@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 05: SynchronizationContext — await 续延调度的核心机制</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  .callout {
+    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
+  }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
+
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafaf9; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+
+  .diagram {
+    background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 1.5rem; margin: 1.5rem 0; font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 0.82rem; line-height: 1.6; white-space: pre; overflow-x: auto;
+    color: #333;
+  }
+  .diagram .arrow { color: var(--accent); font-weight: bold; }
+  .diagram .label { color: var(--text-muted); font-style: italic; font-size: 0.85em; }
+</style>
+</head>
+<body>
+
+<h1>Lesson 05: SynchronizationContext — await 续延调度的核心机制</h1>
+<p class="subtitle">await 完成后，代码"回哪儿继续执行"？这不是一个随机决定——SynchronizationContext 回答了这个问题</p>
+
+<div class="callout callout--info">
+<strong>前置 / Prerequisite：</strong>已完成 <a href="04-csharp8-async-streams.html">Lesson 04（异步流）</a>，知道 <code>await</code>/<code>async</code> 基本用法，听说过 <code>ConfigureAwait(false)</code> 但不完全理解它解决的底层问题。<br>
+<strong>本课目标：</strong>理解 <code>SynchronizationContext</code> 是什么、它在 await 续延中的角色、为什么 .NET Framework 的 ASP.NET 会有 <code>.Result</code> 死锁而 ASP.NET Core 没有。
+</div>
+
+<!-- ====== SECTION 1: THE HOOK ====== -->
+
+<h2>一、钩子——这段代码为什么卡死？</h2>
+
+<p>先看一个在 .NET Framework 4.8 中会让你的应用永久挂起的场景：</p>
+
+<pre><code><span class="cmt">// .NET Framework 4.8 + ASP.NET MVC 控制器</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">HomeController</span> : <span class="type">Controller</span>
+{
+    <span class="kw">public</span> <span class="type">ActionResult</span> Index()
+    {
+        <span class="cmt">// 🚫 永远卡死在这里——页面永远不返回</span>
+        <span class="kw">var</span> json = GetJsonAsync().<span class="pnk">Result</span>;
+        <span class="kw">return</span> Content(json);
+    }
+
+    <span class="kw">async</span> Task&lt;<span class="kw">string</span>&gt; GetJsonAsync()
+    {
+        <span class="kw">using var</span> client = <span class="kw">new</span> HttpClient();
+        <span class="kw">var</span> response = <span class="kw">await</span> client.GetStringAsync(<span class="str">"https://api.example.com"</span>);
+        <span class="kw">return</span> response;  <span class="cmt">// ← 这行代码永远执行不到</span>
+    }
+}</code></pre>
+
+<p>如果你有过 .NET Framework 项目经验，你很可能踩过这个坑——或者在 Code Review 中被提醒"不要在同步方法里用 <code>.Result</code>"。但<strong>为什么？</strong></p>
+
+<p>表面答案：<code>.Result</code> 阻塞了线程。但线程阻塞本身并不死锁——线程被阻塞后会释放 CPU，线程池会补充新线程。真正的死锁发生在<strong>另一个层面</strong>——<strong>SynchronizationContext</strong>。</p>
+
+<p>本课的目标就是让你能够精确解释这个死锁——以及为什么同一段代码在 ASP.NET Core 中不会死锁。</p>
+
+<!-- ====== SECTION 2: THE QUESTION ====== -->
+
+<h2>二、核心问题：await 之后，代码在哪个线程执行？</h2>
+
+<p>回顾 <a href="03-sync-yield-return-iterators.html">Lesson 03</a> 和 <a href="04-csharp8-async-streams.html">Lesson 04</a> 的内容：每个 <code>async</code> 方法被编译成一个状态机。当 <code>await</code> 一个未完成的 Task 时，状态机记录当前位置，注册一个<strong>续延</strong><span class="en">continuation</span>——"Task 完成后，从这里接着执行"。</p>
+
+<p>但有一个关键问题：<strong>续延在哪个线程上执行？</strong></p>
+
+<div class="diagram">
+<span class="cmt">// 你在 UI 线程上执行：</span>
+<span class="kw">await</span> httpClient.GetStringAsync(url);  <span class="cmt">// HTTP 请求发出，UI 线程被释放</span>
+label1.Text = result;                     <span class="cmt">// ← 这行必须在 UI 线程执行！</span>
+                                         <span class="cmt">//    但 await 之后，我在哪个线程？</span>
+</div>
+
+<p>回到 UI 线程（才能改控件），还是随便一个线程池线程（更快）？这个问题的答案取决于当前线程上挂着的 <strong>SynchronizationContext</strong>。</p>
+
+<!-- ====== SECTION 3: WHAT IS SC ====== -->
+
+<h2>三、SynchronizationContext 是什么</h2>
+
+<p><code>SynchronizationContext</code> 是一个抽象类，定义在 <code>System.Threading</code> 里。它的核心方法是 <code>Post</code> 和 <code>Send</code>：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">SynchronizationContext</span>
+{
+    <span class="cmt">// 把一个委托"投递"到特定线程/上下文执行</span>
+    <span class="kw">public</span> <span class="kw">virtual</span> <span class="kw">void</span> Post(SendOrPostCallback d, <span class="kw">object</span> state);
+    <span class="kw">public</span> <span class="kw">virtual</span> <span class="kw">void</span> Send(SendOrPostCallback d, <span class="kw">object</span> state);
+
+    <span class="cmt">// 获取当前线程的 SynchronizationContext</span>
+    <span class="kw">public</span> <span class="kw">static</span> <span class="type">SynchronizationContext</span> Current { <span class="kw">get</span>; }
+}
+</code></pre>
+
+<p>一句话概括：</p>
+
+<div class="callout callout--info">
+<strong>SynchronizationContext = 调度器。</strong>它决定"一段代码应该在哪个线程/上下文上执行"。<br><br>
+<strong>Post：异步投递</strong>——把委托放进队列，立即返回。<br>
+<strong>Send：同步投递</strong>——把委托交给目标线程，等它执行完才返回。<br><br>
+<strong>类比：</strong>Post 是在前台留了个便条，前台有空时处理；Send 是当面把便条交给前台，站那儿等 TA 读完了才走。
+</div>
+
+<p>不同环境提供了不同的 <code>SynchronizationContext</code> 子类，<strong>它们的行为完全不同</strong>——这就是理解死锁和 <code>ConfigureAwait</code> 的关键。</p>
+
+<!-- ====== SECTION 4: THREE SYNCHRONIZATIONCONTEXTS ====== -->
+
+<h2>四、三个最重要的 SynchronizationContext</h2>
+
+<h3>4.1 UI SynchronizationContext（WinForms / WPF）</h3>
+
+<p>在 Windows GUI 应用中（WinForms、WPF），UI 线程有一个 <strong>单线程</strong> 的 SynchronizationContext：</p>
+
+<div class="diagram">
+┌─────────────────────────────────────────────┐
+│            UI Thread (STA)                   │
+│  ┌─────────────────────────────────────┐    │
+│  │  Message Pump (消息循环)              │    │
+│  │  while (GetMessage(out msg))          │    │
+│  │  {                                    │    │
+│  │      DispatchMessage(msg);  ← Post()  │    │
+│  │  }        把委托当成消息塞进这个循环     │    │
+│  └─────────────────────────────────────┘    │
+│                                              │
+│  调用 Post(callback)                          │
+│    → 把 callback 包装成一条 Windows 消息       │
+│    → 投递到 UI 线程的消息队列                  │
+│    → UI 线程的消息循环取到这条消息              │
+│    → 执行 callback（在 UI 线程上！）            │
+└─────────────────────────────────────────────┘
+</div>
+
+<p>这意味着：有 UI SynchronizationContext 的线程上 <code>await</code> 之后，续延代码会被 Post 到 UI 线程——你可以安全地改控件、改 UI。</p>
+
+<pre><code><span class="cmt">// WinForms Button Click 事件（在 UI 线程上执行）</span>
+<span class="kw">private</span> <span class="kw">async</span> <span class="kw">void</span> Button1_Click(<span class="kw">object</span> sender, <span class="type">EventArgs</span> e)
+{
+    <span class="cmt">// ↓ 此时在 UI 线程
+    // SynchronizationContext.Current = WindowsFormsSynchronizationContext</span>
+
+    <span class="kw">var</span> data = <span class="kw">await</span> httpClient.GetStringAsync(url);
+    <span class="cmt">// ↑ await 内部：捕获了 WindowsFormsSynchronizationContext
+    // HTTP 完成后，Post 续延到 UI 线程
+    // ↓ 所以这里又回到 UI 线程了</span>
+
+    label1.Text = data;  <span class="cmt">// ✅ 安全——在 UI 线程上</span>
+}</code></pre>
+
+<div class="callout callout--info">
+<strong>概念：线程亲和</strong><span class="en">Thread Affinity</span><strong>—— 为什么非得回到 UI 线程？</strong><br><br>
+<strong>线程亲和</strong> 指的是某个对象/资源绑定在特定线程上，只能在那个线程访问，换别的线程就炸。Windows GUI 控件（WinForms 的 <code>Button</code>/<code>Label</code>、WPF 的 <code>TextBox</code> 等）就是最典型的例子：<br><br>
+<pre style="margin:0.5rem 0 0 0;"><code><span class="cmt">// ✅ UI 线程上改控件——安全</span>
+label1.Text = <span class="str">"Hello"</span>;
+
+<span class="cmt">// 🚫 从线程池线程改控件——炸了</span>
+Task.Run(() =&gt;
+{
+    label1.Text = <span class="str">"Hello"</span>;  <span class="cmt">// InvalidOperationException: 跨线程操作！</span>
+});</code></pre>
+由此整个因果链就清晰了：<strong>控件有线程亲和 → 必须在 UI 线程操作 → <code>await</code> 默认捕获 SynchronizationContext 回到 UI 线程 → 安全地更新控件。库代码不碰 UI，没有线程亲和 → 加 <code>ConfigureAwait(false)</code> 避免回 UI 线程的开销和死锁风险。</strong><br><br>
+线程池线程是反例——没有线程亲和，Task 的续延在哪个线程池线程执行都无所谓，因为你不碰有线程亲和的资源。
+</div>
+
+<h3>4.2 ASP.NET SynchronizationContext（.NET Framework 独有）</h3>
+
+<p>在 .NET Framework 的 ASP.NET（非 Core）中，每个请求有一个 <code>AspNetSynchronizationContext</code>。它<strong>不是线程亲和</strong>的——它只是确保同一时刻<strong>只有一个线程在处理这个请求</strong>：</p>
+
+<div class="diagram">
+┌─────────────────────────────────────────┐
+│     AspNetSynchronizationContext         │
+│                                          │
+│  Post(callback):                         │
+│    → callback 扔进线程池队列去执行         │
+│    → 哪个线程执行都行（不绑定特定线程）     │
+│                                          │
+│  <span class="label">但：它有一个计数器，追踪"当前有几个操作在进行"</span> │
+│  <span class="label">只有一个操作完成，才会让下一个 Post 的 callback 执行</span> │
+└─────────────────────────────────────────┘
+</div>
+
+<p>关键区别：</p>
+
+<table>
+  <tr><th></th><th>UI SynchronizationContext</th><th>AspNetSynchronizationContext</th></tr>
+  <tr><td>绑定特定线程？</td><td>✅ 是——必须同一个 UI 线程</td><td>❌ 否——任何线程池线程都行</td></tr>
+  <tr><td>串行化执行？</td><td>✅ 是——UI 线程一次只做一件事</td><td>✅ 是——同一请求一次只处理一个续延</td></tr>
+  <tr><td>目的</td><td>线程安全地访问 UI 控件</td><td>保证 <code>HttpContext.Current</code> 可用</td></tr>
+  <tr><td>Post 实现</td><td>Win32 PostMessage 到 UI 线程</td><td>委托排队到线程池，但串行执行</td></tr>
+</table>
+
+<h3>4.3 默认 SynchronizationContext（= null）</h3>
+
+<p>如果当前线程没有设置任何 SynchronizationContext，则 <code>SynchronizationContext.Current</code> 为 <code>null</code>。<strong>线程池线程和控制台应用的主线程都是 null。</strong>当 <code>Current</code> 为 <code>null</code> 时，<code>await</code> 的续延直接在线程池上执行——Task 用哪个线程完成，续延就在哪个线程跑。</p>
+
+<table>
+  <tr><th>环境</th><th>SynchronizationContext.Current</th></tr>
+  <tr><td>WinForms / WPF UI 线程</td><td><code>WindowsFormsSynchronizationContext</code> / <code>DispatcherSynchronizationContext</code></td></tr>
+  <tr><td>ASP.NET (.NET Framework) 请求线程</td><td><code>AspNetSynchronizationContext</code></td></tr>
+  <tr><td>ASP.NET Core 请求线程</td><td><code>null</code> ✨</td></tr>
+  <tr><td>控制台 Main 线程</td><td><code>null</code></td></tr>
+  <tr><td>线程池线程 (Task.Run)</td><td><code>null</code></td></tr>
+</table>
+
+<!-- ====== SECTION 5: HOW AWAIT USES SYNCHRONIZATIONCONTEXT ====== -->
+
+<h2>五、await 内部如何用 SynchronizationContext</h2>
+
+<p>当编译器把 <code>await</code> 变成状态机时，它会生成类似这样的代码：</p>
+
+<pre><code><span class="cmt">// 你写的：</span>
+<span class="kw">var</span> result = <span class="kw">await</span> SomeAsyncOperation();
+DoSomething(result);
+
+<span class="cmt">// 编译器生成的逻辑（极度简化）：</span>
+<span class="kw">var</span> task = SomeAsyncOperation();
+
+<span class="cmt">// 第一步：拿到 Task 的 Awaiter</span>
+<span class="kw">var</span> awaiter = task.GetAwaiter();
+
+<span class="cmt">// 第二步：如果已经完成，直接拿结果，跳过续延</span>
+<span class="kw">if</span> (awaiter.IsCompleted)
+{
+    DoSomething(awaiter.GetResult());
+    <span class="kw">return</span>;
+}
+
+<span class="cmt">// 第三步：还没完成——捕获当前上下文，注册续延</span>
+<span class="kw">var</span> capturedContext = SynchronizationContext.Current;  <span class="cmt">// ← 关键！</span>
+
+<span class="cmt">// 第四步：告诉 Task "完成后叫我"，通过 Awaiter 注册</span>
+awaiter.OnCompleted(() =&gt;
+{
+    <span class="cmt">// ===== Task 完成时，这段代码在哪个线程执行？ =====</span>
+    <span class="kw">if</span> (capturedContext != <span class="kw">null</span>)
+    {
+        <span class="cmt">// 有 SynchronizationContext → Post 到它那里执行</span>
+        capturedContext.Post(_ =&gt;
+        {
+            DoSomething(awaiter.GetResult());  <span class="cmt">// 在目标上下文上执行</span>
+        }, <span class="kw">null</span>);
+    }
+    <span class="kw">else</span>
+    {
+        <span class="cmt">// 没有 SynchronizationContext → 随便哪个线程池线程执行</span>
+        DoSomething(awaiter.GetResult());  <span class="cmt">// 在线程池线程上执行</span>
+    }
+});
+</code></pre>
+
+<div class="callout callout--info">
+<strong>这里就是全部秘密所在。</strong><code>await</code> 在调用 <code>OnCompleted</code> 之前捕获 <code>SynchronizationContext.Current</code>，Task 完成后，如果有捕获到的上下文，续延就通过 <code>Post</code> 投递回那个上下文；如果没有，续延就在线程池上直接执行。
+</div>
+
+<p>这也解释了为什么控制台应用中 <code>await</code> 之后你看到的线程 ID 会变——因为 <code>Current</code> 是 <code>null</code>，续延在线程池随便跑，没有固定回去的"家"。</p>
+
+<!-- ====== SECTION 6: THE DEADLOCK EXPLAINED ====== -->
+
+<h2>六、经典死锁——逐帧回放</h2>
+
+<p>现在我们可以完整解释开头那个死锁了。回到那段代码：</p>
+
+<pre><code><span class="cmt">// .NET Framework 4.8 ASP.NET MVC</span>
+<span class="kw">public</span> <span class="type">ActionResult</span> Index()
+{
+    <span class="kw">var</span> json = GetJsonAsync().<span class="pnk">Result</span>;  <span class="cmt">// ← 卡死</span>
+    <span class="kw">return</span> Content(json);
+}
+
+<span class="kw">async</span> Task&lt;<span class="kw">string</span>&gt; GetJsonAsync()
+{
+    <span class="kw">var</span> response = <span class="kw">await</span> client.GetStringAsync(url);
+    <span class="kw">return</span> response;
+}</code></pre>
+
+<p>逐帧分析：</p>
+
+<div class="diagram">
+<span class="label">帧 1：请求到达 ASP.NET，Index() 开始执行</span>
+  ASP.NET 线程 A 进入 Index()
+  SynchronizationContext.Current = AspNetSynchronizationContext
+
+<span class="label">帧 2：调用 GetJsonAsync()，开始发 HTTP 请求</span>
+  GetJsonAsync 里的代码开始执行（仍在 A 上）
+  碰到 client.GetStringAsync(url) —— 一个未完成的 Task
+  await <span class="label">捕获了 AspNetSynchronizationContext</span>
+  然后 OnCompleted：<span class="label">"Task 完成后，Post 续延到 AspNetSynchronizationContext"</span>
+  GetJsonAsync 返回一个未完成的 Task&lt;string&gt;
+
+<span class="label">帧 3：回到 Index()，调用 .Result</span>
+  .Result 阻塞线程 A，等待 Task 完成
+  线程 A：<span class="label">🔒 被 .Result 卡住，什么也干不了</span>
+  <span class="label">注意：AspNetSynchronizationContext 还没释放——请求还在"进行中"</span>
+
+<span class="label">帧 4：HTTP 响应到达，Task 完成！</span>
+  线程池线程 B 收到 HTTP 完成的通知
+  Task 完成 → 触发续延
+  续延的逻辑：capturedContext.Post(续延代码)
+  <span class="label">→ 尝试把续延 Post 到 AspNetSynchronizationContext</span>
+  <span class="label">→ 但 AspNetSynchronizationContext 说："请求正在处理中（A 还在卡着），</span>
+  <span class="label">   你得等当前操作完成才能进来"</span>
+  ❌ <span class="pnk">死锁！</span>
+
+<span class="label">帧 5：谁在等谁？</span>
+  线程 A 在等 Task 完成（.Result 阻塞）
+  Task 的续延在等线程 A 释放 AspNetSynchronizationContext（Post 排不上队）
+  <span class="label">→ 循环等待 → 死锁</span>
+</div>
+
+<div class="callout callout--bad">
+<strong>死锁的充要条件：</strong>
+① 有一个 SynchronizationContext 限制同一时刻只能有一个操作在执行<strong>（ASP.NET Framework）</strong><br>
+② 你在这个上下文中用 <code>.Result</code> / <code>.Wait()</code> 同步阻塞了当前操作<strong>（.Result）</strong><br>
+③ 被阻塞的 async 方法的续延需要回到这个上下文才能完成<strong>（await 捕获了 SC）</strong><br><br>
+<strong>三个条件缺一不可。</strong>打破任何一个都不会死锁——ConfigureAwait(false) 打破条件③，不用 .Result 打破条件②，ASP.NET Core 打破条件①。
+</div>
+
+<!-- ====== SECTION 7: CONFIGUREAWAIT ====== -->
+
+<h2>七、ConfigureAwait(false)——打破条件③</h2>
+
+<p>回到 <a href="04-csharp8-async-streams.html">Lesson 04</a> 中初见过的 <code>ConfigureAwait(false)</code>。现在你完全理解它在干什么了：</p>
+
+<pre><code><span class="kw">async</span> Task&lt;<span class="kw">string</span>&gt; GetJsonAsync()
+{
+    <span class="kw">var</span> response = <span class="kw">await</span> client.GetStringAsync(url)
+        .<span class="pnk">ConfigureAwait(</span><span class="kw">false</span><span class="pnk">)</span>;
+    <span class="cmt">// ↑ ConfigureAwait(false) 做了什么？
+    // 它告诉编译器："这个 await 不要捕获 SynchronizationContext"</span>
+    <span class="kw">return</span> response;  <span class="cmt">// 在线程池线程上执行——不需要回原上下文</span>
+}</code></pre>
+
+<p>编译器生成的状态机中，</p>
+
+<pre><code><span class="cmt">// 普通 await：</span>
+<span class="kw">var</span> capturedContext = SynchronizationContext.Current;  <span class="cmt">// 捕获！
+// Task 完成后 Post 回 capturedContext</span>
+
+<span class="cmt">// ConfigureAwait(false)：</span>
+<span class="cmt">// 不捕获 SynchronizationContext！
+// Task 完成后直接在线程池线程上运行续延
+// → 续延不需要回去排队 → 条件③被打破 → 不死锁</span>
+</code></pre>
+
+<div class="callout callout--good">
+<strong>这就是为什么库代码（DAL、BLL、工具方法）要加 ConfigureAwait(false)：</strong>库代码不知道调用方在什么环境下运行（控制台？ASP.NET？WinForms？），加了 <code>ConfigureAwait(false)</code> 的库代码<strong>不会引发死锁</strong>——不管调用方有没有 SynchronizationContext。<br><br>
+<strong>唯一的例外：</strong>如果你的方法需要在 await 之后操作 UI 控件，那<strong>不能</strong>加 ConfigureAwait(false)——你需要回到 UI 线程才能改控件。
+</div>
+
+<!-- ====== SECTION 8: ASPNET CORE DIFFERENCE ====== -->
+
+<h2>八、ASP.NET Core 怎么打破的死锁——打破条件①</h2>
+
+<p>ASP.NET Core 做了一个大胆的设计决策：</p>
+
+<div class="callout callout--good" style="font-size:1.05rem;">
+<strong>ASP.NET Core 没有 SynchronizationContext。</strong><br>
+每个请求处理过程中，<code>SynchronizationContext.Current</code> 始终是 <code>null</code>。
+</div>
+
+<p>这意味着 <code>await</code> 不会捕获任何上下文，续延直接在线程池上执行——没有排队、没有串行化、不会有 <code>.Result</code> 死锁。</p>
+
+<p>那 <code>HttpContext</code> 怎么访问？在 ASP.NET Framework 中，<code>HttpContext.Current</code> 是一个静态属性——依赖 SynchronizationContext 保证每次只有一个线程在访问"当前请求"。ASP.NET Core 改成了依赖注入：<code>IHttpContextAccessor</code> 用 <code>AsyncLocal&lt;T&gt;</code> 追踪（详见<a href="#section-asyncLocal">第九节</a>）。</p>
+
+<div class="comparison">
+<div class="old">
+<h4>.NET Framework ASP.NET</h4>
+<p style="font-size:0.9rem;">
+  ✅ <code>HttpContext.Current</code> 直接可用<br>
+  ✅ 旧代码兼容<br>
+  ❌ 容易 <code>.Result</code> 死锁<br>
+  ❌ 每个请求串行化——同一时刻只有一个 await 续延在跑（限制并发）
+</p>
+</div>
+<div class="new">
+<h4>ASP.NET Core</h4>
+<p style="font-size:0.9rem;">
+  ✅ 不会 <code>.Result</code> 死锁<br>
+  ✅ 每个请求内多个 await 续延可以并发（如果需要）<br>
+  ❌ <code>HttpContext.Current</code> 不存在——用 DI 注入<br>
+  ❌ 旧代码迁移时需要去掉对 <code>HttpContext.Current</code> 的依赖
+</p>
+</div>
+</div>
+
+<div class="callout callout--warn">
+<strong>面试重点——为什么 ASP.NET Core 可以去掉 SynchronizationContext？</strong><br><br>
+因为 ASP.NET Core 从第一天就是为异步设计的。<code>HttpContext</code> 不再用静态属性存储（那是为同步代码设计的模式），而是通过 <code>AsyncLocal&lt;T&gt;</code> 和依赖注入在每个异步调用链中自动流动。不需要 SynchronizationContext 来"串行化"以保证 <code>HttpContext.Current</code> 正确——每个异步流有自己的 AsyncLocal 作用域。
+</div>
+
+<!-- ====== SECTION 9: ASYNCLOCAL vs SYNCHRONIZATIONCONTEXT ====== -->
+
+<h2 id="section-asyncLocal">九、ExecutionContext 与 AsyncLocal——上下文流动的另一个机制</h2>
+
+<h3>9.1 两个不同的问题</h3>
+
+<p>假设你在处理一个 HTTP 请求，当前用户是 <code>user-123</code>。你把这个用户 ID 存在某个地方，然后 <code>await</code> 了一个 I/O。I/O 完成之后，代码在<strong>另一个线程</strong>上继续执行——怎么知道还是 <code>user-123</code>？</p>
+
+<p>这就是 <strong>ExecutionContext</strong> 和 <strong>SynchronizationContext</strong> 回答了两个完全不同的问题：</p>
+
+<table>
+  <tr><th></th><th>SynchronizationContext</th><th>ExecutionContext</th></tr>
+  <tr><td>回答的问题</td><td>续延在<strong>哪个线程</strong>执行？</td><td>续延的代码<strong>能看到什么数据</strong>？</td></tr>
+  <tr><td>类比</td><td>引导续延去哪里</td><td>确保续延带着护照和行李</td></tr>
+  <tr><td>ConfigureAwait(false) 影响？</td><td>✅ 是——false 就不回去</td><td>❌ 不影响——ExecutionContext 无论如何都会流动</td></tr>
+  <tr><td>存储内容</td><td>调度策略</td><td>SecurityContext（用户身份）、所有 AsyncLocal 数据</td></tr>
+  <tr><td>流动方式</td><td>await 捕获 → Task 完成后 Post 回去</td><td>await 前 Capture → await 后 Run（自动、强制）</td></tr>
+</table>
+
+<h3>9.2 ExecutionContext —— "隐形的背包"</h3>
+
+<p>ExecutionContext 像每个异步调用链背着的隐形背包。每次 <code>await</code>：</p>
+
+<div class="diagram">
+  <span class="label">await 前：</span>
+  ExecutionContext 被打包（Capture）
+    → 挂在 Task 上
+
+  <span class="label">await 后：</span>
+  ExecutionContext 被还原（Run）
+    → 包里的数据全部恢复
+    → 即使现在在完全不同的线程上
+</div>
+
+<p>包里装着：</p>
+<ul>
+  <li><strong>SecurityContext</strong>：当前用户的 Windows 身份/Claims（ASP.NET Core 用它做身份模拟）</li>
+  <li><strong>所有 AsyncLocal&lt;T&gt; 的值</strong>：你写在 AsyncLocal 里的任何数据</li>
+</ul>
+
+<p>ExecutionContext 的流动是<strong>强制的</strong>——你无法用 <code>ConfigureAwait(false)</code> 阻止它。这是安全底线：用户的身份信息不能因为一个 <code>await</code> 就丢了。</p>
+
+<h3>9.3 AsyncLocal&lt;T&gt; —— 一个变量，但值跟随异步调用链</h3>
+
+<p><code>AsyncLocal&lt;T&gt;</code> 是 ExecutionContext 背包里最重要的"口袋"。它让你定义一个变量，这个变量的值<strong>自动跟随异步控制流</strong>，不管中间经过多少 <code>await</code>、换过多少线程：</p>
+
+<pre><code><span class="kw">private</span> <span class="kw">static</span> <span class="kw">readonly</span> AsyncLocal&lt;<span class="kw">string</span>&gt; _currentUser = <span class="kw">new</span>();
+
+<span class="kw">async</span> Task HandleRequest()
+{
+    _currentUser.Value = <span class="str">"user-123"</span>;   <span class="cmt">// 设置当前异步链的值</span>
+
+    <span class="kw">await</span> Task.Delay(100).ConfigureAwait(<span class="kw">false</span>);  <span class="cmt">// 跳到线程池线程</span>
+    <span class="cmt">// ↑ ConfigureAwait(false) 不影响 AsyncLocal！</span>
+
+    Console.WriteLine(_currentUser.Value);  <span class="cmt">// 还是 "user-123" ✅</span>
+    <span class="cmt">// 即使现在在另一个线程上，ExecutionContext 自动把值带过来了</span>
+}</code></pre>
+
+<h3>9.4 AsyncLocal&lt;T&gt; vs ThreadLocal&lt;T&gt; —— 容易混淆的区别</h3>
+
+<p>名字像，行为完全不同：</p>
+
+<div class="comparison">
+<div class="old">
+<h4>ThreadLocal&lt;T&gt;：值绑定到操作系统线程</h4>
+<pre><code><span class="kw">private</span> <span class="kw">static</span> <span class="kw">readonly</span>
+  ThreadLocal&lt;<span class="kw">string</span>&gt; _tl = <span class="kw">new</span>();
+
+<span class="kw">async</span> Task Foo()
+{
+    _tl.Value = <span class="str">"hello"</span>;
+    <span class="kw">await</span> Task.Delay(100);
+    <span class="cmt">// await 后可能换了线程</span>
+    Console.WriteLine(_tl.Value);
+    <span class="cmt">// → 可能为 null！</span>
+    <span class="cmt">// 因为新线程没设过这个值</span>
+}</code></pre>
+</div>
+<div class="new">
+<h4>AsyncLocal&lt;T&gt;：值绑定到异步调用链</h4>
+<pre><code><span class="kw">private</span> <span class="kw">static</span> <span class="kw">readonly</span>
+  AsyncLocal&lt;<span class="kw">string</span>&gt; _al = <span class="kw">new</span>();
+
+<span class="kw">async</span> Task Foo()
+{
+    _al.Value = <span class="str">"hello"</span>;
+    <span class="kw">await</span> Task.Delay(100);
+    <span class="cmt">// 不管换不换线程</span>
+    Console.WriteLine(_al.Value);
+    <span class="cmt">// → 总是 "hello" ✅</span>
+}</code></pre>
+</div>
+</div>
+
+<div class="callout callout--warn">
+<strong>规则：在 async 方法中永远用 AsyncLocal&lt;T&gt;，不要用 ThreadLocal&lt;T&gt;。</strong><br>
+ThreadLocal 是同步时代的设计——假设一个请求从头到尾在一个线程上跑。async/await 打破了这条假设（一个请求可能被拆到多个线程），只有 AsyncLocal 能正确跟随异步流。
+</div>
+
+<h3>9.5 真实世界的使用场景</h3>
+
+<p><strong>场景一：ASP.NET Core 的 IHttpContextAccessor</strong></p>
+
+<p>在第八节提到过——ASP.NET Core 没有 SynchronizationContext，那 <code>HttpContext</code> 怎么在每个请求中访问？答案就是 <code>AsyncLocal&lt;T&gt;</code>：</p>
+
+<pre><code><span class="cmt">// ASP.NET Core 内部实现（极度简化）</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">HttpContextAccessor</span> : <span class="type">IHttpContextAccessor</span>
+{
+    <span class="kw">private</span> <span class="kw">static</span> <span class="kw">readonly</span> AsyncLocal&lt;<span class="type">HttpContext</span>&gt; _httpContext = <span class="kw">new</span>();
+
+    <span class="kw">public</span> <span class="type">HttpContext</span> HttpContext
+    {
+        <span class="kw">get</span> =&gt; _httpContext.Value;
+        <span class="kw">set</span> =&gt; _httpContext.Value = <span class="kw">value</span>;
+    }
+}
+
+<span class="cmt">// 中间件在请求开始时设置：</span>
+<span class="kw">public</span> <span class="kw">async</span> Task InvokeAsync(<span class="type">HttpContext</span> context)
+{
+    _accessor.HttpContext = context;  <span class="cmt">// 设进 AsyncLocal</span>
+    <span class="kw">await</span> _next(context);  <span class="cmt">// 无论中间件怎么 await/换线程，都能拿到</span>
+}</code></pre>
+
+<p><strong>场景二：OpenTelemetry 分布式追踪</strong></p>
+
+<pre><code><span class="cmt">// Activity.Current 底层就是 AsyncLocal&lt;Activity&gt;</span>
+<span class="kw">using var</span> activity = ActivitySource.StartActivity(<span class="str">"ProcessOrder"</span>);
+
+activity?.SetTag(<span class="str">"order.id"</span>, <span class="str">"12345"</span>);
+<span class="kw">await</span> _service.ProcessAsync();
+<span class="kw">await</span> _repository.SaveAsync();
+<span class="cmt">// ↑ 无论中间这些 await 在线程池怎么跳</span>
+<span class="cmt">// Activity.Current 始终是同一个 Activity</span>
+<span class="cmt">// 因为 AsyncLocal&lt;Activity&gt; 跟着 ExecutionContext 流动</span></code></pre>
+
+<p><strong>场景三：多租户数据隔离</strong></p>
+
+<pre><code><span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> <span class="type">TenantContext</span>
+{
+    <span class="kw">private</span> <span class="kw">static</span> <span class="kw">readonly</span> AsyncLocal&lt;<span class="kw">string</span>&gt; _tenantId = <span class="kw">new</span>();
+
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">string</span> CurrentTenant =&gt; _tenantId.Value;
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">void</span> SetTenant(<span class="kw">string</span> id) =&gt; _tenantId.Value = id;
+}
+
+<span class="cmt">// 中间件：</span>
+TenantContext.SetTenant(request.TenantId);
+<span class="kw">await</span> _next(context);
+<span class="cmt">// → 后续任何地方调用 TenantContext.CurrentTenant 都拿到正确的租户 ID</span>
+<span class="cmt">// → 不需要把 tenantId 透传到每个方法参数里</span></code></pre>
+
+<h3>9.6 三者关系——一张图总结</h3>
+
+<div class="diagram">
+┌──────────────────────────────────────────────────────────┐
+│              <span class="label">一个 async 方法的异步调用链</span>                  │
+│                                                          │
+│  ┌──────────────────┐                                    │
+│  │ ExecutionContext  │  ← <strong>背包（容器）</strong>                    │
+│  │  ┌──────────────┐│    await 前 Capture，await 后 Run    │
+│  │  │ AsyncLocal 1  ││    强制的——ConfigureAwait 不影响     │
+│  │  │ AsyncLocal 2  ││    装着：身份、租户ID、Trace 等      │
+│  │  │    ...        ││                                    │
+│  │  └──────────────┘│                                    │
+│  └──────────────────┘                                    │
+│           │                                              │
+│           │ 跟着异步流走（不依赖线程）                       │
+│           ▼                                              │
+│  ┌──────────────────────────────────┐                    │
+│  │   SynchronizationContext         │  ← <strong>目的地（调度器）</strong> │
+│  │                                   │    Post(续延) → 投递到目标线程 │
+│  │   UI SC → 回到 UI 线程            │    null → 线程池随便跑      │
+│  │   AspNet SC → 串行排队           │    ConfigureAwait(false)  │
+│  │   null → 线程池直接执行           │    → 不捕获目的地          │
+│  └──────────────────────────────────┘                    │
+└──────────────────────────────────────────────────────────┘
+</div>
+
+<div class="callout callout--good">
+<strong>一句话：</strong><code>ConfigureAwait(false)</code> 只改了<strong>目的地</strong>（不回原上下文），不改<strong>背包里的东西</strong>（AsyncLocal 数据照带不误）。理解这个区别是面试中区分中高级候选人和初级候选人的关键。
+</div>
+
+<!-- ====== SECTION 10: PRACTICAL ====== -->
+
+<h2>十、实战指南——在代码中正确使用</h2>
+
+<h3>规则一：应用层代码（控制器、UI 事件处理）不需要 ConfigureAwait(false)</h3>
+
+<pre><code><span class="cmt">// ASP.NET Core 控制器——不需要，因为没有 SynchronizationContext</span>
+[<span class="type">HttpGet</span>]
+<span class="kw">public</span> <span class="kw">async</span> Task&lt;<span class="type">IActionResult</span>&gt; Get()
+{
+    <span class="kw">var</span> data = <span class="kw">await</span> _service.GetDataAsync();  <span class="cmt">// 直接 await，不用 ConfigureAwait</span>
+    <span class="kw">return</span> Ok(data);
+}
+
+<span class="cmt">// WinForms/WPF 事件处理——不能加，因为要回 UI 线程</span>
+<span class="kw">private</span> <span class="kw">async</span> <span class="kw">void</span> Button_Click(<span class="kw">object</span> s, <span class="type">EventArgs</span> e)
+{
+    <span class="kw">var</span> data = <span class="kw">await</span> _api.FetchAsync();  <span class="cmt">// 不能加 ConfigureAwait(false)</span>
+    label1.Text = data;  <span class="cmt">// 需要在 UI 线程</span>
+}</code></pre>
+
+<h3>规则二：库代码（Repository、Service、工具类）应该加 ConfigureAwait(false)</h3>
+
+<pre><code><span class="cmt">// Repository / 通用库——不碰 UI，不加可能引起调用方死锁</span>
+<span class="kw">public</span> <span class="kw">async</span> Task&lt;<span class="type">List</span>&lt;<span class="type">Order</span>&gt;&gt; GetOrdersAsync()
+{
+    <span class="kw">await using var</span> conn = <span class="kw">new</span> SqlConnection(_connStr);
+    <span class="kw">await</span> conn.OpenAsync().ConfigureAwait(<span class="kw">false</span>);
+    <span class="kw">using var</span> cmd = conn.CreateCommand();
+    <span class="kw">using var</span> reader = <span class="kw">await</span> cmd.ExecuteReaderAsync().ConfigureAwait(<span class="kw">false</span>);
+    <span class="kw">while</span> (<span class="kw">await</span> reader.ReadAsync().ConfigureAwait(<span class="kw">false</span>))
+    {
+        <span class="cmt">// ...</span>
+    }
+}</code></pre>
+
+<h3>规则三：永远不用 .Result / .Wait() 在异步代码中</h3>
+
+<pre><code><span class="cmt">// 🚫 永远不要这样写：</span>
+<span class="kw">var</span> result = SomeAsyncMethod().Result;
+SomeAsyncMethod().Wait();
+
+<span class="cmt">// ✅ 始终 async all the way：</span>
+<span class="kw">var</span> result = <span class="kw">await</span> SomeAsyncMethod();
+
+<span class="cmt">// ⚠️ 如果确实需要在同步上下文中调用异步方法（比如 Main 函数）：</span>
+<span class="cmt">// C# 7.1+ 可以有 async Main：</span>
+<span class="kw">static</span> <span class="kw">async</span> Task Main()
+{
+    <span class="kw">var</span> result = <span class="kw">await</span> SomeAsyncMethod();
+}
+
+<span class="cmt">// 或者显式从线程池跑，避开当前 SC：</span>
+<span class="kw">var</span> result = Task.Run(() =&gt; SomeAsyncMethod()).GetAwaiter().GetResult();
+</code></pre>
+
+<div class="callout callout--warn">
+<strong>.NET Framework 项目中如果不得不保留 .Result（比如构造函数里），怎么办？</strong><br>
+确保被调用的 async 方法内部每个 await 都加了 <code>ConfigureAwait(false)</code>。这样续延不需要回原上下文，<code>.Result</code> 才能正常返回。但长期方案永远是<strong>迁移到全异步</strong>。
+</div>
+
+<!-- ====== QUIZ ====== -->
+
+<h2>📝 小测验</h2>
+
+<div class="quiz" id="q1">
+  <h3>Q1. SynchronizationContext 的核心方法 Post() 做了什么？</h3>
+  <div class="question">选择最准确的描述：</div>
+  <label><input type="radio" name="q1" value="a"> 立即在当前线程上同步执行回调</label>
+  <label><input type="radio" name="q1" value="b"> 把一个委托异步投递到目标上下文去执行</label>
+  <label><input type="radio" name="q1" value="c"> 创建一个新的线程来执行回调</label>
+  <label><input type="radio" name="q1" value="d"> 在 Task 完成时自动触发回调</label>
+  <button onclick="check('q1','b')">确认</button>
+  <div class="feedback" id="f_q1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>Q2. 在 .NET Framework 4.8 的 ASP.NET 中，以下代码为什么死锁？</h3>
+<pre><code><span class="kw">public</span> <span class="type">ActionResult</span> Index()
+{
+    <span class="kw">var</span> data = FetchAsync().Result;  <span class="cmt">// 卡死</span>
+    <span class="kw">return</span> View(data);
+}</code></pre>
+  <div class="question">选择最完整的解释：</div>
+  <label><input type="radio" name="q2" value="a"> .Result 阻塞了线程池，没有新线程可用</label>
+  <label><input type="radio" name="q2" value="b"> HTTP 请求超时了</label>
+  <label><input type="radio" name="q2" value="c"> .Result 阻塞了当前线程 → await 续延需要 Post 回 AspNetSynchronizationContext → 但上下文被 .Result 占着 → 续延排不上队 → Task 永远无法完成 → 循环等待</label>
+  <label><input type="radio" name="q2" value="d"> HttpClient 在 ASP.NET 环境下不能异步</label>
+  <button onclick="check('q2','c')">确认</button>
+  <div class="feedback" id="f_q2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>Q3. 下面哪个环境中的 <code>SynchronizationContext.Current</code> 是 <code>null</code>？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q3" value="a"> WinForms Button Click 事件中</label>
+  <label><input type="radio" name="q3" value="b"> .NET Framework ASP.NET 请求中</label>
+  <label><input type="radio" name="q3" value="c"> ASP.NET Core 请求中</label>
+  <label><input type="radio" name="q3" value="d"> WPF 窗口构造函数中</label>
+  <button onclick="check('q3','c')">确认</button>
+  <div class="feedback" id="f_q3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>Q4. 关于 <code>ConfigureAwait(false)</code>，以下哪句<strong>错误</strong>？</h3>
+  <div class="question">选择错误的那句：</div>
+  <label><input type="radio" name="q4" value="a"> 它告诉 await 不要捕获 SynchronizationContext</label>
+  <label><input type="radio" name="q4" value="b"> 库代码应该用它来防止调用方死锁</label>
+  <label><input type="radio" name="q4" value="c"> 它也会阻止 AsyncLocal&lt;T&gt; 的数据流动</label>
+  <label><input type="radio" name="q4" value="d"> UI 事件处理方法不应该用它（因为需要回到 UI 线程）</label>
+  <button onclick="check('q4','c')">确认</button>
+  <div class="feedback" id="f_q4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>Q5. 以下代码在同一进程中的 ASP.NET Core 和 .NET Framework ASP.NET 上运行，行为有何不同？</h3>
+<pre><code><span class="cmt">// 控制器的 Action 方法中：</span>
+<span class="kw">var</span> t1 = Thread.CurrentThread.ManagedThreadId;
+<span class="kw">await</span> Task.Delay(10);
+<span class="kw">var</span> t2 = Thread.CurrentThread.ManagedThreadId;
+Console.WriteLine(t1 == t2);  <span class="cmt">// 输出什么？</span></code></pre>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q5" value="a"> 两者都输出 True</label>
+  <label><input type="radio" name="q5" value="b"> 两者都输出 False</label>
+  <label><input type="radio" name="q5" value="c"> Framework ASP.NET 输出 True，Core 输出可能是 False</label>
+  <label><input type="radio" name="q5" value="d"> Framework ASP.NET 输出 False，Core 输出 True</label>
+  <button onclick="check('q5','c')">确认</button>
+  <div class="feedback" id="f_q5"></div>
+</div>
+
+<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<p class="mild">
+  Lesson 05 · SynchronizationContext 与 await 续延调度 · 下一课预告：<a href="06-csharp8-wrapup-default-interface-methods.html">Lesson 06 — C# 8 收尾 (Default Interface Methods)</a>
+</p>
+<p class="mild">
+  有任何不清楚的地方？<strong>直接在对话中追问</strong>——Agent 就是你的私教。
+</p>
+
+<script>
+function check(qid, correct) {
+  var f = document.getElementById('f_' + qid);
+  var selected = document.querySelector('input[name="' + qid + '"]:checked');
+  if (!selected) {
+    f.textContent = '⚠️ 请先选择一个答案。';
+    f.className = 'feedback show wrong';
+    return;
+  }
+  var isCorrect = selected.value === correct;
+  var answers = {
+    q1: {
+      correct: '✅ 正确！Post() 把委托异步投递到目标上下文，不阻塞调用方（区别于 Send 的同步等待）。',
+      wrong:   '❌ 答案是「b 异步投递」。Post 不是同步执行（那是 Send），也不创建新线程，而是把委托排队给目标上下文去调度。'
+    },
+    q2: {
+      correct: '✅ 正确！这就是 AspNetSynchronizationContext 死锁的完整因果链——.Result 占着请求上下文，续延需要上下文，形成循环等待。',
+      wrong:   '❌ 答案是 c——最完整的解释。仅有 .Result 阻塞线程本身不会死锁（线程池会补充线程）；关键是 await 的续延需要排回 AspNetSynchronizationContext，而这个上下文被 .Result 占用着。'
+    },
+    q3: {
+      correct: '✅ 正确！ASP.NET Core 移除了 SynchronizationContext。WinForms/WPF 和 .NET Framework ASP.NET 都有各自的上下文实现。',
+      wrong:   '❌ 答案是 c（ASP.NET Core）。WinForms/WPF 有 UI 上下文，.NET Framework ASP.NET 有 AspNetSynchronizationContext，只有 ASP.NET Core 是 null。'
+    },
+    q4: {
+      correct: '✅ 正确！这句话是错的——ConfigureAwait(false) <strong>只影响 SynchronizationContext</strong>，不影响 ExecutionContext 和 AsyncLocal&lt;T&gt; 的流动。',
+      wrong:   '❌ 答案是 c（那是错误说法）。ConfigureAwait(false) 只阻止 SynchronizationContext 的捕获和恢复，不影响 ExecutionContext——AsyncLocal&lt;T&gt; 的数据仍然会流动。其余三句都是对的。'
+    },
+    q5: {
+      correct: '✅ 正确！Framework ASP.NET 有 AspNetSynchronizationContext，await 后 Post 回同一上下文的线程（可能同个线程，也可能被串行化但碰巧相同）；ASP.NET Core 没有 SC，续延在线程池上跑，几乎肯定是不同线程。',
+      wrong:   '❌ 答案是 c。Framework ASP.NET 的 SynchronizationContext 保证续延在同一上下文中执行（线程可能相同），Core 没有 SC，续延在随机线程池线程上——线程 ID 大概率不同。'
+    }
+  };
+  var a = answers[qid];
+  f.textContent = isCorrect ? a.correct : a.wrong;
+  f.className = 'feedback show ' + (isCorrect ? 'correct' : 'wrong');
+}
+</script>
+
+</body>
+</html>

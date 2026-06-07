@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 06: C# 8 收尾 — Default Interface Methods 与其他实用特性</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  .callout {
+    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
+  }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
+
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafaf9; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+
+  .diagram {
+    background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 1.5rem; margin: 1.5rem 0; font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 0.82rem; line-height: 1.6; white-space: pre; overflow-x: auto;
+    color: #333;
+  }
+  .diagram .arrow { color: var(--accent); font-weight: bold; }
+  .diagram .label { color: var(--text-muted); font-style: italic; font-size: 0.85em; }
+
+  .timeline {
+    display: flex; gap: 0; margin: 1.5rem 0; overflow-x: auto;
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1rem;
+  }
+  .timeline-item {
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    min-width: 90px; flex: 0 0 auto; font-size: 0.82rem;
+  }
+  .timeline-item .ver { font-weight: 700; color: var(--accent); }
+  .timeline-item .feat { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; }
+  .timeline-item .arrow { margin: 0 0.3rem; color: var(--border); font-size: 1.2rem; align-self: center; }
+</style>
+</head>
+<body>
+
+<h1>Lesson 06: C# 8 收尾 — Default Interface Methods 与其他实用特性</h1>
+<p class="subtitle">接口被"冻住"了 17 年——C# 8 解冻了它，但也带来了新的取舍</p>
+
+<div class="callout callout--info">
+<strong>前置 / Prerequisite：</strong>已完成 <a href="05-async-await-synchronizationcontext.html">Lesson 05（SynchronizationContext）</a>，熟悉接口和多态的基本概念。<br>
+<strong>本课目标：</strong>理解 Default Interface Methods 解决的问题、它的实现机制、菱形继承问题和正确使用场景；同时掌握 <code>??=</code>、static local functions、readonly struct members 这些日常高频小特性。
+</div>
+
+<!-- ====== PRELUDE: C# 8 MAP ====== -->
+
+<h2>零、C# 8 全景回顾</h2>
+
+<p>在收尾之前，看看我们已经走了多远：</p>
+
+<table>
+  <tr><th>特性</th><th>课程</th><th>一句话</th></tr>
+  <tr><td>Nullable Reference Types</td><td>01</td><td>编译器帮你追踪 null——用类型系统消灭 NullReferenceException</td></tr>
+  <tr><td>Switch Expressions &amp; 模式匹配</td><td>02</td><td>switch 从语句升级为表达式，配合属性/元组/when 模式</td></tr>
+  <tr><td>Using Declarations</td><td>02</td><td>不需要嵌套大括号了，变量离开作用域自动释放</td></tr>
+  <tr><td>Indices &amp; Ranges</td><td>02</td><td><code>^1</code> 取最后一个，<code>..</code> 切片——从 Python 学来的</td></tr>
+  <tr><td>Async Streams</td><td>03·04</td><td><code>IAsyncEnumerable&lt;T&gt;</code> + <code>await foreach</code>——边拉边处理</td></tr>
+  <tr><td><strong>Default Interface Methods</strong></td><td><strong>06</strong></td><td><strong>接口里可以写方法体了</strong></td></tr>
+  <tr><td>Null-coalescing assignment</td><td>06</td><td><code>??=</code>——只在 null 时赋值</td></tr>
+  <tr><td>Static local functions</td><td>06</td><td>防止局部函数意外捕获外部变量</td></tr>
+  <tr><td>Readonly struct members</td><td>06</td><td>细粒度控制——struct 里单个成员标记 readonly</td></tr>
+</table>
+
+<!-- ====== PART 1: DEFAULT INTERFACE METHODS ====== -->
+
+<h2>第一部分：Default Interface Methods — 接口进化之谜</h2>
+
+<h3>1.1 现象——加一个方法，50 个实现全炸</h3>
+
+<p>场景：你维护一个基础库，定义了一个 <code>IRepository&lt;T&gt;</code> 接口，被团队 50 个类实现：</p>
+
+<pre><code><span class="cmt">// v1.0 —— 发布时只有 3 个方法</span>
+<span class="kw">public</span> <span class="kw">interface</span> <span class="type">IRepository</span>&lt;<span class="type">T</span>&gt;
+{
+    <span class="type">T</span> GetById(<span class="kw">int</span> id);
+    <span class="kw">void</span> Add(<span class="type">T</span> entity);
+    <span class="kw">void</span> Delete(<span class="kw">int</span> id);
+}
+
+<span class="cmt">// v2.0 —— 你想加一个批量查询方法：</span>
+<span class="kw">public</span> <span class="kw">interface</span> <span class="type">IRepository</span>&lt;<span class="type">T</span>&gt;
+{
+    <span class="type">T</span> GetById(<span class="kw">int</span> id);
+    <span class="kw">void</span> Add(<span class="type">T</span> entity);
+    <span class="kw">void</span> Delete(<span class="kw">int</span> id);
+    IEnumerable&lt;<span class="type">T</span>&gt; GetByIds(IEnumerable&lt;<span class="kw">int</span>&gt; ids);  <span class="cmt">// ⚠️ 加了这行</span>
+}
+<span class="cmt">// → 编译错误！50 个实现类全都缺少 GetByIds 方法
+// → 要么改 50 个实现类，要么放弃加这个方法</span></code></pre>
+
+<p>这就是 <strong>接口进化问题</strong>：C# 1.0~7.3 的接口是"冻住的"——一旦发布，不能再加任何成员。Java（从 Java 8 开始）和 Swift 早就解决了这个问题，C# 直到 8.0 才跟上。</p>
+
+<h3>1.2 机制——Default Interface Methods 怎么工作的</h3>
+
+<p>C# 8 允许在接口里给方法写<strong>默认实现</strong>：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">interface</span> <span class="type">IRepository</span>&lt;<span class="type">T</span>&gt;
+{
+    <span class="type">T</span> GetById(<span class="kw">int</span> id);
+    <span class="kw">void</span> Add(<span class="type">T</span> entity);
+    <span class="kw">void</span> Delete(<span class="kw">int</span> id);
+
+    <span class="cmt">// C# 8: 带默认实现的新方法——已有的 50 个实现类不需要改动！</span>
+    IEnumerable&lt;<span class="type">T</span>&gt; GetByIds(IEnumerable&lt;<span class="kw">int</span>&gt; ids)
+    {
+        <span class="kw">foreach</span> (<span class="kw">var</span> id <span class="kw">in</span> ids)
+            <span class="kw">yield return</span> GetById(id);
+    }
+}</code></pre>
+
+<p>已有的 50 个实现类——它们没有显式实现 <code>GetByIds</code>——<strong>自动继承这个默认实现</strong>。新的实现类可以覆盖它（如果需要批量查询优化的话）。</p>
+
+<div class="callout callout--info">
+<strong>编译器生成了什么？</strong>默认接口方法会被编译成接口上的 <code>virtual</code> 方法 + 一个 <code>sealed</code> 方法（保证默认实现有地方存放）。实现类如果没有显式实现这个方法，CLR 走接口的默认实现；如果显式实现了，走实现类的版本——和类继承的虚方法分发类似，但发生在接口层面。
+</div>
+
+<h3>1.3 最诡异的坑——不同调用方式，结果不同</h3>
+
+<p>这是面试最喜欢考的 Default Interface Methods 题目：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">interface</span> <span class="type">ILogger</span>
+{
+    <span class="kw">void</span> Log(<span class="kw">string</span> msg) =&gt; Console.WriteLine(<span class="str">$"[Default] {msg}"</span>);
+}
+
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">MyLogger</span> : <span class="type">ILogger</span>
+{
+    <span class="cmt">// 没有实现 Log —— 用接口的默认实现</span>
+}
+
+<span class="cmt">// 调用：</span>
+<span class="type">MyLogger</span> logger = <span class="kw">new</span> <span class="type">MyLogger</span>();
+logger.Log(<span class="str">"hello"</span>);  <span class="cmt">// ⚠️ 编译错误！MyLogger 类型上没有 Log 方法</span>
+
+<span class="type">ILogger</span> iLogger = <span class="kw">new</span> <span class="type">MyLogger</span>();
+iLogger.Log(<span class="str">"hello"</span>);  <span class="cmt">// ✅ 输出 [Default] hello —— 通过接口类型访问才走默认实现</span></code></pre>
+
+<p>默认接口方法<strong>只通过接口类型的引用访问</strong>——它是接口的成员，不是类的成员。这和 C++ 的多重继承不同。</p>
+
+<div class="callout callout--warn">
+<strong>关键理解：</strong>默认接口方法不是"让接口变成抽象类"。它解决的是一个很窄的问题：<strong>API 进化</strong>——允许接口在不破坏已有实现的前提下增加新成员。如果你发现自己大量使用默认实现来"共享代码"，那说明你应该用抽象类或者组合模式。
+</div>
+
+<h3>1.4 菱形继承（Diamond Problem）</h3>
+
+<p>类可以实现多个接口。如果两个接口都提供了同名方法的默认实现，怎么办？</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">interface</span> <span class="type">IFlyable</span>
+{
+    <span class="kw">void</span> Move() =&gt; Console.WriteLine(<span class="str">"Flying"</span>);
+}
+
+<span class="kw">public</span> <span class="kw">interface</span> <span class="type">ISwimmable</span>
+{
+    <span class="kw">void</span> Move() =&gt; Console.WriteLine(<span class="str">"Swimming"</span>);
+}
+
+<span class="cmt">// 类同时实现了两个接口 → 编译错误：Move 的实现在两个接口间有歧义</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Duck</span> : <span class="type">IFlyable</span>, <span class="type">ISwimmable</span>
+{
+    <span class="cmt">// 必须显式实现两个接口的 Move，或者给出自己的 Move</span>
+    <span class="kw">void</span> <span class="type">IFlyable</span>.Move() { Console.WriteLine(<span class="str">"Flying"</span>); }
+    <span class="kw">void</span> <span class="type">ISwimmable</span>.Move() { Console.WriteLine(<span class="str">"Swimming"</span>); }
+}</code></pre>
+
+<p>C# 的解决方案很务实：<strong>类自己的实现优先级最高</strong>，如果类没有实现，则必须显式消歧——不会像 C++ 那样悄无声息地调用一个"父类"版本。</p>
+
+<h3>1.5 正确使用场景 vs 反模式</h3>
+
+<table>
+  <tr><th>✅ 用 Default Interface Methods</th><th>❌ 不用（反模式）</th></tr>
+  <tr><td>给已发布的接口加便捷方法（如 <code>GetByIds</code> 基于 <code>GetById</code>）</td><td>在接口里塞入复杂的业务逻辑</td></tr>
+  <tr><td>接口的"可选"成员——实现者可以不管，需要时覆盖</td><td>把接口当抽象类用——共享字段、构造函数逻辑</td></tr>
+  <tr><td>跨平台的 .NET 运行时 API 进化（如 <code>Span&lt;T&gt;</code> 相关接口）</td><td>为了省事——不想创建抽象类，直接用接口代替</td></tr>
+  <tr><td>为旧接口提供适应新特性的适配层（如给老接口加 async 版本）</td><td>菱形继承——两个接口同名方法的意图完全不同</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>.NET 团队自己怎么用？</strong>默认接口方法最经典的应用是 <code>IList&lt;T&gt;</code> 接口——它提供了 <code>CopyTo</code>、<code>IndexOf</code> 等方法的默认实现，基于 <code>Count</code> 和索引器。如果你的集合有高性能的自定义实现，就覆盖；没有，就用默认的——不会报错。这就是 API 进化的正确姿势。
+</div>
+
+<!-- ====== PART 2: SMALLER FEATURES ====== -->
+
+<h2>第二部分：三个日常高频小特性</h2>
+
+<h3>2.1 Null-coalescing assignment — <code>??=</code></h3>
+
+<p>这是 C# 8 最简单的特性——从"检查 + 赋值"两行变一行：</p>
+
+<pre><code><span class="cmt">// 旧写法（C# 7.3 及以前）：</span>
+<span class="kw">if</span> (_cache == <span class="kw">null</span>)
+    _cache = LoadFromDb();
+
+<span class="cmt">// 或者：</span>
+_cache = _cache ?? LoadFromDb();
+
+<span class="cmt">// C# 8 新写法——只在左边是 null 时才赋值：</span>
+_cache <span class="pnk">??=</span> LoadFromDb();</code></pre>
+
+<p>本质上是 <code>a ?? (a = b)</code> 的语法糖。适用于惰性初始化、缓存填充、配置默认值等场景：</p>
+
+<pre><code><span class="cmt">// 典型场景一：惰性初始化</span>
+<span class="kw">private</span> <span class="type">List</span>&lt;<span class="type">Order</span>&gt; _orders;
+<span class="kw">public</span> <span class="type">List</span>&lt;<span class="type">Order</span>&gt; Orders =&gt; _orders <span class="pnk">??=</span> LoadOrdersFromDb();
+
+<span class="cmt">// 典型场景二：字典缓存</span>
+<span class="kw">public</span> <span class="type">T</span> GetOrCreate&lt;<span class="type">T</span>&gt;(<span class="kw">string</span> key, Func&lt;<span class="type">T</span>&gt; factory)
+{
+    <span class="cmt">// 没有就创建，有了不覆盖</span>
+    _cache[key] <span class="pnk">??=</span> factory();
+    <span class="kw">return</span> (_cache[key]);
+}</code></pre>
+
+<h3>2.2 Static Local Functions — 防止意外捕获</h3>
+
+<p>局部函数（C# 7 引入）可以访问外部变量——但有时你<strong>不想</strong>它访问，因为这会导致隐式的堆分配（闭包）：</p>
+
+<pre><code><span class="cmt">// 问题：非 static 局部函数可能捕获外部变量</span>
+<span class="kw">int</span> factor = 10;
+<span class="kw">int</span> total = 0;
+
+<span class="kw">int</span> Multiply(<span class="kw">int</span> x)
+{
+    <span class="kw">return</span> x * factor;  <span class="cmt">// ← 捕获了外部变量 factor → 编译器生成闭包类 → 堆分配</span>
+}
+
+<span class="cmt">// C# 8 解决：加 static —— 不允许捕获任何外部变量</span>
+<span class="kw">static</span> <span class="kw">int</span> Multiply(<span class="kw">int</span> x, <span class="kw">int</span> factor)  <span class="cmt">// ← 加了 static</span>
+{
+    <span class="kw">return</span> x * factor;  <span class="cmt">// factor 是参数，不是捕获的外部变量 → 无堆分配 ✅</span>
+}
+<span class="cmt">// 如果你不小心引用了外部变量 → 编译错误！
+// 这让你明确知道这函数没有闭包，性能更可预测</span></code></pre>
+
+<div class="callout callout--info">
+<strong>何时用 static local function？</strong>当局部函数不需要访问任何外部变量时——这强制了"纯函数"语义，编译器不会生成闭包，性能更好（无堆分配），意图也更清晰。在性能敏感的路径上尤其重要。
+</div>
+
+<h3>2.3 Readonly Struct Members — 细粒度 readonly</h3>
+
+<p>C# 7.2 引入了 <code>readonly struct</code>——整个结构体不可变。但有时你只想标记<strong>个别方法或属性</strong>为 readonly：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">struct</span> <span class="type">Vector3</span>
+{
+    <span class="kw">public</span> <span class="kw">float</span> X, Y, Z;
+
+    <span class="cmt">// C# 8: 标记单个成员为 readonly</span>
+    <span class="kw">public</span> <span class="kw">readonly</span> <span class="kw">float</span> Magnitude =&gt; MathF.Sqrt(X * X + Y * Y + Z * Z);
+
+    <span class="cmt">// 普通方法——可能修改字段</span>
+    <span class="kw">public</span> <span class="kw">void</span> Translate(<span class="kw">float</span> dx, <span class="kw">float</span> dy, <span class="kw">float</span> dz)
+    {
+        X += dx; Y += dy; Z += dz;
+    }
+}</code></pre>
+
+<p>这有什么好处？编译器在调用 <code>readonly</code> 成员时，会创建<strong>防御性拷贝</strong><span class="en">defensive copy</span>的规则更宽松——因为它知道这个成员不会修改结构体。在高性能场景（比如大量 Vector3 运算），这减少了很多不必要的拷贝。</p>
+
+<div class="callout callout--info">
+<strong>编译器防御性拷贝简述：</strong>当 struct 的某个方法可能修改 struct 自身时，编译器在非安全上下文中会先拷贝一份再调用方法——防止意外修改原值。<code>readonly</code> 标记告诉编译器"这个方法不会修改 struct"→ 编译器跳过防御性拷贝 → 更快。
+</div>
+
+<!-- ====== SUMMARY ====== -->
+
+<h2>三、C# 8 完结——你掌握了什么</h2>
+
+<p>六节课，你从 .NET Framework 4.8 的 C# 7.3 基线，完整覆盖了 C# 8 的所有重要特性：</p>
+
+<table>
+  <tr><th>能力维度</th><th>达成</th></tr>
+  <tr><td>Null 安全</td><td>Nullable Reference Types —— 编译期追踪 null，消灭 NRE</td></tr>
+  <tr><td>模式匹配</td><td>switch 表达式 + 属性模式 + 元组模式 + when —— 声明式分支</td></tr>
+  <tr><td>资源管理</td><td>using 声明 —— 作用域结束自动释放</td></tr>
+  <tr><td>集合操作</td><td>Indices/Ranges + yield return 状态机 —— 切片 + 惰性枚举</td></tr>
+  <tr><td>异步编程</td><td>IAsyncEnumerable + await foreach + SynchronizationContext/ConfigureAwait</td></tr>
+  <tr><td>API 进化</td><td>Default Interface Methods —— 安全地向接口添加新成员</td></tr>
+  <tr><td>性能与安全</td><td>static local functions + readonly struct members + ??=</td></tr>
+</table>
+
+<div class="callout callout--good" style="font-size:1rem;">
+<strong>C# 8 收官。</strong>下一站：<strong>C# 9</strong>——Records、Init-only properties、Top-level statements、Pattern matching 增强。这些才是真正改变你日常编码方式的特性。
+</div>
+
+<!-- ====== QUIZ ====== -->
+
+<h2>📝 小测验</h2>
+
+<div class="quiz" id="q1">
+  <h3>Q1. 以下代码的输出是什么？</h3>
+<pre><code><span class="kw">public</span> <span class="kw">interface</span> <span class="type">ISpeak</span>
+{
+    <span class="kw">void</span> Say() =&gt; Console.WriteLine(<span class="str">"Interface"</span>);
+}
+
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Speaker</span> : <span class="type">ISpeak</span> { }
+
+<span class="kw">var</span> s = <span class="kw">new</span> <span class="type">Speaker</span>();
+s.Say();</code></pre>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q1" value="a"> 输出 "Interface"</label>
+  <label><input type="radio" name="q1" value="b"> 输出 null，没有报错</label>
+  <label><input type="radio" name="q1" value="c"> 编译错误——Speaker 类型上没有 Say 方法</label>
+  <label><input type="radio" name="q1" value="d"> 运行时抛出 NotImplementedException</label>
+  <button onclick="check('q1','c')">确认</button>
+  <div class="feedback" id="f_q1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>Q2. Default Interface Methods 的<strong>首要</strong>设计目的是什么？</h3>
+  <div class="question">选择最准确的描述：</div>
+  <label><input type="radio" name="q2" value="a"> 让接口代替抽象类，减少类的数量</label>
+  <label><input type="radio" name="q2" value="b"> 允许在不破坏已有实现的前提下给接口增加新成员</label>
+  <label><input type="radio" name="q2" value="c"> 支持多重继承</label>
+  <label><input type="radio" name="q2" value="d"> 提高接口方法的调用性能</label>
+  <button onclick="check('q2','b')">确认</button>
+  <div class="feedback" id="f_q2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>Q3. 以下两个类同时实现 IFlyable 和 ISwimmable（两个接口都有 Move() 默认实现），会发生什么？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q3" value="a"> 自动选择先声明的接口的实现</label>
+  <label><input type="radio" name="q3" value="b"> 运行时随机选一个</label>
+  <label><input type="radio" name="q3" value="c"> 编译错误——必须在类中显式实现来消歧</label>
+  <label><input type="radio" name="q3" value="d"> 两个实现通过线程 ID 来决定调用哪个</label>
+  <button onclick="check('q3','c')">确认</button>
+  <div class="feedback" id="f_q3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>Q4. <code>x ??= y</code> 等价于什么？</h3>
+  <div class="question">选择正确的等价表达式：</div>
+  <label><input type="radio" name="q4" value="a"> <code>x = x ?? y</code></label>
+  <label><input type="radio" name="q4" value="b"> <code>x = y; if (x == null) x = y;</code> 的简写</label>
+  <label><input type="radio" name="q4" value="c"> <code>if (x == null) x = y;</code></label>
+  <label><input type="radio" name="q4" value="d"> <code>if (x != null) x = y;</code></label>
+  <button onclick="check('q4','a')">确认</button>
+  <div class="feedback" id="f_q4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>Q5. 关于 <code>static</code> 局部函数，以下哪句是<strong>正确</strong>的？</h3>
+  <div class="question">选择正确的描述：</div>
+  <label><input type="radio" name="q5" value="a"> static 局部函数访问外部变量时会自动创建副本</label>
+  <label><input type="radio" name="q5" value="b"> static 局部函数不能有任何参数</label>
+  <label><input type="radio" name="q5" value="c"> static 局部函数不能捕获外部变量——如果尝试引用外部变量会编译错误</label>
+  <label><input type="radio" name="q5" value="d"> static 局部函数只能在 static 类中使用</label>
+  <button onclick="check('q5','c')">确认</button>
+  <div class="feedback" id="f_q5"></div>
+</div>
+
+<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<p class="mild">
+  Lesson 06 · C# 8 收尾 · 下一课预告：<strong>C# 9 Records</strong>——不可变引用类型，值相等语义
+</p>
+<p class="mild">
+  有任何不清楚的地方？<strong>直接在对话中追问</strong>——Agent 就是你的私教。
+</p>
+
+<script>
+function check(qid, correct) {
+  var f = document.getElementById('f_' + qid);
+  var selected = document.querySelector('input[name="' + qid + '"]:checked');
+  if (!selected) {
+    f.textContent = '⚠️ 请先选择一个答案。';
+    f.className = 'feedback show wrong';
+    return;
+  }
+  var isCorrect = selected.value === correct;
+  var answers = {
+    q1: {
+      correct: '✅ 正确！默认接口方法只能通过接口类型的引用访问，Speaker 类型上没有 Say 方法。这是面试必考题。',
+      wrong:   '❌ 答案是「编译错误」。默认接口方法只属于接口——Speaker 类没有实现 Say 方法，所以 s.Say() 编译报错。必须写 ISpeak i = new Speaker(); i.Say(); 才能走默认实现。'
+    },
+    q2: {
+      correct: '✅ 正确！Default Interface Methods 的核心动机是 API 进化——让接口可以在不破坏已有实现的前提下安全地增加新成员。Java 8 和 Swift 都先于 C# 做到了这点。',
+      wrong:   '❌ 答案是 b。Default Interface Methods 不是为了代替抽象类或实现多重继承，它是为解决 API 进化问题而设计的——允许已发布的接口安全地添加新成员。'
+    },
+    q3: {
+      correct: '✅ 正确！C# 的菱形继承解决方案很清晰——不自动选择，不随机，必须由开发者显式消歧。',
+      wrong:   '❌ 答案是「编译错误」。C# 不会自动帮你选——两个接口的 Move() 发生冲突时，类必须显式实现（或给出自己的实现），否则编译报错。这是 C# 比 C++ 更安全的设计选择。'
+    },
+    q4: {
+      correct: '✅ 正确！<code>x ??= y</code> 就是 <code>x = x ?? y</code> 的语法糖：如果 x 不是 null，保持不变；如果是 null，赋值为 y。',
+      wrong:   '❌ 答案是 <code>x = x ?? y</code>。语义是"如果 x 是 null，则把 y 赋给 x；否则 x 保持不变"。和 if (x == null) x = y 也等价，但 <code>x = x ?? y</code> 是编译器内部的展开形式。'
+    },
+    q5: {
+      correct: '✅ 正确！<code>static</code> 局部函数保证了"纯函数"语义——它不能看到外部作用域的变量，所有数据必须通过参数传入。这既明确了意图，又避免了隐式闭包产生的堆分配。',
+      wrong:   '❌ 答案是 c。static 局部函数不能捕获外部变量。如果尝试在 static 函数里引用外部的局部变量或字段，编译器会报错。这个设计是为了防止意外的闭包捕获（堆分配）和明确函数的数据依赖。'
+    }
+  };
+  var a = answers[qid];
+  f.textContent = isCorrect ? a.correct : a.wrong;
+  f.className = 'feedback show ' + (isCorrect ? 'correct' : 'wrong');
+}
+</script>
+
+</body>
+</html>
