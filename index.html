@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Learning Lessons — 课程目录</title>
+<style>
+  :root {
+    --bg: #faf9f6;
+    --card-bg: #ffffff;
+    --text: #1a1a1a;
+    --muted: #666;
+    --accent: #2563eb;
+    --border: #e5e5e5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Noto Sans SC", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  header { text-align: center; margin-bottom: 2.5rem; }
+  header h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+  header p { color: var(--muted); font-size: 1.05rem; }
+  .course-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .course-card h2 {
+    font-size: 1.35rem;
+    margin-bottom: 0.75rem;
+    color: var(--accent);
+  }
+  .course-card ol { padding-left: 1.5rem; }
+  .course-card li { margin-bottom: 0.5rem; line-height: 1.5; }
+  .course-card a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  .course-card a:hover { text-decoration: underline; }
+  footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 3rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📚 Learning Lessons</h1>
+  <p>现代 .NET 开发学习笔记</p>
+</header>
+
+<main>
+  <section class="course-card">
+    <h2>Morden .NET</h2>
+    <ol>
+      <li><a href="Morden%20.NET/01-csharp8-nullable-reference-types.html">Lesson 01: C# 8 Nullable Reference Types — 从 Framework 4.8 到现代 .NET</a></li>
+      <li><a href="Morden%20.NET/02-csharp8-switch-using-indices.html">Lesson 02: C# 8 Switch Expressions &middot; Using Declarations &middot; Indices/Ranges</a></li>
+      <li><a href="Morden%20.NET/03-sync-yield-return-iterators.html">Lesson 03: C# yield return 同步迭代器</a></li>
+      <li><a href="Morden%20.NET/04-csharp8-async-streams.html">Lesson 04: C# 8 Async Streams — 异步流</a></li>
+    </ol>
+  </section>
+</main>
+
+<footer>
+  <p>由 sync-lessons skill 自动生成</p>
+</footer>
+
+</body>
+</html>

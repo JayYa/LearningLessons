@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 01: C# 8 Nullable Reference Types — 从 Framework 4.8 到现代 .NET</title>
+<style>
+  :root {
+    --bg: #faf9f7;
+    --card-bg: #ffffff;
+    --text: #1a1a1a;
+    --text-muted: #6b6b6b;
+    --border: #e0ded8;
+    --accent: #512bd4;
+    --accent-light: #ede4ff;
+    --good: #1a7f37;
+    --good-bg: #dafbe1;
+    --warn: #9a6700;
+    --warn-bg: #fff8c5;
+    --bad: #cf222e;
+    --bad-bg: #ffebe9;
+    --code-bg: #f0efeb;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+
+  .callout {
+    padding: 1rem 1.25rem;
+    border-radius: var(--radius);
+    margin: 1rem 0;
+    font-size: 0.95rem;
+  }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; }
+  .en::after { content: ')'; }
+
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+
+  .comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+
+  pre {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 1rem 1.25rem;
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; }
+  .str { color: #a6e3a1; }
+  .cmt { color: #6c7086; }
+  .num { color: #fab387; }
+  .type { color: #89b4fa; }
+
+  .quiz {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem;
+    padding: 0.5rem 1.25rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback { margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem; }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.93rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { font-weight: 600; color: var(--text-muted); font-size: 0.82rem; text-transform: uppercase; }
+  tr:last-child td { border-bottom: none; }
+
+  .timeline {
+    display: flex;
+    gap: 0.5rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+  }
+  .timeline-item {
+    flex: 1;
+    min-width: 100px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+    text-align: center;
+    font-size: 0.85rem;
+  }
+  .timeline-item .year { font-weight: 700; font-size: 1.1rem; }
+  .timeline-item .plat { color: var(--accent); }
+  .timeline-item .lang { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.15rem; }
+  .timeline-item.current {
+    border: 2px solid var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
+  }
+</style>
+</head>
+<body>
+
+<h1>Lesson 01: C# 8 —— 告别空引用异常的时代</h1>
+<p class="subtitle">从 .NET Framework 4.8 / C# 7.3 出发，进入现代 C# 的第一个大版本</p>
+
+<div class="callout callout--info">
+<strong>你的位置 / Your baseline：</strong>你已经掌握 C# 7.3（可空值类型<span class="en">Nullable Value Types</span>、表达式体成员<span class="en">Expression-bodied members</span>、模式匹配<span class="en">Pattern matching</span> 入门）。<br>
+<strong>本课目标 / Goal：</strong>理解 C# 8 最重要的变革——<em>可空引用类型<span class="en">Nullable Reference Types, NRT</span></em>，以及为什么它是现代 C# 的基石。
+</div>
+
+<details style="margin: 1rem 0;">
+<summary style="cursor: pointer; font-weight: 600; color: var(--text-muted);">
+  📎 快速回顾：C# 7.3 已经有的三个东西
+</summary>
+<div style="padding: 0.75rem 1rem; border-left: 3px solid var(--border); margin-top: 0.5rem;">
+
+<p><strong>可空值类型<span class="en">Nullable Value Types</span></strong>——C# 2.0 就有了：</p>
+<pre><code><span class="type">int</span>? score = <span class="kw">null</span>;                  <span class="cmt">// 语法糖，底层是 Nullable&lt;int&gt;</span>
+<span class="type">int</span> result = score ?? -1;             <span class="cmt">// null-coalescing（C# 2）</span>
+<span class="type">int</span> result2 = score.HasValue ? score.Value : -1;  <span class="cmt">// 等价</span></code></pre>
+
+<p><strong>表达式体成员<span class="en">Expression-bodied Members</span></strong>——<code>=&gt;</code> 语法糖，C# 6 引入方法/只读属性，C# 7 扩展到构造/析构/访问器：</p>
+<pre><code><span class="kw">public string</span> FullName => <span class="str">$"{FirstName} {LastName}"</span>;
+<span class="kw">public</span> Person(<span class="kw">string</span> name) => _name = name;   <span class="cmt">// C# 7 新增</span></code></pre>
+
+<p><strong>模式匹配<span class="en">Pattern Matching</span></strong>——C# 7 把类型检查 + 转换合为一步，C# 8 后大幅强化：</p>
+<pre><code><span class="cmt">// C# 6：检查 + 转换两步</span>
+<span class="kw">if</span> (obj <span class="kw">is</span> <span class="type">string</span>) { <span class="kw">var</span> s = (<span class="type">string</span>)obj; ... }
+
+<span class="cmt">// C# 7：一步到位</span>
+<span class="kw">if</span> (obj <span class="kw">is</span> <span class="type">string</span> s && s.Length > 0) ...</code></pre>
+
+</div>
+</details>
+
+<h2>一、先看全貌：Framework 4.8 之后发生了什么</h2>
+
+<div class="timeline">
+  <div class="timeline-item"><div class="year">2018</div><div class="plat">FW 4.7.2</div><div class="lang">C# 7.3</div></div>
+  <div class="timeline-item current"><div class="year">2019</div><div class="plat">FW 4.8 / Core 3.0</div><div class="lang">C# 8</div></div>
+  <div class="timeline-item"><div class="year">2020</div><div class="plat">.NET 5</div><div class="lang">C# 9</div></div>
+  <div class="timeline-item"><div class="year">2021</div><div class="plat">.NET 6 LTS</div><div class="lang">C# 10</div></div>
+  <div class="timeline-item"><div class="year">2022</div><div class="plat">.NET 7</div><div class="lang">C# 11</div></div>
+  <div class="timeline-item"><div class="year">2023</div><div class="plat">.NET 8 LTS</div><div class="lang">C# 12</div></div>
+  <div class="timeline-item"><div class="year">2024</div><div class="plat">.NET 9</div><div class="lang">C# 13</div></div>
+  <div class="timeline-item"><div class="year">2025</div><div class="plat">.NET 10 LTS</div><div class="lang">C# 14</div></div>
+</div>
+
+<p><strong>关键转折：</strong></p>
+<ul>
+  <li><strong>.NET Core 3.0</strong> 是 Framework 4.8 的"平行版本"——它是重写，不是升级。去掉了 Windows 依赖，支持 Linux/macOS。</li>
+  <li><strong>.NET 5</strong> 把 Core 和 Mono 统一为一个平台。没有 .NET Core 4.0（跳过 4 是为了避免和 Framework 4.x 混淆）。</li>
+  <li><strong>.NET 6 / 8 / 10</strong> 是 LTS 版本，偶数号 + 3 年支持。企业项目优先选 LTS。</li>
+</ul>
+
+<div class="callout callout--warn">
+<strong>重要概念：</strong>统一后的 .NET 不再叫 ".NET Core"——就叫 ".NET"。见人说 .NET 6，不是 .NET Core 6。
+</div>
+
+<h2>二、引入 Nullable Reference Types</h2>
+
+<h3>问题：你可能已经写过上万行 NullReferenceException</h3>
+
+<div class="comparison">
+  <div class="old">
+    <h4>C# 7.3（Framework 4.8）</h4>
+<pre><code><span class="type">string</span> name = GetName();
+<span class="type">int</span> length = name.Length; <span class="cmt">// 💥 如果 name 是 null</span>
+<span class="cmt">// 编译完全通过，运行时爆炸</span>
+
+<span class="type">string</span>? nullableValue; <span class="cmt">// ← 只对 value type 有效</span>
+<span class="cmt">// int? = Nullable&lt;int&gt;</span>
+<span class="cmt">// string? 不存在！（C# 7.3）</span></code></pre>
+  </div>
+  <div class="new">
+    <h4>C# 8+（Nullable 开启）</h4>
+<pre><code><span class="type">string</span> name = GetName();      <span class="cmt">// 非 null 的承诺</span>
+<span class="type">int</span> length = name.Length;    <span class="cmt">// ✅ 编译器放心</span>
+
+<span class="type">string?</span> maybeNull = GetName(); <span class="cmt">// 可以为 null</span>
+<span class="cmt">// int len = maybeNull.Length; // ⚠️ 编译器警告!</span>
+<span class="cmt">// int len = maybeNull!.Length // 我知道它不是 null（断言）</span></span></code></pre>
+  </div>
+</div>
+
+<p>核心思想：<strong>引用类型<span class="en">Reference Types</span> 的 null 不再是运行时<span class="en">Runtime</span>问题，而变成编译时<span class="en">Compile-time</span>问题。</strong></p>
+
+<p>用 TypeScript 类比：C# 8 的 NRT 就像 TypeScript 的 <code>strictNullChecks</code>——在编译期区分 <code>string</code>（非 null）和 <code>string?</code>（可能 null）。</p>
+
+<h3>开启方式</h3>
+
+<p>在你的 <code>.csproj</code> 或文件顶部控制：</p>
+
+<pre><code><span class="cmt">// 方式 1：项目级别（.csproj）</span>
+&lt;Nullable&gt;enable&lt;/Nullable&gt;
+
+<span class="cmt">// 方式 2：文件级别（放在文件最顶部）</span>
+<span class="kw">#nullable</span> enable
+<span class="kw">#nullable</span> disable    <span class="cmt">// 局部关闭</span>
+<span class="kw">#nullable</span> restore    <span class="cmt">// 恢复到项目设置</span></code></pre>
+
+<div class="callout callout--good">
+<strong>建议：</strong>新项目直接在 .csproj 中 <code>&lt;Nullable&gt;enable&lt;/Nullable&gt;</code>。旧项目可以逐文件迁移。
+</div>
+
+<h3>核心规则：四个操作符<span class="en">Operators</span>，两个场景<span class="en">Scenarios</span></h3>
+
+<table>
+  <tr><th>写法 / Syntax</th><th>含义 / Meaning</th><th>编译器行为 / Compiler Behavior</th></tr>
+  <tr>
+    <td><code>string name</code></td>
+    <td>"这个引用不会为 null"</td>
+    <td>如果你把它设为 null，<strong>警告</strong></td>
+  </tr>
+  <tr>
+    <td><code>string? name</code></td>
+    <td>"这个引用可以为 null"</td>
+    <td>如果你直接访问它的成员，<strong>警告</strong></td>
+  </tr>
+  <tr>
+    <td><code>name!</code></td>
+    <td>"我断言它不是 null"（空包容操作符<span class="en">Null-forgiving Operator</span>）</td>
+    <td><strong>抑制所有警告</strong>——相信自己，风险自负</td>
+  </tr>
+  <tr>
+    <td><code>name!.Foo</code></td>
+    <td><code>!</code> 作用在 <code>name</code> 上，<code>.Foo</code> 是普通成员访问</td>
+    <td><code>!</code> 不是和 <code>.</code> 绑定的操作符——它俩独立，只是挨在一起</td>
+  </tr>
+</table>
+
+<h3>编译器如何追踪 null 状态 <span class="en">Null-state Analysis</span></h3>
+
+<p>编译器会做<strong>流分析<span class="en">Flow Analysis</span></strong>，追踪变量在每条路径上的 null 状态<span class="en">Null State</span>：</p>
+
+<pre><code><span class="type">string?</span> name = GetMaybeNullName();
+
+<span class="cmt">// ❌ 编译器警告：name 可能为 null</span>
+<span class="type">int</span> a = name.Length;
+
+<span class="cmt">// ✅ 编译器不警告：你在 if 里检查过</span>
+<span class="kw">if</span> (name != <span class="kw">null</span>)
+{
+    <span class="type">int</span> b = name.Length;  <span class="cmt">// name 在此分支内被追踪为 "not null"</span>
+}
+
+<span class="cmt">// ✅ 也可以用 throw 来帮助编译器推断</span>
+<span class="kw">if</span> (name == <span class="kw">null</span>) <span class="kw">throw new</span> ArgumentNullException(<span class="kw">nameof</span>(name));
+<span class="type">int</span> d = name.Length;  <span class="cmt">// 编译器知道这下面 name 一定不是 null</span>
+
+<span class="cmt">// ✅ null-coalescing 也会被追踪</span>
+<span class="type">int</span> e = (name ?? <span class="str">""</span>).Length;</code></pre>
+
+<h3>最该记住的模式</h3>
+
+<div class="comparison">
+  <div class="old">
+    <h4>C# 7.3：防御式编程<span class="en">Defensive Programming</span></h4>
+<pre><code><span class="kw">public</span> <span class="type">string</span> Format(<span class="type">string</span> input)
+{
+    <span class="kw">if</span> (input == <span class="kw">null</span>)
+        <span class="kw">throw new</span> ArgumentNullException(
+            <span class="kw">nameof</span>(input));
+
+    <span class="kw">return</span> input.ToUpper();
+    <span class="cmt">// 你只是"自觉"保证不返回 null</span>
+}</code></pre>
+  </div>
+  <div class="new">
+    <h4>C# 8：类型系统替你做</h4>
+<pre><code><span class="kw">public</span> <span class="type">string</span> Format(<span class="type">string</span> input)
+{
+    <span class="kw">return</span> input.ToUpper();
+    <span class="cmt">// 1. 非 null 签名就是契约</span>
+    <span class="cmt">// 2. 调用方传 null 时编译器会警告</span>
+    <span class="cmt">// 3. 你不需要手动 throw</span>
+}</code></pre>
+  </div>
+</div>
+
+<div class="callout callout--warn">
+<strong>注意：</strong>NRT 是<strong>编译时检查</strong>，不是运行时保证。JIT 不会插入 null 检查。如果通过反射或者关掉 nullable 的代码调用你，null 仍然会进入你的方法。这就是为什么 BCL 中的公开 API 仍然保留显式的 <code>ArgumentNullException.ThrowIfNull</code> 检查（.NET 6+ 新增的）。
+</div>
+
+<h2>三、配套特性：<code>??=</code> 空合并赋值<span class="en">Null-coalescing Assignment</span></h2>
+
+<pre><code><span class="cmt">// C# 7.3: 检查 + 赋值 两步走</span>
+<span class="kw">if</span> (name == <span class="kw">null</span>)
+    name = <span class="str">"default"</span>;
+
+<span class="cmt">// C# 8: 一步</span>
+name ??= <span class="str">"default"</span>;
+
+<span class="cmt">// 和 ?? 一样是短路求值——只有左边是 null 才执行右边</span>
+list ??= <span class="kw">new</span> List&lt;<span class="type">string</span>&gt;();</code></pre>
+
+<h2>四、实战场景与边界情况 <span class="en">Real-world Scenarios & Edge Cases</span></h2>
+
+<h3>场景 1：编译器流分析<span class="en">Flow Analysis</span> 对构造函数的宽松处理</h3>
+
+<p>开了 NRT 后，编译器会检查所有非 null 字段是否初始化。但它在构造函数上做特殊分析——只要字段在构造函数体中被赋了值（不管是 DI 传进来还是直接 new），它就<strong>不报警告</strong>。</p>
+
+<pre><code><span class="kw">public class</span> <span class="type">UserService</span>
+{
+    <span class="cmt">// 构造函数内一定被赋值 → 编译器追踪到了 → 不警告</span>
+    <span class="kw">private</span> <span class="type">ILogger</span> _logger;
+    <span class="kw">private</span> <span class="type">DbContext</span> _db;
+
+    <span class="kw">public</span> UserService(<span class="type">ILogger</span> logger, <span class="type">DbContext</span> db)
+    {
+        _logger = logger;
+        _db = db;
+    }
+}</code></pre>
+
+<div class="callout callout--info">
+<strong>注意：</strong>如果你的项目没开 <code>#nullable enable</code>，编译器完全不追踪 null 状态，这段代码和你 Framework 4.8 的体验完全一样。这个场景只有在 NRT 开启时才需要关心。
+</div>
+
+<h3>场景 2：EF Core 的导航属性<span class="en">Navigation Properties</span></h3>
+
+<pre><code><span class="kw">public class</span> <span class="type">Order</span>
+{
+    <span class="kw">public</span> <span class="type">int</span> Id { <span class="kw">get</span>; <span class="kw">set</span>; }
+
+    <span class="cmt">// EF Core 通过反射填充，编译器认为它没有初始化</span>
+    <span class="cmt">// 用 = null! 告诉编译器"我知道它会被填充"</span>
+    <span class="kw">public</span> <span class="type">Customer</span> Customer { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="kw">null!</span>;
+
+    <span class="cmt">// 或标记为 required (C# 11)</span>
+    <span class="cmt">// public required Customer Customer { get; set; }</span>
+}</code></pre>
+
+<div class="callout callout--info">
+<strong><code>null!</code> 拆解——它是两个独立的东西叠加：</strong><br>
+<code>null</code> 给字段一个初始值（满足编译器"非 null 字段必须初始化"的要求）；<br>
+<code>!</code> 马上告诉编译器"别分析这个 null 赋值"（空包容操作符<span class="en">Null-forgiving Operator</span>）。<br><br>
+两者没有任何语法绑定——<code>!</code> 不是 <code>null!</code> 专用，它可以跟在任何表达式后面。这里的本质就是：<em>"我先写个 null，编译器你别管，反射会在运行时塞真正的对象进来。"</em>
+</div>
+
+<h3>场景 3：TryGetValue 模式<span class="en">Try-Parse Pattern</span></h3>
+
+<pre><code><span class="cmt">// 传统 TryXxx 模式——out 参数在 NRT 下的签名</span>
+<span class="kw">public</span> <span class="type">bool</span> TryGetUser(<span class="type">int</span> id, [NotNullWhen(<span class="kw">true</span>)] <span class="kw">out</span> <span class="type">User?</span> user)
+{
+    user = _users.FirstOrDefault(u =&gt; u.Id == id);
+    <span class="kw">return</span> user != <span class="kw">null</span>;
+}
+
+<span class="cmt">// 调用侧——编译器理解 NotNullWhen</span>
+<span class="kw">if</span> (TryGetUser(42, <span class="kw">out var</span> user))
+{
+    <span class="type">string</span> name = user.Name; <span class="cmt">// ✅ 编译器知道这里 user 不是 null</span>
+}</code></pre>
+
+<p><code>[NotNullWhen(true)]</code> 是 C# 8 引入的 null-state 分析 attribute，让编译器理解"如果方法返回 true，out 参数就不是 null"。</p>
+
+<h2>五、迁移旧项目的策略 <span class="en">Migration Strategy</span></h2>
+
+<ol>
+  <li><strong>先开 warnings，不开 enable：</strong><code>&lt;Nullable&gt;warnings&lt;/Nullable&gt;</code>——有提示但没编译错误</li>
+  <li><strong>逐文件迁移：</strong>在文件顶部加 <code>#nullable enable</code>，修完一个文件再下一个</li>
+  <li><strong>公共 API 优先：</strong>先修 library 项目的公开接口，再修 internal 代码</li>
+  <li><strong>善用 <code>null!</code>：</strong>对于 DI、EF Core 等"我知道它不是 null 但编译器不知道"的场景</li>
+</ol>
+
+<h2>六、NRT 现在用得怎么样了？<span class="en">Adoption Status</span></h2>
+
+<div class="callout callout--info">
+<strong>2026 年视角：NRT 不再被热议——因为它已经是默认了。</strong><br><br>
+<strong>为什么你感觉没人提？</strong>两个原因：<br>
+1. 讨论期（2019-2021）早已过去，现在它和 <code>async/await</code> 一样属于"这还用聊？"的基础设定。<br>
+2. .NET 6 起所有官方项目模板默认带 <code>&lt;Nullable&gt;enable&lt;/Nullable&gt;</code>，新项目从出生就开着。<br><br>
+<strong>实际使用情况：</strong>BCL 全量标注、EF Core / ASP.NET Core / 主流 NuGet 包全部跟进。面试中 NRT 不会被当作"新特性"来问——它被当成默认存在的背景。面试官可能直接写 <code>string?</code> 然后问你这行有什么问题。
+</div>
+
+<h2>📝 小测验</h2>
+
+<div class="quiz" id="q1">
+  <h3>Q1. 以下代码有几处编译警告？</h3>
+  <pre><code><span class="kw">#nullable enable</span>
+
+<span class="type">string?</span> a = <span class="kw">null</span>;
+<span class="type">string</span> b = a;
+<span class="type">string?</span> c = <span class="str">"hello"</span>;
+<span class="type">int</span> len1 = c.Length;
+<span class="type">int</span> len2 = c!.Length;
+<span class="type">string</span> d = c!;</code></pre>
+
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q1" value="0"> 0 处</label>
+  <label><input type="radio" name="q1" value="1"> 1 处</label>
+  <label><input type="radio" name="q1" value="2"> 2 处</label>
+  <label><input type="radio" name="q1" value="3"> 3 处</label>
+  <button onclick="checkQ1()">确认</button>
+  <div class="feedback" id="f1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>Q2. 以下哪种写法是"我断言它不是 null"？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q2" value="a"> <code>name?</code></label>
+  <label><input type="radio" name="q2" value="b"> <code>name!</code></label>
+  <label><input type="radio" name="q2" value="c"> <code>name?.</code></label>
+  <label><input type="radio" name="q2" value="d"> <code>name??</code></label>
+  <button onclick="checkQ2()">确认</button>
+  <div class="feedback" id="f2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>Q3. NRT 给你的保障是？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q3" value="a"> 运行时保证 null 不会发生</label>
+  <label><input type="radio" name="q3" value="b"> 编译时静态分析，减少 null 引用的可能性</label>
+  <label><input type="radio" name="q3" value="c"> 自动为所有方法添加 null check</label>
+  <label><input type="radio" name="q3" value="d"> 让所有引用类型变成值类型</label>
+  <button onclick="checkQ3()">确认</button>
+  <div class="feedback" id="f3"></div>
+</div>
+
+<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<p style="color: var(--text-muted); font-size: 0.85rem;">
+  Lesson 01 · C# 8 Nullable Reference Types · 下一课预告：Switch Expressions、Using Declarations、Indices/Ranges
+</p>
+
+<script>
+  function show(el, correct) {
+    el.classList.add('show');
+    el.classList.add(correct ? 'correct' : 'wrong');
+    el.classList.remove(correct ? 'wrong' : 'correct');
+  }
+
+  function checkQ1() {
+    var f = document.getElementById('f1');
+    var selected = document.querySelector('input[name="q1"]:checked');
+    if (!selected) return;
+    var correct = selected.value === '2';
+    f.textContent = correct
+      ? '✅ 正确！第3行 string b = a（将 T? 赋给 T）和第5行 int len1 = c.Length（对 T? 直接访问成员）各一个警告。第6行的 ! 和第7行的 ! 抑制了警告。'
+      : '❌ 是 2 处。第3行 string b = a（将 T? 赋给 T）和第5行 int len1 = c.Length（对 T? 直接访问成员）各一个警告。';
+    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
+  }
+
+  function checkQ2() {
+    var f = document.getElementById('f2');
+    var selected = document.querySelector('input[name="q2"]:checked');
+    if (!selected) return;
+    var correct = selected.value === 'b';
+    f.textContent = correct
+      ? '✅ 正确！name! 是 null-forgiving operator——告诉编译器闭嘴，我保证它不是 null。'
+      : '❌ 正确答案是 name!（null-forgiving operator）。name? 是 nullable 类型标注，name?. 是 null-conditional 调用，name?? 不存在。';
+    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
+  }
+
+  function checkQ3() {
+    var f = document.getElementById('f3');
+    var selected = document.querySelector('input[name="q3"]:checked');
+    if (!selected) return;
+    var correct = selected.value === 'b';
+    f.textContent = correct
+      ? '✅ 正确！NRT 纯粹是编译时静态分析。JIT 不会插入任何 null 检查。它改变的是你的编码习惯和编译器给你的反馈速度——从运行时爆炸变成编译时警告。'
+      : '❌ 正确答案是 b。NRT 纯粹是编译时静态分析，不是运行时机制。JIT 不会插入 null 检查。';
+    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
+  }
+</script>
+
+</body>
+</html>
