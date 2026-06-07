@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 04: C# 8 Async Streams — 异步流</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  .callout {
+    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
+  }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
+
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafaf9; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<h1>Lesson 04: C# 8 Async Streams · 异步流</h1>
+<p class="subtitle">当"拿到所有数据再返回"太慢时，你需要的是一条一条异步喂给调用方的管道</p>
+
+<div class="callout callout--info">
+<strong>前置 / Prerequisite：</strong>已完成 <a href="03-sync-yield-return-iterators.html">Lesson 03（yield return 同步迭代器）</a>，理解 <code>async</code>/<code>await</code>。<br>
+<strong>本课目标：</strong>能用 <code>IAsyncEnumerable&lt;T&gt;</code> 写出低延迟、省内存的异步数据流处理代码。
+</div>
+
+<!-- ====== SECTION 1: THE PROBLEM ====== -->
+
+<h2>一、痛点：为什么 <code>Task&lt;IEnumerable&lt;T&gt;&gt;</code> 不够用</h2>
+
+<p>假设你要从数据库读取 100 万条记录，或者从分页 API 拉取多页数据。在 C# 7.3 里你有两个选择，都不理想：</p>
+
+<div class="comparison">
+<div class="old">
+<h4>方案 A：一次性返回所有数据</h4>
+<pre><code><span class="cmt">// 问题：100 万条全进内存，等最慢那页完成才开始处理</span>
+<span class="kw">async</span> Task&lt;<span class="type">List</span>&lt;<span class="type">Order</span>&gt;&gt; GetAllOrders()
+{
+    <span class="kw">var</span> all = <span class="kw">new</span> <span class="type">List</span>&lt;<span class="type">Order</span>&gt;();
+    <span class="kw">while</span> (<span class="kw">true</span>)
+    {
+        <span class="kw">var</span> page = <span class="kw">await</span> FetchPageAsync();
+        <span class="kw">if</span> (!page.Any()) <span class="kw">break</span>;
+        all.AddRange(page);
+    }
+    <span class="kw">return</span> all; <span class="cmt">// 等到这里，调用方才拿到第一条数据</span>
+}</code></pre>
+<p style="margin-top:0.5rem;"><strong>代价：</strong>内存爆炸 + 首字节延迟 = 最慢那页的耗时 × 数据总量。</p>
+</div>
+<div class="new">
+<h4>方案 B：回调</h4>
+<pre><code><span class="cmt">// 问题：回调地狱，无法用 using / try-catch 包裹整个迭代生命周期</span>
+<span class="kw">async</span> Task ReadOrders(Func&lt;<span class="type">Order</span>, Task&gt; onNext)
+{
+    <span class="kw">foreach</span> (<span class="kw">var</span> batch <span class="kw">in</span> batches)
+    {
+        <span class="kw">foreach</span> (<span class="kw">var</span> order <span class="kw">in</span> batch)
+            <span class="kw">await</span> onNext(order);
+    }
+}</code></pre>
+<p style="margin-top:0.5rem;"><strong>代价：</strong>资源释放、异常处理、取消操作——全得手动管理。回调不是 C# 的惯用模式。</p>
+</div>
+</div>
+
+<h3>理想方案：异步迭代器</h3>
+
+<p>同步世界里我们有 <code>yield return</code>——调用方"拉"一条，生产者"产"一条，用多少取多少。异步流把这个模型加上 <code>await</code>：</p>
+
+<pre><code><span class="cmt">// C# 8：IAsyncEnumerable&lt;T&gt;——异步的 yield return</span>
+<span class="kw">async</span> IAsyncEnumerable&lt;<span class="type">Order</span>&gt; GetAllOrders()
+{
+    <span class="kw">while</span> (<span class="kw">true</span>)
+    {
+        <span class="kw">var</span> page = <span class="kw">await</span> FetchPageAsync();
+        <span class="kw">if</span> (!page.Any()) <span class="kw">yield break</span>;
+        <span class="kw">foreach</span> (<span class="kw">var</span> order <span class="kw">in</span> page)
+            <span class="kw">yield return</span> order;
+    }
+}
+
+<span class="cmt">// 调用方：await foreach——来一条处理一条</span>
+<span class="kw">await foreach</span> (<span class="kw">var</span> order <span class="kw">in</span> GetAllOrders())
+{
+    Process(order);  <span class="cmt">// 第一条数据到达时就开始处理，不等人齐</span>
+}</code></pre>
+
+<div class="callout callout--good">
+<strong>关键优势：</strong>
+① <strong>低延迟</strong>——第一条数据到达即可处理，不用等全部加载完<br>
+② <strong>省内存</strong>——一次只在内存中保留当前批次，而不是 100 万条<br>
+③ <strong>惯用语法</strong>——<code>await foreach</code> 和 <code>yield return</code> 的组合，跟同步迭代器一样自然<br>
+④ <strong>资源安全</strong>——迭代器里的 <code>using</code> / <code>try-finally</code> 正常工作
+</div>
+
+<div class="callout callout--warn" style="margin-top: 1.5rem;">
+<strong>⚠️ 常见困惑：<code>await foreach</code> vs <code>foreach</code> + <code>await</code></strong><br><br>
+<code>await</code> 放在不同位置，语义完全不同——这不是风格差别，而是<strong>两种不同的返回类型</strong>：
+<pre style="margin:0.5rem 0;"><code><span class="cmt">// 写法 A：await 在 foreach 里面 → 流式（本课主角）</span>
+<span class="kw">await foreach</span> (<span class="kw">var</span> x <span class="kw">in</span> GetStream())  <span class="cmt">// 方法返回 IAsyncEnumerable&lt;T&gt;</span>
+    Process(x);                         <span class="cmt">// 逐条异步拉取，来一条处理一条</span>
+
+<span class="cmt">// 写法 B：await 在 foreach 外面 → 等人齐（传统 C# 7.3 做法）</span>
+<span class="kw">foreach</span> (<span class="kw">var</span> x <span class="kw">in</span> <span class="kw">await</span> GetAllAsync())  <span class="cmt">// 方法返回 Task&lt;IEnumerable&lt;T&gt;&gt;</span>
+    Process(x);                              <span class="cmt">// await 等全部数据就绪，然后同步遍历</span></code></pre>
+<table style="margin-top:0.5rem;">
+  <tr><th></th><th>写法 A：<code>await foreach</code></th><th>写法 B：<code>foreach await</code></th></tr>
+  <tr><td>方法返回</td><td><code>IAsyncEnumerable&lt;T&gt;</code></td><td><code>Task&lt;IEnumerable&lt;T&gt;&gt;</code></td></tr>
+  <tr><td>首条延迟</td><td>第一条数据到达即可处理</td><td>全部数据就绪才开始</td></tr>
+  <tr><td>内存</td><td>一次一条/一批</td><td>整个集合</td></tr>
+  <tr><td>编译保护</td><td>对 <code>IAsyncEnumerable</code> 用普通 <code>foreach</code> → 编译报错</td><td>—</td></tr>
+</table>
+<strong>记忆口诀：await 在 foreach 里面 = 边拉边处理。await 在 foreach 外面 = 等人齐再遍历。</strong>决定用哪种的不是偏好，而是方法的返回类型——编译器会替你检查。
+</div>
+
+<!-- ====== SECTION 2: THE INTERFACES ====== -->
+
+<h2>二、接口与编译产物</h2>
+
+<h3>两个核心接口</h3>
+
+<p>就像同步迭代器依赖 <code>IEnumerable&lt;T&gt;</code> 和 <code>IEnumerator&lt;T&gt;</code>，异步流有对应的异步版本：</p>
+
+<pre><code><span class="cmt">// 异步可枚举——只需要实现这一个（通常编译器帮你干）</span>
+<span class="kw">public</span> <span class="kw">interface</span> <span class="type">IAsyncEnumerable</span>&lt;<span class="kw">out</span> <span class="type">T</span>&gt;
+{
+    <span class="type">IAsyncEnumerator</span>&lt;<span class="type">T</span>&gt; GetAsyncEnumerator(<span class="type">CancellationToken</span> ct = <span class="kw">default</span>);
+}
+
+<span class="cmt">// 异步枚举器——真正做 MoveNext + Current 的</span>
+<span class="kw">public</span> <span class="kw">interface</span> <span class="type">IAsyncEnumerator</span>&lt;<span class="kw">out</span> <span class="type">T</span>&gt; : <span class="type">IAsyncDisposable</span>
+{
+    <span class="type">T</span> Current { <span class="kw">get</span>; }
+    <span class="type">ValueTask</span>&lt;<span class="kw">bool</span>&gt; MoveNextAsync();
+}</code></pre>
+
+<div class="callout callout--info">
+<strong>注意 <code>MoveNextAsync</code> 返回 <code>ValueTask&lt;bool&gt;</code>，不是 <code>Task&lt;bool&gt;</code>。</strong>异步流的迭代循环非常频繁（每条数据至少一次 MoveNext），<code>ValueTask</code> 在同步完成时不会分配堆内存——这是性能敏感的设计。
+</div>
+
+<table>
+  <tr><th></th><th>同步</th><th>异步 (C# 8)</th></tr>
+  <tr><td>可枚举接口</td><td><code>IEnumerable&lt;T&gt;</code></td><td><code>IAsyncEnumerable&lt;T&gt;</code></td></tr>
+  <tr><td>枚举器接口</td><td><code>IEnumerator&lt;T&gt;</code></td><td><code>IAsyncEnumerator&lt;T&gt;</code></td></tr>
+  <tr><td>取下一个</td><td><code>MoveNext()</code></td><td><code>MoveNextAsync()</code></td></tr>
+  <tr><td>当前元素</td><td><code>Current</code></td><td><code>Current</code></td></tr>
+  <tr><td>消费语法</td><td><code>foreach</code></td><td><code>await foreach</code></td></tr>
+  <tr><td>释放</td><td><code>IDisposable</code></td><td><code>IAsyncDisposable</code></td></tr>
+</table>
+
+<h3>回顾：IEnumerable&lt;T&gt; vs IEnumerator&lt;T&gt; —— 工厂与光标</h3>
+
+<p>这两个接口的区别是理解 <code>foreach</code>（无论是同步还是异步版本）的基础。一句话：</p>
+
+<div class="callout callout--info">
+<strong><code>IEnumerable&lt;T&gt;</code></strong> = "我是一批可以遍历的数据"（<strong>工厂</strong>）<br>
+<strong><code>IEnumerator&lt;T&gt;</code></strong> = "我是那个正在遍历的光标"（<strong>工人</strong>）<br><br>
+<strong>类比：</strong><code>IEnumerable</code> 是图书馆，<code>IEnumerator</code> 是你手上的借书卡。同一个图书馆可以发出多张借书卡，每张卡各自记录独立的阅读进度——互不影响。之所以拆成两个接口，就是为了支持<strong>多次、同时、独立遍历</strong>同一个集合。
+</div>
+
+<pre><code><span class="cmt">// 同一个 List，两个独立的光标——各自有自己的 Current 位置</span>
+<span class="kw">var</span> library = <span class="kw">new</span> List&lt;<span class="kw">int</span>&gt; { 10, 20, 30, 40 };
+
+<span class="kw">var</span> card1 = library.GetEnumerator();  <span class="cmt">// IEnumerable.GetEnumerator() → 返回一个新光标</span>
+<span class="kw">var</span> card2 = library.GetEnumerator();  <span class="cmt">// 再调一次，拿到另一个独立光标</span>
+
+card1.MoveNext(); card1.MoveNext();  <span class="cmt">// card1 走到 20</span>
+card2.MoveNext();                     <span class="cmt">// card2 还在 10——互不影响</span>
+
+Console.WriteLine(card1.Current);  <span class="cmt">// 20</span>
+Console.WriteLine(card2.Current);  <span class="cmt">// 10</span></code></pre>
+
+<p>异步流的两兄弟结构完全一样——只是把"工厂"和"光标"都变成了异步版本：</p>
+
+<table>
+  <tr><th>角色</th><th>同步</th><th>异步 (C# 8)</th></tr>
+  <tr><td>工厂</td><td><code>IEnumerable&lt;T&gt;</code></td><td><code>IAsyncEnumerable&lt;T&gt;</code></td></tr>
+  <tr><td>光标</td><td><code>IEnumerator&lt;T&gt;</code></td><td><code>IAsyncEnumerator&lt;T&gt;</code></td></tr>
+  <tr><td>往前走</td><td><code>MoveNext()</code></td><td><code>MoveNextAsync()</code></td></tr>
+</table>
+
+<h3>编译器生成什么</h3>
+
+<p>当你写一个 <code>async IAsyncEnumerable&lt;T&gt;</code> 方法，编译器把它变成状态机——和你熟悉的 <code>async Task</code> 方法类似，但状态机里多了一个迭代器状态。</p>
+
+<pre><code><span class="cmt">// 你写的：</span>
+<span class="kw">async</span> IAsyncEnumerable&lt;<span class="kw">int</span>&gt; Generate()
+{
+    <span class="kw">yield return</span> 1;
+    <span class="kw">await</span> Task.Delay(100);
+    <span class="kw">yield return</span> 2;
+}
+
+<span class="cmt">// 编译器生成的（伪代码简化）：</span>
+<span class="cmt">// 一个实现了 IAsyncEnumerable&lt;int&gt; 的类</span>
+<span class="cmt">// ＋ 一个实现了 IAsyncEnumerator&lt;int&gt; 的状态机</span>
+<span class="cmt">// 状态：-2=初始, -1=运行中, 0=在yield1之后, 1=在await之后, -3=结束</span>
+<span class="cmt">// await 和 yield 混在一起时，状态机会在两者之间切换</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>限制：</strong><code>async IAsyncEnumerable</code> 方法里不能同时用 <code>out</code>/<code>ref</code> 参数。这是状态机的实现限制，和 <code>async Task</code> 方法一致。
+</div>
+
+<!-- ====== SECTION 3: CANCELLATION ====== -->
+
+<h2>三、CancellationToken —— 如何取消异步流</h2>
+
+<p>异步操作必须有取消支持。异步流有三种传递 <code>CancellationToken</code> 的方式：</p>
+
+<h3>方式一：参数传入（推荐，C# 8 手动模式）</h3>
+
+<pre><code><span class="cmt">// 调用方把 token 作为参数传进去</span>
+<span class="kw">async</span> IAsyncEnumerable&lt;<span class="type">Order</span>&gt; GetOrders(
+    <span class="type">CancellationToken</span> ct = <span class="kw">default</span>)
+{
+    <span class="kw">while</span> (<span class="kw">true</span>)
+    {
+        ct.ThrowIfCancellationRequested();  <span class="cmt">// 每轮循环检查一次</span>
+        <span class="kw">var</span> page = <span class="kw">await</span> FetchPageAsync(ct); <span class="cmt">// 传给下游</span>
+        <span class="kw">if</span> (!page.Any()) <span class="kw">yield break</span>;
+        <span class="kw">foreach</span> (<span class="kw">var</span> o <span class="kw">in</span> page) <span class="kw">yield return</span> o;
+    }
+}
+
+<span class="cmt">// 调用方：</span>
+<span class="kw">var</span> cts = <span class="kw">new</span> CancellationTokenSource();
+<span class="kw">await foreach</span> (<span class="kw">var</span> order <span class="kw">in</span> GetOrders(cts.Token))
+{
+    <span class="kw">if</span> (ShouldStop(order)) cts.Cancel();
+}</code></pre>
+
+<div class="callout callout--info">
+<strong><code>ThrowIfCancellationRequested()</code> 会抛异常吗？</strong>会——它抛出 <code>OperationCanceledException</code>。本质上是语法糖：<code>if (token.IsCancellationRequested) throw new OperationCanceledException(token);</code><br><br>
+<strong>为什么用抛异常来取消？</strong>这是 .NET 异步体系的设计约定——<code>Task</code> 能识别 <code>OperationCanceledException</code>，把自身状态设为 <code>Canceled</code>（而非 <code>Faulted</code>），<code>await</code> 也会正确处理这个异常。如果只是想检查而不抛，用 <code>IsCancellationRequested</code> 属性即可。
+</div>
+
+<h3>方式二：WithCancellation 扩展方法（调用方传入）</h3>
+
+<pre><code><span class="cmt">// WithCancellation 把 token 塞进 GetAsyncEnumerator 的 ct 参数</span>
+<span class="kw">var</span> cts = <span class="kw">new</span> CancellationTokenSource();
+<span class="kw">await foreach</span> (<span class="kw">var</span> order <span class="kw">in</span> GetOrders().WithCancellation(cts.Token))
+{
+    Process(order);
+}
+
+<span class="cmt">// 迭代器这边用 [EnumeratorCancellation] 接收：</span>
+<span class="kw">async</span> IAsyncEnumerable&lt;<span class="type">Order</span>&gt; GetOrders(
+    [<span class="type">EnumeratorCancellation</span>] <span class="type">CancellationToken</span> ct = <span class="kw">default</span>)
+{
+    <span class="cmt">// ct 现在来自调用方的 WithCancellation 传进来的 token</span>
+    ...
+}</code></pre>
+
+<div class="callout callout--info">
+<strong><code>[EnumeratorCancellation]</code> 的作用：</strong>告诉编译器"这个参数的值从调用方的 <code>WithCancellation</code> 取，不要让它和其他参数混在一起"。这样调用方写 <code>.WithCancellation(token)</code> 时，token 会自动路由到这个参数。没有这个特性时，你得手动把它当成普通参数传——方式一的做法。
+</div>
+
+<h3>方式三：直接用 CancellationToken.None（不推荐）</h3>
+
+<p>如果你的场景确实不需要取消（比如控制台小工具），可以不处理 token。但任何涉及网络/数据库的异步流都应该支持取消——这是 .NET 生态的约定。</p>
+
+<!-- ====== SECTION 4: ConfigureAwait ====== -->
+
+<h2>四、ConfigureAwait —— "await 之后回不回原来的地盘"</h2>
+
+<h3>没有 ConfigureAwait：默认回到原始上下文</h3>
+
+<p><code>await</code> 默认会捕获当前的 <strong>SynchronizationContext</strong>（同步上下文）<span class="en">SynchronizationContext</span>，I/O 完成后尝试调度回那个上下文继续执行。这在 UI 应用中是必须的：</p>
+
+<pre><code><span class="cmt">// WinForms / WPF 场景：UI 线程上执行</span>
+<span class="kw">async</span> Task FetchDataAsync()
+{
+    <span class="kw">var</span> data = <span class="kw">await</span> httpClient.GetStringAsync(url);
+    <span class="cmt">// ↑ 默认回到 UI 线程</span>
+    label1.Text = data;  <span class="cmt">// 改控件——必须在 UI 线程</span>
+}</code></pre>
+
+<h3>ConfigureAwait(false)：别回来了，随便哪个线程都行</h3>
+
+<pre><code><span class="kw">async</span> Task&lt;<span class="kw">string</span>&gt; FetchDataAsync()
+{
+    <span class="kw">var</span> data = <span class="kw">await</span> httpClient.GetStringAsync(url)
+        .ConfigureAwait(<span class="kw">false</span>);
+    <span class="cmt">// ↑ "不用回 UI 线程了，随便哪个线程池线程继续就行"</span>
+    <span class="kw">return</span> data;  <span class="cmt">// 在随便哪个线程上执行——但这里不碰 UI，无所谓</span>
+}</code></pre>
+
+<h3>为什么要用 false？两个原因</h3>
+
+<p><strong>1. 防止死锁（.NET Framework 尤其常见）</strong></p>
+
+<p>经典死锁场景——用 <code>.Result</code> / <code>.Wait()</code> 同步阻塞等待一个 async 方法：</p>
+
+<pre><code><span class="cmt">// 🚫 经典死锁（UI 线程 / ASP.NET 非 Core）</span>
+<span class="kw">var</span> result = FetchDataAsync().Result;  <span class="cmt">// 阻塞了当前线程！</span>
+<span class="cmt">// UI 线程卡在 .Result，等 Task 完成</span>
+<span class="cmt">// → Task 完成后想回到 UI 线程执行 await 后面的代码</span>
+<span class="cmt">// → 但 UI 线程还被 .Result 卡着</span>
+<span class="cmt">// → **死锁**</span>
+
+<span class="cmt">// ✅ 加了 ConfigureAwait(false) 的版本：</span>
+<span class="kw">async</span> Task&lt;<span class="kw">string</span>&gt; FetchDataAsync()
+{
+    <span class="kw">var</span> data = <span class="kw">await</span> httpClient.GetStringAsync(url)
+        .ConfigureAwait(<span class="kw">false</span>);  <span class="cmt">// 不用回 UI 线程</span>
+    <span class="kw">return</span> data;  <span class="cmt">// 线程池线程执行 → Task 正常完成 → .Result 解除</span>
+}</code></pre>
+
+<p><strong>2. 节省上下文切换开销</strong></p>
+
+<p>每个 <code>await</code> 后调度回原线程是有开销的。库代码（数据访问层、业务逻辑层）普遍在每个 <code>await</code> 加 <code>.ConfigureAwait(false)</code>——不碰 UI 就不需要回原线程。</p>
+
+<h3>.NET Framework 4.8 时代的典型写法</h3>
+
+<p>这是你在 Framework 项目里应该非常熟悉的模式——每个非 UI 层的 async 方法都像这样：</p>
+
+<pre><code><span class="kw">async</span> Task&lt;<span class="type">List</span>&lt;<span class="type">Order</span>&gt;&gt; GetOrdersAsync()
+{
+    <span class="kw">using var</span> conn = <span class="kw">new</span> SqlConnection(connectionString);
+    <span class="kw">await</span> conn.OpenAsync().ConfigureAwait(<span class="kw">false</span>);
+
+    <span class="kw">using var</span> cmd = conn.CreateCommand();
+    cmd.CommandText = <span class="str">"SELECT ..."</span>;
+    <span class="kw">using var</span> reader = <span class="kw">await</span> cmd.ExecuteReaderAsync().ConfigureAwait(<span class="kw">false</span>);
+
+    <span class="kw">var</span> orders = <span class="kw">new</span> List&lt;<span class="type">Order</span>&gt;();
+    <span class="kw">while</span> (<span class="kw">await</span> reader.ReadAsync().ConfigureAwait(<span class="kw">false</span>))
+        orders.Add(...);
+    <span class="kw">return</span> orders;
+}</code></pre>
+
+<div class="callout callout--good">
+<strong>好消息：ASP.NET Core 没有 <code>SynchronizationContext</code>。</strong>经典的 <code>.Result</code> 死锁在 Core 环境下不会发生。但库代码里加 <code>.ConfigureAwait(false)</code> 仍然是好习惯——性能上有小收益。<br><br>
+<strong>核心理解：</strong><code>ConfigureAwait</code> 决定的是 await 状态机<strong>恢复时跳到哪个线程</strong>，而不是代码执行顺序。这和 Lesson 03 的状态机模型完全对应——只是额外加了一个"恢复目标线程"的配置。
+</div>
+
+<h3>异步流的 ConfigureAwait（.NET 6+）</h3>
+
+<pre><code><span class="cmt">// 单个 Task 的 ConfigureAwait：</span>
+<span class="kw">var</span> result = <span class="kw">await</span> SomeTask().ConfigureAwait(<span class="kw">false</span>);
+
+<span class="cmt">// 异步流的 ConfigureAwait（.NET 6 新增扩展方法）：</span>
+<span class="kw">await foreach</span> (<span class="kw">var</span> item <span class="kw">in</span> GetItems().ConfigureAwait(<span class="kw">false</span>))
+{
+    <span class="cmt">// 每次 MoveNextAsync 都会用 ConfigureAwait(false)</span>
+}</code></pre>
+
+<div class="callout callout--warn">
+<strong>C# 8 时代（.NET Core 3.x）的限制：</strong>
+<code>IAsyncEnumerable&lt;T&gt;</code> 的 <code>ConfigureAwait</code> 扩展方法是 .NET 6 才加入的。在 .NET Core 3.x 中，只能在异步迭代器<strong>内部</strong>的每个 <code>await</code> 上加 <code>.ConfigureAwait(false)</code>。
+</div>
+
+<!-- ====== SECTION 5: REAL-WORLD PATTERNS ====== -->
+
+<h2>五、实战模式</h2>
+
+<h3>场景一：数据库游标读取</h3>
+
+<pre><code><span class="kw">async</span> IAsyncEnumerable&lt;<span class="type">Customer</span>&gt; ReadCustomers(
+    <span class="type">DbConnection</span> conn,
+    [<span class="type">EnumeratorCancellation</span>] <span class="type">CancellationToken</span> ct = <span class="kw">default</span>)
+{
+    <span class="kw">await using</span> <span class="kw">var</span> cmd = conn.CreateCommand();
+    cmd.CommandText = <span class="str">"SELECT Id, Name FROM Customers"</span>;
+
+    <span class="kw">await using var</span> reader = <span class="kw">await</span> cmd.ExecuteReaderAsync(ct);
+    <span class="kw">while</span> (<span class="kw">await</span> reader.ReadAsync(ct))
+    {
+        <span class="kw">yield return</span> <span class="kw">new</span> Customer
+        {
+            Id = reader.GetInt32(0),
+            Name = reader.GetString(1),
+        };
+    }
+    <span class="cmt">// reader.DisposeAsync → cmd.DisposeAsync 自动执行</span>
+}</code></pre>
+
+<p>注意 <code>await using var</code>——异步流内部支持 <code>IAsyncDisposable</code> 模式，迭代器结束或中断时自动释放资源。</p>
+
+<div class="callout callout--info">
+<strong>为什么 <code>await using var reader = await cmd.ExecuteReaderAsync(ct)</code> 里有两个 <code>await</code>？</strong><br><br>
+这行包含<strong>两个完全不同的 await，各干各的事</strong>：<br>
+① <strong>后面的 <code>await cmd.ExecuteReaderAsync(ct)</code></strong>：异步等待数据库返回 <code>DbDataReader</code>。<br>
+② <strong>前面的 <code>await using var</code></strong>：声明这个 reader 用完后要<strong>异步释放</strong>（调 <code>DisposeAsync()</code> 而非同步的 <code>Dispose()</code>）。<br><br>
+<strong>为什么 Dispose 也要异步？</strong>因为 <code>DbDataReader</code> 的 <code>Dispose</code> 可能涉及网络 I/O——比如通知 SQL Server "释放服务器端游标"。同步 Dispose 会阻塞线程等这个网络 round-trip；异步 Dispose 不阻塞。<br><br>
+<strong>展开后：</strong>
+<pre style="margin:0.5rem 0 0 0;"><code><span class="kw">var</span> reader = <span class="kw">await</span> cmd.ExecuteReaderAsync(ct);  <span class="cmt">// 异步获取 reader</span>
+<span class="kw">try</span> { ... } <span class="kw">finally</span> { <span class="kw">await</span> reader.DisposeAsync(); }  <span class="cmt">// 异步释放</span></code></pre>
+</div>
+
+<h3>场景二：分页 API 流式消费</h3>
+
+<pre><code><span class="kw">async</span> IAsyncEnumerable&lt;<span class="type">Issue</span>&gt; GetGitHubIssues(
+    <span class="kw">string</span> repo,
+    [<span class="type">EnumeratorCancellation</span>] <span class="type">CancellationToken</span> ct = <span class="kw">default</span>)
+{
+    <span class="kw">var</span> page = 1;
+    <span class="kw">while</span> (<span class="kw">true</span>)
+    {
+        <span class="kw">var</span> url = <span class="str">$"https://api.github.com/repos/{repo}/issues?page={page}"</span>;
+        <span class="kw">var</span> response = <span class="kw">await</span> _http.GetAsync(url, ct);
+
+        <span class="kw">if</span> (!response.IsSuccessStatusCode) <span class="kw">yield break</span>;
+
+        <span class="kw">var</span> issues = <span class="kw">await</span> response.Content
+            .ReadFromJsonAsync&lt;<span class="type">List</span>&lt;<span class="type">Issue</span>&gt;&gt;(cancellationToken: ct);
+
+        <span class="kw">if</span> (issues == <span class="kw">null</span> || issues.Count == 0) <span class="kw">yield break</span>;
+
+        <span class="kw">foreach</span> (<span class="kw">var</span> issue <span class="kw">in</span> issues)
+            <span class="kw">yield return</span> issue;
+
+        page++;
+    }
+}
+
+<span class="cmt">// 消费——拿到第一条就开始展示，不等全部翻页</span>
+<span class="kw">await foreach</span> (<span class="kw">var</span> issue <span class="kw">in</span> GetGitHubIssues(<span class="str">"dotnet/runtime"</span>))
+{
+    Console.WriteLine(<span class="str">$"#{issue.Number}: {issue.Title}"</span>);
+}</code></pre>
+
+<h3>场景三：文件逐行异步读取</h3>
+
+<pre><code><span class="cmt">// .NET 6+ 自带：System.IO.File.ReadLinesAsync</span>
+<span class="kw">await foreach</span> (<span class="kw">var</span> line <span class="kw">in</span> <span class="type">File</span>.ReadLinesAsync(<span class="str">"huge.log"</span>))
+{
+    <span class="kw">if</span> (line.Contains(<span class="str">"ERROR"</span>))
+        Console.WriteLine(line);
+}
+
+<span class="cmt">// C# 8 / .NET Core 3.x 中可以自己封装：</span>
+<span class="kw">async</span> IAsyncEnumerable&lt;<span class="kw">string</span>&gt; ReadLinesAsync(<span class="kw">string</span> path)
+{
+    <span class="kw">using var</span> reader = <span class="kw">new</span> StreamReader(path);
+    <span class="kw">while</span> (<span class="kw">true</span>)
+    {
+        <span class="kw">var</span> line = <span class="kw">await</span> reader.ReadLineAsync();
+        <span class="kw">if</span> (line == <span class="kw">null</span>) <span class="kw">yield break</span>;
+        <span class="kw">yield return</span> line;
+    }
+}</code></pre>
+
+<!-- ====== SECTION 6: ASYNC LINQ ====== -->
+
+<h2>六、Async LINQ —— 不自己写 foreach</h2>
+
+<p>引入 <code>System.Linq.Async</code> 包后，可以像操作同步集合一样操作异步流：</p>
+
+<pre><code><span class="kw">using</span> System.Linq.Async;  <span class="cmt">// NuGet: System.Linq.Async</span>
+
+<span class="kw">await foreach</span> (<span class="kw">var</span> order <span class="kw">in</span> GetOrders()
+    .Where(o => o.Total > 1000)
+    .OrderByDescending(o => o.Total)
+    .Take(10))
+{
+    Console.WriteLine(<span class="str">$"大额订单: {order.Total}"</span>);
+}
+
+<span class="cmt">// 也可以聚合到单个值：</span>
+<span class="kw">var</span> count = <span class="kw">await</span> GetOrders().CountAsync(o => o.Total > 1000);
+<span class="kw">var</span> max   = <span class="kw">await</span> GetOrders().MaxAsync(o => o.Total);
+<span class="kw">var</span> list  = <span class="kw">await</span> GetOrders().ToListAsync();  <span class="cmt">// 全量——注意内存</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>不要滥用 <code>ToListAsync()</code>。</strong>异步流的初衷是流式处理。如果最终还是要全量加载到 <code>List&lt;T&gt;</code>，那你用 <code>Task&lt;List&lt;T&gt;&gt;</code> 就够了，不需要异步流。
+</div>
+
+<!-- ====== SECTION 7: WHEN TO USE ====== -->
+
+<h2>七、什么时候用异步流（什么时候不用）</h2>
+
+<table>
+  <tr><th>场景</th><th>用异步流？</th><th>理由</th></tr>
+  <tr>
+    <td>数据库轮询大表</td>
+    <td>✅ 用</td>
+    <td>逐条产出，不占内存</td>
+  </tr>
+  <tr>
+    <td>分页 API 翻页</td>
+    <td>✅ 用</td>
+    <td>隐藏翻页细节，给调用方一个统一的流</td>
+  </tr>
+  <tr>
+    <td>事件流 / 消息队列消费</td>
+    <td>✅ 用</td>
+    <td>天然就是流（Channel&lt;T&gt; 的 ReadAllAsync）</td>
+  </tr>
+  <tr>
+    <td>文件逐行异步读取</td>
+    <td>✅ 用</td>
+    <td>.NET 6+ 原生支持</td>
+  </tr>
+  <tr>
+    <td>单次 HTTP 请求返回小 JSON</td>
+    <td>❌ 不用</td>
+    <td>数据量小，<code>Task&lt;T&gt;</code> 更简单</td>
+  </tr>
+  <tr>
+    <td>CPU 密集型数据计算（无 I/O）</td>
+    <td>❌ 不用</td>
+    <td>没有异步操作，普通 <code>IEnumerable&lt;T&gt;</code> 足够</td>
+  </tr>
+  <tr>
+    <td>最终需要对全量数据排序 / 分组</td>
+    <td>⚠️ 谨慎</td>
+    <td>排序必须加载全量，此时异步流只是延迟了加载，没省内存</td>
+  </tr>
+</table>
+
+<div class="callout callout--good">
+<strong>经验法则：</strong>如果你在迭代循环体内有 <code>await</code>，而且数据量可能很大——用异步流。如果数据总是小的（几十条），或者循环体内没有 I/O——普通 <code>IEnumerable&lt;T&gt;</code> 就够了。
+</div>
+
+<!-- ====== SECTION 8: vs TASK<IENUMERABLE> ====== -->
+
+<h2>八、对比：三个相近概念的区别</h2>
+
+<table>
+  <tr><th>返回类型</th><th>语义</th><th>数据何时到达</th><th>内存</th></tr>
+  <tr>
+    <td><code>Task&lt;List&lt;T&gt;&gt;</code></td>
+    <td>一次性全拉、一次性返回</td>
+    <td>全部就绪后才能遍历</td>
+    <td>全量</td>
+  </tr>
+  <tr>
+    <td><code>Task&lt;IEnumerable&lt;T&gt;&gt;</code></td>
+    <td>任务完成后返回一个迭代器</td>
+    <td>迭代器本身异步获取，但迭代过程同步</td>
+    <td>取决于迭代器实现</td>
+  </tr>
+  <tr>
+    <td><code>IAsyncEnumerable&lt;T&gt;</code></td>
+    <td>每次 MoveNext 都可以异步</td>
+    <td>边拉边产，流式到达</td>
+    <td>一次一条（或一批）</td>
+  </tr>
+</table>
+
+<pre><code><span class="cmt">// Task&lt;List&lt;T&gt;&gt;：启动 → 全部拉完 → 再遍历</span>
+<span class="kw">var</span> list = <span class="kw">await</span> GetAllAsync();    <span class="cmt">// 阻塞等全部数据就绪</span>
+<span class="kw">foreach</span> (<span class="kw">var</span> x <span class="kw">in</span> list) { ... }  <span class="cmt">// 然后才遍历</span>
+
+<span class="cmt">// IAsyncEnumerable&lt;T&gt;：启动 → 拉一条 → 处理 → 拉下一条 → ...</span>
+<span class="kw">await foreach</span> (<span class="kw">var</span> x <span class="kw">in</span> GetAllAsync()) <span class="cmt">// 拿到第一条就开始</span>
+{
+    Process(x);  <span class="cmt">// 处理完第一条才去拉第二条</span>
+}</code></pre>
+
+<!-- ====== QUIZ ====== -->
+
+<h2>📝 小测验</h2>
+
+<div class="quiz" id="q1">
+  <h3>Q1. 以下哪项是 <code>IAsyncEnumerable&lt;T&gt;</code> 相比 <code>Task&lt;List&lt;T&gt;&gt;</code> 的核心优势？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q1" value="a"> 代码更短</label>
+  <label><input type="radio" name="q1" value="b"> 第一条数据可以边拉边处理，不需要等全部数据就绪</label>
+  <label><input type="radio" name="q1" value="c"> 不需要 await</label>
+  <label><input type="radio" name="q1" value="d"> 速度一定更快</label>
+  <button onclick="checkQ1()">确认</button>
+  <div class="feedback" id="f1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>Q2. 以下代码有什么问题？</h3>
+<pre><code><span class="kw">async</span> IAsyncEnumerable&lt;<span class="kw">int</span>&gt; GetNumbers()
+{
+    <span class="kw">yield return</span> 1;
+    <span class="kw">await</span> Task.Delay(100);
+    <span class="kw">yield return</span> 2;
+}
+
+<span class="kw">foreach</span> (<span class="kw">var</span> n <span class="kw">in</span> GetNumbers())  <span class="cmt">// 注意：不是 await foreach</span>
+{
+    Console.WriteLine(n);
+}</code></pre>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q2" value="a"> 没问题，可以编译运行</label>
+  <label><input type="radio" name="q2" value="b"> 编译错误：IAsyncEnumerable&lt;T&gt; 不能用 foreach 遍历</label>
+  <label><input type="radio" name="q2" value="c"> 编译通过，但运行时会死循环</label>
+  <label><input type="radio" name="q2" value="d"> 编译通过，但运行时 Task.Delay 会被跳过</label>
+  <button onclick="checkQ2()">确认</button>
+  <div class="feedback" id="f2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>Q3. 关于 <code>IAsyncEnumerator&lt;T&gt;.MoveNextAsync()</code>，以下哪句正确？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q3" value="a"> 返回 Task&lt;bool&gt;</label>
+  <label><input type="radio" name="q3" value="b"> 返回 ValueTask&lt;bool&gt;，为减少堆分配</label>
+  <label><input type="radio" name="q3" value="c"> 返回 void，用 out 参数表示结果</label>
+  <label><input type="radio" name="q3" value="d"> 返回 bool，但可以 await</label>
+  <button onclick="checkQ3()">确认</button>
+  <div class="feedback" id="f3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>Q4. 在异步流方法中，以下哪个写法是<strong>错误</strong>的？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q4" value="a"> <code>yield return</code> 和 <code>await</code> 在同一个方法中</label>
+  <label><input type="radio" name="q4" value="b"> 在迭代器方法参数上使用 <code>[EnumeratorCancellation]</code></label>
+  <label><input type="radio" name="q4" value="c"> 方法签名包含 <code>out</code> 参数</label>
+  <label><input type="radio" name="q4" value="d"> 在 using 语句中使用 <code>await using</code></label>
+  <button onclick="checkQ4()">确认</button>
+  <div class="feedback" id="f4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>Q5. 以下哪个场景<strong>不适合</strong>用 <code>IAsyncEnumerable&lt;T&gt;</code>？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q5" value="a"> 从数据库流式读取大量记录</label>
+  <label><input type="radio" name="q5" value="b"> 翻页消费 GitHub API 的所有 Issue</label>
+  <label><input type="radio" name="q5" value="c"> 返回 5 条固定的配置项</label>
+  <label><input type="radio" name="q5" value="d"> 从消息队列逐条消费消息</label>
+  <button onclick="checkQ5()">确认</button>
+  <div class="feedback" id="f5"></div>
+</div>
+
+<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<p class="mild">
+  Lesson 04 · C# 8 Async Streams · 下一课预告：C# 8 Default Interface Methods
+</p>
+
+<script>
+  function checkQ1() {
+    var f = document.getElementById('f1');
+    var selected = document.querySelector('input[name="q1"]:checked');
+    if (!selected) return;
+    var correct = selected.value === 'b';
+    f.textContent = correct
+      ? '✅ 正确！异步流的核心价值是流式处理：第一条数据可用即可开始处理，不需要等全部数据就绪。'
+      : '❌ 答案是 b。异步流的核心优势不是代码更短或速度更快，而是"不等人齐"——低延迟、省内存的流式处理。';
+    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
+  }
+  function checkQ2() {
+    var f = document.getElementById('f2');
+    var selected = document.querySelector('input[name="q2"]:checked');
+    if (!selected) return;
+    var correct = selected.value === 'b';
+    f.textContent = correct
+      ? '✅ 正确！编译错误。IAsyncEnumerable&lt;T&gt; 没有实现 IEnumerable&lt;T&gt;，不能用 foreach 遍历——必须用 await foreach。'
+      : '❌ 答案是"编译错误"。IAsyncEnumerable&lt;T&gt; 没有实现 IEnumerable&lt;T&gt;，foreach 只能用于同步的可枚举类型。编译器会直接报错。';
+    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
+  }
+  function checkQ3() {
+    var f = document.getElementById('f3');
+    var selected = document.querySelector('input[name="q3"]:checked');
+    if (!selected) return;
+    var correct = selected.value === 'b';
+    f.textContent = correct
+      ? '✅ 正确！MoveNextAsync 返回 ValueTask&lt;bool&gt;，在同步完成时（如已缓存的数据）不会分配堆内存。因为迭代循环非常频繁，这个优化很关键。'
+      : '❌ 答案是 b。返回 ValueTask&lt;bool&gt; 是故意的性能优化——迭代循环调用 MoveNextAsync 极其频繁，ValueTask 在同步完成时避免堆分配。';
+    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
+  }
+  function checkQ4() {
+    var f = document.getElementById('f4');
+    var selected = document.querySelector('input[name="q4"]:checked');
+    if (!selected) return;
+    var correct = selected.value === 'c';
+    f.textContent = correct
+      ? '✅ 正确！async IAsyncEnumerable 方法不能有 out/ref 参数，这是状态机实现限制——和 async Task 方法一致。yield + await 混用、[EnumeratorCancellation]、await using 都是合法的。'
+      : '❌ 答案是 c。async IAsyncEnumerable 方法不能有 out/ref 参数。其他三项都是正确的异步流用法。';
+    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
+  }
+  function checkQ5() {
+    var f = document.getElementById('f5');
+    var selected = document.querySelector('input[name="q5"]:checked');
+    if (!selected) return;
+    var correct = selected.value === 'c';
+    f.textContent = correct
+      ? '✅ 正确！5 条固定配置项数据量很小、没有异步 I/O，用普通的 Task&lt;List&lt;T&gt;&gt; 或同步 IEnumerable&lt;T&gt; 更简单。异步流的收益在大数据量 + 有 I/O 的场景。'
+      : '❌ 答案是 c。5 条配置项数据量太小，用异步流是过度设计。异步流的优势在于大数据量 + 流式 I/O 的场景。';
+    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
+  }
+</script>
+
+</body>
+</html>

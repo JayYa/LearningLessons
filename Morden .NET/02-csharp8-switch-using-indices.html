@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 02: C# 8 Switch Expressions · Using Declarations · Indices/Ranges</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  .callout {
+    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
+  }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<h1>Lesson 02: C# 8 Switch Expressions · Using Declarations · Indices/Ranges</h1>
+<p class="subtitle">三个轻量但高频的特性，让你的日常代码少写 30% 的废话</p>
+
+<div class="callout callout--info">
+<strong>前置 / Prerequisite：</strong>Lesson 01 的 NRT 基础。<br>
+<strong>本课目标：</strong>三件能马上在项目里用起来的工具——switch 表达式<span class="en">Switch Expressions</span>、using 声明<span class="en">Using Declarations</span>、索引与范围<span class="en">Indices & Ranges</span>。
+</div>
+
+<!-- ====== SECTION 1: SWITCH EXPRESSIONS ====== -->
+
+<h2>一、Switch 表达式<span class="en">Switch Expressions</span></h2>
+
+<h3>老写法的问题</h3>
+
+<p>传统的 <code>switch</code> 是语句<span class="en">Statement</span>，不是表达式<span class="en">Expression</span>。你不能把它放在赋值的右侧，于是代码变成：</p>
+
+<pre><code><span class="cmt">// C# 7.3：啰嗦五连——break、return、临时变量、重复书写</span>
+<span class="kw">string</span> dayType;
+<span class="kw">switch</span> (day)
+{
+    <span class="kw">case</span> DayOfWeek.Saturday:
+    <span class="kw">case</span> DayOfWeek.Sunday:
+        dayType = <span class="str">"周末"</span>;
+        <span class="kw">break</span>;
+    <span class="kw">case</span> DayOfWeek.Monday:
+        dayType = <span class="str">"星期一综合症"</span>;
+        <span class="kw">break</span>;
+    <span class="kw">default</span>:
+        dayType = <span class="str">"工作日"</span>;
+        <span class="kw">break</span>;
+}</code></pre>
+
+<p>四个痛点：声明临时变量、重复赋值、每个分支 <code>break</code>、<code>case</code> 和 <code>switch</code> 本身都是纯噪音。</p>
+
+<h3>新写法</h3>
+
+<pre><code><span class="cmt">// C# 8：开关表达式——直接放在 = 右侧</span>
+<span class="kw">string</span> dayType = day <span class="kw">switch</span>
+{
+    DayOfWeek.Saturday <span class="kw">or</span> DayOfWeek.Sunday => <span class="str">"周末"</span>,
+    DayOfWeek.Monday                          => <span class="str">"星期一综合症"</span>,
+    _                                         => <span class="str">"工作日"</span>,
+};</code></pre>
+
+<p>一次只改一样东西，效果很明显：</p>
+
+<div class="comparison">
+  <div class="old"><h4>老写法 (Statement)</h4>
+<pre><code><span class="kw">string</span> result;
+<span class="kw">switch</span> (x) {
+    <span class="kw">case</span> 1: result = <span class="str">"一"</span>; <span class="kw">break</span>;
+    <span class="kw">case</span> 2: result = <span class="str">"二"</span>; <span class="kw">break</span>;
+    <span class="kw">default</span>: result = <span class="str">"其他"</span>; <span class="kw">break</span>;
+}
+<span class="kw">return</span> result;</code></pre>
+  </div>
+  <div class="new"><h4>C# 8 (Expression)</h4>
+<pre><code><span class="kw">return</span> x <span class="kw">switch</span>
+{
+    1 => <span class="str">"一"</span>,
+    2 => <span class="str">"二"</span>,
+    _ => <span class="str">"其他"</span>,
+};</code></pre>
+  </div>
+</div>
+
+<h3>核心语法元素</h3>
+
+<table>
+  <tr><th>元素</th><th>写法</th><th>含义</th></tr>
+  <tr><td>丢弃模式<span class="en">Discard Pattern</span></td><td><code>_</code></td><td>匹配所有剩余情况（代替 <code>default</code>）</td></tr>
+  <tr><td>或模式<span class="en">Or Pattern</span></td><td><code>1 or 2</code></td><td>匹配任一值</td></tr>
+  <tr><td>与模式<span class="en">And Pattern</span></td><td><code>> 0 and &lt; 10</code></td><td>两个条件同时成立</td></tr>
+  <tr><td>属性模式<span class="en">Property Pattern</span></td><td><code>{ Name: "张三" }</code></td><td>在 case 里直接解构对象属性</td></tr>
+  <tr><td>元组模式<span class="en">Tuple Pattern</span></td><td><code>("a", 1)</code></td><td>同时匹配多个值</td></tr>
+  <tr><td>when 子句<span class="en">When Clause</span></td><td><code>n when n > 10</code></td><td>附加条件</td></tr>
+</table>
+
+<div class="callout callout--info">
+<strong>🤔 为什么是 <code>or</code>/<code>and</code>/<code>not</code>，不是 <code>|</code>/<code>&amp;</code>/<code>!</code>？</strong><br>
+<code>|</code> 和 <code>&amp;</code> 在 C# 里已经是按位运算——对<strong>两个值</strong>做运算、产出一个<strong>新值</strong>。模式匹配不是在算值，是在描述<strong>形状</strong>。<br><br>
+举个例子：<code>x is 1 | 2 &amp; 3</code> 怎么解析？是先算出 <code>1 | 2 = 3</code>，再 <code>3 &amp; 3 = 3</code>，最后匹配 3？还是 <code>1 or (2 and 3)</code>？用 <code>or</code>/<code>and</code> 就没有歧义——模式有自己的优先级，跟表达式优先级彻底隔离。加上 <code>not</code> 没有好的运算符（<code>!</code> 是逻辑非，<code>x is !null</code> 读起来很奇怪），三个一起用关键字更一致。读起来也更像"条件描述"而非"位运算"。
+</div>
+
+<h3>属性模式<span class="en">Property Pattern</span> 深入</h3>
+
+<p>属性模式的本质：不拆解对象，直接在 <code>{ }</code> 里描述你要匹配的属性形状。</p>
+
+<h4>基础：匹配一个或多个属性</h4>
+
+<pre><code><span class="kw">public</span> <span class="type">decimal</span> CalcDiscount(<span class="type">Order</span> order) => order <span class="kw">switch</span>
+{
+    { IsVip: <span class="kw">true</span>, Total: >= 1000 }          => 0.2m,
+    { IsVip: <span class="kw">true</span> }                           => 0.1m,
+    { Total: >= 500 }                            => 0.05m,
+    _                                            => 0m,
+};</code></pre>
+
+<div class="callout callout--info">
+<strong>关键规则：</strong><code>{ }</code> 里的多个属性之间是 <strong>AND</strong> 关系——必须全部满足才命中该分支。但 <strong>未列出的属性会被忽略</strong>。<br>比如第三行 <code>{ Total: >= 500 }</code> 不管 <code>IsVip</code> 是什么值都进来。
+</div>
+
+<h4>嵌套属性<span class="en">Nested / Recursive Pattern</span></h4>
+
+<p>属性的值本身也可以是一个模式——属性模式可以无限嵌套：</p>
+
+<pre><code><span class="kw">public</span> <span class="type">string</span> DescribeAddress(<span class="type">Person</span> p) => p <span class="kw">switch</span>
+{
+    { Address: { City: <span class="str">"北京"</span>, District: <span class="str">"海淀"</span> } } => <span class="str">"海淀区居民"</span>,
+    { Address: { City: <span class="str">"北京"</span> } }                      => <span class="str">"北京居民"</span>,
+    { Address: { Province: <span class="kw">not</span> <span class="kw">null</span> } }                => <span class="str">"有地址但缺城市"</span>,
+    _                                                   => <span class="str">"无地址信息"</span>,
+};</code></pre>
+
+<h4>组合类型模式——同时做类型检查、属性解构、null 防御</h4>
+
+<p>属性模式可以和<strong>类型模式</strong>写在一起：<code>TypeName { Prop: subpattern }</code>。先检查类型，再检查属性形状。这是日常开发里最常用的模式组合。</p>
+
+<pre><code><span class="kw">public</span> <span class="type">string</span> ProcessShape(<span class="kw">object</span> shape) => shape <span class="kw">switch</span>
+{
+    <span class="type">Circle</span> { Radius: > 100 }                     => <span class="str">"大圆"</span>,
+    <span class="type">Circle</span> { Radius: > 0 }                       => <span class="str">"小圆"</span>,
+    <span class="type">Rectangle</span> { Width: <span class="kw">var</span> w, Height: <span class="kw">var</span> h } <span class="kw">when</span> w == h => <span class="str">"正方形"</span>,
+    <span class="type">Rectangle</span>                                     => <span class="str">"矩形"</span>,
+    <span class="kw">null</span>                                          => <span class="str">"空"</span>,
+    _                                               => <span class="str">"未知形状"</span>,
+};</code></pre>
+
+<p>注意 <code>Rectangle</code> 这行没带 <code>{ }</code>——它是纯类型模式，只检查"是不是 Rectangle"。但如果 <code>shape</code> 是 <code>null</code>，这一行<strong>不会命中</strong>，因为类型模式自动排除 null。<code>null</code> 由下面单独的分支兜底。</p>
+
+<div class="callout callout--info">
+<strong>那 <code>TypeName { }</code> 又是什么意思？</strong>写 <code>Circle { }</code> 就等于说"是 Circle 类型，且满足属性模式 <code>{ }</code>"。而 <code>{ }</code> 是属性模式的退化形式——不指定任何属性，匹配<strong>所有非 null 实例</strong>。效果上等价于纯类型模式 <code>Circle</code>。<br><br>
+<strong>同理，单独一个 <code>{ }</code></strong> 也能用——<code>obj is { }</code> 等价于 <code>obj is not null</code>。如果再加 var 模式，就能一边判 null 一边取出 NotNull 变量：<code>obj is { } notNull</code>。
+</div>
+
+<p>上面第三行还藏着两个新东西：<code>var w</code> 是 <strong>var 模式</strong>（匹配任意值并绑定变量），<code>when w == h</code> 是附加条件。这就引出了下面两个话题。</p>
+
+<!-- ====== TUPLE PATTERN ====== -->
+
+<h3>元组模式<span class="en">Tuple Pattern</span></h3>
+
+<p>当你要根据<strong>多个独立值</strong>的组合来做决策时，传统的做法是一层层的 <code>if-else</code>。元组模式让你把这些组合写成一个二维（或多维）的匹配表。</p>
+
+<h4>基础语法</h4>
+
+<pre><code><span class="cmt">// C# 7.3：层层 if —— 逻辑分散、可读性差</span>
+<span class="kw">string</span> DescribeGame(string p1, string p2)
+{
+    <span class="kw">if</span> (p1 == <span class="str">"rock"</span> && p2 == <span class="str">"scissors"</span>) <span class="kw">return</span> <span class="str">"Player1 胜"</span>;
+    <span class="kw">if</span> (p1 == <span class="str">"rock"</span> && p2 == <span class="str">"paper"</span>)    <span class="kw">return</span> <span class="str">"Player2 胜"</span>;
+    <span class="kw">if</span> (p1 == <span class="str">"rock"</span> && p2 == <span class="str">"rock"</span>)     <span class="kw">return</span> <span class="str">"平局"</span>;
+    <span class="cmt">// ... 还有 6 种组合</span>
+    <span class="kw">return</span> <span class="str">"未知"</span>;
+}
+
+<span class="cmt">// C# 8：元组模式——所有组合一目了然</span>
+<span class="kw">string</span> DescribeGame(string p1, string p2) => (p1, p2) <span class="kw">switch</span>
+{
+    (<span class="str">"rock"</span>, <span class="str">"scissors"</span>)   => <span class="str">"Player1 胜"</span>,
+    (<span class="str">"rock"</span>, <span class="str">"paper"</span>)      => <span class="str">"Player2 胜"</span>,
+    (<span class="str">"rock"</span>, <span class="str">"rock"</span>)       => <span class="str">"平局"</span>,
+    (<span class="str">"paper"</span>, <span class="str">"rock"</span>)      => <span class="str">"Player1 胜"</span>,
+    (<span class="str">"paper"</span>, <span class="str">"scissors"</span>)  => <span class="str">"Player2 胜"</span>,
+    (<span class="str">"paper"</span>, <span class="str">"paper"</span>)     => <span class="str">"平局"</span>,
+    (<span class="str">"scissors"</span>, <span class="str">"paper"</span>)  => <span class="str">"Player1 胜"</span>,
+    (<span class="str">"scissors"</span>, <span class="str">"rock"</span>)   => <span class="str">"Player2 胜"</span>,
+    (<span class="str">"scissors"</span>, <span class="str">"scissors"</span>)=> <span class="str">"平局"</span>,
+    _                    => <span class="str">"非法手势"</span>,
+};</code></pre>
+
+<h4>元组模式里每个位置都可以是子模式</h4>
+
+<p>不限于常量——你可以在元组的每个位置用<strong>任何模式</strong>：</p>
+
+<pre><code><span class="kw">string</span> ClassifyPoint(<span class="kw">int</span> x, <span class="kw">int</span> y) => (x, y) <span class="kw">switch</span>
+{
+    (0, 0)              => <span class="str">"原点"</span>,
+    (_, 0)              => <span class="str">"在 X 轴上"</span>,
+    (0, _)              => <span class="str">"在 Y 轴上"</span>,
+    (> 0, > 0)          => <span class="str">"第一象限"</span>,
+    (&lt; 0, > 0)          => <span class="str">"第二象限"</span>,
+    (&lt; 0, &lt; 0)          => <span class="str">"第三象限"</span>,
+    (> 0, &lt; 0)          => <span class="str">"第四象限"</span>,
+};</code></pre>
+
+<div class="callout callout--info">
+<strong>多用 <code>_</code> 丢弃你不关心的位置。</strong>比如上面 <code>(_, 0)</code> 的含义是"不管 x 是多少，只要 y 是 0 就命中"。
+</div>
+
+<h4>元组模式 + 属性模式 可以混用</h4>
+
+<pre><code><span class="cmt">// 同时用元组和属性模式做复杂决策</span>
+<span class="kw">string</span> CanOrder(<span class="type">User</span> user, <span class="type">Product</span> product) => (user, product) <span class="kw">switch</span>
+{
+    ({ IsVip: <span class="kw">true</span> }, _)                              => <span class="str">"可以购买（VIP 不限购）"</span>,
+    (_, { Stock: 0 })                                    => <span class="str">"库存不足"</span>,
+    ({ Age: &lt; 18 }, { Category: <span class="str">"成人用品"</span> })             => <span class="str">"年龄不符"</span>,
+    _                                                    => <span class="str">"可以购买"</span>,
+};</code></pre>
+
+<p>这里 <code>(user, product)</code> 构建了一个元组，元组里每个位置再用属性模式去解构。两种模式完全正交、可以任意嵌套。</p>
+
+<!-- ====== WHEN CLAUSE ====== -->
+
+<h3>when 子句<span class="en">When Clause</span></h3>
+
+<p><code>when</code> 给任何模式附加一个<strong>运行时条件</strong>——先匹配模式，再检查条件。模式本身是<strong>编译时确定的形状</strong>，<code>when</code> 是<strong>运行时求值的布尔表达式</strong>。</p>
+
+<h4>什么时候必须用 <code>when</code></h4>
+
+<p>模式匹配能做的事有限：</p>
+
+<table>
+  <tr><th>场景</th><th>模式能做吗？</th><th>怎么办</th></tr>
+  <tr>
+    <td>比较两个变量</td>
+    <td>❌ 模式只能匹配固定常量</td>
+    <td><code>{ Width: var w, Height: var h } when w == h</code></td>
+  </tr>
+  <tr>
+    <td>调用方法</td>
+    <td>❌ 模式里不能调用方法</td>
+    <td><code>s when s.StartsWith("ERR")</code></td>
+  </tr>
+  <tr>
+    <td>访问集合元素</td>
+    <td>❌ 模式不支持索引器</td>
+    <td><code>list when list.Count > 0 && list[0] > 10</code></td>
+  </tr>
+  <tr>
+    <td>复杂布尔逻辑</td>
+    <td>⚠️ 部分支持（<code>or</code>/<code>and</code>/<code>not</code>）</td>
+    <td>简单逻辑用 <code>and</code>/<code>or</code>，复杂逻辑用 <code>when</code></td>
+  </tr>
+  <tr>
+    <td>匹配常量</td>
+    <td>✅ 直接用</td>
+    <td><code>42</code> 或 <code>"hello"</code></td>
+  </tr>
+  <tr>
+    <td>范围比较</td>
+    <td>✅ 关系模式（C# 9+）</td>
+    <td><code>&gt; 0 and &lt; 100</code></td>
+  </tr>
+  <tr>
+    <td>null 检查</td>
+    <td>✅</td>
+    <td><code>null</code> 或 <code>not null</code></td>
+  </tr>
+  <tr>
+    <td>类型检查</td>
+    <td>✅ 类型模式</td>
+    <td><code>Circle c</code></td>
+  </tr>
+</table>
+
+<h4>实战对比：when 必要 vs 不必要</h4>
+
+<pre><code><span class="cmt">// ❌ 不需要 when——模式本身就能搞定</span>
+<span class="kw">string</span> Bad(<span class="kw">int</span> n) => n <span class="kw">switch</span>
+{
+    <span class="kw">int</span> x <span class="kw">when</span> x > 0  => <span class="str">"正数"</span>,   <span class="cmt">// when 多余：直接用 > 0 模式</span>
+    <span class="kw">int</span> x <span class="kw">when</span> x &lt; 0  => <span class="str">"负数"</span>,   <span class="cmt">// 同上</span>
+    _               => <span class="str">"零"</span>,
+};
+
+<span class="cmt">// ✅ 模式优先——关系模式干的事别用 when</span>
+<span class="kw">string</span> Good(<span class="kw">int</span> n) => n <span class="kw">switch</span>
+{
+    > 0  => <span class="str">"正数"</span>,
+    &lt; 0  => <span class="str">"负数"</span>,
+    _    => <span class="str">"零"</span>,
+};
+
+<span class="cmt">// ✅ 必须用 when：条件涉及方法调用或变量间关系</span>
+<span class="kw">string</span> ValidateString(<span class="kw">string</span> s) => s <span class="kw">switch</span>
+{
+    <span class="kw">null</span>                                          => <span class="str">"空引用"</span>,
+    <span class="str">""</span>                                            => <span class="str">"空字符串"</span>,
+    <span class="kw">string</span> x <span class="kw">when</span> x.Trim().Length == 0           => <span class="str">"全是空白"</span>,        <span class="cmt">// 调了 Trim()</span>
+    <span class="kw">string</span> x <span class="kw">when</span> x.Length > 100                  => <span class="str">"超长字符串"</span>,        <span class="cmt">// 调了 Length 属性</span>
+    <span class="kw">string</span> x <span class="kw">when</span> x.StartsWith(<span class="str">"ERR"</span>)           => <span class="str">"错误消息"</span>,          <span class="cmt">// 调了方法</span>
+    _                                             => <span class="str">"普通字符串"</span>,
+};</code></pre>
+
+<h4>when 的执行顺序陷阱</h4>
+
+<div class="callout callout--warn">
+<strong>关键：</strong>switch 表达式里的分支是<strong>从上到下依次匹配</strong>的，不是选"最匹配"的。<code>when</code> 条件失败不会报错，而是<strong>继续尝试下一个分支</strong>。
+</div>
+
+<pre><code><span class="kw">string</span> Grade(<span class="kw">int</span> score) => score <span class="kw">switch</span>
+{
+    >= 90 <span class="kw">when</span> score &lt;= 100  => <span class="str">"A"</span>,
+    >= 80                   => <span class="str">"B"</span>,
+    >= 90                   => <span class="str">"这句永远执行不到"</span>,   <span class="cmt">// 如果 score >= 90，早就在第一行被匹配了</span>
+    _                       => <span class="str">"C"</span>,
+};</code></pre>
+
+<p>第一行：<code>score = 95</code> 时，模式 <code>>= 90</code> 命中，然后 <code>when score <= 100</code> 也为 true → 返回 "A"。<br>
+<code>score = 110</code> 时，模式 <code>>= 90</code> 命中，但 <code>when score <= 100</code> 为 false → <strong>跳过，继续试下一行</strong> → <code>>= 80</code> 命中 → 返回 "B"。</p>
+
+<p>所以 <code>when</code> 的本质是：<strong>模式先匹配，<code>when</code> 再过滤</strong>。模式匹配成功但 <code>when</code> 失败，等于这个分支没命中。</p>
+
+<!-- ====== PROPERTY+TUPLE+WHEN 联合实战 ====== -->
+
+<h3>综合实战：三种模式一起用</h3>
+
+<pre><code><span class="kw">public</span> <span class="type">string</span> HandleRequest(<span class="type">HttpRequest</span> req, <span class="type">User</span>? user)
+{
+    <span class="kw">return</span> (req, user) <span class="kw">switch</span>
+    {
+        <span class="cmt">// 元组模式：两个值一起匹配</span>
+        <span class="cmt">// 属性模式：解构 req 的属性</span>
+        <span class="cmt">// when：运行时条件——调用方法判断</span>
+        ({ Method: <span class="str">"GET"</span>, Path: <span class="str">"/admin"</span> <span class="kw">or</span> <span class="str">"/admin/"</span> }, { Role: <span class="str">"Admin"</span> })
+            => <span class="str">"管理员页面"</span>,
+
+        ({ Method: <span class="str">"GET"</span>, Path: <span class="str">"/admin"</span> <span class="kw">or</span> <span class="str">"/admin/"</span> }, _)
+            => <span class="str">"403 无权限"</span>,
+
+        ({ Method: <span class="str">"POST"</span> }, { } user) <span class="kw">when</span> user.CanPost()
+            => <span class="str">"发布成功"</span>,
+
+        ({ Method: <span class="str">"POST"</span> }, _)
+            => <span class="str">"请先登录"</span>,
+
+        _   => <span class="str">"未知请求"</span>,
+    };
+}</code></pre>
+
+<p>一行拆解：<code>(req, user)</code> 构建元组 → 第一个位置用属性模式解构 <code>Method</code> 和 <code>Path</code> → <code>Path</code> 的值本身又用了 <code>or</code> 模式 → 第二个位置用属性模式检查 <code>Role</code>。<strong>四种模式装饰在一行里，各自独立、语义清晰。</strong></p>
+
+<div class="callout callout--good">
+<strong>核心心智模型：</strong>模式 = 形状描述。你可以想象自己是在声明 <strong>"我要的形状长这样"</strong>，而不是在写 <strong>"如果满足条件 A 且 B 且 C 则……"</strong>。代码即文档。
+</div>
+
+<div class="callout callout--warn">
+<strong>注意：</strong>Switch 表达式是<strong>穷尽</strong>的——你必须提供 <code>_</code>（或穷举所有可能值），否则编译器报错。这和传统 <code>switch</code> 语句不一样（传统 <code>default</code> 是可选的）。
+</div>
+
+<!-- ====== SECTION 2: USING DECLARATIONS ====== -->
+
+<h2>二、Using 声明<span class="en">Using Declarations</span></h2>
+
+<p>传统 <code>using</code> 语句自带一层花括号和缩进：</p>
+
+<pre><code><span class="cmt">// C# 7.3：每多一个 using，就多一层缩进</span>
+<span class="kw">public void</span> DoWork()
+{
+    <span class="kw">using</span> (<span class="kw">var</span> conn = <span class="kw">new</span> SqlConnection(...))
+    <span class="kw">using</span> (<span class="kw">var</span> cmd = conn.CreateCommand())
+    {
+        cmd.CommandText = <span class="str">"SELECT ..."</span>;
+        <span class="kw">using</span> (<span class="kw">var</span> reader = cmd.ExecuteReader())
+        {
+            <span class="cmt">// 三层的缩进只是为了释放资源</span>
+        }
+    }
+}</code></pre>
+
+<p>C# 8 的 using 声明<span class="en">Using Declaration</span> 不需要花括号：</p>
+
+<pre><code><span class="cmt">// C# 8：变量在所在作用域结束时自动释放</span>
+<span class="kw">public void</span> DoWork()
+{
+    <span class="kw">using var</span> conn = <span class="kw">new</span> SqlConnection(...);
+    <span class="kw">using var</span> cmd = conn.CreateCommand();
+    cmd.CommandText = <span class="str">"SELECT ..."</span>;
+    <span class="kw">using var</span> reader = cmd.ExecuteReader();
+    <span class="cmt">// 离开方法时，reader → cmd → conn 依次 Dispose</span>
+}</code></pre>
+
+<h3>区别</h3>
+
+<table>
+  <tr><th></th><th>using 语句<span class="en">Statement</span></th><th>using 声明<span class="en">Declaration</span> (C# 8)</th></tr>
+  <tr><td>写法</td><td><code>using (var x = ...) { }</code></td><td><code>using var x = ...;</code></td></tr>
+  <tr><td>释放时机</td><td>花括号 <code>}</code> 结束</td><td>变量离开作用域<span class="en">Scope</span> 时</td></tr>
+  <tr><td>有自己的作用域</td><td>是</td><td>否——变量属于父作用域</td></tr>
+</table>
+
+<div class="callout callout--warn">
+<strong>陷阱：</strong>using 声明在<strong>变量离开作用域</strong>时才释放。如果你在方法中间声明它，它会在方法结束时才 Dispose，而不是"当前块"结束。如果资源需要尽早释放，仍然用老式 using 语句。
+</div>
+
+<h3>什么时候用哪种</h3>
+
+<pre><code><span class="cmt">// ✅ 用 using 声明：资源使用到方法结束</span>
+<span class="kw">void</span> Process()
+{
+    <span class="kw">using var</span> conn = OpenConnection();
+    DoQuery(conn);       <span class="cmt">// 用到方法最后</span>
+    DoOtherQuery(conn);  <span class="cmt">// 方法结束时释放——没问题</span>
+}
+
+<span class="cmt">// ✅ 用老 using 语句：资源需要尽早释放</span>
+<span class="kw">void</span> Process()
+{
+    <span class="kw">using</span> (<span class="kw">var</span> conn = OpenConnection())
+    {
+        DoQuery(conn);   <span class="cmt">// } 时立即释放</span>
+    }
+    <span class="cmt">// 这里 conn 已经没了，做其他耗时操作不影响连接</span>
+    RunHeavyComputation();
+}</code></pre>
+
+<!-- ====== SECTION 3: INDICES & RANGES ====== -->
+
+<h2>三、索引与范围<span class="en">Indices & Ranges</span></h2>
+
+<h3>末尾索引<span class="en">Index from End</span>：<code>^</code></h3>
+
+<pre><code><span class="cmt">// C# 7.3：从末尾访问</span>
+<span class="kw">var</span> last = arr[arr.Length - 1];
+<span class="kw">var</span> secondLast = arr[arr.Length - 2];
+
+<span class="cmt">// C# 8：^ 操作符——"从末尾数"</span>
+<span class="kw">var</span> last = arr[^1];         <span class="cmt">// 倒数第一个</span>
+<span class="kw">var</span> secondLast = arr[^2];   <span class="cmt">// 倒数第二个</span></code></pre>
+
+<p><code>Index</code> 是新类型，<code>^n</code> 是"从末尾数第 n 个"：</p>
+
+<pre><code><span class="type">Index</span> i1 = ^1;    <span class="cmt">// 倒数第一个</span>
+<span class="type">Index</span> i2 = 0;     <span class="cmt">// 从前往后第 0 个（正常索引）</span>
+<span class="type">Index</span> i3 = ^0;    <span class="cmt">// 等于 Length——不是最后一个！</span></code></pre>
+
+<h4>为什么 <code>^1</code> 是倒数第一，不是 <code>^0</code>？</h4>
+
+<p>答案藏在公式里：<strong><code>^n = Length - n</code></strong>。这不是随意定的——是为了让 <strong>范围（Ranges）的数学性质干净</strong>。</p>
+
+<p>先看正向索引和范围的关系：</p>
+
+<pre><code><span class="cmt">// 正向索引：0 是第一个，Length 是"末尾之后的位置"</span>
+<span class="cmt">// 范围是左闭右开 [start, end)，end 取"末尾之后"刚好表达"到结尾"</span>
+<span class="type">int</span>[] arr = [10, 20, 30, 40, 50];  <span class="cmt">// Length = 5</span>
+
+arr[0..5];    <span class="cmt">// [10,20,30,40,50]——5 是 Length，"到末尾"</span>
+arr[2..5];    <span class="cmt">// [30,40,50]——"从索引 2 到末尾"</span></code></pre>
+
+<p>关键点：范围的右端是<strong>不包含的</strong>。所以"取到数组最后一个元素"的正确写法是 <code>arr[0..Length]</code>，而不是 <code>arr[0..Length-1]</code>。</p>
+
+<p>倒着数的时候，同样的数学必须成立。设计团队定下的规则是：</p>
+
+<pre><code><span class="cmt">// ^n 映射到正向索引：^n = Length - n</span>
+^0 = <span class="num">5</span> - <span class="num">0</span> = <span class="num">5</span>   <span class="cmt">// 等于 Length——"末尾之后"</span>
+^1 = <span class="num">5</span> - <span class="num">1</span> = <span class="num">4</span>   <span class="cmt">// 最后一个元素</span>
+^2 = <span class="num">5</span> - <span class="num">2</span> = <span class="num">3</span>   <span class="cmt">// 倒数第二个</span>
+^5 = <span class="num">5</span> - <span class="num">5</span> = <span class="num">0</span>   <span class="cmt">// 第一个元素</span></code></pre>
+
+<div class="callout callout--good">
+<strong>这套公式的好处全在范围上。</strong>想取"最后三个元素"？写成 <code>arr[^3..^0]</code>——右端是 <code>^0</code>（等于 Length），完美符合左闭右开的语义：<br>
+<code>arr[^3..^0] = arr[2..5] = [30, 40, 50]</code>。<br><br>
+如果 <code>^0</code> 是最后一个元素，那 <code>arr[^3..^0]</code> 的右端到底包含还是不包含？要么破坏左闭右开，要么用 <code>^3..</code> 这种省略形式绕过去——两种都是特殊 case，不如让公式统一。
+</div>
+
+<p>换个角度想：<strong>正向索引的 0 是"开头"，负向索引的 ^0 是"结尾之后"</strong>——对称。正向的 <code>arr.Length</code> 是"最后一个元素之后"，负向的 <code>^0</code> 也是。这套映射是双射（bijection），数学上干净。</p>
+
+<div class="callout callout--warn">
+<strong>日常记住两条就够了：</strong><br>
+① <code>^1</code> 是最后一个。取单个元素用 <code>^1</code>、<code>^2</code>。<br>
+② 范围右端用 <code>^0</code> 表示"直到末尾"。取后缀用 <code>arr[^3..^0]</code>，或者更简短的 <code>arr[^3..]</code>（省略右端等价于省略 <code>^0</code>）。
+</div>
+
+<h3>范围<span class="en">Range</span>：<code>..</code></h3>
+
+<pre><code><span class="type">int</span>[] arr = [0, 1, 2, 3, 4, 5];  <span class="cmt">// 长度 6</span>
+
+<span class="kw">var</span> a = arr[0..3];    <span class="cmt">// [0, 1, 2]——左闭右开</span>
+<span class="kw">var</span> b = arr[^3..^1];  <span class="cmt">// [3, 4]——从倒数第3到倒数第1（不含）</span>
+<span class="kw">var</span> c = arr[3..];     <span class="cmt">// [3, 4, 5]——从索引3到末尾</span>
+<span class="kw">var</span> d = arr[..3];     <span class="cmt">// [0, 1, 2]——从开头到索引3（不含）</span>
+<span class="kw">var</span> e = arr[..];      <span class="cmt">// [0, 1, 2, 3, 4, 5]——全部（浅拷贝）</span></code></pre>
+
+<p>关键规则：</p>
+<ul>
+  <li><strong>左闭右开：</strong><code>[start..end)</code>——包含 start，不包含 end</li>
+  <li><strong>两端都可以省略：</strong><code>..3</code>（开头到3）、<code>3..</code>（3到末尾）、<code>..</code>（全部）</li>
+  <li><strong><code>^</code> 可以用于任一端：</strong><code>^3..^1</code>、"从倒数第3到倒数第1（不含）"</li>
+</ul>
+
+<h3>内部实现</h3>
+
+<pre><code><span class="cmt">// 切片会走 Slice 方法——Span/Memory 也同样支持</span>
+<span class="type">ReadOnlySpan</span>&lt;<span class="kw">char</span>&gt; slice = <span class="str">"Hello World"</span>.AsSpan()[0..5];  <span class="cmt">// "Hello"</span>
+
+<span class="cmt">// 字符串切片返回 string（不需要 .AsSpan()）</span>
+<span class="type">string</span> sub = str[1..^1];  <span class="cmt">// 去掉首尾字符</span></code></pre>
+
+<p>任何有 <code>Count</code>/<code>Length</code> 属性和带 <code>int</code> 索引器的类型（加上 <code>Slice(int, int)</code> 方法）都自动支持。常见的：<code>T[]</code>、<code>string</code>、<code>Span&lt;T&gt;</code>、<code>List&lt;T&gt;</code>。</p>
+
+<!-- ====== QUIZ ====== -->
+
+<h2>📝 小测验</h2>
+
+<div class="quiz" id="q1">
+  <h3>Q1. 以下哪个 switch 表达式会编译失败？</h3>
+<pre><code><span class="cmt">// A</span>
+<span class="kw">var</span> a = n <span class="kw">switch</span> { 1 => <span class="str">"一"</span>, _ => <span class="str">"其他"</span> };
+
+<span class="cmt">// B</span>
+<span class="kw">var</span> b = n <span class="kw">switch</span> { 1 => <span class="str">"一"</span>, 2 => <span class="str">"二"</span> };
+
+<span class="cmt">// C</span>
+<span class="kw">string</span> GetName(<span class="type">DayOfWeek</span> d) => d <span class="kw">switch</span>
+{
+    DayOfWeek.Monday => <span class="str">"周一"</span>,
+    DayOfWeek.Tuesday => <span class="str">"周二"</span>,
+    _ => <span class="str">"其他"</span>
+};</code></pre>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q1" value="a"> A</label>
+  <label><input type="radio" name="q1" value="b"> B</label>
+  <label><input type="radio" name="q1" value="c"> C</label>
+  <label><input type="radio" name="q1" value="d"> A 和 B 都会失败</label>
+  <button onclick="checkQ1()">确认</button>
+  <div class="feedback" id="f1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>Q2. 关于 using 声明<span class="en">Using Declaration</span>，以下哪句话正确？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q2" value="a"> using 声明在语句结束时立即释放</label>
+  <label><input type="radio" name="q2" value="b"> using 声明在变量离开作用域时释放</label>
+  <label><input type="radio" name="q2" value="c"> using 声明不需要实现 IDisposable</label>
+  <label><input type="radio" name="q2" value="d"> using 声明只能在 .csproj 中开启</label>
+  <button onclick="checkQ2()">确认</button>
+  <div class="feedback" id="f2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>Q3. <code>arr[^2..^0]</code> 返回什么？（arr = [10, 20, 30, 40, 50]，5 个元素）</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q3" value="a"> [40]</label>
+  <label><input type="radio" name="q3" value="b"> [40, 50]</label>
+  <label><input type="radio" name="q3" value="c"> [30, 40]</label>
+  <label><input type="radio" name="q3" value="d"> 运行时异常</label>
+  <button onclick="checkQ3()">确认</button>
+  <div class="feedback" id="f3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>Q4. 以下代码，当 <code>point = (0, -5)</code> 时输出什么？</h3>
+<pre><code><span class="kw">string</span> Describe(<span class="kw">int</span> x, <span class="kw">int</span> y) => (x, y) <span class="kw">switch</span>
+{
+    (0, 0)          => <span class="str">"原点"</span>,
+    (_, 0)          => <span class="str">"在 X 轴上"</span>,
+    (0, _)          => <span class="str">"在 Y 轴上"</span>,
+    (> 0, > 0)      => <span class="str">"第一象限"</span>,
+    (&lt; 0, > 0)      => <span class="str">"第二象限"</span>,
+    (&lt; 0, &lt; 0)      => <span class="str">"第三象限"</span>,
+    (> 0, &lt; 0)      => <span class="str">"第四象限"</span>,
+};</code></pre>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q4" value="a"> "在 X 轴上"</label>
+  <label><input type="radio" name="q4" value="b"> "在 Y 轴上"</label>
+  <label><input type="radio" name="q4" value="c"> "第四象限"</label>
+  <label><input type="radio" name="q4" value="d"> 编译错误——穷尽检查失败</label>
+  <button onclick="checkQ4()">确认</button>
+  <div class="feedback" id="f4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>Q5. 关于 <code>when</code> 子句，以下哪句话<strong>错误</strong>？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q5" value="a"> when 可以在模式匹配成功后附加运行时条件</label>
+  <label><input type="radio" name="q5" value="b"> when 条件失败时，会抛出一个异常</label>
+  <label><input type="radio" name="q5" value="c"> when 可以调用方法，模式本身不能</label>
+  <label><input type="radio" name="q5" value="d"> when 可以比较模式中绑定出来的变量</label>
+  <button onclick="checkQ5()">确认</button>
+  <div class="feedback" id="f5"></div>
+</div>
+
+<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<p class="mild">
+  Lesson 02 · C# 8 Switch Expressions / Using Declarations / Indices &amp; Ranges · 下一课预告：<a href="03-sync-yield-return-iterators.html">Lesson 03 — yield return 同步迭代器</a>（异步流的前置基础）
+</p>
+
+<script>
+  function checkQ1() {
+    var f = document.getElementById('f1');
+    var selected = document.querySelector('input[name="q1"]:checked');
+    if (!selected) return;
+    var correct = selected.value === 'b';
+    f.textContent = correct
+      ? '✅ 正确！B 缺少丢弃模式 _（或穷举所有 int 值），switch 表达式要求穷尽匹配。A 和 C 都有 _ 兜底。'
+      : '❌ 答案是 B。switch 表达式要求穷尽匹配，B 只覆盖了 1 和 2，缺少 _ 来兜底所有其他 int 值。A 和 C 都有 _ 兜底。';
+    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
+  }
+  function checkQ2() {
+    var f = document.getElementById('f2');
+    var selected = document.querySelector('input[name="q2"]:checked');
+    if (!selected) return;
+    var correct = selected.value === 'b';
+    f.textContent = correct
+      ? '✅ 正确！using 声明在变量离开作用域时释放——通常是方法结束。如果要尽早释放，用老式 using 语句。'
+      : '❌ 答案是 b。using 声明在变量离开作用域时释放（通常方法结束），不是语句结束。它仍然需要 IDisposable。';
+    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
+  }
+  function checkQ3() {
+    var f = document.getElementById('f3');
+    var selected = document.querySelector('input[name="q3"]:checked');
+    if (!selected) return;
+    var correct = selected.value === 'b';
+    f.textContent = correct
+      ? '✅ 正确！^2 = 索引3（元素 40），^0 = 索引5（= Length，右边界不包含），所以范围是 [3..5) → [40, 50]。'
+      : '❌ 答案是 [40, 50]。^2 = 索引3（元素 40），^0 = 索引5（= Length），范围 [3..5) 是左闭右开 → [40, 50]。';
+    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
+  }
+  function checkQ4() {
+    var f = document.getElementById('f4');
+    var selected = document.querySelector('input[name="q4"]:checked');
+    if (!selected) return;
+    var correct = selected.value === 'd';
+    f.textContent = correct
+      ? '✅ 正确！编译错误。switch 表达式要求穷尽匹配，代码只覆盖了 7 种情况，编译器无法证明所有 (int x, int y) 组合都被覆盖，必须加 _ 兜底。'
+      : '❌ 答案是「编译错误」。这个 switch 表达式缺少 _ 丢弃模式，编译器无法证明 (int, int) 的所有组合都被覆盖，所以报错。回答"在 Y 轴上"的话——(0, -5) 确实 x=0，但 y≠0，所以不命中 (0, _)，即使命中也编译不过。';
+    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
+  }
+  function checkQ5() {
+    var f = document.getElementById('f5');
+    var selected = document.querySelector('input[name="q5"]:checked');
+    if (!selected) return;
+    var correct = selected.value === 'b';
+    f.textContent = correct
+      ? '✅ 正确！when 条件失败时不会抛异常，而是跳过当前分支继续尝试下一个分支。这就是 when 的核心语义——"模式匹配 + 条件过滤"。'
+      : '❌ 答案是 b（错误说法）。when 条件失败不会抛异常——它会继续尝试下一个分支。A、C、D 都是对 when 的正确描述。';
+    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
+  }
+</script>
+
+</body>
+</html>

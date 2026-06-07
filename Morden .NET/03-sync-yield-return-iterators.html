@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 03: C# yield return 同步迭代器</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  .callout {
+    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
+  }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
+
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafaf9; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+
+  .diagram {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1rem 0;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.6; white-space: pre; overflow-x: auto;
+  }
+</style>
+</head>
+<body>
+
+<h1>Lesson 03: yield return 同步迭代器</h1>
+<p class="subtitle">编译器替你写状态机——你只管"产出一条、歇一下"，框架负责所有簿记工作</p>
+
+<div class="callout callout--info">
+<strong>前置 / Prerequisite：</strong>熟悉 C# 基础（方法、循环、集合）。本课讲解 C# 2.0 引入的 <code>yield return</code> 迭代器——这是理解后续 <a href="04-csharp8-async-streams.html">Lesson 04 异步流</a> 的必要基础。<br>
+<strong>本课目标：</strong>理解 <code>yield return</code> 的设计初衷、编译器实现原理、以及何时使用它。
+</div>
+
+<!-- ====== SECTION 1: THE PROBLEM ====== -->
+
+<h2>一、痛点：没有 yield return 的世界长什么样</h2>
+
+<p>假设你要写一个方法，返回文件中的所有行。听上去很简单——但在 C# 1.0（没有 <code>yield return</code>）里，你必须<strong>手动实现 <code>IEnumerator&lt;T&gt;</code></strong>：</p>
+
+<div class="comparison">
+<div class="old">
+<h4>C# 1.0：手动写状态机（约 50 行样板代码）</h4>
+<pre><code><span class="kw">public class</span> <span class="type">FileLineEnumerator</span> : <span class="type">IEnumerator</span>&lt;<span class="kw">string</span>&gt;
+{
+    <span class="kw">private</span> <span class="type">StreamReader</span> _reader;
+    <span class="kw">private</span> <span class="kw">string</span> _current;
+    <span class="kw">private</span> <span class="kw">int</span> _state = 0;  <span class="cmt">// 手动状态机！</span>
+
+    <span class="kw">public</span> FileLineEnumerator(<span class="kw">string</span> path)
+    {
+        _reader = <span class="kw">new</span> StreamReader(path);
+    }
+
+    <span class="kw">public string</span> Current => _current;
+    <span class="kw">object</span> IEnumerator.Current => _current;
+
+    <span class="kw">public bool</span> MoveNext()
+    {
+        <span class="kw">switch</span> (_state)
+        {
+            <span class="kw">case</span> 0:
+                _current = _reader.ReadLine();
+                <span class="kw">if</span> (_current == <span class="kw">null</span>)
+                {
+                    _state = -1; <span class="kw">return false</span>;
+                }
+                _state = 1; <span class="kw">return true</span>;
+            <span class="kw">case</span> 1:
+                _current = _reader.ReadLine();
+                <span class="kw">if</span> (_current == <span class="kw">null</span>)
+                {
+                    _state = -1; <span class="kw">return false</span>;
+                }
+                <span class="kw">return true</span>;
+            <span class="kw">default</span>:
+                <span class="kw">return false</span>;
+        }
+    }
+
+    <span class="kw">public void</span> Reset() => <span class="kw">throw new</span> NotSupportedException();
+    <span class="kw">public void</span> Dispose() => _reader?.Dispose();
+}
+
+<span class="cmt">// 还得写一个 IEnumerable 包装类……</span></code></pre>
+</div>
+<div class="new">
+<h4>C# 2.0+：yield return（4 行）</h4>
+<pre><code><span class="kw">public</span> IEnumerable&lt;<span class="kw">string</span>&gt; ReadLines(<span class="kw">string</span> path)
+{
+    <span class="kw">using var</span> reader = <span class="kw">new</span> StreamReader(path);
+    <span class="kw">string</span> line;
+    <span class="kw">while</span> ((line = reader.ReadLine()) != <span class="kw">null</span>)
+    {
+        <span class="kw">yield return</span> line;
+    }
+}</code></pre>
+</div>
+</div>
+
+<div class="callout callout--good">
+<strong>核心思想：</strong><code>yield return</code> 让<strong>编译器替你生成状态机</strong>。你只需要用最直观的方式写出"拿一条、吐一条"的逻辑——状态追踪、<code>IEnumerator</code> 实现、<code>IDisposable</code> 管理等所有样板代码由编译器自动完成。
+</div>
+
+<!-- ====== SECTION 2: WHY YIELD RETURN ====== -->
+
+<h2>二、为什么要用 yield return：延迟执行</h2>
+
+<p><code>yield return</code> 的核心语义是<strong>延迟执行</strong>（Deferred Execution）<span class="en">延迟执行</span>——方法的代码体<strong>不会在调用时执行</strong>，而是等到调用方第一次 <code>foreach</code>（或调用 <code>MoveNext()</code>）时才逐条执行。</p>
+
+<h3>用实验理解延迟执行</h3>
+
+<pre><code><span class="kw">public static</span> IEnumerable&lt;<span class="kw">int</span>&gt; GetNumbers()
+{
+    Console.WriteLine(<span class="str">"→ 生成器开始执行"</span>);
+    <span class="kw">yield return</span> 1;
+    Console.WriteLine(<span class="str">"→ yield return 1 之后，控制权交还给调用方"</span>);
+    <span class="kw">yield return</span> 2;
+    Console.WriteLine(<span class="str">"→ yield return 2 之后"</span>);
+    <span class="kw">yield return</span> 3;
+    Console.WriteLine(<span class="str">"→ 最后一次，方法即将结束"</span>);
+}
+
+<span class="cmt">// ====== 调用 ======</span>
+Console.WriteLine(<span class="str">"A. 调用 GetNumbers()——但还没有迭代"</span>);
+<span class="kw">var</span> numbers = GetNumbers();  <span class="cmt">// 什么都不打印！代码还没有执行</span>
+
+Console.WriteLine(<span class="str">"B. 开始 foreach"</span>);
+<span class="kw">foreach</span> (<span class="kw">var</span> n <span class="kw">in</span> numbers)
+{
+    Console.WriteLine(<span class="str">$"   拿到: {n}"</span>);
+}
+Console.WriteLine(<span class="str">"C. foreach 结束"</span>);
+
+<span class="cmt">// ====== 输出 ======</span>
+<span class="cmt">// A. 调用 GetNumbers()——但还没有迭代</span>
+<span class="cmt">// B. 开始 foreach</span>
+<span class="cmt">// → 生成器开始执行</span>
+<span class="cmt">//    拿到: 1</span>
+<span class="cmt">// → yield return 1 之后，控制权交还给调用方</span>
+<span class="cmt">//    拿到: 2</span>
+<span class="cmt">// → yield return 2 之后</span>
+<span class="cmt">//    拿到: 3</span>
+<span class="cmt">// → 最后一次，方法即将结束</span>
+<span class="cmt">// C. foreach 结束</span></code></pre>
+
+<div class="callout callout--info">
+<strong>控制流本质：</strong>每次 <code>yield return</code> 都做两件事——① 把值交给调用方；② <strong>暂停方法执行</strong>，把所有局部变量的状态保存下来。下一次 <code>MoveNext()</code> 时从暂停点<strong>恢复</strong>。这就像一个可以多次"暂停-恢复"的方法——和协程 (coroutine) 是一个道理。
+</div>
+
+<h3>如果你不用 yield return 会怎样？</h3>
+
+<p>最常见的替代方案是一次性构建整个 <code>List&lt;T&gt;</code> 并返回：</p>
+
+<pre><code><span class="cmt">// 不用 yield return：一次性加载全部到 List</span>
+<span class="kw">public</span> List&lt;<span class="kw">string</span>&gt; ReadLinesEager(<span class="kw">string</span> path)
+{
+    <span class="kw">var</span> result = <span class="kw">new</span> List&lt;<span class="kw">string</span>&gt;();
+    <span class="kw">using var</span> reader = <span class="kw">new</span> StreamReader(path);
+    <span class="kw">string</span> line;
+    <span class="kw">while</span> ((line = reader.ReadLine()) != <span class="kw">null</span>)
+        result.Add(line);
+    <span class="kw">return</span> result;  <span class="cmt">// 全部读完了才返回</span>
+}</code></pre>
+
+<div class="callout callout--bad">
+<strong>问题：</strong>如果文件有 100 万行，你会在方法返回之前把所有行全部加载到 <code>List&lt;T&gt;</code> 里——内存爆炸。而且调用方必须等全部读取完毕才能处理第一条数据。<br><br>
+而 <code>yield return</code> 版本只存<strong>当前行</strong>在内存里，调用方拿一条、处理一条、GC 回收一条。
+</div>
+
+<h3>常见误解："yield return 更快"</h3>
+
+<p><code>yield return</code> 的性能优势<strong>不是"计算速度更快"</strong>——事实上，状态机调度本身有微小开销（经过这么多年优化基本可以忽略）。它的真正优势是：</p>
+
+<table>
+  <tr><th>维度</th><th>yield return</th><th>List&lt;T&gt; 全量返回</th></tr>
+  <tr><td>内存</td><td>O(1)——一次只持有一条数据</td><td>O(n)——持有全部数据</td></tr>
+  <tr><td>首条延迟</td><td>极低——第一条产出即可处理</td><td>等全部处理完毕才能开始</td></tr>
+  <tr><td>可否提前终止</td><td>可以——foreach 里 break 就行，剩余数据不产生</td><td>不能——全部数据已经生成</td></tr>
+  <tr><td>适合无限序列</td><td>✅ 适合（如生成斐波那契数列）</td><td>❌ 不可能——List 必须有限</td></tr>
+</table>
+
+<!-- ====== SECTION 3: HOW IT WORKS ====== -->
+
+<h2>三、编译器到底生成了什么：状态机解剖</h2>
+
+<p>这是整个 yield return 最核心的知识——理解了状态机，你就真正理解了迭代器。</p>
+
+<h3>源文件：你写的代码</h3>
+
+<pre><code><span class="kw">public static</span> IEnumerable&lt;<span class="kw">int</span>&gt; SimpleDemo()
+{
+    Console.WriteLine(<span class="str">"start"</span>);
+    <span class="kw">yield return</span> 10;
+    Console.WriteLine(<span class="str">"middle"</span>);
+    <span class="kw">yield return</span> 20;
+    Console.WriteLine(<span class="str">"end"</span>);
+}</code></pre>
+
+<h3>编译器生成（概念模型）</h3>
+
+<p>编译器把上面的方法翻译成一个<strong>实现了 <code>IEnumerable&lt;int&gt;</code> 和 <code>IEnumerator&lt;int&gt;</code> 的嵌套类</strong>，核心是一个 <code>switch</code>-based 状态机：</p>
+
+<pre><code><span class="cmt">// ===== 编译器为你生成的类（概念上的等价代码）=====</span>
+<span class="kw">private sealed class</span> <span class="type">&lt;SimpleDemo&gt;d__0</span> : <span class="type">IEnumerable</span>&lt;<span class="kw">int</span>&gt;,
+                                       <span class="type">IEnumerator</span>&lt;<span class="kw">int</span>&gt;
+{
+    <span class="kw">private int</span> __state;      <span class="cmt">// -2: 初始; 0/1/2: yield位置; -1: 结束</span>
+    <span class="kw">private int</span> __current;    <span class="cmt">// Current 属性返回的值</span>
+    <span class="kw">private int</span> __initialThreadId;
+
+    <span class="kw">public int</span> Current => __current;
+
+    <span class="kw">public bool</span> MoveNext()
+    {
+        <span class="kw">switch</span> (__state)
+        {
+            <span class="kw">case</span> 0:                              <span class="cmt">// 初始状态 / 刚从 start 恢复</span>
+                Console.WriteLine(<span class="str">"start"</span>);
+                __current = 10;                  <span class="cmt">// ← 这就是 yield return 10</span>
+                __state = 1;                     <span class="cmt">// 下次 MoveNext 从 case 1 开始</span>
+                <span class="kw">return true</span>;                     <span class="cmt">// true = 还有数据</span>
+
+            <span class="kw">case</span> 1:                              <span class="cmt">// 从 yield return 10 之后恢复</span>
+                Console.WriteLine(<span class="str">"middle"</span>);
+                __current = 20;                  <span class="cmt">// ← yield return 20</span>
+                __state = 2;                     <span class="cmt">// 下次从 case 2 开始</span>
+                <span class="kw">return true</span>;
+
+            <span class="kw">case</span> 2:                              <span class="cmt">// 从 yield return 20 之后恢复</span>
+                Console.WriteLine(<span class="str">"end"</span>);
+                __state = -1;                    <span class="cmt">// 结束——下次 MoveNext 走 default</span>
+                <span class="kw">return false</span>;                    <span class="cmt">// false = 迭代结束</span>
+
+            <span class="kw">default</span>:
+                <span class="kw">return false</span>;                    <span class="cmt">// 状态 -1 或异常后，直接返回 false</span>
+        }
+    }
+
+    <span class="cmt">// 还有 Reset(), Dispose(), GetEnumerator() 等……</span>
+}</code></pre>
+
+<div class="diagram">
+<strong>状态转移图：</strong>
+
+  foreach 开始
+     │
+     ▼
+  state=0  ──MoveNext()──▶  Console.WriteLine("start")
+                              yield return 10
+                              state=1, return true
+                                  │
+                                  ▼  (调用方拿到 10，处理完后再次调用 MoveNext)
+  state=1  ──MoveNext()──▶  Console.WriteLine("middle")
+                              yield return 20
+                              state=2, return true
+                                  │
+                                  ▼  (调用方拿到 20，处理完后再次调用 MoveNext)
+  state=2  ──MoveNext()──▶  Console.WriteLine("end")
+                              state=-1, return false  →  foreach 退出
+</div>
+
+<div class="callout callout--info">
+<strong>想亲眼看看？</strong>打开 <a href="https://sharplab.io/" target="_blank">SharpLab.io</a>，贴入上面的 <code>SimpleDemo</code> 方法，右下角选择 "C# → IL" 或 "C# → C# (decompiled)"，你就能看到编译器生成的真实状态机类。这和上面概念模型的结构几乎一致。
+</div>
+
+<h3>所有局部变量都升格为字段</h3>
+
+<pre><code><span class="kw">public static</span> IEnumerable&lt;<span class="kw">int</span>&gt; WithLocals()
+{
+    <span class="kw">int</span> x = 0;
+    <span class="kw">for</span> (<span class="kw">int</span> i = 0; i &lt; 3; i++)
+    {
+        x += i;
+        <span class="kw">yield return</span> x;
+    }
+    <span class="cmt">// 循环结束，状态机标记为 -1</span>
+}</code></pre>
+
+<p>编译器会把 <code>x</code>、<code>i</code>、循环状态等所有在 <code>yield return</code> 之间"存活"的局部变量都提升为状态机类的<strong>字段</strong>——这样每次 <code>MoveNext()</code> 调用后，变量的值都能在字段中"记住"，下次调用时从字段恢复。</p>
+
+<div class="callout callout--warn">
+<strong>和 async/await 状态机的相似性：</strong>如果你已经理解了 <code>async Task</code> 方法被编译成状态机，你会发现 <code>yield return</code> 状态机的结构几乎一样——都是把方法体拆成若干个"断点"，在每个 <code>await</code>（或 <code>yield return</code>）之后切开，用 <code>switch</code> 来跳转到正确的恢复点。区别在于：
+<ul style="margin-top:0.5rem;">
+  <li><code>async Task</code> 状态机——在 <code>await</code> 处暂停，等待 IO 完成</li>
+  <li><code>yield return</code> 状态机——在 <code>yield return</code> 处暂停，等待调用方取走数据后调用下一次 <code>MoveNext</code></li>
+</ul>
+</div>
+
+<!-- ====== SECTION 4: YIELD BREAK ====== -->
+
+<h2>四、yield break —— 提前终止迭代</h2>
+
+<p><code>yield break</code> 相当于普通方法里的 <code>return</code>——它告诉状态机"这个迭代器结束了，不要再调用 <code>MoveNext()</code>"。</p>
+
+<pre><code><span class="kw">public static</span> IEnumerable&lt;<span class="kw">string</span>&gt; TakeUntilEmpty(IEnumerable&lt;<span class="kw">string</span>&gt; source)
+{
+    <span class="kw">foreach</span> (<span class="kw">var</span> item <span class="kw">in</span> source)
+    {
+        <span class="kw">if</span> (<span class="kw">string</span>.IsNullOrEmpty(item))
+            <span class="kw">yield break</span>;  <span class="cmt">// 遇到空字符串就停止——后续数据不再产生</span>
+
+        <span class="kw">yield return</span> item;
+    }
+    <span class="cmt">// 方法自然结束 = 隐式的 yield break</span>
+}
+
+<span class="cmt">// 调用：</span>
+<span class="kw">var</span> data = <span class="kw">new</span>[] { <span class="str">"a"</span>, <span class="str">"b"</span>, <span class="str">""</span>, <span class="str">"c"</span>, <span class="str">"d"</span> };
+<span class="kw">foreach</span> (<span class="kw">var</span> s <span class="kw">in</span> TakeUntilEmpty(data))
+    Console.WriteLine(s);  <span class="cmt">// 输出: a, b —— 不会输出 c 和 d</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>注意：</strong>在 <code>try-finally</code> 块里不能用 <code>yield break</code>（C# 的语法限制），但 <code>yield return</code> 可以。这跟 <code>yield return</code> 在 <code>try-finally</code> 中时，<code>finally</code> 块的语义有关——编译器需要保证 <code>finally</code> 在迭代器 Dispose 时执行。
+</div>
+
+<!-- ====== SECTION 5: PATTERNS ====== -->
+
+<h2>五、实战模式</h2>
+
+<h3>模式一：延迟过滤 —— LINQ 就是这么做出来的</h3>
+
+<p>所有 LINQ 方法（<code>Where</code>、<code>Select</code>、<code>Take</code>…）都是<strong>用 yield return 实现的延迟迭代器</strong>。你可以自己写一个：</p>
+
+<pre><code><span class="cmt">// 自己实现的 Where——和 LINQ 的 Enumerable.Where 原理一模一样</span>
+<span class="kw">public static</span> IEnumerable&lt;<span class="type">T</span>&gt; MyWhere&lt;<span class="type">T</span>&gt;(
+    <span class="kw">this</span> IEnumerable&lt;<span class="type">T</span>&gt; source, Func&lt;<span class="type">T</span>, <span class="kw">bool</span>&gt; predicate)
+{
+    <span class="kw">foreach</span> (<span class="kw">var</span> item <span class="kw">in</span> source)
+    {
+        <span class="kw">if</span> (predicate(item))
+            <span class="kw">yield return</span> item;  <span class="cmt">// 只产出符合条件的</span>
+    }
+}
+
+<span class="cmt">// 使用：链式调用——每个环节都是延迟的</span>
+<span class="kw">var</span> result = Enumerable.Range(1, 100)
+    .MyWhere(x => x % 2 == 0)   <span class="cmt">// 偶数</span>
+    .MyWhere(x => x > 10)        <span class="cmt">// 大于 10</span>
+    .Take(3);                    <span class="cmt">// 只取 3 个</span>
+
+<span class="cmt">// 到 foreach 这一刻，上面所有东西才真正开始执行</span>
+<span class="cmt">// 而且只迭代到凑够 3 个为止——不需要处理全部 100 个</span></code></pre>
+
+<h3>模式二：无限序列</h3>
+
+<p><code>yield return</code> 可以表示理论上无限长的序列——因为数据是"按需生成"的：</p>
+
+<pre><code><span class="cmt">// 斐波那契数列——本身是无限的，调用方用 Take 来控制取多少</span>
+<span class="kw">public static</span> IEnumerable&lt;<span class="kw">long</span>&gt; Fibonacci()
+{
+    <span class="kw">long</span> a = 0, b = 1;
+    <span class="kw">while</span> (<span class="kw">true</span>)  <span class="cmt">// 看起来是死循环，但实际上每次都暂停</span>
+    {
+        <span class="kw">yield return</span> a;
+        (a, b) = (b, a + b);
+    }
+}
+
+<span class="cmt">// 取前 20 个斐波那契数——方法在 Take 满足后自动停止</span>
+<span class="kw">foreach</span> (<span class="kw">var</span> f <span class="kw">in</span> Fibonacci().Take(20))
+    Console.WriteLine(f);</code></pre>
+
+<h3>模式三：分层遍历</h3>
+
+<pre><code><span class="cmt">// 遍历一棵树的所有节点——递归也可以用 yield return</span>
+<span class="kw">public static</span> IEnumerable&lt;<span class="type">TreeNode</span>&gt; Flatten(<span class="type">TreeNode</span> root)
+{
+    <span class="kw">if</span> (root == <span class="kw">null</span>) <span class="kw">yield break</span>;
+
+    <span class="kw">yield return</span> root;  <span class="cmt">// 先返回当前节点</span>
+
+    <span class="kw">foreach</span> (<span class="kw">var</span> child <span class="kw">in</span> root.Children)
+    {
+        <span class="kw">foreach</span> (<span class="kw">var</span> node <span class="kw">in</span> Flatten(child))  <span class="cmt">// 递归展开子节点</span>
+            <span class="kw">yield return</span> node;
+    }
+}</code></pre>
+
+<div class="callout callout--warn">
+<strong>递归 + yield return 的性能陷阱：</strong>上面的 <code>Flatten</code> 方法在深层嵌套时会产生大量嵌套的迭代器对象——每一层递归创建一个迭代器，遍历时层层穿透。对于深度超过几百层的树，考虑用 <code>Stack&lt;T&gt;</code> 手动展开（非递归遍历）。
+</div>
+
+<!-- ====== SECTION 6: WHEN TO USE ====== -->
+
+<h2>六、什么时候用 yield return（什么时候不用）</h2>
+
+<table>
+  <tr><th>场景</th><th>用？</th><th>理由</th></tr>
+  <tr>
+    <td>大数据量、逐条处理</td>
+    <td>✅ 用</td>
+    <td>省内存，首条延迟低</td>
+  </tr>
+  <tr>
+    <td>链式数据转换（管道）</td>
+    <td>✅ 用</td>
+    <td>LINQ 风格——多个操作串联，但只遍历一次</td>
+  </tr>
+  <tr>
+    <td>无限序列 / 数学序列</td>
+    <td>✅ 用</td>
+    <td>只能按需生成，不可能全部实例化</td>
+  </tr>
+  <tr>
+    <td>数据源支持提前终止</td>
+    <td>✅ 用</td>
+    <td>调用方 Take(5) 时就只生成 5 条，不多干活</td>
+  </tr>
+  <tr>
+    <td>小数据量（几十条）</td>
+    <td>⚠️ 随意</td>
+    <td>用 List 也没差——但 yield return 同样清晰</td>
+  </tr>
+  <tr>
+    <td>需要对全量数据排序 / 分组</td>
+    <td>❌ 不用</td>
+    <td>排序必须先拿到所有数据——yield return 省不了内存</td>
+  </tr>
+  <tr>
+    <td>需要随机访问（按索引取）</td>
+    <td>❌ 不用</td>
+    <td>IEnumerable 只能向前遍历，适合用 List/Array</td>
+  </tr>
+  <tr>
+    <td>方法体内没有循环/迭代逻辑</td>
+    <td>❌ 不用</td>
+    <td>只有一个 yield return 不如直接返回</td>
+  </tr>
+</table>
+
+<div class="callout callout--good">
+<strong>经验法则：</strong>如果你发现自己写了一个 <code>List&lt;T&gt;</code>，用 <code>Add</code> 一点点往里塞，然后返回——考虑改用 <code>yield return</code>。如果数据量小或需要随机访问/排序，返回 <code>List&lt;T&gt;</code> 或 <code>Array</code> 没问题。
+</div>
+
+<!-- ====== SECTION 7: BRIDGE ====== -->
+
+<h2>七、为什么说 yield return 是理解异步流的前提</h2>
+
+<p>C# 8 的 <code>IAsyncEnumerable&lt;T&gt;</code> 和 <code>await foreach</code>（下一课）就是 yield return 的<strong>异步版本</strong>。两者的结构几乎一样：</p>
+
+<table>
+  <tr><th></th><th>同步迭代器</th><th>异步迭代器 (C# 8)</th></tr>
+  <tr><td>返回类型</td><td><code>IEnumerable&lt;T&gt;</code></td><td><code>IAsyncEnumerable&lt;T&gt;</code></td></tr>
+  <tr><td>消费语法</td><td><code>foreach (var x in source)</code></td><td><code>await foreach (var x in source)</code></td></tr>
+  <tr><td>在迭代中做 IO</td><td>❌ 阻塞线程</td><td>✅ await 不阻塞</td></tr>
+  <tr><td>状态机</td><td>yield return 状态机</td><td>yield return + async 双重状态机</td></tr>
+  <tr><td>优点</td><td>省内存、延迟执行</td><td>省内存 + 不阻塞线程 + 延迟执行</td></tr>
+</table>
+
+<pre><code><span class="cmt">// 同步迭代器——如果 ReadLineAsync 是异步的，这里没法 await</span>
+<span class="kw">public</span> IEnumerable&lt;<span class="kw">string</span>&gt; ReadLines(<span class="kw">string</span> path)
+{
+    <span class="kw">using var</span> reader = <span class="kw">new</span> StreamReader(path);
+    <span class="kw">string</span> line;
+    <span class="kw">while</span> ((line = reader.ReadLine()) != <span class="kw">null</span>)  <span class="cmt">// 同步阻塞！</span>
+        <span class="kw">yield return</span> line;
+}
+
+<span class="cmt">// 异步版本（Lesson 04）——一切自然得多</span>
+<span class="kw">public async</span> IAsyncEnumerable&lt;<span class="kw">string</span>&gt; ReadLinesAsync(<span class="kw">string</span> path)
+{
+    <span class="kw">using var</span> reader = <span class="kw">new</span> StreamReader(path);
+    <span class="kw">string</span> line;
+    <span class="kw">while</span> ((line = <span class="kw">await</span> reader.ReadLineAsync()) != <span class="kw">null</span>)
+        <span class="kw">yield return</span> line;
+}</code></pre>
+
+<div class="callout callout--info">
+<strong>关键洞见：</strong>同步 yield return 迭代器里的每次 <code>MoveNext()</code> 都是同步的——如果你在迭代器内部做 I/O，调用线程就阻塞在那里。异步流（下一课）解决了这个问题：每次 <code>MoveNextAsync()</code> 都是可等待的，I/O 操作不阻塞线程。但两者<strong>状态机的结构、延迟执行的语义、链式组合的模式</strong>——完全一样。所以理解 yield return 是理解异步流的基础。
+</div>
+
+<!-- ====== QUIZ ====== -->
+
+<h2>📝 小测验</h2>
+
+<div class="quiz" id="q1">
+  <h3>Q1. 以下代码中，<code>GetNumbers()</code> 的"start"会<strong>什么时候</strong>打印？</h3>
+<pre><code><span class="kw">public static</span> IEnumerable&lt;<span class="kw">int</span>&gt; GetNumbers()
+{
+    Console.WriteLine(<span class="str">"start"</span>);
+    <span class="kw">yield return</span> 1;
+}
+
+<span class="kw">var</span> nums = GetNumbers();
+Console.WriteLine(<span class="str">"after call"</span>);
+<span class="kw">foreach</span> (<span class="kw">var</span> n <span class="kw">in</span> nums)
+    Console.WriteLine(n);</code></pre>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q1" value="a"> "start" → "after call" → "1"</label>
+  <label><input type="radio" name="q1" value="b"> "after call" → "start" → "1"</label>
+  <label><input type="radio" name="q1" value="c"> "start" → "1" → "after call"</label>
+  <label><input type="radio" name="q1" value="d"> 编译错误——yield return 不能和 Console.WriteLine 混用</label>
+  <button onclick="checkQ1()">确认</button>
+  <div class="feedback" id="f1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>Q2. 关于 yield return 的<strong>内存使用</strong>，以下哪句正确？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q2" value="a"> yield return 比 List&lt;T&gt; 更快，因为它运行更快</label>
+  <label><input type="radio" name="q2" value="b"> yield return 一次只在内存里保留当前元素，List&lt;T&gt; 保留全部</label>
+  <label><input type="radio" name="q2" value="c"> yield return 在调用时把所有结果预计算好，存在隐藏的数组里</label>
+  <label><input type="radio" name="q2" value="d"> 内存使用和 List&lt;T&gt; 没有任何区别</label>
+  <button onclick="checkQ2()">确认</button>
+  <div class="feedback" id="f2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>Q3. 编译器为 yield return 方法生成了什么？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q3" value="a"> 一个线程池线程在后台运行</label>
+  <label><input type="radio" name="q3" value="b"> 一个实现了 IEnumerable&lt;T&gt; 和 IEnumerator&lt;T&gt; 的状态机类</label>
+  <label><input type="radio" name="q3" value="c"> 一个 SQL 查询计划</label>
+  <label><input type="radio" name="q3" value="d"> 一个动态代理类，用反射调用原方法</label>
+  <button onclick="checkQ3()">确认</button>
+  <div class="feedback" id="f3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>Q4. 下面的代码有什么<strong>潜在问题</strong>？</h3>
+<pre><code><span class="kw">public static</span> IEnumerable&lt;<span class="kw">int</span>&gt; GetData()
+{
+    <span class="kw">var</span> data = <span class="kw">new</span> List&lt;<span class="kw">int</span>&gt; { 1, 2, 3 };
+    <span class="kw">return</span> data;  <span class="cmt">// 直接返回了 List</span>
+}</code></pre>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q4" value="a"> 没问题——List&lt;T&gt; 实现了 IEnumerable&lt;T&gt;，可以直接返回</label>
+  <label><input type="radio" name="q4" value="b"> 编译错误：不能返回 List&lt;T&gt; 给 IEnumerable&lt;T&gt;</label>
+  <label><input type="radio" name="q4" value="c"> 问题：调用方可以把返回值 cast 回 List&lt;T&gt; 并修改它，破坏了封装</label>
+  <label><input type="radio" name="q4" value="d"> 运行时每次迭代都会崩溃</label>
+  <button onclick="checkQ4()">确认</button>
+  <div class="feedback" id="f4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>Q5. yield return 和 async/await 有什么<strong>共同点</strong>？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q5" value="a"> 两者都是多线程技术</label>
+  <label><input type="radio" name="q5" value="b"> 两者都依赖操作系统信号</label>
+  <label><input type="radio" name="q5" value="c"> 编译器都把它们编译成状态机类，在暂停点用 switch 恢复执行</label>
+  <label><input type="radio" name="q5" value="d"> 没有任何共同点</label>
+  <button onclick="checkQ5()">确认</button>
+  <div class="feedback" id="f5"></div>
+</div>
+
+<div class="quiz" id="q6">
+  <h3>Q6. <code>yield break</code> 的作用是什么？</h3>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q6" value="a"> 抛出异常</label>
+  <label><input type="radio" name="q6" value="b"> 暂停迭代，但不终止</label>
+  <label><input type="radio" name="q6" value="c"> 提前终止迭代——就像普通方法里的 return</label>
+  <label><input type="radio" name="q6" value="d"> 跳过一次迭代，继续下一个</label>
+  <button onclick="checkQ6()">确认</button>
+  <div class="feedback" id="f6"></div>
+</div>
+
+<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<p class="mild">
+  Lesson 03 · yield return 同步迭代器 · 下一课预告：<a href="04-csharp8-async-streams.html">Lesson 04 — C# 8 Async Streams</a>
+</p>
+<p class="mild" style="margin-top: 0.5rem;">
+  💬 有任何不理解的地方？随时问 agent 老师——追问是学习的正确姿势。
+</p>
+
+<script>
+  function checkQ1() {
+    var f = document.getElementById('f1');
+    var sel = document.querySelector('input[name="q1"]:checked');
+    if (!sel) return;
+    var ok = sel.value === 'b';
+    f.textContent = ok
+      ? '✅ 正确！yield return 是延迟执行的——调用 GetNumbers() 时方法体不会执行（此时什么都不打印）。只有 foreach 第一次 MoveNext() 时，方法体才开始执行，打印 "start"，然后 yield return 1。'
+      : '❌ 答案是 b："after call" → "start" → "1"。调用 GetNumbers() 时方法不执行（延迟执行），foreach 才会触发真正的执行。';
+    f.className = 'feedback show ' + (ok ? 'correct' : 'wrong');
+  }
+  function checkQ2() {
+    var f = document.getElementById('f2');
+    var sel = document.querySelector('input[name="q2"]:checked');
+    if (!sel) return;
+    var ok = sel.value === 'b';
+    f.textContent = ok
+      ? '✅ 正确！yield return 是流式的——一次只在内存里持有当前元素。而 List<T> 需要先全部生成再返回。注意：yield return 不是"运行更快"，而是"内存更省 + 首条延迟更低"。'
+      : '❌ 答案是 b。yield return 一次只保留当前元素在内存里。它不是"更快"——事实上状态机调度有微小开销——但内存节省和低延迟是它的核心优势。';
+    f.className = 'feedback show ' + (ok ? 'correct' : 'wrong');
+  }
+  function checkQ3() {
+    var f = document.getElementById('f3');
+    var sel = document.querySelector('input[name="q3"]:checked');
+    if (!sel) return;
+    var ok = sel.value === 'b';
+    f.textContent = ok
+      ? '✅ 正确！编译器生成一个同时实现 IEnumerable<T> 和 IEnumerator<T> 的嵌套类，核心是 MoveNext() 里的 switch 状态机。局部变量都提升为字段。'
+      : '❌ 答案是 b。编译器生成一个状态机类——不涉及线程、不涉及反射、不涉及 SQL。这是在编译时完成的纯 IL 变换。';
+    f.className = 'feedback show ' + (ok ? 'correct' : 'wrong');
+  }
+  function checkQ4() {
+    var f = document.getElementById('f4');
+    var sel = document.querySelector('input[name="q4"]:checked');
+    if (!sel) return;
+    var ok = sel.value === 'c';
+    f.textContent = ok
+      ? '✅ 正确！虽然 List<T> 实现了 IEnumerable<T>，编译没问题——但调用方可以把结果转型回 List<T> 并修改它，破坏了"我只给你读"的契约。用 yield return 逐条产出可以防止这种"后门修改"。'
+      : '❌ 答案是 c。编译没问题（List<T> 实现了 IEnumerable<T>），但调用方可以 cast 回 List<T> 并随意修改数据——破坏了只读语义。用 yield return 可以天然防止这个问题。';
+    f.className = 'feedback show ' + (ok ? 'correct' : 'wrong');
+  }
+  function checkQ5() {
+    var f = document.getElementById('f5');
+    var sel = document.querySelector('input[name="q5"]:checked');
+    if (!sel) return;
+    var ok = sel.value === 'c';
+    f.textContent = ok
+      ? '✅ 正确！yield return 和 async/await 都是编译器魔法——方法体被切成多个"断点"，局部变量提升为字段，用 switch 状态机恢复执行。结构几乎一样，只是触发恢复的条件不同（MoveNext vs IO 完成）。'
+      : '❌ 答案是 c。两者都被编译成状态机类，这是 C# 编译器最漂亮的两个变换。理解其中一个，再学另一个就非常快。';
+    f.className = 'feedback show ' + (ok ? 'correct' : 'wrong');
+  }
+  function checkQ6() {
+    var f = document.getElementById('f6');
+    var sel = document.querySelector('input[name="q6"]:checked');
+    if (!sel) return;
+    var ok = sel.value === 'c';
+    f.textContent = ok
+      ? '✅ 正确！yield break 提前终止整个迭代，等价于普通方法里的 return。之后 foreach 循环退出，不会再调用 MoveNext()。'
+      : '❌ 答案是 c。yield break 是终止迭代，不是跳过一条（跳过一条应该用 continue），也不是暂停（yield return 才暂停）。';
+    f.className = 'feedback show ' + (ok ? 'correct' : 'wrong');
+  }
+</script>
+
+</body>
+</html>
