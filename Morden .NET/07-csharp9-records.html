@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 07: C# 9 Records — 不可变引用类型与值相等语义</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  .callout {
+    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
+  }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
+
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafaf9; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+
+  .diagram {
+    background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 1.5rem; margin: 1.5rem 0; font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 0.82rem; line-height: 1.6; white-space: pre; overflow-x: auto;
+    color: #333;
+  }
+  .diagram .arrow { color: var(--accent); font-weight: bold; }
+  .diagram .label { color: var(--text-muted); font-style: italic; font-size: 0.85em; }
+</style>
+</head>
+<body>
+
+<h1>Lesson 07: C# 9 Records — 不可变引用类型与值相等语义</h1>
+<p class="subtitle">50 行样板代码 → 1 行。这不是语法糖——这是对"数据"这个概念的重新定义</p>
+
+<div class="callout callout--info">
+<strong>前置 / Prerequisite：</strong>已完成 <a href="06-csharp8-wrapup-default-interface-methods.html">Lesson 06（C# 8 收尾）</a>，熟悉 class、struct、属性、继承的基本概念。<br>
+<strong>本课目标：</strong>理解记录类型<span class="en">Records</span>解决的问题、掌握位置记录<span class="en">Positional Records</span>语法、理解值相等<span class="en">Value Equality</span>语义、熟练使用仅初始化属性<span class="en">Init-only Properties</span>（含 class 场景）、with 表达式<span class="en">With Expressions</span>进行非破坏性变异<span class="en">Non-destructive Mutation</span>、深入理解解构函数<span class="en">Deconstruct</span>机制。
+</div>
+
+<!-- ====== SECTION 1: THE HOOK ====== -->
+
+<h2>一、钩子——一个 Person 类写 50 行，到底在写什么？</h2>
+
+<p>来，写一个最简单的"人"类。不需要任何业务逻辑——只要存姓名和年龄：</p>
+
+<pre><code><span class="cmt">// 需求：存 Name + Age，能比较是否相等，能打印，能解构</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> Name { <span class="kw">get</span>; }
+    <span class="kw">public</span> <span class="kw">int</span> Age { <span class="kw">get</span>; }
+
+    <span class="kw">public</span> Person(<span class="kw">string</span> name, <span class="kw">int</span> age)
+    {
+        Name = name;
+        Age = age;
+    }
+
+    <span class="cmt">// 值相等？手动写的</span>
+    <span class="kw">public</span> <span class="kw">override</span> <span class="kw">bool</span> Equals(<span class="kw">object</span> obj)
+    {
+        <span class="kw">if</span> (obj <span class="kw">is</span> <span class="kw">not</span> <span class="type">Person</span> other) <span class="kw">return</span> <span class="num">false</span>;
+        <span class="kw">return</span> Name == other.Name &amp;&amp; Age == other.Age;
+    }
+
+    <span class="cmt">// GetHashCode？手动写的</span>
+    <span class="kw">public</span> <span class="kw">override</span> <span class="kw">int</span> GetHashCode() =&gt; HashCode.Combine(Name, Age);
+
+    <span class="cmt">// ToString？手动写的</span>
+    <span class="kw">public</span> <span class="kw">override</span> <span class="kw">string</span> ToString() =&gt; <span class="str">$"Person {{ Name = {Name}, Age = {Age} }}"</span>;
+
+    <span class="cmt">// 解构？手动写的</span>
+    <span class="kw">public</span> <span class="kw">void</span> Deconstruct(<span class="kw">out</span> <span class="kw">string</span> name, <span class="kw">out</span> <span class="kw">int</span> age)
+    {
+        name = Name;
+        age = Age;
+    }
+}</code></pre>
+
+<p><strong>50 行</strong>。其中真正有业务含义的只有两行半——"Name"和"Age"。其余全是样板代码<span class="en">Boilerplate</span>——编译器知道该生成什么，但你不得不手写。</p>
+
+<p>更糟的是，样板代码会<strong>腐烂</strong>：你加了 <code>Email</code> 属性却忘了更新 <code>Equals</code> → 两个同 Name、同 Age、不同 Email 的 Person 被判为"相等"→ 静默 Bug。而且这只是三个属性的情况——五个、八个呢？</p>
+
+<p>这就是记录类型<span class="en">Records</span>要解决的问题。C# 9 说：让编译器来写样板代码——你只需要声明数据结构是什么。</p>
+
+<!-- ====== SECTION 2: POSITIONAL RECORDS ====== -->
+
+<h2>二、位置记录 <span class="en">Positional Records</span> — 一行搞定</h2>
+
+<pre><code><span class="cmt">// C# 9: 位置记录——等价于上面 50 行的 Person 类</span>
+<span class="kw">public</span> <span class="kw">record</span> <span class="type">Person</span>(<span class="kw">string</span> Name, <span class="kw">int</span> Age);
+
+<span class="cmt">// 使用：</span>
+<span class="kw">var</span> alice = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>, <span class="num">30</span>);
+<span class="kw">var</span> alice2 = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>, <span class="num">30</span>);
+
+<span class="cmt">// 值相等——两个不同引用的对象，属性值相同 → 被视为相等</span>
+Console.WriteLine(alice == alice2);       <span class="cmt">// True  ← class 的话是 False！</span>
+Console.WriteLine(alice.Equals(alice2));  <span class="cmt">// True</span>
+
+<span class="cmt">// 自动生成 ToString()</span>
+Console.WriteLine(alice);  <span class="cmt">// Person { Name = Alice, Age = 30 }</span>
+
+<span class="cmt">// 自动生成 Deconstruct()——支持解构</span>
+<span class="kw">var</span> (name, age) = alice;  <span class="cmt">// name = "Alice", age = 30</span></code></pre>
+
+<p><code>public record Person(string Name, int Age);</code>——这一行叫<strong>位置记录</strong><span class="en">Positional Record</span>，括号里是<strong>位置参数</strong><span class="en">Positional Parameters</span>。编译器自动生成：</p>
+
+<ol>
+  <li>同名属性（<code>Name</code> 和 <code>Age</code>）——带 <code>init</code> 访问器</li>
+  <li>匹配参数的构造函数</li>
+  <li><code>Equals(object)</code> + <code>Equals(Person)</code> + <code>==</code> / <code>!=</code> ——基于属性值比较</li>
+  <li><code>GetHashCode()</code> ——基于所有属性值</li>
+  <li><code>ToString()</code> ——格式化输出所有属性和值</li>
+  <li><code>Deconstruct()</code> ——解构支持</li>
+  <li><code>&lt;Clone&gt;$()</code> ——为 <code>with</code> 表达式提供拷贝基础（后面讲）</li>
+</ol>
+
+<div class="callout callout--warn">
+<strong>关键理解：</strong><code>record</code> 是<strong>引用类型</strong><span class="en">Reference Type</span>——和 <code>class</code> 一样在堆上分配。但它用<strong>值相等</strong><span class="en">Value Equality</span>而不是引用相等来判断两个对象是否"相同"。这是 record 和 class 最本质的区别。
+</div>
+
+<!-- ====== SECTION 3: INIT-ONLY PROPERTIES ====== -->
+
+<h2>三、仅初始化属性 <span class="en">Init-only Properties</span> — 不可变的基石</h2>
+
+<p>Records 是不可变的<span class="en">Immutable</span>——创建后不能修改。这个不可变性由 <code>init</code> 访问器保证：</p>
+
+<pre><code><span class="kw">var</span> alice = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>, <span class="num">30</span>);
+
+<span class="cmt">// ❌ 编译错误：init 属性只能在初始化时赋值</span>
+alice.Name = <span class="str">"Bob"</span>;   <span class="cmt">// CS8852: Init-only property can only be assigned in an object initializer or constructor</span>
+
+<span class="cmt">// ✅ init 属性可以在对象初始化器中赋值</span>
+<span class="kw">var</span> bob = <span class="kw">new</span> <span class="type">Person</span> { Name = <span class="str">"Bob"</span>, Age = <span class="num">25</span> };
+
+<span class="cmt">// ✅ 或者在构造函数中赋值</span>
+<span class="kw">public</span> <span class="kw">record</span> <span class="type">Person</span>
+{
+    <span class="kw">public</span> <span class="type">Person</span>(<span class="kw">string</span> name) { Name = name; Age = <span class="num">0</span>; }
+}</code></pre>
+
+<p><code>init</code> 是 C# 9 引人的第三种访问器——介于 <code>set</code>（随时可设）和 <code>get</code>（永远读）之间：<strong>只能在对象构造阶段设一次，之后永远只读</strong>。位置记录的位置参数属性默认就是 <code>init</code>。</p>
+
+<div class="callout callout--info">
+<strong>init 不仅限 record：</strong>你可以给普通 <code>class</code> 和 <code>struct</code> 的属性加 <code>init</code> 访问器——它独立于 record 存在。但在实践中，init 和 record 是天然的搭档：record 提供值语义，init 保证不可变性。
+</div>
+
+<h3>3.1 init 在普通 class 中使用</h3>
+
+<p>当你不需要 record 全套功能（值相等、ToString 等），只想要"不可变性"这一项能力时，class + init 是更轻量的选择：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">DatabaseOptions</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> ConnectionString { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="kw">public</span> <span class="kw">int</span> MaxRetries { <span class="kw">get</span>; <span class="kw">init</span>; } = <span class="num">3</span>;
+    <span class="kw">public</span> TimeSpan Timeout { <span class="kw">get</span>; <span class="kw">init</span>; } = TimeSpan.FromSeconds(<span class="num">30</span>);
+}
+
+<span class="cmt">// ✅ 对象初始化器中赋值——没问题</span>
+<span class="kw">var</span> opts = <span class="kw">new</span> <span class="type">DatabaseOptions</span>
+{
+    ConnectionString = <span class="str">"Server=..."</span>,
+    MaxRetries = <span class="num">5</span>
+};
+
+<span class="cmt">// ❌ 创建后再改——编译错误 CS8852</span>
+opts.MaxRetries = <span class="num">10</span>;  <span class="cmt">// Init-only property can only be assigned</span>
+                           <span class="cmt">// in an object initializer or constructor</span></code></pre>
+
+<p>三种访问器的能力对比：</p>
+
+<table>
+  <tr><th>访问器</th><th>构造函数中赋值</th><th>对象初始化器中赋值</th><th><code>with</code> 表达式中赋值</th><th>对象创建后赋值</th></tr>
+  <tr><td><code>set</code></td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+  <tr><td><code>init</code></td><td>✅</td><td>✅</td><td>✅（仅 record）</td><td>❌</td></tr>
+  <tr><td>纯 <code>get</code></td><td>✅（backing field）</td><td>❌</td><td>❌</td><td>❌</td></tr>
+</table>
+
+<h3>3.2 真实场景——什么时候在 class 中用 init？</h3>
+
+<p><strong>场景一：配置对象</strong>——创建时一次性赋值，之后全局只读，防止被业务代码意外修改：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">EmailServiceOptions</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> SmtpHost { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="kw">public</span> <span class="kw">int</span> Port { <span class="kw">get</span>; <span class="kw">init</span>; } = <span class="num">587</span>;
+    <span class="kw">public</span> <span class="kw">string</span> ApiKey { <span class="kw">get</span>; <span class="kw">init</span>; }
+}
+<span class="cmt">// 注册进 DI 后，任何服务都无法修改——天然的线程安全</span></code></pre>
+
+<p><strong>场景二：DTO 必填字段保护</strong>——防止消费者拿到 DTO 后偷偷修改：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">CreateOrderRequest</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> CustomerId { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="kw">public</span> <span class="kw">decimal</span> Amount { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="cmt">// 如果用 set，下游 Handler 可能随手改 Amount——静默 bug</span>
+}</code></pre>
+
+<p><strong>场景三：init 访问器内加验证</strong>——set 能做的逻辑，init 都能做：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span>
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">string</span> _name;
+
+    <span class="kw">public</span> <span class="kw">string</span> Name
+    {
+        <span class="kw">get</span> => _name;
+        <span class="kw">init</span>
+        {
+            <span class="kw">if</span> (<span class="kw">string</span>.IsNullOrWhiteSpace(value))
+                <span class="kw">throw</span> <span class="kw">new</span> ArgumentException(<span class="str">"Name is required"</span>);
+            _name = value;
+        }
+    }
+
+    <span class="kw">public</span> <span class="kw">int</span> Age { <span class="kw">get</span>; <span class="kw">init</span>; }
+}</code></pre>
+
+<h3>3.3 init 属性 vs readonly 字段</h3>
+
+<table>
+  <tr><th>特性</th><th><code>init</code> 属性</th><th><code>readonly</code> 字段</th></tr>
+  <tr><td>本质</td><td>属性（有访问器逻辑）</td><td>字段（直接存储）</td></tr>
+  <tr><td>对象初始化器中赋值</td><td>✅ <code>new X { Prop = val }</code></td><td>❌</td></tr>
+  <tr><td>可定义在接口中</td><td>✅</td><td>❌（字段不能进接口）</td></tr>
+  <tr><td>适用场景</td><td>暴露给外部的不可变数据</td><td>内部实现细节</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>编译器生成了什么？</strong><code>init</code> 属性在底层被编译为一个 <code>readonly</code> 的 backing field + 带 <code>modreq</code> 标记的 set 访问器。CLR 通过 <code>modreq</code> 验证调用方是否在合法的构造阶段——不在则拒绝执行。这就是为什么你绕不过它的限制：不是编译器的语法检查，而是 CLR 级别的强制。
+</div>
+
+<!-- ====== SECTION 4: WITH EXPRESSIONS ====== -->
+
+<h2>四、With 表达式 <span class="en">With Expressions</span> — 基于旧对象创建新对象</h2>
+
+<p>如果 record 不可变，那"改"一个对象的属性怎么办？答案：<strong>不改——创建一个副本，修改你需要的属性</strong>。这叫非破坏性变异<span class="en">Non-destructive Mutation</span>：</p>
+
+<pre><code><span class="kw">var</span> alice = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>, <span class="num">30</span>);
+
+<span class="cmt">// with 表达式：创建 alice 的副本，只修改 Age</span>
+<span class="kw">var</span> aliceNextYear = alice <span class="kw">with</span> { Age = <span class="num">31</span> };
+
+Console.WriteLine(alice);          <span class="cmt">// Person { Name = Alice, Age = 30 }   ← 原对象不变</span>
+Console.WriteLine(aliceNextYear);  <span class="cmt">// Person { Name = Alice, Age = 31 }   ← 新对象</span></code></pre>
+
+<p><code>with</code> 的语义：① 浅拷贝<span class="en">Shallow Copy</span>整个对象 → ② 应用括号里的属性修改 → ③ 返回新对象。原对象毫发无损。</p>
+
+<div class="callout callout--info">
+<strong>编译器生成了什么？</strong><code>with</code> 被编译为调用 <code>&lt;Clone&gt;$()</code> 方法（一个编译器生成的 protected 方法，做 memberwise clone），然后对指定的属性赋值。不需要你写任何 Clone 逻辑——编译器从位置参数推导出所有细节。
+</div>
+
+<h3>4.1 With 表达式的嵌套场景</h3>
+
+<pre><code><span class="kw">public</span> <span class="kw">record</span> <span class="type">Address</span>(<span class="kw">string</span> City, <span class="kw">string</span> Street);
+<span class="kw">public</span> <span class="kw">record</span> <span class="type">Person</span>(<span class="kw">string</span> Name, <span class="type">Address</span> Address);
+
+<span class="kw">var</span> alice = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>, <span class="kw">new</span> <span class="type">Address</span>(<span class="str">"Beijing"</span>, <span class="str">"长安街"</span>));
+
+<span class="cmt">// 嵌套 with：改地址的城市</span>
+<span class="kw">var</span> aliceMoved = alice <span class="kw">with</span>
+{
+    Address = alice.Address <span class="kw">with</span> { City = <span class="str">"Shanghai"</span> }
+};
+
+Console.WriteLine(aliceMoved);  <span class="cmt">// Person { Name = Alice, Address = Address { City = Shanghai, Street = 长安街 } }</span></code></pre>
+
+<!-- ====== SECTION 5: VALUE EQUALITY DEEP DIVE ====== -->
+
+<h2>五、值相等 <span class="en">Value Equality</span> 深入</h2>
+
+<p>两个 record 何时相等？<strong>类型相同 + 所有属性值相等</strong>。看看具体行为：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">record</span> <span class="type">Person</span>(<span class="kw">string</span> Name, <span class="kw">int</span> Age);
+
+<span class="kw">var</span> a = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>, <span class="num">30</span>);
+<span class="kw">var</span> b = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>, <span class="num">30</span>);
+<span class="kw">var</span> c = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>, <span class="num">31</span>);
+
+Console.WriteLine(a == b);  <span class="cmt">// True  —— 不同引用，但值相同 → 相等</span>
+Console.WriteLine(a == c);  <span class="cmt">// False —— Age 不同 → 不相等</span>
+
+<span class="cmt">// 注意：record 的 == 被重载为值相等，不是引用相等！</span>
+Console.WriteLine(ReferenceEquals(a, b));  <span class="cmt">// False —— 它们的引用确实不同</span></code></pre>
+
+<div class="comparison">
+  <div class="old">
+    <h4>Class：引用相等</h4>
+    <p><code>==</code> 比较地址（除非重载）<br>两个 new 出来的 class 永远 <code>!=</code><br>用于有"身份"的对象——Entity</p>
+  </div>
+  <div class="new">
+    <h4>Record：值相等</h4>
+    <p><code>==</code> 比较所有属性值<br>两个属性值相同的 record 就是 <code>==</code><br>用于有"值"的对象——DTO、消息</p>
+  </div>
+</div>
+
+<h3>5.1 Equals 的派生规则</h3>
+
+<p>编译器的 <code>Equals</code> 实现不是简单的 <code>==</code> 连用——它知道每个属性类型的相等语义：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">record</span> <span class="type">Order</span>(<span class="kw">string</span> Id, <span class="kw">decimal</span> Amount, <span class="type">List</span>&lt;<span class="kw">string</span>&gt; Tags);
+
+<span class="kw">var</span> a = <span class="kw">new</span> <span class="type">Order</span>(<span class="str">"A"</span>, <span class="num">100m</span>, <span class="kw">new</span> <span class="type">List</span>&lt;<span class="kw">string</span>&gt; { <span class="str">"urgent"</span> });
+<span class="kw">var</span> b = <span class="kw">new</span> <span class="type">Order</span>(<span class="str">"A"</span>, <span class="num">100m</span>, <span class="kw">new</span> <span class="type">List</span>&lt;<span class="kw">string</span>&gt; { <span class="str">"urgent"</span> });
+
+Console.WriteLine(a == b);  <span class="cmt">// False！</span>
+<span class="cmt">// 为什么？List&lt;T&gt; 是引用类型，没有实现 IEquatable&lt;T&gt; 的值相等</span>
+<span class="cmt">// 所以两个不同的 List 实例在 Equals 中比较引用 → False</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>陷阱：</strong>record 的值相等是<strong>递归的</strong>——它检查每个<strong>属性</strong>的 <code>Equals</code>。但如果某个属性类型本身不支持值相等（比如 <code>List&lt;T&gt;</code>），结果可能出乎预料。解决方案：用 <code>ImmutableList&lt;T&gt;</code>、<code>IReadOnlyList&lt;T&gt;</code> 包裹数组，或在 record 中使用自定义 <code>Equals</code>。
+</div>
+
+<!-- ====== SECTION 6: COMPILER INTERNALS ====== -->
+
+<h2>六、编译器生成了什么？——完整展开</h2>
+
+<p>输入这一行：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">record</span> <span class="type">Person</span>(<span class="kw">string</span> Name, <span class="kw">int</span> Age);</code></pre>
+
+<p>编译器生成的东西近似如下（简化但结构准确）：</p>
+
+<pre><code><span class="cmt">// ===== 编译器生成的 Person record =====</span>
+<span class="kw">public</span> <span class="kw">record</span> <span class="type">Person</span> : <span class="type">IEquatable</span>&lt;<span class="type">Person</span>&gt;
+{
+    <span class="cmt">// ① init-only 属性</span>
+    <span class="kw">public</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="kw">public</span> <span class="kw">int</span> Age { <span class="kw">get</span>; <span class="kw">init</span>; }
+
+    <span class="cmt">// ② 主构造函数</span>
+    <span class="kw">public</span> Person(<span class="kw">string</span> Name, <span class="kw">int</span> Age)
+    {
+        <span class="kw">this</span>.Name = Name;
+        <span class="kw">this</span>.Age = Age;
+    }
+
+    <span class="cmt">// ③ 值相等 —— Equals(R other) + Equals(object) + == / !=</span>
+    <span class="kw">public</span> <span class="kw">virtual</span> <span class="kw">bool</span> Equals(<span class="type">Person</span> other)
+    {
+        <span class="kw">if</span> (other <span class="kw">is</span> <span class="kw">null</span>) <span class="kw">return</span> <span class="kw">false</span>;
+        <span class="kw">return</span> EqualityComparer&lt;<span class="kw">string</span>&gt;.Default.Equals(Name, other.Name)
+            &amp;&amp; EqualityComparer&lt;<span class="kw">int</span>&gt;.Default.Equals(Age, other.Age);
+    }
+
+    <span class="kw">public</span> <span class="kw">override</span> <span class="kw">bool</span> Equals(<span class="kw">object</span> obj)
+        =&gt; Equals(obj <span class="kw">as</span> <span class="type">Person</span>);
+
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">bool</span> <span class="kw">operator</span> ==(<span class="type">Person</span> left, <span class="type">Person</span> right)
+        =&gt; left?.Equals(right) ?? right <span class="kw">is</span> <span class="kw">null</span>;
+
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">bool</span> <span class="kw">operator</span> !=(<span class="type">Person</span> left, <span class="type">Person</span> right)
+        =&gt; !(left == right);
+
+    <span class="cmt">// ④ GetHashCode —— 组合所有属性</span>
+    <span class="kw">public</span> <span class="kw">override</span> <span class="kw">int</span> GetHashCode()
+    {
+        <span class="kw">var</span> hc = <span class="kw">new</span> HashCode();
+        hc.Add(Name);
+        hc.Add(Age);
+        <span class="kw">return</span> hc.ToHashCode();
+    }
+
+    <span class="cmt">// ⑤ ToString —— PrintMembers 模式</span>
+    <span class="kw">public</span> <span class="kw">override</span> <span class="kw">string</span> ToString()
+    {
+        <span class="kw">var</span> sb = <span class="kw">new</span> StringBuilder();
+        sb.Append(<span class="str">"Person { "</span>);
+        PrintMembers(sb);
+        sb.Append(<span class="str">"}"</span>);
+        <span class="kw">return</span> sb.ToString();
+    }
+
+    <span class="kw">protected</span> <span class="kw">virtual</span> <span class="kw">bool</span> PrintMembers(StringBuilder sb)
+    {
+        sb.Append(<span class="str">"Name = "</span>).Append(Name);
+        sb.Append(<span class="str">", Age = "</span>).Append(Age);
+        <span class="kw">return</span> <span class="kw">true</span>;
+    }
+
+    <span class="cmt">// ⑥ Deconstruct —— 位置解构</span>
+    <span class="kw">public</span> <span class="kw">void</span> Deconstruct(<span class="kw">out</span> <span class="kw">string</span> Name, <span class="kw">out</span> <span class="kw">int</span> Age)
+    {
+        Name = <span class="kw">this</span>.Name;
+        Age = <span class="kw">this</span>.Age;
+    }
+
+    <span class="cmt">// ⑦ &lt;Clone&gt;$ —— with 表达式的底层机制（编译器命名，不可手动调用）</span>
+    <span class="kw">protected</span> <span class="type">Person</span> &lt;Clone&gt;$()
+    {
+        <span class="kw">return</span> (<span class="type">Person</span>)MemberwiseClone();  <span class="cmt">// 浅拷贝</span>
+    }
+}</code></pre>
+
+<div class="callout callout--good">
+<strong>为什么要关注编译器生成代码？</strong>① 面试：问"record 和 class 有什么区别"时，你能量化回答——"编译器自动生成 7 种方法"比"record 更方便"有力得多；② 调试：当你发现 <code>GetHashCode</code> 行为不符合预期时，你知道去哪看；③ 性能：<code>with</code> 做的是浅拷贝，不是深拷贝——明白这个就不会在引用类型属性上踩坑。
+</div>
+
+<!-- ====== SECTION 7: DECONSTRUCT DEEP DIVE ====== -->
+
+<h2>七、解构函数 <span class="en">Deconstruct</span> 深入 — 把对象"拆开"的魔法</h2>
+
+<p>你在第二节见过这行代码：</p>
+
+<pre><code><span class="kw">var</span> (name, age) = alice;  <span class="cmt">// name = "Alice", age = 30</span></code></pre>
+
+<p>这背后工作的就是<strong>解构函数</strong>——一个叫 <code>Deconstruct</code> 的方法。它不是 C# 9 的新特性（早在 C# 7 就引入了），但 record 让它从"手动写"变成了"自动生成"。</p>
+
+<h3>7.1 Deconstruct 不是什么关键字——是纯约定</h3>
+
+<p>解构函数<strong>不依赖任何接口</strong>、<strong>不需要任何特性标注</strong>。编译器只认一个模式：</p>
+
+<pre><code><span class="cmt">// 只要你的类型有一个签名匹配的方法……</span>
+<span class="kw">public</span> <span class="kw">void</span> Deconstruct(<span class="kw">out</span> T1 p1, <span class="kw">out</span> T2 p2, <span class="kw">out</span> T3 p3, ...)</code></pre>
+
+<p>编译器看到 <code>var (a, b, c) = obj</code>，就把它翻译成：</p>
+
+<pre><code>obj.Deconstruct(<span class="kw">out</span> <span class="kw">var</span> a, <span class="kw">out</span> <span class="kw">var</span> b, <span class="kw">out</span> <span class="kw">var</span> c);</code></pre>
+
+<p>你可以重载多个 <code>Deconstruct</code> 方法，按 <code>out</code> 参数的<strong>数量和类型</strong>区分：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">void</span> Deconstruct(<span class="kw">out</span> <span class="kw">string</span> name, <span class="kw">out</span> <span class="kw">int</span> age) { ... }
+<span class="kw">public</span> <span class="kw">void</span> Deconstruct(<span class="kw">out</span> <span class="kw">string</span> name, <span class="kw">out</span> <span class="kw">int</span> age, <span class="kw">out</span> <span class="kw">string</span> email) { ... }
+
+<span class="cmt">// 编译器根据你接收的变量数量自动选择正确的重载</span>
+<span class="kw">var</span> (n, a) = person;           <span class="cmt">// 调用 2 参数版本</span>
+<span class="kw">var</span> (n, a, e) = person;        <span class="cmt">// 调用 3 参数版本</span></code></pre>
+
+<h3>7.2 ⚠️ 解构 ≠ 析构</h3>
+
+<p>中文非常容易混淆，但它们<strong>毫无关系</strong>：</p>
+
+<table>
+  <tr><th>术语</th><th>英文</th><th>方法签名</th><th>含义</th><th>引入版本</th></tr>
+  <tr><td><strong>解构</strong></td><td>Deconstruct</td><td><code>void Deconstruct(out T1, ...)</code></td><td>把对象拆成多个变量</td><td>C# 7</td></tr>
+  <tr><td><strong>析构</strong></td><td>Destructor / Finalizer</td><td><code>~ClassName()</code></td><td>GC 回收前的清理回调</td><td>C# 1.0</td></tr>
+</table>
+
+<div class="callout callout--warn">
+<strong>面试高频陷阱题：</strong>"C# 中解构和析构有什么区别？"——很多候选人以为是一种东西。解构是拆开用（Deconstruct → <code>out</code> 参数），析构是销毁清理（Destructor → <code>~ClassName()</code>）。两者在语法、语义、运行时机制上没有任何联系。
+</div>
+
+<h3>7.3 哪些类型可以解构？</h3>
+
+<p>解构是<strong>纯命名约定</strong>，不依赖任何接口。以下全部支持：</p>
+
+<pre><code><span class="cmt">// ✅ class —— 手动定义 Deconstruct</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> Name { <span class="kw">get</span>; }
+    <span class="kw">public</span> <span class="kw">void</span> Deconstruct(<span class="kw">out</span> <span class="kw">string</span> name, <span class="kw">out</span> <span class="kw">int</span> age) { ... }
+}
+
+<span class="cmt">// ✅ struct —— 同样可以</span>
+<span class="kw">public</span> <span class="kw">struct</span> <span class="type">Point</span>
+{
+    <span class="kw">public</span> <span class="kw">void</span> Deconstruct(<span class="kw">out</span> <span class="kw">int</span> x, <span class="kw">out</span> <span class="kw">int</span> y) { ... }
+}
+
+<span class="cmt">// ✅ record —— 位置记录编译器自动生成 Deconstruct</span>
+<span class="kw">public</span> <span class="kw">record</span> <span class="type">Person</span>(<span class="kw">string</span> Name, <span class="kw">int</span> Age);  <span class="cmt">// Deconstruct 自动生成</span>
+
+<span class="cmt">// ✅ 甚至可以用扩展方法给别人的类型加解构！</span>
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> <span class="type">DateTimeExtensions</span>
+{
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">void</span> Deconstruct(<span class="kw">this</span> DateTime dt,
+        <span class="kw">out</span> <span class="kw">int</span> year, <span class="kw">out</span> <span class="kw">int</span> month, <span class="kw">out</span> <span class="kw">int</span> day)
+    {
+        year = dt.Year; month = dt.Month; day = dt.Day;
+    }
+}
+
+<span class="kw">var</span> (y, m, d) = DateTime.Now;  <span class="cmt">// 解构系统类型！</span></code></pre>
+
+<div class="callout callout--info">
+<strong>扩展方法解构是 C# 的一颗隐藏宝石：</strong>它意味着你可以给任何第三方类型、甚至 BCL 类型（如 <code>DateTime</code>、<code>KeyValuePair</code>）加上解构能力——而不需要修改源码。这是"命名约定优于接口继承"设计哲学的绝佳例子：灵活性极高，代价是"解构"没有编译期契约保障（你无法强制一个类型一定可解构）。
+</div>
+
+<h3>7.4 Record 的 Deconstruct：自动生成 vs 手动</h3>
+
+<table>
+  <tr><th>记录类型</th><th>编译器生成 Deconstruct？</th><th>为什么</th></tr>
+  <tr><td>位置记录 <code>record Person(string Name, int Age)</code></td><td>✅ 自动</td><td>位置参数一一对应属性，编译器知道解构出什么</td></tr>
+  <tr><td>命名记录（手动定义属性）</td><td>❌ 不生成</td><td>属性和构造函数参数不一定一一对应，编译器不做猜测</td></tr>
+</table>
+
+<p>如果命名记录也需要解构——自己写一个 <code>Deconstruct</code> 方法即可，和 class 里面一模一样。</p>
+
+<!-- ====== SECTION 8: MANUAL RECORDS ====== -->
+
+<h2>八、命名记录 <span class="en">Nominal Records</span> — 手动定义</h2>
+
+<p>位置记录提供了一行声明法，但你也可以手动定义 record——当属性名字和构造函数参数名不一致，或需要自定义行为时：</p>
+
+<pre><code><span class="cmt">// 命名记录：手动声明属性和构造函数</span>
+<span class="kw">public</span> <span class="kw">record</span> <span class="type">Person</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="kw">public</span> <span class="kw">int</span> Age { <span class="kw">get</span>; <span class="kw">init</span>; }
+
+    <span class="cmt">// 自定义构造函数——做一些验证</span>
+    <span class="kw">public</span> Person(<span class="kw">string</span> name, <span class="kw">int</span> age)
+    {
+        <span class="kw">if</span> (<span class="kw">string</span>.IsNullOrWhiteSpace(name))
+            <span class="kw">throw</span> <span class="kw">new</span> ArgumentException(<span class="str">"Name is required"</span>);
+        Name = name;
+        Age = age;
+    }
+}</code></pre>
+
+<p>命名记录<span class="en">Nominal Record</span>和位置记录<span class="en">Positional Record</span>的唯一区别：编译器不会自动生成位置参数的构造函数和 Deconstruct。但 <code>Equals</code>、<code>GetHashCode</code>、<code>ToString</code>、<code>&lt;Clone&gt;$</code> 依然自动生成——因为它们基于<strong>所有属性</strong>，和构造函数参数无关。</p>
+
+<!-- ====== SECTION 9: INHERITANCE ====== -->
+
+<h2>九、继承 <span class="en">Inheritance</span> — Record 可以继承 Record</h2>
+
+<pre><code><span class="kw">public</span> <span class="kw">record</span> <span class="type">Person</span>(<span class="kw">string</span> Name, <span class="kw">int</span> Age);
+<span class="kw">public</span> <span class="kw">record</span> <span class="type">Student</span>(<span class="kw">string</span> Name, <span class="kw">int</span> Age, <span class="kw">string</span> School) : <span class="type">Person</span>(Name, Age);
+
+<span class="kw">var</span> s = <span class="kw">new</span> <span class="type">Student</span>(<span class="str">"Bob"</span>, <span class="num">20</span>, <span class="str">"Tsinghua"</span>);
+Console.WriteLine(s);  <span class="cmt">// Student { Name = Bob, Age = 20, School = Tsinghua }</span></code></pre>
+
+<p>继承规则很严格：</p>
+
+<table>
+  <tr><th>行为</th><th>允许？</th><th>说明</th></tr>
+  <tr><td>Record 继承 Record</td><td>✅</td><td></td></tr>
+  <tr><td>Record 继承 Class</td><td>❌</td><td>Record 只能继承 Record 或 object</td></tr>
+  <tr><td>Class 继承 Record</td><td>❌</td><td>Record 基类有编译器生成的方法，class 无法兼容</td></tr>
+  <tr><td><code>sealed record</code></td><td>✅</td><td>阻止进一步继承，推荐作为默认做法</td></tr>
+</table>
+
+<div class="callout callout--warn">
+<strong>继承 + 值相等的坑：</strong>如果 <code>Person p = new Student("Bob", 20, "Tsinghua")</code>，<code>p.Equals(anotherPerson)</code> 会<strong>同时</strong>检查运行时类型和属性值。两个不同的子类——即使父类属性完全相同——也不会相等。因为编译器插入了一个 <code>EqualityContract</code> 属性来标识类型，确保不会把 Student 和 Teacher（碰巧同名同年龄）判为相等。
+</div>
+
+<!-- ====== SECTION 10: WHEN TO USE ====== -->
+
+<h2>十、使用指南——何时用 Record，何时不用</h2>
+
+<table>
+  <tr><th>✅ 用 Record</th><th>❌ 不用 Record</th></tr>
+  <tr><td>DTO / API 响应模型——数据进来出去，不需要改</td><td>EF Core 实体——需要变更追踪<span class="en">Change Tracking</span></td></tr>
+  <tr><td>消息 / 事件——值语义保证幂等比较</td><td>需要独立身份<span class="en">Identity</span>的对象——比如 User（即使所有属性相同也是不同的人）</td></tr>
+  <tr><td>配置快照——不可变保证线程安全</td><td>频繁修改的大对象——每次 <code>with</code> 都创建新对象，GC 压力大</td></tr>
+  <tr><td>领域值对象<span class="en">Value Object</span>——Money、Address、Color</td><td>需要引用相等语义的场景——比如缓存键依赖引用</td></tr>
+  <tr><td>需要无损变异<span class="en">Non-destructive Mutation</span>的场景</td><td>所有属性都可变的简单数据容器——struct 可能更适合</td></tr>
+</table>
+
+<div class="callout callout--info">
+<strong>EF Core 能用 Record 吗？</strong>从 EF Core 6 开始，Record 可以作为 Owned Entity（值对象）使用。但作为主实体（Aggregate Root）时，EF Core 需要能修改属性来做变更追踪——这时 Record 的不可变性反而碍事。C# 10 的 <code>record struct</code> 部分缓解了这个问题，但那是另一个话题。
+</div>
+
+<!-- ====== SECTION 11: C# 9 OTHER FEATURES ====== -->
+
+<h2>十一、C# 9 还有哪些值得期待的特性？</h2>
+
+<table>
+  <tr><th>特性</th><th>一句话</th><th>本课覆盖？</th></tr>
+  <tr><td>Records</td><td>不可变引用类型，值相等语义</td><td>✅ 本课</td></tr>
+  <tr><td>Init-only Properties</td><td>set 只能在初始化时调用</td><td>✅ 本课</td></tr>
+  <tr><td>With Expressions</td><td>基于旧对象创建新对象</td><td>✅ 本课</td></tr>
+  <tr><td>Top-level Statements</td><td>没有 Main 方法的 Program.cs</td><td>📅 下一课</td></tr>
+  <tr><td>Pattern Matching 增强</td><td><code>is not</code>、<code>and</code>/<code>or</code> 模式、关系模式</td><td>📅 下一课</td></tr>
+  <tr><td>Target-typed <code>new</code></td><td><code>Person p = new();</code> 省略类型</td><td>📅 下一课</td></tr>
+  <tr><td>Covariant Returns</td><td>重写方法可以返回更具体的类型</td><td>📅 下一课</td></tr>
+</table>
+
+<!-- ====== QUIZ ====== -->
+
+<h2>📝 小测验</h2>
+
+<div class="quiz" id="q1">
+  <h3>Q1. 以下代码输出什么？</h3>
+<pre><code><span class="kw">public</span> <span class="kw">record</span> <span class="type">Point</span>(<span class="kw">int</span> X, <span class="kw">int</span> Y);
+
+<span class="kw">var</span> a = <span class="kw">new</span> <span class="type">Point</span>(<span class="num">1</span>, <span class="num">2</span>);
+<span class="kw">var</span> b = <span class="kw">new</span> <span class="type">Point</span>(<span class="num">1</span>, <span class="num">2</span>);
+
+Console.WriteLine(a == b);
+Console.WriteLine(ReferenceEquals(a, b));</code></pre>
+  <div class="question">选择正确答案：</div>
+  <label><input type="radio" name="q1" value="a"> 输出 True 然后 True</label>
+  <label><input type="radio" name="q1" value="b"> 输出 False 然后 False</label>
+  <label><input type="radio" name="q1" value="c"> 输出 True 然后 False</label>
+  <label><input type="radio" name="q1" value="d"> 输出 False 然后 True</label>
+  <button onclick="check('q1','c')">确认</button>
+  <div class="feedback" id="f_q1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>Q2. 关于 <code>with</code> 表达式，以下哪句是<strong>正确</strong>的？</h3>
+  <div class="question">选择正确的描述：</div>
+  <label><input type="radio" name="q2" value="a"> <code>with</code> 直接修改原对象——所以叫"无损"变异</label>
+  <label><input type="radio" name="q2" value="b"> <code>with</code> 创建一个<strong>新</strong>对象——原对象保持不变</label>
+  <label><input type="radio" name="q2" value="c"> <code>with</code> 只能修改一个属性</label>
+  <label><input type="radio" name="q2" value="d"> <code>with</code> 做的是深拷贝，包括所有嵌套对象</label>
+  <button onclick="check('q2','b')">确认</button>
+  <div class="feedback" id="f_q2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>Q3. <code>init</code> 访问器允许在<strong>哪些</strong>场景下赋值？</h3>
+  <div class="question">选择最准确的描述：</div>
+  <label><input type="radio" name="q3" value="a"> 任何时候——和 set 一样</label>
+  <label><input type="radio" name="q3" value="b"> 只能在构造函数中赋值</label>
+  <label><input type="radio" name="q3" value="c"> 只能在构造函数、对象初始化器、或 <code>with</code> 表达式中赋值</label>
+  <label><input type="radio" name="q3" value="d"> 只能在 <code>record</code> 类型中使用</label>
+  <button onclick="check('q3','c')">确认</button>
+  <div class="feedback" id="f_q3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>Q4. 以下关于 Record 继承的说法，哪个是<strong>正确</strong>的？</h3>
+  <div class="question">选择正确的描述：</div>
+  <label><input type="radio" name="q4" value="a"> Record 可以继承任何 class，class 也可以继承 record</label>
+  <label><input type="radio" name="q4" value="b"> Record 只能继承 record，不能继承 class；class 也不能继承 record</label>
+  <label><input type="radio" name="q4" value="c"> Record 可以继承 class，但 class 不能继承 record</label>
+  <label><input type="radio" name="q4" value="d"> Record 不能有任何继承关系</label>
+  <button onclick="check('q4','b')">确认</button>
+  <div class="feedback" id="f_q4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>Q5. 为什么两个属性值相同的 <code>Person</code> record，<code>ReferenceEquals</code> 返回 False？</h3>
+  <div class="question">选择最准确的解释：</div>
+  <label><input type="radio" name="q5" value="a"> 因为 record 的 <code>ReferenceEquals</code> 也被重载了</label>
+  <label><input type="radio" name="q5" value="b"> 因为它们是堆上的两个不同对象——record <strong>重载</strong>了 <code>==</code> 但 <code>ReferenceEquals</code> 是 <code>object</code> 的静态方法，永远比较引用</label>
+  <label><input type="radio" name="q5" value="c"> 因为 record 是值类型，存储在栈上</label>
+  <label><input type="radio" name="q5" value="d"> 因为编译器没有给 record 生成 <code>ReferenceEquals</code></label>
+  <button onclick="check('q5','b')">确认</button>
+  <div class="feedback" id="f_q5"></div>
+</div>
+
+<div class="quiz" id="q6">
+  <h3>Q6.（场景题）你在写一个订单系统。以下哪个最适合用 Record？</h3>
+  <div class="question">选择最佳答案：</div>
+  <label><input type="radio" name="q6" value="a"> <code>Order</code> 实体——它会被 EF Core 追踪变更，状态从 Pending → Paid → Shipped</label>
+  <label><input type="radio" name="q6" value="b"> <code>Money</code> 值对象——包含 Amount 和 Currency，创建后永不修改</label>
+  <label><input type="radio" name="q6" value="c"> <code>OrderService</code>——包含业务逻辑和依赖注入</label>
+  <label><input type="radio" name="q6" value="d"> <code>UserSession</code>——需要频繁更新 LastAccessTime</label>
+  <button onclick="check('q6','b')">确认</button>
+  <div class="feedback" id="f_q6"></div>
+</div>
+
+<div class="quiz" id="q7">
+  <h3>Q7. 关于解构函数 <code>Deconstruct</code>，以下哪个说法是<strong>错误</strong>的？</h3>
+  <div class="question">选择不正确的描述：</div>
+  <label><input type="radio" name="q7" value="a"> 解构依赖一个命名约定——方法名叫 <code>Deconstruct</code>，参数全是 <code>out</code></label>
+  <label><input type="radio" name="q7" value="b"> 你可以用扩展方法给第三方类型（如 <code>DateTime</code>）加上解构能力</label>
+  <label><input type="radio" name="q7" value="c"> 解构（Deconstruct）和析构（Destructor）是同一回事——<code>~ClassName()</code></label>
+  <label><input type="radio" name="q7" value="d"> 同一个类型可以重载多个 <code>Deconstruct</code> 方法，按 <code>out</code> 参数数量区分</label>
+  <button onclick="check('q7','c')">确认</button>
+  <div class="feedback" id="f_q7"></div>
+</div>
+
+<div class="quiz" id="q8">
+  <h3>Q8. 以下代码中，哪个赋值操作会<strong>编译失败</strong>？</h3>
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Options</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> Url { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="kw">public</span> <span class="kw">int</span> Retries { <span class="kw">get</span>; <span class="kw">init</span>; } = <span class="num">3</span>;
+}
+
+<span class="kw">var</span> opts = <span class="kw">new</span> <span class="type">Options</span> { Url = <span class="str">"https://api.example.com"</span> };
+opts.Retries = <span class="num">5</span>;  <span class="cmt">// ← A</span>
+
+<span class="kw">var</span> opts2 = <span class="kw">new</span> <span class="type">Options</span> { Url = <span class="str">"https://api2.example.com"</span>, Retries = <span class="num">10</span> };
+<span class="cmt">// ← B</span>
+
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Service</span>
+{
+    <span class="kw">public</span> <span class="type">Options</span> Config { <span class="kw">get</span>; }
+    <span class="kw">public</span> Service()
+    {
+        Config = <span class="kw">new</span> <span class="type">Options</span> { Url = <span class="str">"default"</span> };
+        <span class="cmt">// ← C</span>
+    }
+}</code></pre>
+  <div class="question">选择会编译失败的行：</div>
+  <label><input type="radio" name="q8" value="a"> A</label>
+  <label><input type="radio" name="q8" value="b"> B</label>
+  <label><input type="radio" name="q8" value="c"> C</label>
+  <label><input type="radio" name="q8" value="d"> 全部编译通过</label>
+  <button onclick="check('q8','a')">确认</button>
+  <div class="feedback" id="f_q8"></div>
+</div>
+
+<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<p class="mild">
+  Lesson 07 · C# 9 Records · 下一课预告：<strong>C# 9 小特性集</strong>——Top-level Statements、Pattern Matching 增强、Target-typed new、Covariant Returns
+</p>
+<p class="mild">
+  有任何不清楚的地方？<strong>直接在对话中追问</strong>——Agent 就是你的私教。
+</p>
+
+<script>
+function check(qid, correct) {
+  var f = document.getElementById('f_' + qid);
+  var selected = document.querySelector('input[name="' + qid + '"]:checked');
+  if (!selected) {
+    f.textContent = '⚠️ 请先选择一个答案。';
+    f.className = 'feedback show wrong';
+    return;
+  }
+  var isCorrect = selected.value === correct;
+  var answers = {
+    q1: {
+      correct: '✅ 正确！Record 重载了 <code>==</code> 为值相等 → True。但 <code>ReferenceEquals</code> 是 <code>object</code> 的静态方法，永远比较堆引用 → 两个不同 new 出来的是 False。',
+      wrong:   '❌ 答案是「True 然后 False」。Record 重载了 <code>==</code> 做值比较（属性相同→相等），但 <code>ReferenceEquals</code> 不受影响，仍然比较堆地址。'
+    },
+    q2: {
+      correct: '✅ 正确！<code>with</code> 表达式创建新对象——它调用编译器生成的 <code>&lt;Clone&gt;$()</code> 做浅拷贝，然后应用属性修改。原对象完全不受影响。',
+      wrong:   '❌ 答案是 b。<code>with</code> 不修改原对象——它创建一个<strong>新</strong>对象，只修改你指定的属性。这叫非破坏性变异<span class="en">Non-destructive Mutation</span>。<code>with</code> 做的是浅拷贝，不是深拷贝——嵌套引用类型仍然共享。'
+    },
+    q3: {
+      correct: '✅ 正确！<code>init</code> 只能在构造函数、对象初始化器（<code>new X { Prop = ... }</code>）和 <code>with</code> 表达式中赋值。创建完成后，属性变为只读。<code>init</code> 不仅限 record——class 和 struct 也可以用。',
+      wrong:   '❌ 答案是 c。<code>init</code> 允许在三个场景赋值：① 构造函数中；② 对象初始化器中（<code>new Person { Name = "Bob" }</code>）；③ <code>with</code> 表达式中。一旦对象创建完成，init 属性变为只读。'
+    },
+    q4: {
+      correct: '✅ 正确！Record 只能继承 record（或 object）；class 也不能继承 record。这是编译器层面的硬限制——因为 record 的 <code>EqualityContract</code> 等机制和 class 不兼容。',
+      wrong:   '❌ 答案是 b。Record 的继承链条只能在 record 之间——Record ↔ Record，不能交叉：Record → Class ❌，Class → Record ❌。需要阻止继承时用 <code>sealed record</code>。'
+    },
+    q5: {
+      correct: '✅ 正确！<code>ReferenceEquals</code> 是 <code>object</code> 的静态方法，永远比较引用——record 无法重载它。Record 重载的是 <code>==</code> 运算符和 <code>Equals</code> 方法。',
+      wrong:   '❌ 答案是 b。<code>ReferenceEquals</code> 是 <code>object</code> 类的静态方法——编译器不能重写它，record 也不行。Record 重载的是 <code>==</code> 运算符和实例方法 <code>Equals</code>。两个通过 <code>new</code> 创建的 record 始终是不同的堆对象。'
+    },
+    q6: {
+      correct: '✅ 正确！<code>Money</code> 是典型的领域值对象<span class="en">Value Object</span>——创建后不变、需要值相等、不需要身份。Record 完美匹配这个场景。',
+      wrong:   '❌ 答案是 b（Money）。Record 最适合"数据进来、读取、不改"的场景：① Order 实体需要变更追踪（EF Core 在追踪时修改属性），用 class；② OrderService 是行为承载者，用 class；③ UserSession 频繁修改，用 class。只有 Money——不变的金额+币种——是 Record 的最佳用例。'
+    },
+    q7: {
+      correct: '✅ 正确！c 是错的——解构（<code>Deconstruct</code>，拆成多个变量）和析构（<code>~ClassName()</code>，GC 回收前的清理回调）是完全不同的概念，仅中文发音相似。',
+      wrong:   '❌ 答案是 c（错误的说法）。解构和析构毫无关系：解构（Deconstruct）是把对象拆成多个变量，依赖 <code>out</code> 参数约定；析构（Destructor / Finalizer）是 GC 回收前的资源清理回调，语法是 <code>~ClassName()</code>。另外三个选项都是正确的——解构确实是命名约定、扩展方法确实可以给第三方类型加解构、同一个类型确实可以重载多个 Deconstruct。'
+    },
+    q8: {
+      correct: '✅ 正确！A 行会编译失败——<code>opts.Retries = 5</code> 试图在对象创建后修改 <code>init</code> 属性，触发 CS8852。B 行在对象初始化器中赋值 ✅；C 行在构造函数内赋值（对象初始化器也是一种构造上下文）✅。',
+      wrong:   '❌ 答案是 A。A 行 <code>opts.Retries = 5</code> 在对象创建后修改 init 属性 → 编译错误 CS8852。B 行在对象初始化器中赋值，C 行在构造函数内赋值——都在"构造阶段"内，所以合法。'
+    }
+  };
+  var a = answers[qid];
+  f.textContent = isCorrect ? a.correct : a.wrong;
+  f.className = 'feedback show ' + (isCorrect ? 'correct' : 'wrong');
+}
+</script>
+
+</body>
+</html>

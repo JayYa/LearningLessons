@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 08: C# 9 小特性集 — Top-level Statements · Pattern Matching 增强 · Target-typed new · Covariant Returns</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  .callout {
+    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
+  }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
+
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafaf9; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+
+  .diagram {
+    background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 1.5rem; margin: 1.5rem 0;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 0.82rem; line-height: 1.6; white-space: pre; overflow-x: auto;
+    color: #333;
+  }
+</style>
+</head>
+<body>
+
+<h1>Lesson 08: C# 9 小特性集</h1>
+<p class="subtitle">四个"小"特性，加起来省掉 30% 的日常样板代码——而且每天都在用</p>
+
+<div class="callout callout--info">
+<strong>前置 / Prerequisite：</strong>已完成 <a href="07-csharp9-records.html">Lesson 07（C# 9 Records）</a>，熟悉 C# 8 模式匹配基础（<a href="02-csharp8-switch-using-indices.html">Lesson 02</a>）。<br>
+<strong>本课目标：</strong>掌握 Top-level Statements<span class="en">顶级语句</span>、Pattern Matching 增强（<code>not</code> / <code>and</code> / <code>or</code> + 关系模式<span class="en">Relational Patterns</span>）、Target-typed <code>new</code> 表达式<span class="en">目标类型 new</span>、协变返回<span class="en">Covariant Returns</span>。四个特性覆盖 4 种不同的日常痛点。
+</div>
+
+<!-- ====== SECTION 1: THE HOOK ====== -->
+
+<h2>一、钩子——"Hello World" 为什么需要 12 行？</h2>
+
+<p>打开任何一个 C# 教程，第一个程序长这样：</p>
+
+<pre><code><span class="kw">using</span> System;
+
+<span class="kw">namespace</span> <span class="type">MyApp</span>
+{
+    <span class="kw">class</span> <span class="type">Program</span>
+    {
+        <span class="kw">static</span> <span class="kw">void</span> Main(<span class="kw">string</span>[] args)
+        {
+            Console.WriteLine(<span class="str">"Hello World!"</span>);
+        }
+    }
+}</code></pre>
+
+<p><strong>12 行，其中只有 1 行在做实际的事。</strong> 其余 11 行是仪式<span class="en">Ceremony</span>——编译器完全知道你要干什么，但你被迫写出来。</p>
+
+<p>Python 程序员嘲笑 C# 时，第一刀就砍在这里。</p>
+
+<p>C# 9 的回答：</p>
+
+<pre><code><span class="cmt">// 这就是一个完整的、可编译运行的 C# 程序</span>
+Console.WriteLine(<span class="str">"Hello World!"</span>);</code></pre>
+
+<p><strong>一行。</strong>没有 <code>using</code>（自动隐式导入）、没有 <code>namespace</code>、没有 <code>class</code>、没有 <code>Main</code>。</p>
+
+<p>这不是给初学者用的"简易模式"——<strong>这是合法的、完整的 C# 程序</strong>。生成的 IL 和一个完整 Program.cs 一模一样。这就是本课要讲的第一个特性：<strong>顶级语句</strong><span class="en">Top-level Statements</span>。</p>
+
+<!-- ====== SECTION 2: TOP-LEVEL STATEMENTS ====== -->
+
+<h2>二、顶级语句 <span class="en">Top-level Statements</span></h2>
+
+<h3>2.1 什么能写？——就是你之前在 Main 里写的</h3>
+
+<pre><code><span class="cmt">// 完整示例：有 using、有方法、有 await、有参数</span>
+<span class="kw">using</span> System;
+<span class="kw">using</span> System.Net.Http;
+
+<span class="kw">var</span> client = <span class="kw">new</span> HttpClient();
+<span class="kw">var</span> response = <span class="kw">await</span> client.GetStringAsync(<span class="str">"https://api.github.com/zen"</span>);
+Console.WriteLine(response);
+
+<span class="cmt">// args 依然可用——编译器偷偷传给你</span>
+Console.WriteLine(<span class="str">$"参数数量: {args.Length}"</span>);
+
+<span class="cmt">// 甚至可以返回值——变成 Main 的 exit code</span>
+<span class="kw">return</span> <span class="num">0</span>;</code></pre>
+
+<table>
+  <tr><th>在 Main 里能做的事</th><th>顶级语句中？</th></tr>
+  <tr><td><code>using</code> 导入命名空间</td><td>✅ 文件开头</td></tr>
+  <tr><td>定义局部变量</td><td>✅</td></tr>
+  <tr><td><code>await</code> 异步调用</td><td>✅ 编译器自动生成 async Main</td></tr>
+  <tr><td>访问 <code>args</code></td><td>✅ 隐式可用</td></tr>
+  <tr><td><code>return</code> 返回 exit code</td><td>✅ <code>return 0;</code></td></tr>
+  <tr><td>定义类 / struct / 方法</td><td>✅ 放在语句之后</td></tr>
+  <tr><td>第二个文件也写顶级语句</td><td>❌ 一个项目只能有一个文件用顶级语句</td></tr>
+</table>
+
+<h3>2.2 编译器生成了什么？——.NET 6+ SDK 的魔法</h3>
+
+<p>你不是一直想问"编译器生成了什么"吗？来：</p>
+
+<pre><code><span class="cmt">// 你写的（Program.cs 一行）：</span>
+Console.WriteLine(<span class="str">"Hello"</span>);
+
+<span class="cmt">// ===== 编译器生成的（简化） =====</span>
+<span class="kw">using</span> System;                              <span class="cmt">// 隐式 using（SDK 自动加）</span>
+
+<span class="cmt">// 编译器合成 Program 类 + $Main 方法</span>
+<span class="kw">internal</span> <span class="kw">class</span> <span class="type">Program</span>
+{
+    <span class="kw">private</span> <span class="kw">static</span> <span class="kw">void</span> $Main(<span class="kw">string</span>[] args)
+    {
+        Console.WriteLine(<span class="str">"Hello"</span>);
+    }
+}</code></pre>
+
+<p>如果你用了 <code>await</code>：</p>
+
+<pre><code><span class="cmt">// 你写的：</span>
+<span class="kw">var</span> data = <span class="kw">await</span> FetchAsync();
+Console.WriteLine(data);
+
+<span class="cmt">// 编译器生成：</span>
+<span class="kw">internal</span> <span class="kw">class</span> <span class="type">Program</span>
+{
+    <span class="kw">private</span> <span class="kw">static</span> <span class="kw">async</span> Task $Main(<span class="kw">string</span>[] args)  <span class="cmt">// ← 自动 async Task</span>
+    {
+        <span class="kw">var</span> data = <span class="kw">await</span> FetchAsync();
+        Console.WriteLine(data);
+    }
+}</code></pre>
+
+<div class="callout callout--warn">
+<strong>你不是要面试吗？</strong>Top-level statements 的面试常考题："Program 类去哪了？"——答：编译器合成为一个 <code>internal class Program</code>，Main 方法改名叫 <code>$Main</code>。代码引用了 <code>Program</code> 类的地方（如 EF Core migration、ASP.NET Minimal API）照常工作——编译器的合成类和以前的 <code>Program</code> 合并。
+</div>
+
+<h3>2.3 什么时候用，什么时候不用？</h3>
+
+<table>
+  <tr><th>✅ 适合</th><th>❌ 不适合</th></tr>
+  <tr><td>控制台小工具、脚本、Demo</td><td>大型项目——只有一个文件能省略，反而不一致</td></tr>
+  <tr><td>ASP.NET Core Minimal API 的 Program.cs</td><td>需要显式 <code>Main</code> 签名（比如返回 <code>Task&lt;int&gt;</code>）</td></tr>
+  <tr><td>.NET 6+ 默认模板——它就是默认</td><td>团队有严格的代码风格规范要求显式定义</td></tr>
+</table>
+
+<!-- ====== SECTION 3: PATTERN MATCHING ENHANCEMENTS ====== -->
+
+<h2>三、模式匹配增强 <span class="en">Pattern Matching Enhancements</span></h2>
+
+<p>C# 8 给了你 switch 表达式、属性模式、元组模式。C# 9 给模式加了三个逻辑关键字和一类比较操作——让模式匹配从"够用"到"顺手"。</p>
+
+<h3>3.1 <code>not</code> — 反模式</h3>
+
+<p>之前你写非空检查：</p>
+
+<pre><code><span class="cmt">// C# 8 之前的几种写法，都不够好</span>
+<span class="kw">if</span> (obj != <span class="kw">null</span>) { }          <span class="cmt">// 依赖运算符重载——可能被 class 重载 !=</span>
+<span class="kw">if</span> (!(obj <span class="kw">is</span> <span class="kw">null</span>)) { }      <span class="cmt">// 正确但括号太多，读起来绕</span>
+<span class="kw">if</span> (obj <span class="kw">is</span> <span class="kw">object</span>) { }       <span class="cmt">// 匹配所有非 null——但语义不直觉</span>
+</code></pre>
+
+<p>C# 9：</p>
+
+<pre><code><span class="kw">if</span> (obj <span class="kw">is</span> <span class="kw">not</span> <span class="kw">null</span>) { }     <span class="cmt">// 干净、直观、安全——编译器保证不走 operator !=</span>
+
+<span class="cmt">// not 可以用在任何模式前面</span>
+<span class="kw">if</span> (x <span class="kw">is</span> <span class="kw">not</span> <span class="num">0</span>) { }                          <span class="cmt">// x 不是 0</span>
+<span class="kw">if</span> (s <span class="kw">is</span> <span class="kw">not</span> <span class="kw">null</span> <span class="kw">and</span> <span class="kw">not</span> <span class="str">""</span>) { }               <span class="cmt">// 非 null 且非空字符串</span>
+
+<span class="cmt">// switch 表达式中也很实用</span>
+<span class="kw">return</span> obj <span class="kw">switch</span>
+{
+    <span class="kw">null</span>       => <span class="str">"空"</span>,
+    <span class="kw">not</span> <span class="kw">null</span>   => <span class="str">"非空"</span>,   <span class="cmt">// 覆盖了 null 之外的所有情况</span>
+};</code></pre>
+
+<div class="callout callout--good">
+<strong>为什么用 <code>is not null</code> 而不是 <code>!= null</code>？</strong><code>is not null</code> 是模式匹配——编译器直接生成 IL 层面的 null 检查，<strong>不经过</strong>任何 <code>operator !=</code> 重载。即使有人把 <code>!=</code> 重载成奇怪的逻辑，<code>is not null</code> 也不受影响。这是最安全、最"确定性"的 null 检查方式。从 C# 9 开始，这是推荐的写法。
+</div>
+
+<h3>3.2 <code>and</code> 和 <code>or</code> — 组合模式</h3>
+
+<pre><code><span class="cmt">// and：同时满足多个条件（交集）</span>
+<span class="kw">if</span> (x <span class="kw">is</span> > <span class="num">0</span> <span class="kw">and</span> < <span class="num">100</span>) { }                   <span class="cmt">// 0 < x < 100</span>
+
+<span class="kw">return</span> score <span class="kw">switch</span>
+{
+    >= <span class="num">0</span> <span class="kw">and</span> < <span class="num">60</span>    => <span class="str">"F"</span>,
+    >= <span class="num">60</span> <span class="kw">and</span> < <span class="num">80</span>   => <span class="str">"C"</span>,
+    >= <span class="num">80</span> <span class="kw">and</span> < <span class="num">90</span>   => <span class="str">"B"</span>,
+    >= <span class="num">90</span> <span class="kw">and</span> <= <span class="num">100</span> => <span class="str">"A"</span>,
+};
+
+<span class="cmt">// or：满足其中之一（并集）</span>
+<span class="kw">if</span> (status <span class="kw">is</span> <span class="str">"pending"</span> <span class="kw">or</span> <span class="str">"processing"</span>) { }  <span class="cmt">// 两个状态之一</span>
+
+<span class="kw">return</span> ch <span class="kw">switch</span>
+{
+    <span class="str">'a'</span> <span class="kw">or</span> <span class="str">'e'</span> <span class="kw">or</span> <span class="str">'i'</span> <span class="kw">or</span> <span class="str">'o'</span> <span class="kw">or</span> <span class="str">'u'</span> => <span class="str">"元音"</span>,
+    _                        => <span class="str">"辅音"</span>,
+};
+
+<span class="cmt">// and + or 混用——注意结合性：and 优先级高于 or</span>
+x <span class="kw">switch</span>
+{
+    <span class="kw">not</span> <span class="kw">null</span> <span class="kw">and</span> >= <span class="num">0</span> <span class="kw">or</span> <span class="kw">null</span> => <span class="str">"null 或非负数"</span>,  <span class="cmt">// 等价于: (not null and >= 0) or null</span>
+};</code></pre>
+
+<div class="callout callout--warn">
+<strong>记不住优先级就用括号：</strong><code>and</code> 优先级高于 <code>or</code>（和 <code>&amp;&amp;</code> vs <code>||</code> 一致）。但模式匹配中不能用 <code>()</code> 给子模式分组——这是 C# 目前的设计限制。碰到复杂的 <code>and</code> + <code>or</code> 混用，拆成两行或用 <code>when</code>。
+</div>
+
+<h3>3.3 关系模式 <span class="en">Relational Patterns</span></h3>
+
+<p>关系模式就是把 <code>&gt;</code>、<code>&gt;=</code>、<code>&lt;</code>、<code>&lt;=</code> 直接写进模式里面——不再需要 <code>when</code>：</p>
+
+<pre><code><span class="cmt">// C# 8：大小比较只能用 when</span>
+score <span class="kw">switch</span>
+{
+    <span class="kw">int</span> n <span class="kw">when</span> n >= <span class="num">90</span> => <span class="str">"A"</span>,
+    _                      => <span class="str">"Other"</span>,
+};
+
+<span class="cmt">// C# 9：关系模式——直接写比较</span>
+score <span class="kw">switch</span>
+{
+    >= <span class="num">90</span> => <span class="str">"A"</span>,
+    >= <span class="num">80</span> => <span class="str">"B"</span>,
+    >= <span class="num">60</span> => <span class="str">"C"</span>,
+    < <span class="num">60</span> => <span class="str">"F"</span>,
+};</code></pre>
+
+<p>关系模式 + 属性模式 = 表达力爆炸：</p>
+
+<pre><code><span class="cmt">// 订单折扣：VIP 且金额 >= 1000 → 20% off，非 VIP 且金额 >= 500 → 5% off</span>
+<span class="kw">return</span> order <span class="kw">switch</span>
+{
+    { IsVip: <span class="kw">true</span>, Total: >= <span class="num">1000</span> } => 0.20m,
+    { IsVip: <span class="kw">true</span>, Total: >= <span class="num">0</span>    } => 0.10m,
+    { IsVip: <span class="kw">false</span>, Total: >= <span class="num">500</span> } => 0.05m,
+    _                                => 0m,
+};</code></pre>
+
+<div class="callout callout--info">
+<strong>关系模式 vs when：什么时候用谁？</strong>简单的比较运算（<code>>=</code>、<code><</code>）用关系模式——更短、更直观。涉及方法调用（<code>StartsWith</code>）、跨变量比较（<code>w == h</code>）仍然用 <code>when</code>。关系模式不能调用方法，只能比较。
+</div>
+
+<!-- ====== SECTION 4: TARGET-TYPED NEW ====== -->
+
+<h2>四、目标类型 <code>new</code> <span class="en">Target-typed new</span></h2>
+
+<p>从 C# 2.0 起，你可以写 <code>var x = new Person()</code>——类型从右边推断出左边。但有时你不想用 <code>var</code>：</p>
+
+<pre><code><span class="cmt">// 你一直在忍受的重复：</span>
+<span class="type">List</span>&lt;<span class="kw">string</span>&gt; names = <span class="kw">new</span> <span class="type">List</span>&lt;<span class="kw">string</span>&gt;();          <span class="cmt">// List<string> 写了两次</span>
+<span class="type">Dictionary</span>&lt;<span class="kw">string</span>, <span class="type">Person</span>&gt; map = <span class="kw">new</span> <span class="type">Dictionary</span>&lt;<span class="kw">string</span>, <span class="type">Person</span>&gt;();  <span class="cmt">// 又臭又长</span>
+
+<span class="cmt">// 用 var？可以——但类型驱动不了字段/属性的初始化</span>
+<span class="kw">var</span> names = <span class="kw">new</span> <span class="type">List</span>&lt;<span class="kw">string</span>&gt;();  <span class="cmt">// 右边还是得写类型</span></code></pre>
+
+<p>C# 9 的答案：既然编译器知道左边是什么类型，右边就别再重复了。</p>
+
+<pre><code><span class="cmt">// C# 9: 左边说了类型，右边 new() 就够了</span>
+<span class="type">List</span>&lt;<span class="kw">string</span>&gt; names = <span class="kw">new</span>();
+<span class="type">Dictionary</span>&lt;<span class="kw">string</span>, <span class="type">Person</span>&gt; map = <span class="kw">new</span>();
+
+<span class="cmt">// 只要编译器能从上下文推出来类型，new() 就能用</span>
+ProcessData(<span class="kw">new</span>());  <span class="cmt">// 参数类型从方法签名推断</span>
+<span class="type">Person</span>[] people = { <span class="kw">new</span>(), <span class="kw">new</span>(), <span class="kw">new</span>() };  <span class="cmt">// 数组元素类型从声明推断</span>
+
+<span class="cmt">// 字段初始化——之前必须写全，现在不需要</span>
+<span class="kw">private</span> <span class="type">List</span>&lt;<span class="type">Order</span>&gt; _orders = <span class="kw">new</span>();  <span class="cmt">// 字段类型已声明，右边简写</span></code></pre>
+
+<div class="callout callout--warn">
+<strong><code>new()</code> !== <code>new</code> 一切：</strong>前提是编译器能从<strong>单一、明确</strong>的目标上下文推断出类型。以下情况不能用：
+<pre style="margin-top:0.5rem"><code><span class="cmt">// ❌ 不能：lambda 表达式参数类型不明</span>
+M(<span class="kw">new</span>());  <span class="cmt">// 如果 M 有多个重载——歧义</span>
+
+<span class="cmt">// ❌ 不能：var 声明——没有"目标类型"</span>
+<span class="kw">var</span> x = <span class="kw">new</span>();  <span class="cmt">// 编译器：你到底要什么类型？</span>
+
+<span class="cmt">// ❌ 不能：dynamic</span>
+<span class="kw">dynamic</span> d = <span class="kw">new</span>();  <span class="cmt">// dynamic 不提供编译期类型信息</span></code></pre>
+</div>
+
+<h3>4.1 真实场景——这里最省事</h3>
+
+<table>
+  <tr><th>场景</th><th>C# 8</th><th>C# 9</th></tr>
+  <tr><td>字段初始化</td><td><code>private List&lt;int&gt; _nums = new List&lt;int&gt;();</code></td><td><code>private List&lt;int&gt; _nums = new();</code></td></tr>
+  <tr><td>构造函数 DI</td><td><code>_logger = logger ?? throw new ArgumentNullException(nameof(logger));</code></td><td>同样可以用 <code>throw new()</code></td></tr>
+  <tr><td>方法参数</td><td><code>Process(new List&lt;string&gt;());</code></td><td><code>Process(new());</code></td></tr>
+  <tr><td>集合初始化器</td><td><code>new List&lt;string&gt; { "a", "b" }</code></td><td><code>new() { "a", "b" }</code>（需要上下文）</td></tr>
+</table>
+
+<p><strong>简单原则：</strong>左边明确写了类型 → 右边 <code>new()</code>。左边用 <code>var</code> → 右边必须写全。你的 IDE（VS / Rider）会自动建议这个——跟着改就行。</p>
+
+<!-- ====== SECTION 5: COVARIANT RETURNS ====== -->
+
+<h2>五、协变返回类型 <span class="en">Covariant Returns</span></h2>
+
+<p>这是本课最"低调但有用"的特性——你看一遍就会忘，但写工厂方法 / Builder / Fluent API 时会突然想起它。</p>
+
+<h3>5.1 旧的痛点</h3>
+
+<pre><code><span class="cmt">// 基类：Clone 返回 Animal</span>
+<span class="kw">public</span> <span class="kw">abstract</span> <span class="kw">class</span> <span class="type">Animal</span>
+{
+    <span class="kw">public</span> <span class="kw">abstract</span> <span class="type">Animal</span> Clone();
+}
+
+<span class="cmt">// 派生类：Clone 返回 Dog——但你必须声明返回 Animal</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Dog</span> : <span class="type">Animal</span>
+{
+    <span class="kw">public</span> <span class="kw">override</span> <span class="type">Animal</span> Clone() => <span class="kw">new</span> <span class="type">Dog</span> { ... };
+
+    <span class="cmt">// 使用者被迫做强制转型</span>
+    <span class="kw">var</span> dog = (Dog)original.Clone();  <span class="cmt">// 每次都要 cast——又丑又不安全</span>
+}</code></pre>
+
+<p>C# 9：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Animal</span>
+{
+    <span class="kw">public</span> <span class="kw">virtual</span> <span class="type">Animal</span> Clone() => <span class="kw">new</span> <span class="type">Animal</span>();
+}
+
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Dog</span> : <span class="type">Animal</span>
+{
+    <span class="cmt">// 重写方法可以返回更具体的类型！</span>
+    <span class="kw">public</span> <span class="kw">override</span> <span class="type">Dog</span> Clone() => <span class="kw">new</span> <span class="type">Dog</span> { ... };
+}
+
+<span class="cmt">// 使用时不需要转型了</span>
+<span class="kw">var</span> dog = original.Clone();   <span class="cmt">// dog 的类型是 Dog（如果你用 Dog 类型引用）</span>
+<span class="type">Dog</span> dog2 = original.Clone();  <span class="cmt">// 不需要 cast！编译器知道返回的是 Dog</span></code></pre>
+
+<h3>5.2 规则很严格</h3>
+
+<table>
+  <tr><th>规则</th><th>说明</th></tr>
+  <tr><td>返回类型必须是引用类型</td><td>只有 <code>class</code> / <code>record</code> 支持——值类型不行（<code>struct</code> 不支持协变）</td></tr>
+  <tr><td>必须是<strong>更具体</strong>的类型</td><td><code>Dog</code> 是 <code>Animal</code> 的子类 ✅；反过来 <code>Animal</code> 是 <code>Dog</code> 的子类 ❌</td></tr>
+  <tr><td>只对引用类型协变</td><td>泛型参数不支持——<code>List&lt;Dog&gt;</code> 不能替代 <code>List&lt;Animal&gt;</code>（那是泛型协变的事）</td></tr>
+  <tr><td>隐式转换关系</td><td>调用者拿基类引用时，返回值自动向上转型，完全透明</td></tr>
+</table>
+
+<h3>5.3 真实场景——Builder 模式的福音</h3>
+
+<pre><code><span class="cmt">// 一个典型的 Fluent Builder 模式——C# 9 之后优雅多了</span>
+<span class="kw">public</span> <span class="kw">abstract</span> <span class="kw">class</span> <span class="type">QueryBuilder</span>
+{
+    <span class="kw">public</span> <span class="kw">abstract</span> <span class="type">QueryBuilder</span> Where(<span class="kw">string</span> condition);
+    <span class="kw">public</span> <span class="kw">abstract</span> <span class="type">QueryBuilder</span> OrderBy(<span class="kw">string</span> column);
+    <span class="kw">public</span> <span class="kw">abstract</span> <span class="kw">string</span> Build();
+}
+
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">SqlBuilder</span> : <span class="type">QueryBuilder</span>
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> StringBuilder _sb = <span class="kw">new</span>();
+
+    <span class="kw">public</span> <span class="kw">override</span> <span class="type">SqlBuilder</span> Where(<span class="kw">string</span> condition)  <span class="cmt">// 返回 SqlBuilder！</span>
+    {
+        _sb.Append(<span class="str">" WHERE "</span>).Append(condition);
+        <span class="kw">return</span> <span class="kw">this</span>;
+    }
+
+    <span class="kw">public</span> <span class="kw">override</span> <span class="type">SqlBuilder</span> OrderBy(<span class="kw">string</span> column)
+    {
+        _sb.Append(<span class="str">" ORDER BY "</span>).Append(column);
+        <span class="kw">return</span> <span class="kw">this</span>;
+    }
+
+    <span class="kw">public</span> <span class="kw">override</span> <span class="kw">string</span> Build() => _sb.ToString();
+}
+
+<span class="cmt">// 使用时——链式调用，不需要 cast</span>
+<span class="kw">var</span> sql = <span class="kw">new</span> <span class="type">SqlBuilder</span>()
+    .Where(<span class="str">"Age > 18"</span>)
+    .OrderBy(<span class="str">"Name DESC"</span>)
+    .Build();</code></pre>
+
+<div class="callout callout--info">
+<strong>编译器怎么实现的？</strong>协变返回的底层是编译器<strong>同时生成两个方法</strong>：① 你写的 <code>override Dog Clone()</code>——作为真正的方法体；② 一个隐式桥接方法 <code>override Animal Clone()</code>——它调用方法①，然后向上转型返回。调用者通过 <code>Animal</code> 引用调用时走桥接方法；通过 <code>Dog</code> 引用调用时直接走方法①。
+</div>
+
+<!-- ====== SECTION 6: COMBO ====== -->
+
+<h2>六、组合拳——四个特性一起用的样子</h2>
+
+<p>来看看一个 ASP.NET Core Minimal API 的 Program.cs——这四个特性实际搭配起来的效果：</p>
+
+<pre><code><span class="cmt">// .NET 6+ Program.cs —— 四个 C# 9 特性都在里面</span>
+<span class="kw">using</span> Microsoft.AspNetCore.Builder;
+<span class="kw">using</span> Microsoft.Extensions.DependencyInjection;
+
+<span class="kw">var</span> builder = WebApplication.CreateBuilder(args);   <span class="cmt">// ① 顶级语句</span>
+builder.Services.AddSingleton&lt;<span class="type">Database</span>&gt;(<span class="kw">new</span>());  <span class="cmt">// ④ Target-typed new</span>
+
+<span class="kw">var</span> app = builder.Build();
+
+app.MapGet(<span class="str">"/score/{n}"</span>, (<span class="kw">int</span> n) => n <span class="kw">switch</span>        <span class="cmt">// ② 模式匹配增强</span>
+{
+    >= <span class="num">90</span> <span class="kw">and</span> <= <span class="num">100</span> => <span class="str">"A"</span>,
+    >= <span class="num">80</span> <span class="kw">and</span> < <span class="num">90</span>   => <span class="str">"B"</span>,
+    >= <span class="num">60</span> <span class="kw">and</span> < <span class="num">80</span>   => <span class="str">"C"</span>,
+    >= <span class="num">0</span> <span class="kw">and</span> < <span class="num">60</span>    => <span class="str">"F"</span>,
+    _                  => <span class="str">"Invalid"</span>,
+});
+
+app.Run();
+
+<span class="cmt">// ③ 协变返回——ASP.NET Core 内部大量使用（如 IApplicationBuilder → WebApplication）</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">MyBuilder</span> : <span class="type">BaseBuilder</span>
+{
+    <span class="kw">public</span> <span class="kw">override</span> <span class="type">MyBuilder</span> AddLogging() { ... }  <span class="cmt">// 返回更具体类型</span>
+}</code></pre>
+
+<p>这就是 C# 9 小特性的真正价值：<strong>单个看都不大，放在一起用才看得出效果</strong>。日常写代码时，这四个特性几乎每个文件都会碰到。</p>
+
+<!-- ====== QUIZ ====== -->
+
+<h2>📝 小测验</h2>
+
+<div class="quiz" id="q1">
+  <h3>Q1. 关于 Top-level Statements，以下哪个说法是<strong>错误</strong>的？</h3>
+  <div class="question">选择不正确的描述：</div>
+  <label><input type="radio" name="q1" value="a"> 一个项目只能有一个文件使用顶级语句</label>
+  <label><input type="radio" name="q1" value="b"> 顶级语句中可以使用 <code>await</code>，编译器自动生成 <code>async Task Main</code></label>
+  <label><input type="radio" name="q1" value="c"> 顶级语句不能访问 <code>args</code> 命令行参数</label>
+  <label><input type="radio" name="q1" value="d"> 顶级语句文件编译后仍然是完整的 <code>Program</code> 类</label>
+  <button onclick="check('q1','c')">确认</button>
+  <div class="feedback" id="f_q1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>Q2. <code>is not null</code> 和 <code>!= null</code> 的关键区别是什么？</h3>
+  <div class="question">选择最准确的描述：</div>
+  <label><input type="radio" name="q2" value="a"> 没有区别，只是语法不同</label>
+  <label><input type="radio" name="q2" value="b"> <code>is not null</code> 更快，因为它用指针比较</label>
+  <label><input type="radio" name="q2" value="c"> <code>is not null</code> 是模式匹配——不经过 <code>operator !=</code> 重载，更安全</label>
+  <label><input type="radio" name="q2" value="d"> <code>is not null</code> 只能用于引用类型</label>
+  <button onclick="check('q2','c')">确认</button>
+  <div class="feedback" id="f_q2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>Q3. 以下模式匹配代码，哪个分支会<strong>先被匹配</strong>？</h3>
+<pre><code>score <span class="kw">switch</span>
+{
+    >= <span class="num">80</span> => <span class="str">"B"</span>,    <span class="cmt">// ①</span>
+    >= <span class="num">90</span> => <span class="str">"A"</span>,    <span class="cmt">// ②</span>
+    _     => <span class="str">"C"</span>,    <span class="cmt">// ③</span>
+};</code></pre>
+  <div class="question">当 <code>score = 95</code> 时，返回什么？</div>
+  <label><input type="radio" name="q3" value="a"> "A"——编译器自动选择最精确的匹配</label>
+  <label><input type="radio" name="q3" value="b"> "B"——switch 表达式按从上到下的顺序匹配，95 >= 80 先命中</label>
+  <label><input type="radio" name="q3" value="c"> 编译错误——分支顺序有歧义</label>
+  <label><input type="radio" name="q3" value="d"> "C"——兜底分支</label>
+  <button onclick="check('q3','b')">确认</button>
+  <div class="feedback" id="f_q3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>Q4. 以下哪个 <code>new()</code> 用法是<strong>合法</strong>的？</h3>
+  <div class="question">选择能编译通过的选项：</div>
+  <label><input type="radio" name="q4" value="a"><code>var x = new();</code></label>
+  <label><input type="radio" name="q4" value="b"><code>dynamic d = new();</code></label>
+  <label><input type="radio" name="q4" value="c"><code>List&lt;string&gt; names = new();</code></label>
+  <label><input type="radio" name="q4" value="d"><code>M(new())</code>——如果 <code>M</code> 有 3 个重载，参数类型各不相同</label>
+  <button onclick="check('q4','c')">确认</button>
+  <div class="feedback" id="f_q4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>Q5. 关于协变返回类型，以下哪个说法是<strong>正确</strong>的？</h3>
+  <div class="question">选择正确的描述：</div>
+  <label><input type="radio" name="q5" value="a"> 协变返回可以用于值类型（struct），比如 <code>override int MyMethod()</code></label>
+  <label><input type="radio" name="q5" value="b"> 返回类型必须比基类方法更具体，且必须是引用类型</label>
+  <label><input type="radio" name="q5" value="c"> 基类方法必须用 <code>virtual</code>，派生类方法必须用 <code>new</code> 关键字</label>
+  <label><input type="radio" name="q5" value="d"> <code>List&lt;Dog&gt;</code> 可以作为 <code>List&lt;Animal&gt;</code> 的协变返回值</label>
+  <button onclick="check('q5','b')">确认</button>
+  <div class="feedback" id="f_q5"></div>
+</div>
+
+<div class="quiz" id="q6">
+  <h3>Q6.（场景题）你在写一个 .NET 6 的 ASP.NET Core 应用。你想在 Program.cs 中同时使用顶级语句和显式的 <code>Program</code> 类（用于集成测试）。以下哪个做法是正确的？</h3>
+  <div class="question">选择最佳方案：</div>
+  <label><input type="radio" name="q6" value="a"> 不能用——顶级语句和显式 <code>Program</code> 类只能二选一</label>
+  <label><input type="radio" name="q6" value="b"> 顶级语句文件放在 Program.cs，显式的 <code>partial class Program</code> 放在另一个文件——编译器会把顶级语句和 partial class 合并</label>
+  <label><input type="radio" name="q6" value="c"> 写一个 wrapping script 在编译时跳过顶级语句文件</label>
+  <label><input type="radio" name="q6" value="d"> 改回传统写法——放弃顶级语句</label>
+  <button onclick="check('q6','b')">确认</button>
+  <div class="feedback" id="f_q6"></div>
+</div>
+
+<div class="quiz" id="q7">
+  <h3>Q7. 关于 <code>and</code> 和 <code>or</code> 组合模式，哪个描述是<strong>正确</strong>的？</h3>
+  <div class="question">选择正确的描述：</div>
+  <label><input type="radio" name="q7" value="a"><code>and</code> 和 <code>or</code> 是运算符，和 <code>&&</code> / <code>||</code> 一样</label>
+  <label><input type="radio" name="q7" value="b"><code>and</code> 优先级高于 <code>or</code>，和 <code>&&</code> vs <code>||</code> 一致</label>
+  <label><input type="radio" name="q7" value="c"><code>or</code> 优先级高于 <code>and</code></label>
+  <label><input type="radio" name="q7" value="d"> 可以用括号改变组合优先级，如 <code>(a or b) and c</code></label>
+  <button onclick="check('q7','b')">确认</button>
+  <div class="feedback" id="f_q7"></div>
+</div>
+
+<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<p class="mild">
+  Lesson 08 · C# 9 小特性集 · 下一课预告：<strong>C# 10</strong>——Record Structs、Global Usings、File-scoped Namespaces、Constant Interpolated Strings
+</p>
+<p class="mild">
+  有任何不清楚的地方？<strong>直接在对话中追问</strong>——Agent 就是你的私教。
+</p>
+
+<script>
+function check(qid, correct) {
+  var f = document.getElementById('f_' + qid);
+  var selected = document.querySelector('input[name="' + qid + '"]:checked');
+  if (!selected) {
+    f.textContent = '⚠️ 请先选择一个答案。';
+    f.className = 'feedback show wrong';
+    return;
+  }
+  var isCorrect = selected.value === correct;
+  var answers = {
+    q1: {
+      correct: '✅ 正确！c 是错的——顶级语句中 <code>args</code> 隐式可用，不需要显式声明。',
+      wrong:   '❌ 答案是 c（错误的说法）。顶级语句中 <code>args</code> 是隐式可用的——编译器自动把它传给生成的 <code>$Main(string[] args)</code> 方法。一个项目确实只能有一个文件用顶级语句（a 对），<code>await</code> 确实自动生成 <code>async Task Main</code>（b 对），顶级语句最终确实编译为 Program 类（d 对）。'
+    },
+    q2: {
+      correct: '✅ 正确！<code>is not null</code> 是模式匹配——编译器直接生成 IL 的 null 检查指令，<strong>完全绕过</strong> <code>operator !=</code> 重载。即使有人把 != 重载成奇怪的逻辑，<code>is not null</code> 也不受影响。',
+      wrong:   '❌ 答案是 c。这是面试高频题。<code>is not null</code> 走模式匹配路径——不受运算符重载影响，是 C# 9+ 推荐的 null 检查写法。它既可用于引用类型也可用于值类型（Nullable&lt;T&gt;）。'
+    },
+    q3: {
+      correct: '✅ 正确！switch 表达式严格按<strong>从上到下</strong>的顺序匹配——95 >= 80 先命中，返回 "B"。永远把更具体的条件放上面，把宽泛的条件放下面——这和传统 switch 语句是一致的心智模型。',
+      wrong:   '❌ 答案是 b（"B"）。switch 表达式不是"最精确匹配"——而是<strong>从上到下顺序匹配</strong>，第一个命中的分支就返回。95 >= 80 先于 >= 90 被检查 → 返回 "B"。正确的写法是把 >= 90 放在 >= 80 前面。这是一个非常容易掉进去的坑。'
+    },
+    q4: {
+      correct: '✅ 正确！左边是 <code>List&lt;string&gt;</code>，类型明确——编译器知道右边 <code>new()</code> 是 <code>new List&lt;string&gt;()</code>。',
+      wrong:   '❌ 答案是 c。a 错误：<code>var</code> 没有提供目标类型；b 错误：<code>dynamic</code> 不提供编译期类型信息；d 错误：多个重载导致编译器无法推断唯一的类型。只有 c——左边明确写 <code>List&lt;string&gt;</code>，右边 <code>new()</code> 才能推断。'
+    },
+    q5: {
+      correct: '✅ 正确！协变返回的要求：① 返回类型是引用类型（class/record/delegate/interface）；② 比基类方法返回类型更具体；③ 两个类型之间存在隐式引用转换。',
+      wrong:   '❌ 答案是 b。协变返回的核心规则：① 只能是引用类型（class/record），不支持值类型 struct；② 派生类返回类型必须比基类更具体（有隐式引用转换）；③ 基类方法需要 virtual/abstract，派生类用 override（不是 new）。泛型协变（如 List&lt;Dog&gt; → List&lt;Animal&gt;）和返回类型协变是两回事。'
+    },
+    q6: {
+      correct: '✅ 正确！编译器把顶级语句转换为 <code>partial class Program</code>——你在另一个文件中声明 <code>public partial class Program { }</code>，两者自动合并。这是 ASP.NET Core 集成测试（WebApplicationFactory）的标准做法。',
+      wrong:   '❌ 答案是 b。顶级语句和显式 Program 类<strong>可以共存</strong>——这正是 ASP.NET Core 6+ 的标准实践。编译器把顶级语句编译为 <code>partial class Program</code>，你可以在另一个文件（如 Program.Public.cs）中声明 <code>public partial class Program { }</code> 来暴露给集成测试项目。不需要放弃顶级语句。'
+    },
+    q7: {
+      correct: '✅ 正确！<code>and</code> 优先级高于 <code>or</code>，和逻辑运算符 <code>&&</code> vs <code>||</code> 一致。它们是<strong>关键字</strong>不是运算符（为了避免与位运算符 <code>&</code>/<code>|</code> 产生歧义）。目前模式匹配<strong>不支持</strong>括号分组——复杂场景用 <code>when</code> 代替。',
+      wrong:   '❌ 答案是 b。<code>and</code> 和 <code>or</code> 是<strong>关键字</strong>而不是运算符（a 错）。<code>and</code> 优先级高于 <code>or</code>（b 对）。不能用括号分组模式（d 错——这是 C# 当前的设计限制）。<code>or</code> 优先级不高于 <code>and</code>（c 错）。'
+    }
+  };
+  var a = answers[qid];
+  f.textContent = isCorrect ? a.correct : a.wrong;
+  f.className = 'feedback show ' + (isCorrect ? 'correct' : 'wrong');
+}
+</script>
+
+</body>
+</html>
