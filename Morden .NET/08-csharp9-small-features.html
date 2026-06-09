@@ -114,6 +114,12 @@
 <strong>本课目标：</strong>掌握 Top-level Statements<span class="en">顶级语句</span>、Pattern Matching 增强（<code>not</code> / <code>and</code> / <code>or</code> + 关系模式<span class="en">Relational Patterns</span>）、Target-typed <code>new</code> 表达式<span class="en">目标类型 new</span>、协变返回<span class="en">Covariant Returns</span>。四个特性覆盖 4 种不同的日常痛点。
 </div>
 
+	<div class="callout callout--info">
+	<strong>📌 C# 9 对应哪个 .NET？</strong>C# 9 随 <strong>.NET 5</strong>（2020.11）发布。但 .NET 5 <strong>不是 LTS</strong>（仅 18 个月支持），绝大多数项目跳过它直接上了 <strong>.NET 6 LTS</strong>（2021.11，自带 C# 10）。<br><br>
+	C# 9 特性在 .NET 5、.NET 6、.NET 7、.NET 8 上<strong>全部可用</strong>——语言特性是前向兼容的。本课例子里出现 ".NET 6+" 是因为：① .NET 6 的默认模板才开始大规模采用 C# 9 特性（如顶级语句的 Minimal API）；② .NET 6 是第一个统一后的 LTS，是生产环境的主流选择。<br><br>
+	<strong>简单说：</strong>这些特性是 C# 9 的，可以用在任何 &ge; .NET 5 的项目上。本课用 .NET 6 举例是因为那才是你一上手就会看到的模板。
+	</div>
+
 <!-- ====== SECTION 1: THE HOOK ====== -->
 
 <h2>一、钩子——"Hello World" 为什么需要 12 行？</h2>
@@ -177,7 +183,7 @@ Console.WriteLine(<span class="str">$"参数数量: {args.Length}"</span>);
   <tr><td>第二个文件也写顶级语句</td><td>❌ 一个项目只能有一个文件用顶级语句</td></tr>
 </table>
 
-<h3>2.2 编译器生成了什么？——.NET 6+ SDK 的魔法</h3>
+<h3>2.2 编译器生成了什么？——SDK 的魔法<span class="en">.NET 5+</span></h3>
 
 <p>你不是一直想问"编译器生成了什么"吗？来：</p>
 
@@ -288,9 +294,41 @@ x <span class="kw">switch</span>
     <span class="kw">not</span> <span class="kw">null</span> <span class="kw">and</span> >= <span class="num">0</span> <span class="kw">or</span> <span class="kw">null</span> => <span class="str">"null 或非负数"</span>,  <span class="cmt">// 等价于: (not null and >= 0) or null</span>
 };</code></pre>
 
-<div class="callout callout--warn">
-<strong>记不住优先级就用括号：</strong><code>and</code> 优先级高于 <code>or</code>（和 <code>&amp;&amp;</code> vs <code>||</code> 一致）。但模式匹配中不能用 <code>()</code> 给子模式分组——这是 C# 目前的设计限制。碰到复杂的 <code>and</code> + <code>or</code> 混用，拆成两行或用 <code>when</code>。
-</div>
+	<div class="callout callout--warn">
+	<strong>记不住优先级？不用记——拆成两行或用 <code>when</code>。</strong><code>and</code> 优先级高于 <code>or</code>（和 <code>&amp;&amp;</code> vs <code>||</code> 一致）。但模式匹配中<strong>不能用 <code>()</code></strong> 给子模式分组——这是 C# 目前的设计限制。以下三种解法覆盖所有复杂场景：
+
+	<pre style="margin-top:0.6rem"><code><span class="cmt">// 需求：用户角色是 admin 或 moderator，且状态是 active</span>
+	<span class="cmt">// 期望：(admin or moderator) and active——但现在不能加括号</span>
+
+	<span class="cmt">// ❌ 直接写 = 歧义，因为 and 优先级高于 or</span>
+	<span class="cmt">// "admin" or "moderator" and "active" → 等价于 "admin" or ("moderator" and "active")</span>
+
+	<span class="cmt">// 解法①：拆成两行——用显式 switch 分步判断，再组合</span>
+	<span class="kw">var</span> isPrivileged = role <span class="kw">switch</span> { <span class="str">"admin"</span> <span class="kw">or</span> <span class="str">"moderator"</span> => <span class="kw">true</span>, _ => <span class="kw">false</span> };
+	<span class="kw">var</span> result = (isPrivileged, status) <span class="kw">switch</span>
+	{
+	    (<span class="kw">true</span>, <span class="str">"active"</span>) => <span class="str">"允许"</span>,
+	    _                    => <span class="str">"拒绝"</span>,
+	};
+
+	<span class="cmt">// 解法②：用 when 把复杂逻辑移出模式——when 里随便用括号</span>
+	<span class="kw">return</span> user <span class="kw">switch</span>
+	{
+	    _ <span class="kw">when</span> (user.Role <span class="kw">is</span> <span class="str">"admin"</span> <span class="kw">or</span> <span class="str">"moderator"</span>) && user.Status == <span class="str">"active"</span>
+	        => <span class="str">"允许"</span>,
+	    _ => <span class="str">"拒绝"</span>,
+	};
+
+	<span class="cmt">// 解法③：把 or 表达式独立成一条分支，歧义自然消失</span>
+	<span class="cmt">// 场景：角色特权组 OR（普通用户 + 活跃状态）</span>
+	<span class="kw">return</span> (role, status) <span class="kw">switch</span>
+	{
+	    (<span class="str">"admin"</span> <span class="kw">or</span> <span class="str">"moderator"</span>, _) => <span class="str">"允许"</span>,       <span class="cmt">// or 独占一行，无歧义</span>
+	    (_, <span class="str">"active"</span>)                           => <span class="str">"允许"</span>,       <span class="cmt">// 另一条独立规则</span>
+	    _                                        => <span class="str">"拒绝"</span>,
+	};</code></pre>
+	<strong>原则：</strong>模式匹配不是银弹——当模式变复杂到你需要括号时，说明该拆了。<code>when</code> 里随便用括号，因为那是普通 C# 表达式。
+	</div>
 
 <h3>3.3 关系模式 <span class="en">Relational Patterns</span></h3>
 
@@ -391,14 +429,15 @@ M(<span class="kw">new</span>());  <span class="cmt">// 如果 M 有多个重载
     <span class="kw">public</span> <span class="kw">abstract</span> <span class="type">Animal</span> Clone();
 }
 
-<span class="cmt">// 派生类：Clone 返回 Dog——但你必须声明返回 Animal</span>
+<span class="cmt">// 派生类：只能声明返回 Animal，实际 new 的是 Dog</span>
 <span class="kw">public</span> <span class="kw">class</span> <span class="type">Dog</span> : <span class="type">Animal</span>
 {
-    <span class="kw">public</span> <span class="kw">override</span> <span class="type">Animal</span> Clone() => <span class="kw">new</span> <span class="type">Dog</span> { ... };
+    <span class="kw">public</span> <span class="kw">override</span> <span class="type">Animal</span> Clone() => <span class="kw">new</span> <span class="type">Dog</span>();
+}
 
-    <span class="cmt">// 使用者被迫做强制转型</span>
-    <span class="kw">var</span> dog = (Dog)original.Clone();  <span class="cmt">// 每次都要 cast——又丑又不安全</span>
-}</code></pre>
+<span class="cmt">// ===== 调用者视角 =====</span>
+<span class="type">Dog</span> original = <span class="kw">new</span> <span class="type">Dog</span>();
+<span class="type">Dog</span> dog = (<span class="type">Dog</span>)original.Clone();  <span class="cmt">// 必须转型！即使你知道它是 Dog</span></code></pre>
 
 <p>C# 9：</p>
 
@@ -410,12 +449,12 @@ M(<span class="kw">new</span>());  <span class="cmt">// 如果 M 有多个重载
 <span class="kw">public</span> <span class="kw">class</span> <span class="type">Dog</span> : <span class="type">Animal</span>
 {
     <span class="cmt">// 重写方法可以返回更具体的类型！</span>
-    <span class="kw">public</span> <span class="kw">override</span> <span class="type">Dog</span> Clone() => <span class="kw">new</span> <span class="type">Dog</span> { ... };
+    <span class="kw">public</span> <span class="kw">override</span> <span class="type">Dog</span> Clone() => <span class="kw">new</span> <span class="type">Dog</span>();
 }
 
-<span class="cmt">// 使用时不需要转型了</span>
-<span class="kw">var</span> dog = original.Clone();   <span class="cmt">// dog 的类型是 Dog（如果你用 Dog 类型引用）</span>
-<span class="type">Dog</span> dog2 = original.Clone();  <span class="cmt">// 不需要 cast！编译器知道返回的是 Dog</span></code></pre>
+<span class="cmt">// ===== 调用者视角 =====</span>
+<span class="type">Dog</span> original = <span class="kw">new</span> <span class="type">Dog</span>();
+<span class="type">Dog</span> dog = original.Clone();   <span class="cmt">// 不需要转型！编译器知道 Dog.Clone() 返回 Dog</span></code></pre>
 
 <h3>5.2 规则很严格</h3>
 
@@ -472,7 +511,7 @@ M(<span class="kw">new</span>());  <span class="cmt">// 如果 M 有多个重载
 
 <p>来看看一个 ASP.NET Core Minimal API 的 Program.cs——这四个特性实际搭配起来的效果：</p>
 
-<pre><code><span class="cmt">// .NET 6+ Program.cs —— 四个 C# 9 特性都在里面</span>
+<pre><code><span class="cmt">// 现代 .NET（5+）Program.cs —— 四个 C# 9 特性都在里面</span>
 <span class="kw">using</span> Microsoft.AspNetCore.Builder;
 <span class="kw">using</span> Microsoft.Extensions.DependencyInjection;
 
@@ -566,7 +605,7 @@ app.Run();
 </div>
 
 <div class="quiz" id="q6">
-  <h3>Q6.（场景题）你在写一个 .NET 6 的 ASP.NET Core 应用。你想在 Program.cs 中同时使用顶级语句和显式的 <code>Program</code> 类（用于集成测试）。以下哪个做法是正确的？</h3>
+  <h3>Q6.（场景题）你在写一个现代 .NET（6+）的 ASP.NET Core 应用。你想在 Program.cs 中同时使用顶级语句和显式的 <code>Program</code> 类（用于集成测试）。以下哪个做法是正确的？</h3>
   <div class="question">选择最佳方案：</div>
   <label><input type="radio" name="q6" value="a"> 不能用——顶级语句和显式 <code>Program</code> 类只能二选一</label>
   <label><input type="radio" name="q6" value="b"> 顶级语句文件放在 Program.cs，显式的 <code>partial class Program</code> 放在另一个文件——编译器会把顶级语句和 partial class 合并</label>
