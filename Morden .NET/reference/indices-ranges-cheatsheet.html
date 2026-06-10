@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>索引与范围速查 · Indices & Ranges · C# 8</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --warn: #9a6700; --warn-bg: #fff8c5; --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.65;
+    max-width: 780px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 0.15rem; }
+  h2 { font-size: 1.15rem; margin: 1.75rem 0 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.35rem; color: var(--accent); }
+  .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+  .en { color: var(--text-muted); font-size: 0.88em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 0.6rem 0 1rem; font-size: 0.88rem;
+  }
+  th, td { text-align: left; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border); }
+  th { background: #f0efeb; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); }
+  tr:last-child td { border-bottom: none; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 0.75rem 1rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.8rem; line-height: 1.5; margin: 0.5rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: #f0efeb; padding: 0.12em 0.3em; border-radius: 3px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 0.5rem 0 1rem; }
+  @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .gotcha {
+    background: var(--warn-bg); border-left: 3px solid var(--warn);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+  .gotcha::before { content: '⚠️ '; }
+
+  .rule {
+    background: #eef1ff; border-left: 3px solid var(--accent);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+  .rule::before { content: '📌 '; }
+
+  @media print {
+    body { font-size: 10pt; padding: 0.5in; max-width: none; }
+    h2 { page-break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>📍 索引与范围速查 <span class="en">Indices &amp; Ranges</span></h1>
+<p class="subtitle">C# 8 引入 · <code>^</code> 末尾索引 · <code>..</code> 范围切片 · <a href="../lessons/02-csharp8-switch-using-indices.html">📖 完整课程</a></p>
+
+<!-- ====== INDEX ====== -->
+<h2>末尾索引<span class="en">Index from End</span> — <code>^</code></h2>
+
+<div class="rule">
+  <strong>核心公式：<code>^n = Length - n</code></strong>。这不是随意定的——是为了让范围（Ranges）的数学性质干净。
+</div>
+
+<pre><code><span class="type">int</span>[] arr = [10, 20, 30, 40, 50];  <span class="cmt">// Length = 5</span>
+
+<span class="cmt">// ^ 映射表</span>
+^0 → 5 - 0 = 5   <span class="cmt">// 等于 Length——"末尾之后"的位置</span>
+^1 → 5 - 1 = 4   <span class="cmt">// 最后一个元素（值 50）</span>
+^2 → 5 - 2 = 3   <span class="cmt">// 倒数第二个（值 40）</span>
+^5 → 5 - 5 = 0   <span class="cmt">// 第一个元素（值 10）</span>
+
+<span class="cmt">// 使用</span>
+<span class="kw">var</span> last = arr[^1];        <span class="cmt">// 50</span>
+<span class="kw">var</span> secondLast = arr[^2];  <span class="cmt">// 40</span>
+
+<span class="cmt">// Index 是独立类型</span>
+<span class="type">Index</span> i1 = ^1;   <span class="cmt">// 倒数第一</span>
+<span class="type">Index</span> i2 = 0;    <span class="cmt">// 正向索引</span></code></pre>
+
+<div class="gotcha">
+  <strong><code>^0</code> 不是最后一个元素！</strong>它是 <code>Length</code>——"末尾之后"。取最后一个元素用 <code>^1</code>。<br>
+  这和正向索引一致：正向 <code>0</code> 是"开头"，负向 <code>^0</code> 是"结尾之后"——对称。
+</div>
+
+<!-- ====== RANGE ====== -->
+<h2>范围<span class="en">Range</span> — <code>..</code></h2>
+
+<div class="rule">
+  <strong>左闭右开：<code>[start..end)</code></strong>——包含 start，不包含 end。这和 <code>Span&lt;T&gt;.Slice</code> 的语义一致。
+</div>
+
+<pre><code><span class="type">int</span>[] arr = [0, 1, 2, 3, 4, 5];  <span class="cmt">// 索引: 0  1  2  3  4  5</span>
+
+<span class="cmt">// 基本用法</span>
+arr[0..3]    → [0, 1, 2]       <span class="cmt">// 从开头取 3 个</span>
+arr[^3..^1]  → [3, 4]          <span class="cmt">// 倒数第3 到 倒数第1（不含）</span>
+arr[^3..^0]  → [3, 4, 5]       <span class="cmt">// 最后 3 个——^0 是 Length</span>
+
+<span class="cmt">// 省略语法</span>
+arr[3..]     → [3, 4, 5]       <span class="cmt">// 省略右端 = 到末尾</span>
+arr[..3]     → [0, 1, 2]       <span class="cmt">// 省略左端 = 从头开始</span>
+arr[..]      → [0, 1, 2, 3, 4, 5] <span class="cmt">// 两端省略 = 全取</span>
+
+<span class="cmt">// ^ 省略组合</span>
+arr[^3..]    → [3, 4, 5]       <span class="cmt">// 省略右端 = 等价于 [^3..^0]</span>
+arr[..^1]    → [0, 1, 2, 3, 4] <span class="cmt">// 去掉最后一个</span></code></pre>
+
+<h3>Range 速查表（arr = [0,1,2,3,4,5]，Length=6）</h3>
+<table>
+  <tr><th>写法</th><th>等价 [start..end)</th><th>结果</th><th>说明</th></tr>
+  <tr><td><code>arr[0..3]</code></td><td>[0..3)</td><td>[0,1,2]</td><td>前 3 个</td></tr>
+  <tr><td><code>arr[3..6]</code></td><td>[3..6)</td><td>[3,4,5]</td><td>索引 3 到末尾</td></tr>
+  <tr><td><code>arr[^3..^0]</code></td><td>[3..6)</td><td>[3,4,5]</td><td>最后 3 个</td></tr>
+  <tr><td><code>arr[^3..]</code></td><td>[3..6)</td><td>[3,4,5]</td><td>等价于上</td></tr>
+  <tr><td><code>arr[..^1]</code></td><td>[0..5)</td><td>[0,1,2,3,4]</td><td>去掉最后一个</td></tr>
+  <tr><td><code>arr[^2..^1]</code></td><td>[4..5)</td><td>[4]</td><td>倒数第二个单元素</td></tr>
+  <tr><td><code>arr[..]</code></td><td>[0..6)</td><td>全部</td><td>浅拷贝</td></tr>
+</table>
+
+<!-- ====== SUPPORTED TYPES ====== -->
+<h2>支持的类型</h2>
+<p>任何有 <code>Count</code>/<code>Length</code> 属性 + <code>int</code> 索引器 + <code>Slice(int, int)</code> 方法的类型：</p>
+<table>
+  <tr><th>类型</th><th>示例</th></tr>
+  <tr><td><code>T[]</code></td><td><code>int[]</code>, <code>string[]</code></td></tr>
+  <tr><td><code>string</code></td><td><code>str[1..^1]</code> — 去掉首尾字符，返回 <code>string</code></td></tr>
+  <tr><td><code>Span&lt;T&gt;</code> / <code>ReadOnlySpan&lt;T&gt;</code></td><td><code>"Hello".AsSpan()[0..5]</code></td></tr>
+  <tr><td><code>Memory&lt;T&gt;</code> / <code>ReadOnlyMemory&lt;T&gt;</code></td><td>同 Span，堆上版本</td></tr>
+  <tr><td><code>List&lt;T&gt;</code></td><td>需通过 <code>CollectionsMarshal.AsSpan(list)[..]</code></td></tr>
+</table>
+
+<!-- ====== USING DECLARATION ====== -->
+<h2>Using 声明<span class="en">Using Declaration</span> (C# 8)</h2>
+
+<div class="grid-2">
+  <div>
+    <h3>Using 语句（旧）</h3>
+<pre><code><span class="kw">using</span> (<span class="kw">var</span> conn = OpenConn())
+<span class="kw">using</span> (<span class="kw">var</span> cmd = conn.CreateCmd())
+{
+    <span class="cmt">// conn 和 cmd 在 } 时释放</span>
+}</code></pre>
+  </div>
+  <div>
+    <h3>Using 声明（新）</h3>
+<pre><code><span class="kw">using var</span> conn = OpenConn();
+<span class="kw">using var</span> cmd = conn.CreateCmd();
+<span class="cmt">// 离开作用域时释放（通常方法结束）</span></code></pre>
+  </div>
+</div>
+
+<table>
+  <tr><th></th><th>Using 语句</th><th>Using 声明 (C# 8)</th></tr>
+  <tr><td>写法</td><td><code>using (var x = ...) { }</code></td><td><code>using var x = ...;</code></td></tr>
+  <tr><td>释放时机</td><td><code>}</code> 时立即释放</td><td>变量离开作用域时释放</td></tr>
+  <tr><td>有自己的作用域</td><td>是</td><td>否（变量属于父作用域）</td></tr>
+</table>
+
+<div class="gotcha">
+  Using 声明在<strong>变量离开作用域</strong>时才释放（通常是方法结束）。如果资源需要尽早释放（如在重计算之前），仍需用老式 using 语句。
+</div>
+
+<!-- ====== CROSS-REF ====== -->
+<h2>相关速查</h2>
+<ul>
+  <li><a href="nrt-cheatsheet.html">NRT 速查<span class="en">Nullable Reference Types</span></a></li>
+  <li><a href="pattern-matching-cheatsheet.html">模式匹配<span class="en">Pattern Matching</span></a></li>
+  <li><a href="async-streams-cheatsheet.html">异步流<span class="en">Async Streams</span></a></li>
+</ul>
+
+<p style="margin-top:2rem; font-size:0.82rem; color: var(--text-muted);">
+  来自 Lesson 02 · 有疑问？向 Claude 老师追问。<br>
+  引用：<a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/language-reference/operators/member-access-operators#index-from-end-operator-">Microsoft Learn: ^ Operator</a> ·
+  <a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/language-reference/operators/member-access-operators#range-operator-">Range Operator</a>
+</p>
+
+</body>
+</html>

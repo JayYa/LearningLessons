@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>异步流速查 · Async Streams · C# 8</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --warn: #9a6700; --warn-bg: #fff8c5; --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.65;
+    max-width: 820px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 0.15rem; }
+  h2 { font-size: 1.15rem; margin: 1.75rem 0 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.35rem; color: var(--accent); }
+  .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+  .en { color: var(--text-muted); font-size: 0.88em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 0.6rem 0 1rem; font-size: 0.88rem;
+  }
+  th, td { text-align: left; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border); }
+  th { background: #f0efeb; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); }
+  tr:last-child td { border-bottom: none; }
+  td code { white-space: nowrap; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 0.75rem 1rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.8rem; line-height: 1.5; margin: 0.5rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: #f0efeb; padding: 0.12em 0.3em; border-radius: 3px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 0.5rem 0 1rem; }
+  @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .gotcha {
+    background: var(--warn-bg); border-left: 3px solid var(--warn);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+  .gotcha::before { content: '⚠️ '; }
+
+  .rule {
+    background: #eef1ff; border-left: 3px solid var(--accent);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+  .rule::before { content: '📌 '; }
+
+  @media print {
+    body { font-size: 10pt; padding: 0.5in; max-width: none; }
+    h2 { page-break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>🌊 异步流速查 <span class="en">Async Streams</span></h1>
+<p class="subtitle">C# 8 引入 · <code>IAsyncEnumerable&lt;T&gt;</code> · <code>await foreach</code> · <a href="../lessons/03-csharp8-async-streams.html">📖 完整课程</a></p>
+
+<!-- ====== INTERFACES ====== -->
+<h2>接口对照</h2>
+<table>
+  <tr><th></th><th>同步</th><th>异步 (C# 8)</th></tr>
+  <tr><td>可枚举接口</td><td><code>IEnumerable&lt;T&gt;</code></td><td><code>IAsyncEnumerable&lt;T&gt;</code></td></tr>
+  <tr><td>枚举器接口</td><td><code>IEnumerator&lt;T&gt;</code></td><td><code>IAsyncEnumerator&lt;T&gt;</code></td></tr>
+  <tr><td>取下一个</td><td><code>MoveNext() → bool</code></td><td><code>MoveNextAsync() → ValueTask&lt;bool&gt;</code></td></tr>
+  <tr><td>当前元素</td><td><code>Current</code></td><td><code>Current</code></td></tr>
+  <tr><td>消费语法</td><td><code>foreach (var x in src)</code></td><td><code>await foreach (var x in src)</code></td></tr>
+  <tr><td>释放</td><td><code>IDisposable</code></td><td><code>IAsyncDisposable</code></td></tr>
+</table>
+
+<div class="rule">
+  <strong><code>MoveNextAsync</code> 返回 <code>ValueTask&lt;bool&gt;</code></strong>（非 <code>Task&lt;bool&gt;</code>）。迭代循环调用极其频繁，<code>ValueTask</code> 在同步完成时避免堆分配。
+</div>
+
+<!-- ====== BASIC USAGE ====== -->
+<h2>基本用法</h2>
+
+<div class="grid-2">
+  <div>
+    <h3>生产者：<code>yield return</code></h3>
+<pre><code><span class="kw">async</span> IAsyncEnumerable&lt;<span class="type">Order</span>&gt; GetOrders()
+{
+    <span class="kw">while</span> (<span class="kw">true</span>)
+    {
+        <span class="kw">var</span> page = <span class="kw">await</span> FetchPageAsync();
+        <span class="kw">if</span> (!page.Any()) <span class="kw">yield break</span>;
+        <span class="kw">foreach</span> (<span class="kw">var</span> o <span class="kw">in</span> page)
+            <span class="kw">yield return</span> o;
+    }
+}</code></pre>
+  </div>
+  <div>
+    <h3>消费者：<code>await foreach</code></h3>
+<pre><code><span class="kw">await foreach</span> (<span class="kw">var</span> order <span class="kw">in</span> GetOrders())
+{
+    Process(order);
+    <span class="cmt">// 第一条到达即处理，不等全部加载</span>
+}</code></pre>
+  </div>
+</div>
+
+<div class="gotcha">
+  <code>IAsyncEnumerable&lt;T&gt;</code> 没有实现 <code>IEnumerable&lt;T&gt;</code>——不能用于普通 <code>foreach</code>。反过来也不行，<code>IEnumerable&lt;T&gt;</code> 不能用于 <code>await foreach</code>。
+</div>
+
+<!-- ====== CANCELLATION ====== -->
+<h2>CancellationToken 传递模式</h2>
+
+<h3>方式一：参数传入（显式）</h3>
+<pre><code><span class="kw">async</span> IAsyncEnumerable&lt;<span class="type">T</span>&gt; Source(<span class="type">CancellationToken</span> ct = <span class="kw">default</span>)
+{
+    <span class="kw">while</span> (...) { ct.ThrowIfCancellationRequested(); ... }
+}
+
+<span class="cmt">// 调用方</span>
+<span class="kw">await foreach</span> (<span class="kw">var</span> x <span class="kw">in</span> Source(cts.Token)) { }</code></pre>
+
+<h3>方式二：WithCancellation + [EnumeratorCancellation]（惯用）</h3>
+<pre><code><span class="kw">async</span> IAsyncEnumerable&lt;<span class="type">T</span>&gt; Source(
+    [<span class="type">EnumeratorCancellation</span>] <span class="type">CancellationToken</span> ct = <span class="kw">default</span>)
+{
+    <span class="cmt">// ct 自动来自调用方的 WithCancellation</span>
+}
+
+<span class="cmt">// 调用方——token 自动路由到标记了 [EnumeratorCancellation] 的参数</span>
+<span class="kw">await foreach</span> (<span class="kw">var</span> x <span class="kw">in</span> Source().WithCancellation(cts.Token)) { }</code></pre>
+
+<div class="rule">
+  <strong><code>[EnumeratorCancellation]</code>：</strong>告诉编译器"这个参数的值从 <code>WithCancellation()</code> 取"。必须配合 <code>.WithCancellation(token)</code> 使用。
+</div>
+
+<!-- ====== REAL-WORLD PATTERNS ====== -->
+<h2>实战模式</h2>
+
+<h3>数据库游标读取</h3>
+<pre><code><span class="kw">async</span> IAsyncEnumerable&lt;<span class="type">Customer</span>&gt; ReadCustomers(
+    <span class="type">DbConnection</span> conn,
+    [<span class="type">EnumeratorCancellation</span>] <span class="type">CancellationToken</span> ct = <span class="kw">default</span>)
+{
+    <span class="kw">await using var</span> cmd = conn.CreateCommand();
+    cmd.CommandText = <span class="str">"SELECT Id, Name FROM Customers"</span>;
+    <span class="kw">await using var</span> reader = <span class="kw">await</span> cmd.ExecuteReaderAsync(ct);
+    <span class="kw">while</span> (<span class="kw">await</span> reader.ReadAsync(ct))
+        <span class="kw">yield return</span> <span class="kw">new</span> Customer { Id = reader.GetInt32(0), Name = reader.GetString(1) };
+    <span class="cmt">// reader → cmd 依次 DisposeAsync</span>
+}</code></pre>
+
+<h3>分页 API</h3>
+<pre><code><span class="kw">async</span> IAsyncEnumerable&lt;<span class="type">Issue</span>&gt; GetIssues(<span class="kw">string</span> repo,
+    [<span class="type">EnumeratorCancellation</span>] <span class="type">CancellationToken</span> ct = <span class="kw">default</span>)
+{
+    <span class="kw">var</span> page = 1;
+    <span class="kw">while</span> (<span class="kw">true</span>)
+    {
+        <span class="kw">var</span> resp = <span class="kw">await</span> _http.GetAsync(<span class="str">$"api/...?page={page++}"</span>, ct);
+        <span class="kw">if</span> (!resp.IsSuccessStatusCode) <span class="kw">yield break</span>;
+        <span class="kw">var</span> items = <span class="kw">await</span> resp.Content.ReadFromJsonAsync&lt;<span class="type">List</span>&lt;<span class="type">Issue</span>&gt;&gt;(cancellationToken: ct);
+        <span class="kw">if</span> (items == <span class="kw">null</span> || !items.Any()) <span class="kw">yield break</span>;
+        <span class="kw">foreach</span> (<span class="kw">var</span> item <span class="kw">in</span> items) <span class="kw">yield return</span> item;
+    }
+}</code></pre>
+
+<h3>文件逐行读取（.NET 6+）</h3>
+<pre><code><span class="kw">await foreach</span> (<span class="kw">var</span> line <span class="kw">in</span> <span class="type">File</span>.ReadLinesAsync(<span class="str">"huge.log"</span>))
+{
+    <span class="kw">if</span> (line.Contains(<span class="str">"ERROR"</span>)) Console.WriteLine(line);
+}</code></pre>
+
+<!-- ====== ASYNC LINQ ====== -->
+<h2>Async LINQ <span class="en">System.Linq.Async</span></h2>
+
+<pre><code><span class="cmt">// NuGet: System.Linq.Async</span>
+<span class="kw">using</span> System.Linq.Async;
+
+<span class="cmt">// 流式：Where → OrderBy → Take</span>
+<span class="kw">await foreach</span> (<span class="kw">var</span> x <span class="kw">in</span> GetOrders()
+    .Where(o => o.Total > 1000)
+    .OrderByDescending(o => o.Total)
+    .Take(10))
+{ }
+
+<span class="cmt">// 聚合：CountAsync, MaxAsync, SumAsync, ToListAsync...</span>
+<span class="kw">var</span> count = <span class="kw">await</span> GetOrders().CountAsync(o => o.Total > 1000);
+<span class="kw">var</span> max   = <span class="kw">await</span> GetOrders().MaxAsync(o => o.Total);</code></pre>
+
+<div class="gotcha">
+  不要滥用 <code>ToListAsync()</code>——异步流的初衷是流式处理。全量加载到 List 不如直接用 <code>Task&lt;List&lt;T&gt;&gt;</code>。
+</div>
+
+<!-- ====== DECISION TABLE ====== -->
+<h2>何时使用 / 何时不用</h2>
+<table>
+  <tr><th>场景</th><th>用异步流？</th><th>理由</th></tr>
+  <tr><td>数据库轮询大表</td><td>✅</td><td>逐条产出，不占内存</td></tr>
+  <tr><td>分页 API 翻页</td><td>✅</td><td>隐藏翻页细节，统一为流</td></tr>
+  <tr><td>事件流 / 消息队列</td><td>✅</td><td>天然就是流</td></tr>
+  <tr><td>文件逐行异步读取</td><td>✅</td><td>.NET 6+ 原生支持</td></tr>
+  <tr><td>单次 HTTP 返回小 JSON</td><td>❌</td><td>数据量小，<code>Task&lt;T&gt;</code> 更简单</td></tr>
+  <tr><td>CPU 密集计算（无 I/O）</td><td>❌</td><td>没有异步操作，<code>IEnumerable&lt;T&gt;</code> 足够</td></tr>
+  <tr><td>需要全量排序/分组</td><td>⚠️ 谨慎</td><td>排序必须加载全量，省不了内存</td></tr>
+</table>
+
+<div class="rule">
+  <strong>经验法则：</strong>迭代体内有 <code>await</code> + 数据量可能很大 → 用异步流。数据总是小的，或体内无 I/O → 普通 <code>IEnumerable&lt;T&gt;</code>。
+</div>
+
+<!-- ====== TYPE COMPARISON ====== -->
+<h2>三个相近类型的区别</h2>
+<table>
+  <tr><th>返回类型</th><th>语义</th><th>数据何时到达</th><th>内存</th></tr>
+  <tr><td><code>Task&lt;List&lt;T&gt;&gt;</code></td><td>一次性全拉、一次性返回</td><td>全部就绪后才能遍历</td><td>全量</td></tr>
+  <tr><td><code>Task&lt;IEnumerable&lt;T&gt;&gt;</code></td><td>任务完成后返回迭代器</td><td>迭代器异步获取，迭代过程同步</td><td>取决于实现</td></tr>
+  <tr><td><code>IAsyncEnumerable&lt;T&gt;</code></td><td>每次 MoveNext 可异步</td><td>边拉边产，流式到达</td><td>一次一条（或一批）</td></tr>
+</table>
+
+<!-- ====== LIMITATIONS ====== -->
+<h2>限制</h2>
+<div class="gotcha">
+  <code>async IAsyncEnumerable&lt;T&gt;</code> 方法不能有 <code>out</code>/<code>ref</code> 参数（状态机实现限制，和 <code>async Task</code> 一致）。
+</div>
+
+<!-- ====== CROSS-REF ====== -->
+<h2>相关速查</h2>
+<ul>
+  <li><a href="nrt-cheatsheet.html">NRT 速查<span class="en">Nullable Reference Types</span></a></li>
+  <li><a href="pattern-matching-cheatsheet.html">模式匹配<span class="en">Pattern Matching</span></a></li>
+  <li><a href="indices-ranges-cheatsheet.html">索引与范围<span class="en">Indices &amp; Ranges</span></a></li>
+</ul>
+
+<p style="margin-top:2rem; font-size:0.82rem; color: var(--text-muted);">
+  来自 Lesson 03 · 有疑问？向 Claude 老师追问。<br>
+  引用：<a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/language-reference/statements/iteration-statements#await-foreach">Microsoft Learn: Async Streams</a> ·
+  <a href="https://learn.microsoft.com/zh-cn/dotnet/api/system.collections.generic.iasyncenumerable-1">IAsyncEnumerable&lt;T&gt;</a>
+</p>
+
+</body>
+</html>

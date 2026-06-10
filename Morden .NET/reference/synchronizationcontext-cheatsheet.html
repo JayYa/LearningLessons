@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reference: SynchronizationContext &amp; await 续延调度</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --code-bg: #f0efeb; --radius: 8px;
+    --good: #1a7f37; --bad: #cf222e; --warn: #9a6700;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6;
+    max-width: 860px; margin: 0 auto; padding: 1.5rem 1.5rem 4rem;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1rem; margin: 1rem 0 0.35rem; }
+  .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.85rem;
+  }
+  th, td {
+    text-align: left; padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--code-bg); font-weight: 600; font-size: 0.8rem; }
+  tr:nth-child(even) td { background: #fafaf9; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 0.75rem 1rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.8rem; line-height: 1.5; margin: 0.5rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85em; background: var(--code-bg); padding: 0.1em 0.3em; border-radius: 3px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+
+  .box {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 0.75rem 1rem; margin: 0.75rem 0; background: var(--card-bg);
+  }
+  .box--good { border-left: 4px solid var(--good); }
+  .box--bad  { border-left: 4px solid var(--bad); }
+  .box--warn { border-left: 4px solid var(--warn); }
+
+  .tag { display: inline-block; padding: 0.15em 0.5em; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+  .tag--fw  { background: #ffebe9; color: var(--bad); }
+  .tag--core { background: #dafbe1; color: var(--good); }
+  .tag--both { background: #eef1ff; color: var(--accent); }
+
+  @media print {
+    body { font-size: 10pt; padding: 0.5in; }
+    h2 { page-break-after: avoid; }
+    table { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>📋 SynchronizationContext &amp; await 续延调度</h1>
+<p class="subtitle">速查表 · 基于 Lesson 05</p>
+
+<!-- ====== CORE CONCEPT ====== -->
+
+<h2>核心概念</h2>
+
+<table>
+  <tr><th>概念</th><th>一句话</th><th>关键细节</th></tr>
+  <tr>
+    <td><strong>SynchronizationContext</strong></td>
+    <td>决定 await 续延在哪个线程/上下文执行</td>
+    <td>抽象类；核心方法 <code>Post</code>（异步投递）和 <code>Send</code>（同步投递）</td>
+  </tr>
+  <tr>
+    <td><strong>ExecutionContext</strong></td>
+    <td>保证上下文数据（AsyncLocal 等）跟着异步流走</td>
+    <td>与 SynchronizationContext 独立；<code>ConfigureAwait(false)</code> 不影响它</td>
+  </tr>
+  <tr>
+    <td><strong>ConfigureAwait(false)</strong></td>
+    <td>告诉 await：不要捕获 SynchronizationContext</td>
+    <td>续延不 Post 回原上下文，直接在线程池跑；防止 .Result 死锁</td>
+  </tr>
+  <tr>
+    <td><strong>AsyncLocal&lt;T&gt;</strong></td>
+    <td>异步调用链中自动流动的数据槽</td>
+    <td>依赖 ExecutionContext，不依赖 SynchronizationContext</td>
+  </tr>
+</table>
+
+<!-- ====== KEY CONCEPTS ====== -->
+
+<h2>关键概念速记</h2>
+
+<h3>线程亲和 (Thread Affinity)</h3>
+<p>对象/资源绑定在特定线程上，只能在该线程访问。Windows GUI 控件是典型——从线程池线程改控件会抛 <code>InvalidOperationException</code>。SynchronizationContext 就是为解决线程亲和问题设计的——Post 续延回 UI 线程，控件操作才安全。</p>
+<p><strong>因果链：</strong>控件有线程亲和 → 必须在 UI 线程操作 → await 捕获 SC 回到 UI 线程 → 可安全更新控件。库代码无线程亲和 → ConfigureAwait(false) 避免回 UI 线程。</p>
+
+<h3>三大概念关系</h3>
+<pre style="background:var(--card-bg); color:var(--text); font-size:0.85rem; padding:0.75rem 1rem;">
+ExecutionContext  = 背包（容器）—— await 前 Capture，await 后 Run，强制的
+AsyncLocal&lt;T&gt;   = 背包里的口袋（数据槽）—— 值跟随异步调用链，不依赖线程
+SynchronizationContext = 目的地（调度器）—— Post 把续延投递到目标线程
+ConfigureAwait(false) = 只改目的地，不改背包里的东西
+</pre>
+
+<!-- ====== ENVIRONMENTS ====== -->
+
+<h2>各环境的 SynchronizationContext</h2>
+
+<table>
+  <tr><th>环境</th><th>SynchronizationContext.Current</th><th>行为</th><th>.Result 死锁？</th></tr>
+  <tr>
+    <td>WinForms / WPF UI 线程</td>
+    <td><code>WindowsFormsSynchronizationContext</code><br><code>DispatcherSynchronizationContext</code></td>
+    <td>Post → Win32 消息投递回 UI 线程</td>
+    <td><span class="tag tag--fw">是</span></td>
+  </tr>
+  <tr>
+    <td>ASP.NET (.NET Framework)</td>
+    <td><code>AspNetSynchronizationContext</code></td>
+    <td>Post → 线程池排队，但同一请求串行</td>
+    <td><span class="tag tag--fw">是</span></td>
+  </tr>
+  <tr>
+    <td>ASP.NET Core</td>
+    <td><code>null</code></td>
+    <td>续延在线程池直接执行</td>
+    <td><span class="tag tag--core">否</span></td>
+  </tr>
+  <tr>
+    <td>控制台 / 线程池线程</td>
+    <td><code>null</code></td>
+    <td>续延在线程池直接执行</td>
+    <td><span class="tag tag--core">否</span></td>
+  </tr>
+  <tr>
+    <td>Blazor Server</td>
+    <td>有（Blazor 专用）</td>
+    <td>续延回到 Blazor 渲染同步上下文</td>
+    <td><span class="tag tag--fw">是</span></td>
+  </tr>
+</table>
+
+<!-- ====== DEADLOCK ====== -->
+
+<h2>经典 .Result 死锁因果链</h2>
+
+<div class="box box--bad">
+<strong>死锁三条件（缺一不可）：</strong><br>
+① 有 SynchronizationContext 限制串行执行<br>
+② <code>.Result</code> / <code>.Wait()</code> 阻塞当前线程<br>
+③ await 续延需要回到被阻塞的 SynchronizationContext
+</div>
+
+<h3>逐帧回放</h3>
+<pre><code><span class="cmt">// .NET Framework ASP.NET 中这段代码死锁：</span>
+<span class="kw">public</span> <span class="type">ActionResult</span> Index()
+{
+    <span class="kw">var</span> data = GetDataAsync().<span class="pnk">Result</span>;  <span class="cmt">// 死锁</span>
+    <span class="kw">return</span> View(data);
+}
+
+<span class="cmt">// 帧1: 线程 A 进入 Index() → SC = AspNetSynchronizationContext
+// 帧2: 线程 A 调用 GetDataAsync()
+// 帧3: GetDataAsync 中 await 捕获了 AspNetSynchronizationContext
+// 帧4: GetDataAsync 返回未完成的 Task → 线程 A 回到 Index()
+// 帧5: .Result 阻塞线程 A，等待 Task 完成
+//
+// 帧6: HTTP 完成 → Task 完成 → 触发续延
+// 帧7: 续延尝试 Post 回 AspNetSynchronizationContext
+// 帧8: 但 AspNetSynchronizationContext 被线程 A 占着
+// 帧9: 线程 A 在等 Task，Task 在等线程 A → 死锁</span></code></pre>
+
+<h3>三种打破方式</h3>
+<table>
+  <tr><th>方式</th><th>打破条件</th><th>做法</th></tr>
+  <tr><td>不用 .Result</td><td>②</td><td><code>var data = await GetDataAsync();</code> → async all the way</td></tr>
+  <tr><td>ConfigureAwait(false)</td><td>③</td><td>库代码每个 await 加 <code>.ConfigureAwait(false)</code></td></tr>
+  <tr><td>ASP.NET Core</td><td>①</td><td>迁移到 Core——天然没有 SynchronizationContext</td></tr>
+</table>
+
+<!-- ====== AWAIT INTERNALS ====== -->
+
+<h2>await 内部流程（简化）</h2>
+
+<pre><code><span class="cmt">// 编译器把 await 变成约等于：</span>
+<span class="kw">var</span> awaiter = task.GetAwaiter();
+
+<span class="kw">if</span> (awaiter.IsCompleted)
+{
+    result = awaiter.GetResult();  <span class="cmt">// 同步完成——直接拿结果</span>
+}
+<span class="kw">else</span>
+{
+    <span class="kw">var</span> capturedContext = SynchronizationContext.Current;  <span class="cmt">// ← 捕获</span>
+    awaiter.OnCompleted(() =&gt;
+    {
+        <span class="kw">if</span> (capturedContext != <span class="kw">null</span>)
+            capturedContext.Post(_ =&gt; <span class="cmt">/* 续延代码 */</span>, <span class="kw">null</span>);
+        <span class="kw">else</span>
+            <span class="cmt">/* 直接在线程池执行续延代码 */</span>;
+    });
+}</code></pre>
+
+<!-- ====== RULES ====== -->
+
+<h2>最佳实践速查</h2>
+
+<table>
+  <tr><th>场景</th><th>做法</th><th>理由</th></tr>
+  <tr>
+    <td>库代码（DAL / Service / Utils）</td>
+    <td>每个 await 加 <code>.ConfigureAwait(false)</code></td>
+    <td>不碰 UI，不需要回原上下文；防止调用方死锁</td>
+  </tr>
+  <tr>
+    <td>ASP.NET Core 控制器</td>
+    <td>直接 await，不加强制（加了也行）</td>
+    <td>Core 没有 SC，加了无害但多余</td>
+  </tr>
+  <tr>
+    <td>WinForms / WPF UI 事件</td>
+    <td><strong>不能</strong>加 ConfigureAwait(false)</td>
+    <td>需要回 UI 线程改控件</td>
+  </tr>
+  <tr>
+    <td>永远</td>
+    <td>不要用 <code>.Result</code> / <code>.Wait()</code></td>
+    <td>async all the way——死锁 + 浪费线程</td>
+  </tr>
+  <tr>
+    <td>构造函数/静态构造中必须同步</td>
+    <td><code>Task.Run(() => AsyncMethod()).GetAwaiter().GetResult()</code></td>
+    <td>从线程池跑，避开当前 SC</td>
+  </tr>
+</table>
+
+<!-- ====== SC vs EC ====== -->
+
+<h2>SynchronizationContext vs ExecutionContext</h2>
+
+<table>
+  <tr><th></th><th>SynchronizationContext</th><th>ExecutionContext</th></tr>
+  <tr><td>控制什么</td><td>续延在<strong>哪个线程</strong></td><td>续延<strong>能看到什么数据</strong></td></tr>
+  <tr><td>类比</td><td>引导续延去哪里</td><td>确保持带着护照和行李</td></tr>
+  <tr><td>ConfigureAwait(false) 影响？</td><td>✅ 是</td><td>❌ 否——总是流动</td></tr>
+  <tr><td>存储内容</td><td>调度策略</td><td>SecurityContext + AsyncLocal 数据</td></tr>
+  <tr><td>何时需要</td><td>需要回到特定线程时</td><td>需要追踪调用链数据时（日志、权限）</td></tr>
+</table>
+
+<!-- ====== ASYNCLOCAL vs THREADLOCAL ====== -->
+
+<h2>AsyncLocal&lt;T&gt; vs ThreadLocal&lt;T&gt;</h2>
+
+<table>
+  <tr><th></th><th>ThreadLocal&lt;T&gt;</th><th>AsyncLocal&lt;T&gt;</th></tr>
+  <tr><td>绑定到</td><td><strong>操作系统线程</strong></td><td><strong>异步调用链</strong>（不依赖线程）</td></tr>
+  <tr><td>await 换线程后</td><td>❌ 值丢失——新线程没设过</td><td>✅ 值自动流动——ExecutionContext 传递</td></tr>
+  <tr><td>适用场景</td><td>同步代码</td><td>async/await 异步代码</td></tr>
+  <tr><td>典型使用</td><td>旧式线程本地存储</td><td>HttpContext 追踪、OpenTelemetry、多租户隔离</td></tr>
+</table>
+
+<h3>真实世界模式</h3>
+
+<table>
+  <tr><th>场景</th><th>依赖</th><th>机制</th></tr>
+  <tr>
+    <td>ASP.NET Core <code>IHttpContextAccessor</code></td>
+    <td><code>AsyncLocal&lt;HttpContext&gt;</code></td>
+    <td>中间件在请求开始设值 → 整个调用链可访问</td>
+  </tr>
+  <tr>
+    <td>OpenTelemetry <code>Activity.Current</code></td>
+    <td><code>AsyncLocal&lt;Activity&gt;</code></td>
+    <td>await 跨线程不变，追踪链完整</td>
+  </tr>
+  <tr>
+    <td>多租户 <code>TenantContext</code></td>
+    <td><code>AsyncLocal&lt;string&gt;</code></td>
+    <td>中间件设租户 ID → 全局可访问，不需透传参数</td>
+  </tr>
+</table>
+
+<!-- ====== MIGRATION ====== -->
+
+<h2>Framework → Core 迁移关注点</h2>
+
+<table>
+  <tr><th>Framework 4.8 模式</th><th>Core 对应</th></tr>
+  <tr>
+    <td><code>HttpContext.Current</code></td>
+    <td>注入 <code>IHttpContextAccessor</code></td>
+  </tr>
+  <tr>
+    <td>到处 <code>.ConfigureAwait(false)</code>（防死锁）</td>
+    <td>不再需要——但保留无害</td>
+  </tr>
+  <tr>
+    <td>每个请求自动串行化</td>
+    <td>无自动串行——如果多个续延并发需自己用锁</td>
+  </tr>
+  <tr>
+    <td><code>HostingEnvironment.QueueBackgroundWorkItem</code></td>
+    <td><code>IHostedService</code> / <code>BackgroundService</code></td>
+  </tr>
+</table>
+
+<hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border);">
+<p style="font-size:0.8rem; color: var(--text-muted);">
+  相关课程：<a href="../lessons/05-async-await-synchronizationcontext.html">Lesson 05</a> ·
+  <a href="../lessons/04-csharp8-async-streams.html">Lesson 04 (Async Streams)</a> ·
+  <a href="../lessons/03-sync-yield-return-iterators.html">Lesson 03 (Yield Return Iterators)</a>
+</p>
+
+</body>
+</html>

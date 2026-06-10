@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 10: C# 11 — Raw String Literals · List Patterns · Required Members · UTF-8 String Literals</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  .callout {
+    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
+  }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
+
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafaf9; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+
+  .diagram {
+    background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 1.5rem; margin: 1.5rem 0;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 0.82rem; line-height: 1.6; white-space: pre; overflow-x: auto;
+    color: #333;
+  }
+  .badge {
+    display: inline-block; padding: 0.15em 0.55em; border-radius: 100px;
+    font-size: 0.78rem; font-weight: 600;
+  }
+  .badge--val { background: #dafbe1; color: #1a7f37; }
+  .badge--ref { background: #ede4ff; color: #512bd4; }
+</style>
+</head>
+<body>
+
+<h1>Lesson 10: C# 11</h1>
+<p class="subtitle">你每天写的那些"没办法"——C# 11 全给解决了</p>
+
+<div class="callout callout--info">
+<strong>前置 / Prerequisite：</strong>已完成 <a href="09-csharp10-record-structs-global-usings.html">Lesson 09（C# 10）</a>，理解 Record Structs、Global Usings 和 File-scoped Namespaces。<br>
+<strong>C# 11 ↔ .NET 7：</strong>C# 11 随 <strong>.NET 7</strong>（2022.11）发布。.NET 7 不是 LTS，但 C# 11 的特性<strong>前向兼容</strong>——在 .NET 8 LTS 上全部可用。<br>
+<strong>本课目标：</strong>掌握 Raw String Literals<span class="en">原始字符串字面量</span>、List Patterns<span class="en">列表模式</span>、Required Members<span class="en">必需成员</span>、UTF-8 String Literals<span class="en">UTF-8 字符串字面量</span>。四个特性覆盖了字符串处理、模式匹配、对象初始化、高性能编码四大日常痛点。
+</div>
+
+<!-- ====== SECTION 1: THE HOOK ====== -->
+
+<h2>一、钩子——这四种痛，你肯定遇到过</h2>
+
+<div class="comparison">
+  <div class="old"><h4>😣 C# 10 及以前</h4>
+<pre><code><span class="cmt">// 1. 写 JSON/XML/SQL 字符串——地狱</span>
+<span class="kw">var</span> json = <span class="str">"{\n"</span> +
+           <span class="str">"  \"name\": \"Alice\",\n"</span> +
+           <span class="str">"  \"age\": 30\n"</span> +
+           <span class="str">"}"</span>;
+
+<span class="cmt">// 2. 匹配数组/列表——啰嗦</span>
+<span class="kw">if</span> (arr.Length == <span class="num">3</span>
+    && arr[<span class="num">0</span>] == <span class="num">1</span>
+    && arr[<span class="num">1</span>] >= <span class="num">10</span>
+    && arr[<span class="num">2</span>] &lt;= <span class="num">100</span>) { }
+
+<span class="cmt">// 3. 强制必填属性——没办法</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span> {
+    <span class="kw">public</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }  <span class="cmt">// 忘了赋值？运行时才发现</span>
+}
+
+<span class="cmt">// 4. 高性能 UTF-8——手动编码</span>
+<span class="kw">byte</span>[] bytes = Encoding.UTF8.GetBytes(<span class="str">"hello"</span>);
+</code></pre>
+  </div>
+  <div class="new"><h4>😎 C# 11</h4>
+<pre><code><span class="cmt">// 1. 所见即所得——Raw String Literals</span>
+<span class="kw">var</span> json = <span class="str">"""</span>
+<span class="str">    {</span>
+<span class="str">        "name": "Alice",</span>
+<span class="str">        "age": 30</span>
+<span class="str">    }</span>
+<span class="str">    """</span>;
+
+<span class="cmt">// 2. 列表模式——优雅</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [<span class="num">1</span>, >= <span class="num">10</span>, &lt;= <span class="num">100</span>]) { }
+
+<span class="cmt">// 3. 编译期强制——Required Members</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span> {
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+}  <span class="cmt">// new Person() → 编译错误！必须提供 Name</span>
+
+<span class="cmt">// 4. UTF-8 直接写在代码里</span>
+ReadOnlySpan&lt;<span class="kw">byte</span>&gt; bytes = <span class="str">"hello"u8</span>;
+</code></pre>
+  </div>
+</div>
+
+<p><strong>C# 11 不做颠覆，它填补日常摩擦</strong>——字符串转义地狱、数组模式匹配啰嗦、属性必填无编译检查、UTF-8 编码开销。每一个都是你写代码时心里嘀咕过"就不能自动处理吗"的地方。C# 11 听到了。</p>
+
+<div class="callout callout--info">
+<strong>本课的定位：</strong>.NET 7 不是 LTS，很多团队跳过它直接等 .NET 8。但 C# 11 的特性<strong>完全不依赖 .NET 7 运行时</strong>——它们是纯语言特性，在 .NET 6 甚至 .NET Core 3.1 上就能用（只要把 <code>LangVersion</code> 设为 11）。面试中能说出"语言版本和运行时版本解耦"，是加分项。
+</div>
+
+<!-- ====== SECTION 2: RAW STRING LITERALS ====== -->
+
+<h2>二、原始字符串字面量 <span class="en">Raw String Literals</span></h2>
+
+<h3>2.1 痛点——字符串地狱三兄弟</h3>
+
+<p>C# 里写多行字符串或含引号的字符串，有三个老问题：</p>
+
+<pre><code><span class="cmt">// ① 转义地狱：每个引号都加反斜杠</span>
+<span class="kw">var</span> json = <span class="str">"{\"name\":\"Alice\",\"city\":\"New York\"}"</span>;
+
+<span class="cmt">// ② 拼接地狱：多行字符串用 + 拼接，丢了可读性</span>
+<span class="kw">var</span> sql = <span class="str">"SELECT Id, Name, Email "</span> +
+         <span class="str">"FROM Users "</span> +
+         <span class="str">"WHERE Status = 1 "</span> +
+         <span class="str">"ORDER BY Name"</span>;
+
+<span class="cmt">// ③ Verbatim 字符串（@）只解决一半——仍然不能含 """</span>
+<span class="kw">var</span> xml = <span class="str">@"&lt;root&gt;
+  &lt;item name=""book""/&gt;
+&lt;/root&gt;"</span>;  <span class="cmt">// 引号还是要双双写</span></code></pre>
+
+<h3>2.2 答案——至少三个双引号</h3>
+
+<p>Raw String Literal 用 <strong>至少三个双引号</strong>（<code>"""</code>）包裹，内部内容<strong>完全原样</strong>——不需要转义任何东西：</p>
+
+<pre><code><span class="cmt">// ✅ JSON：原样写，引号不用转义</span>
+<span class="kw">var</span> json = <span class="str">"""</span>
+<span class="str">    {</span>
+<span class="str">        "name": "Alice",</span>
+<span class="str">        "city": "New York"</span>
+<span class="str">    }</span>
+<span class="str">    """</span>;
+
+<span class="cmt">// ✅ SQL：原样换行，不用 + 拼接</span>
+<span class="kw">var</span> sql = <span class="str">"""</span>
+<span class="str">    SELECT Id, Name, Email</span>
+<span class="str">    FROM Users</span>
+<span class="str">    WHERE Status = 1</span>
+<span class="str">    ORDER BY Name</span>
+<span class="str">    """</span>;
+
+<span class="cmt">// ✅ 字符串里有引号也没关系</span>
+<span class="kw">var</span> html = <span class="str">"""</span>
+<span class="str">    &lt;div class="container"&gt;</span>
+<span class="str">        &lt;p&gt;Hello&lt;/p&gt;</span>
+<span class="str">    &lt;/div&gt;</span>
+<span class="str">    """</span>;</code></pre>
+
+<h3>2.3 关键规则——缩进和引号数量</h3>
+
+<table>
+  <tr><th>规则</th><th>说明</th><th>示例</th></tr>
+  <tr>
+    <td><strong>至少三个 <code>"</code></strong></td>
+    <td>开始/结束各至少 3 个双引号</td>
+    <td><code>"""..."""</code> 或 <code>""""...""""</code></td>
+  </tr>
+  <tr>
+    <td><strong>内容中 <code>"</code> 少于开始标记数就安全</strong></td>
+    <td>如果内容含 3 个连续引号，就用 4 个 <code>""""</code> 包裹</td>
+    <td><code>""""{"key":"val""extra"}""""</code></td>
+  </tr>
+  <tr>
+    <td><strong>自动缩进修剪</strong></td>
+    <td>编译器以<strong>结束标记的缩进</strong>为基准，去掉每行前面的共同空白</td>
+    <td>见下例</td>
+  </tr>
+  <tr>
+    <td><strong>开始 <code>"""</code> 后必须换行</strong></td>
+    <td>开始引号后紧跟的内容在下一行</td>
+    <td><code>"""\n..."""</code></td>
+  </tr>
+  <tr>
+    <td><strong>支持内插</strong></td>
+    <td>加 <code>$</code> 前缀：<code>$"""..."""</code>，<code>{ }</code> 内的引号不受影响</td>
+    <td><code>$"""Hello {name}"""</code></td>
+  </tr>
+  <tr>
+    <td><strong><code>$$</code></strong> 减少内插所需大括号数</td>
+    <td><code>$$"""{{x}}""" = $"{{{x}}}"</code></td>
+    <td>内容本身含大量 <code>{ }</code> 时（如 JSON）用 <code>$$</code></td>
+  </tr>
+</table>
+
+<h4>缩进修剪——编译器怎么决定去留？</h4>
+
+<pre><code><span class="cmt">// 你写（结束 """ 在第 4 列缩进）：</span>
+<span class="kw">var</span> text = <span class="str">"""</span>
+<span class="str">        Line 1</span>
+<span class="str">            Line 2</span>
+<span class="str">        Line 3</span>
+<span class="str">    """</span>;
+
+<span class="cmt">// 编译器处理：
+//   结束 """ 从第 4 列开始 → 基准缩进 = 4 格
+//   每行去掉 4 格 ← 结果：</span>
+<span class="cmt">// Line 1</span>
+<span class="cmt">//     Line 2    ← 这行的额外 4 格保留了（它相对于基准缩进了）</span>
+<span class="cmt">// Line 3</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>缩进基准只看结束 <code>"""</code> 的位置。</strong>如果结束标记在方法体第 2 层缩进里（比如 8 格），那么每行都会去掉 8 格。如果某行实际内容少于 8 格空白——编译器报错，因为它无法区分"这一行本应被修剪"还是"这一行的空白是故意的"。
+</div>
+
+<h3>2.4 编译器生成——几乎零开销</h3>
+
+<pre><code><span class="cmt">// 你写：</span>
+<span class="kw">var</span> json = <span class="str">"""</span>
+<span class="str">    {"name": "Alice"}</span>
+<span class="str">    """</span>;
+
+<span class="cmt">// 编译器生成（简化）：
+//   - 编译时完成缩进去除（纯编译器预处理）
+//   - 最终 IL 等价于：ldstr "{\"name\": \"Alice\"}\r\n"
+//   - 无运行时开销——和写普通字符串字面量完全一样
+//   - $"""...""" 内插版本 → 编译时展开为 string.Format / DefaultInterpolatedStringHandler</span></code></pre>
+
+<p>Raw String Literal 是<strong>纯粹的编译时预处理</strong>——编译结果和手写转义字符串一模一样。它只是让你<strong>写的时候</strong>不用转义。</p>
+
+<h3>2.5 真实场景</h3>
+
+<pre><code><span class="cmt">// ✅ 单元测试中的期望 JSON</span>
+<span class="kw">var</span> expected = <span class="str">"""</span>
+<span class="str">    {</span>
+<span class="str">        "id": 1,</span>
+<span class="str">        "name": "Alice"</span>
+<span class="str">    }</span>
+<span class="str">    """</span>;
+
+<span class="cmt">// ✅ SQL 查询模板</span>
+<span class="kw">var</span> sql = <span class="str">"""</span>
+<span class="str">    SELECT u.Id, u.Name, o.Total</span>
+<span class="str">    FROM Users u</span>
+<span class="str">    JOIN Orders o ON u.Id = o.UserId</span>
+<span class="str">    WHERE u.Status = @status</span>
+<span class="str">    """</span>;
+
+<span class="cmt">// ✅ 内嵌 XML/HTML</span>
+<span class="kw">var</span> template = <span class="str">"""</span>
+<span class="str">    &lt;html&gt;</span>
+<span class="str">    &lt;body&gt;&lt;h1&gt;Hello&lt;/h1&gt;&lt;/body&gt;</span>
+<span class="str">    &lt;/html&gt;</span>
+<span class="str">    """</span>;
+
+<span class="cmt">// ✅ 配合 $ 做内插</span>
+<span class="kw">var</span> name = <span class="str">"Alice"</span>;
+<span class="kw">var</span> json = $<span class="str">"""</span>
+<span class="str">    {{ "name": "{name}", "timestamp": "{DateTime.Now:O}" }}</span>
+<span class="str">    """</span>;
+<span class="cmt">// $ + """ → 内插使用 {name}，字面 { 需要 {{ 转义</span>
+
+<span class="cmt">// ✅ 用 $$ 避免和 JSON 的花括号冲突</span>
+<span class="kw">var</span> json2 = $$<span class="str">"""</span>
+<span class="str">    { "name": "{{name}}", "count": {{count}} }</span>
+<span class="str">    """</span>;
+<span class="cmt">// $$ → 内插用 {{name}}，字面 { 不需要转义</span></code></pre>
+
+<!-- ====== SECTION 3: LIST PATTERNS ====== -->
+
+<h2>三、列表模式 <span class="en">List Patterns</span></h2>
+
+<h3>3.1 痛点——数组和列表的匹配从未优雅过</h3>
+
+<p>你已经在 C# 8 学了属性模式，C# 9 学了 <code>and</code>/<code>or</code>/<code>not</code>。但集合呢？检查数组前三个元素要写一堆 Length + 索引：</p>
+
+<pre><code><span class="cmt">// C# 10：想检查数组是 [1, >=10, <=100]</span>
+<span class="kw">if</span> (arr.Length == <span class="num">3</span>
+    && arr[<span class="num">0</span>] == <span class="num">1</span>
+    && arr[<span class="num">1</span>] >= <span class="num">10</span>
+    && arr[<span class="num">2</span>] &lt;= <span class="num">100</span>) { }</code></pre>
+
+<p>C# 11 把模式匹配的方括号带给了集合：</p>
+
+<pre><code><span class="cmt">// C# 11：列表模式——和数组内容"长得像"</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [<span class="num">1</span>, >= <span class="num">10</span>, &lt;= <span class="num">100</span>]) { }</code></pre>
+
+<p>语法和数组字面量类似，但方括号里的不是值——是<strong>模式</strong>。这就是 "list patterns"：用模式匹配来解构和检查集合。</p>
+
+<h3>3.2 完整语法</h3>
+
+<pre><code><span class="cmt">// ① 精确匹配——长度和元素都相等</span>
+<span class="kw">int</span>[] arr = { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span> };
+Console.WriteLine(arr <span class="kw">is</span> [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>]);   <span class="cmt">// True</span>
+Console.WriteLine(arr <span class="kw">is</span> [<span class="num">1</span>, <span class="num">2</span>]);        <span class="cmt">// False——长度不匹配</span>
+
+<span class="cmt">// ② 元素使用任意模式（常量、关系、类型、属性……）</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [<span class="num">1</span>, >= <span class="num">10</span>, &lt;= <span class="num">100</span>]) { }
+<span class="kw">if</span> (arr <span class="kw">is</span> [<span class="kw">not</span> <span class="num">0</span>, ..]) { }  <span class="cmt">// 第一项不是 0</span>
+
+<span class="cmt">// ③ 切片模式（..）——匹配任意数量元素（含零个）</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [<span class="num">1</span>, ..]) { }          <span class="cmt">// 第一个是 1，后面随便</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [.., <span class="num">9</span>]) { }          <span class="cmt">// 最后一个是 9</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [<span class="num">1</span>, .., <span class="num">9</span>]) { }        <span class="cmt">// 第一个 1，最后 9，中间随便</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [<span class="num">1</span>, .. { Length: <span class="num">2</span> }, <span class="num">9</span>]) { } <span class="cmt">// 1, [任意两个], 9</span>
+
+<span class="cmt">// ④ 嵌套模式——元素是对象时匹配属性</span>
+<span class="kw">if</span> (orders <span class="kw">is</span> [{ Status: <span class="str">"New"</span> }, .., { Total: >= <span class="num">1000</span> }]) { }
+<span class="cmt">// 第一个订单 Status == "New"，最后一个订单 Total >= 1000</span>
+
+<span class="cmt">// ⑤ var 捕获——提取匹配到的元素</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [<span class="kw">var</span> first, .. <span class="kw">var</span> middle, <span class="kw">var</span> last])
+{
+    <span class="cmt">// first = arr[0], middle = arr[1..^1], last = arr[^1]</span>
+}</code></pre>
+
+<h3>3.3 能匹配哪些类型？</h3>
+
+<table>
+  <tr><th>类型</th><th>支持？</th><th>说明</th></tr>
+  <tr><td><code>int[]</code> / <code>T[]</code></td><td>✅</td><td>数组原生支持</td></tr>
+  <tr><td><code>List&lt;T&gt;</code></td><td>✅</td><td>实现了 <code>IList</code> 或有 <code>Count</code> + 索引器</td></tr>
+  <tr><td><code>Span&lt;T&gt;</code> / <code>ReadOnlySpan&lt;T&gt;</code></td><td>✅</td><td>C# 11 新增——Span 模式匹配</td></tr>
+  <tr><td><code>string</code></td><td>✅</td><td><code>string</code> 有 <code>Length</code> + <code>char</code> 索引器</td></tr>
+  <tr><td>自定义集合</td><td>✅</td><td>有 <code>Length</code> 或 <code>Count</code> + 可访问索引器</td></tr>
+</table>
+
+<div class="callout callout--info">
+<strong>编译器怎么判断？</strong>列表模式不要求实现特定接口。编译器只检查类型是否有 <code>Length</code> 或 <code>Count</code> 属性，以及是否有 <strong>可访问的索引器</strong>（<code>this[int]</code> 或 <code>Slice</code> 方法用于 <code>..</code>）。这是一种<strong>鸭子类型</strong><span class="en">Duck Typing</span>模式——编译器不是看接口，而是看成员是否存在。
+</div>
+
+<h3>3.4 switch 表达式中的列表模式</h3>
+
+<pre><code><span class="kw">static</span> <span class="kw">string</span> Describe(<span class="kw">int</span>[] arr) => arr <span class="kw">switch</span>
+{
+    []                    => <span class="str">"空数组"</span>,
+    [<span class="num">0</span>]                   => <span class="str">"只有一个 0"</span>,
+    [<span class="kw">var</span> x, <span class="kw">var</span> y]           => $<span class="str">"两个元素：{x}, {y}"</span>,
+    [<span class="num">1</span>, .., <span class="num">1</span>]              => <span class="str">"首尾都是 1"</span>,
+    [.., <span class="num">0</span>]                => <span class="str">"最后一个元素是 0"</span>,
+    [<span class="kw">not</span> <span class="num">0</span>, ..]             => <span class="str">"第一个不是 0"</span>,
+    _                     => <span class="str">"其他"</span>,
+};
+
+<span class="cmt">// 实战：REST API 路由解析</span>
+<span class="kw">static</span> <span class="kw">string</span> ParseRoute(<span class="kw">string</span>[] segments) => segments <span class="kw">switch</span>
+{
+    [<span class="str">"api"</span>, <span class="str">"users"</span>]             => <span class="str">"用户列表"</span>,
+    [<span class="str">"api"</span>, <span class="str">"users"</span>, <span class="kw">var</span> id]    => $<span class="str">"用户详情 {id}"</span>,
+    [<span class="str">"api"</span>, <span class="str">"users"</span>, <span class="kw">var</span> id, <span class="str">"orders"</span>] => $<span class="str">"用户 {id} 的订单"</span>,
+    [<span class="str">"api"</span>, ..]                    => <span class="str">"其他 API"</span>,
+    _                            => <span class="str">"不是 API"</span>,
+};</code></pre>
+
+<h3>3.5 什么时候用列表模式 vs 传统写法？</h3>
+
+<table>
+  <tr><th>✅ 用列表模式</th><th>❌ 继续传统写法</th></tr>
+  <tr><td>需要同时检查长度 + 元素条件</td><td>只需要检查长度</td></tr>
+  <tr><td>switch 表达式处理多种集合形态</td><td>用 foreach 遍历处理每个元素</td></tr>
+  <tr><td>取"第一个"和"最后一个"元素</td><td>需要随机访问任意索引位置</td></tr>
+  <tr><td>配合 Span 做高性能切片匹配</td><td>集合非常大，模式匹配生成的索引访问代码不如手动优化</td></tr>
+</table>
+
+<!-- ====== SECTION 4: REQUIRED MEMBERS ====== -->
+
+<h2>四、必需成员 <span class="en">Required Members</span></h2>
+
+<h3>4.1 痛点——"这个属性必须设值"靠嘴说</h3>
+
+<p>很多类型有必填属性——比如 <code>Person.Name</code> 必须有值。C# 10 及以前你有三种办法，但都不够好：</p>
+
+<pre><code><span class="cmt">// 方案 1：构造函数强制——可行，但 8 个必填属性 = 8 个参数的构造函数（地狱）</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span> {
+    <span class="kw">public</span> <span class="type">Person</span>(<span class="kw">string</span> name, <span class="kw">string</span> email, <span class="kw">int</span> age, ...) { }  <span class="cmt">// 😫</span>
+}
+
+<span class="cmt">// 方案 2：对象初始化器——方便，但忘了赋值编译器不吭声</span>
+<span class="kw">var</span> p = <span class="kw">new</span> <span class="type">Person</span> { Email = <span class="str">"a@b.com"</span> };  <span class="cmt">// Name 没赋值——谁告诉你？</span>
+
+<span class="cmt">// 方案 3：init-only 属性——可以对象初始化器，但仍然不强制</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span> {
+    <span class="kw">public</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">init</span>; }  <span class="cmt">// 可以不设——运行时为 null</span>
+}</code></pre>
+
+<p>C# 11 给了第四种：<code>required</code> 关键字——让编译器帮你检查：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span>
+{
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Email { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">int</span> Age { <span class="kw">get</span>; <span class="kw">set</span>; }  <span class="cmt">// 没有 required——可选</span>
+}
+
+<span class="kw">var</span> p = <span class="kw">new</span> <span class="type">Person</span> { Name = <span class="str">"Alice"</span> };  <span class="cmt">// ❌ 编译错误：Email 是 required 但未赋值</span>
+<span class="kw">var</span> p = <span class="kw">new</span> <span class="type">Person</span> { Name = <span class="str">"Alice"</span>, Email = <span class="str">"a@b.com"</span> };  <span class="cmt">// ✅</span></code></pre>
+
+<div class="callout callout--good">
+<strong>required 将运行时错误变成编译时错误。</strong>以前你可能在构造函数里抛出 <code>ArgumentNullException</code>，或者在单元测试里才发现属性没设。现在 IDE 在你还未写完那行代码时就显示红色波浪线——反馈零延迟。
+</div>
+
+<h3>4.2 关键规则</h3>
+
+<table>
+  <tr><th>规则</th><th>说明</th></tr>
+  <tr><td>只能用在属性和字段上</td><td><code>required string Name</code>（字段）、<code>required string Name { get; set; }</code>（属性）</td></tr>
+  <tr><td>访问级别必须 ≥ 类型</td><td>如果类是 <code>public</code>，required 成员也必须 ≥ <code>public</code> 的构造函数能访问到</td></tr>
+  <tr><td>必须通过<strong>对象初始化器</strong>赋值</td><td><code>new Person { Name = "A" }</code> 而非 <code>new Person("A")</code></td></tr>
+  <tr><td>构造函数参数可替代对象初始化器</td><td>构造函数里给 required 属性赋值了 → 可以不写对象初始化器</td></tr>
+  <tr><td><code>[SetsRequiredMembers]</code> 可标记构造函数</td><td>告诉编译器"这个构造函数保证设置所有 required 成员"</td></tr>
+</table>
+
+<h3>4.3 SetsRequiredMembers——当构造函数搞定一切</h3>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span>
+{
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Email { <span class="kw">get</span>; <span class="kw">set</span>; }
+
+    <span class="cmt">// 这个构造函数设置了所有 required 成员</span>
+    [<span class="type">SetsRequiredMembers</span>]
+    <span class="kw">public</span> <span class="type">Person</span>(<span class="kw">string</span> name, <span class="kw">string</span> email)
+    {
+        Name = name;
+        Email = email;
+    }
+
+    <span class="cmt">// 没有 [SetsRequiredMembers] → 编译器不保证</span>
+    <span class="kw">public</span> <span class="type">Person</span>(<span class="kw">string</span> name)
+    {
+        Name = name;
+        <span class="cmt">// Email 未赋值——但有 required，调用这个构造函数会怎样？
+        // 编译器报错：构造函数没有 SetsRequiredMembers，调用者必须用对象初始化器补齐 Email</span>
+    }
+}
+
+<span class="cmt">// 使用第一个构造函数（有 SetsRequiredMembers）</span>
+<span class="kw">var</span> p1 = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>, <span class="str">"a@b.com"</span>);  <span class="cmt">// ✅ 不需要对象初始化器</span>
+
+<span class="cmt">// 使用第二个构造函数（没有 SetsRequiredMembers）</span>
+<span class="kw">var</span> p2 = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>) { Email = <span class="str">"a@b.com"</span> };  <span class="cmt">// ✅ 必须补齐 Email</span></code></pre>
+
+<div class="callout callout--warn">
+<strong><code>[SetsRequiredMembers]</code> 是承诺，不是验证。</strong>编译器<strong>不检查</strong>这个构造函数是否真的设置了所有 required 成员——你承诺了，编译器就信你。如果承诺了但没做到，运行时访问未初始化的属性就是未定义行为。这是一个"信任程序员"的契约。
+</div>
+
+<h3>4.4 编译器生成——RequiredMembers 到底生成了什么？</h3>
+
+<p><code>required</code> 修饰符通过一个新特性传递到调用侧：</p>
+
+<pre><code><span class="cmt">// 你写：</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span> {
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+}
+
+<span class="cmt">// 编译器生成（简化说明）：
+//   1. 在 Person 类型上标记 [RequiredMember]
+//   2. 在 Name 属性上标记 [RequiredMember]
+//   3. 在每个构造 new Person() 的调用处，编译器检查：
+//      - 是否通过对象初始化器给 Name 赋值？或
+//      - 构造函数是否有 [SetsRequiredMembers]？
+//   4. 都不满足 → 编译错误 CS9035</span></code></pre>
+
+<p>这是 <strong>编译器层面的强制</strong>——IL 层面没有"必需成员"这个概念。编译后 required 属性就是普通属性，没有运行时代码来检查它是否被赋值。所有检查发生在编译时。</p>
+
+<h3>4.5 Required + init = 编译期强制不可变对象</h3>
+
+<pre><code><span class="cmt">// 组合技：required + init = 必须设值，设了就不改</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">ApiConfig</span>
+{
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> BaseUrl { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> ApiKey { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="kw">public</span> <span class="kw">int</span> Timeout { <span class="kw">get</span>; <span class="kw">init</span>; } = <span class="num">30</span>;  <span class="cmt">// 有默认值——不需要 required</span>
+}
+
+<span class="cmt">// ✅ 必须提供 BaseUrl 和 ApiKey，设定后不可修改</span>
+<span class="kw">var</span> config = <span class="kw">new</span> <span class="type">ApiConfig</span>
+{
+    BaseUrl = <span class="str">"https://api.example.com"</span>,
+    ApiKey = <span class="str">"sk-xxx"</span>,
+    <span class="cmt">// Timeout 用默认值 30</span>
+};
+<span class="cmt">// config.ApiKey = "new";  // ❌ init 不可修改</span></code></pre>
+
+<p><code>record</code> 的 positional 参数本身就是 init-only 的，所以 required 通常更适用于 <strong>class / struct（非 record）</strong> 的配置对象、DTO、Options 模式等场景。</p>
+
+<!-- ====== SECTION 5: UTF-8 STRING LITERALS ====== -->
+
+<h2>五、UTF-8 字符串字面量 <span class="en">UTF-8 String Literals</span></h2>
+
+<h3>5.1 痛点——UTF-8 是无处不在的"隐形成本"</h3>
+
+<p>HTTP 通讯、JSON 序列化、数据库交互——现代应用中字符串几乎总是以 UTF-8 编码传输。但每次从 C# 的 <code>string</code>（内部 UTF-16）转 UTF-8，都有运行时代价：</p>
+
+<pre><code><span class="cmt">// 传统方式——每次调用都做 UTF-16 → UTF-8 编码转换</span>
+<span class="kw">byte</span>[] data = Encoding.UTF8.GetBytes(<span class="str">"application/json"</span>);
+<span class="kw">var</span> span = <span class="kw">new</span> ReadOnlySpan&lt;<span class="kw">byte</span>&gt;(data);  <span class="cmt">// 还要再包一层</span>
+
+<span class="cmt">// 如果你把这一行放在热路径——每次请求都编码一次 "application/json"</span></code></pre>
+
+<p>C# 11 的答案：<code>"..."u8</code>——编译期直接生成 UTF-8 字节序列：</p>
+
+<pre><code><span class="cmt">// C# 11：编译期编码，零运行时开销</span>
+ReadOnlySpan&lt;<span class="kw">byte</span>&gt; contentType = <span class="str">"application/json"u8</span>;
+
+<span class="cmt">// 等价于运行时手动编码——但没有任何运行时开销</span>
+<span class="cmt">// 编译器直接在 IL 中生成 UTF-8 字节数组</span></code></pre>
+
+<h3>5.2 本质——不是 <code>byte[]</code>，是 <code>ReadOnlySpan&lt;byte&gt;</code></h3>
+
+<table>
+  <tr><th>属性</th><th>说明</th></tr>
+  <tr><td>类型</td><td><code>ReadOnlySpan&lt;byte&gt;</code>——零分配、栈上即可用</td></tr>
+  <tr><td>求值时机</td><td><strong>编译期</strong>——C# 编译器把字符串直接编码为 UTF-8 字节序列</td></tr>
+  <tr><td>存储位置</td><td>PE 文件的元数据中——和字符串常量一样</td></tr>
+  <tr><td>运行时开销</td><td><strong>零</strong>——不需要 <code>Encoding.UTF8.GetBytes</code>，不需要堆分配</td></tr>
+</table>
+
+<div class="callout callout--info">
+<strong>编译器实现：</strong>和 const string 的常量折叠类似。编译器在编译时将 <code>"hello"u8</code> 转为 <code>ReadOnlySpan&lt;byte&gt;</code> 指向 PE 数据段中的 UTF-8 编码字节序列。最终 IL 是 <code>ldsflda</code>（加载静态字段地址）——连分配都不需要。
+</div>
+
+<h3>5.3 真实场景——哪里用？</h3>
+
+<pre><code><span class="cmt">// ✅ HTTP Headers / Content-Type</span>
+<span class="kw">var</span> request = <span class="kw">new</span> HttpRequestMessage();
+request.Content = <span class="kw">new</span> StringContent(body, Encoding.UTF8, <span class="str">"application/json"u8</span>);
+
+<span class="cmt">// ✅ ASP.NET Core 响应</span>
+context.Response.ContentType = <span class="str">"application/json"u8</span>;  <span class="cmt">// ReadOnlySpan&lt;byte&gt;</span>
+
+<span class="cmt">// ✅ 高性能序列化——System.Text.Json 大量使用</span>
+<span class="kw">var</span> writer = <span class="kw">new</span> Utf8JsonWriter(stream);
+writer.WriteString(<span class="str">"name"u8</span>, <span class="str">"Alice"u8</span>);  <span class="cmt">// 属性名直接传 UTF-8</span>
+
+<span class="cmt">// ✅ 常量 MIME type / header name</span>
+ReadOnlySpan&lt;<span class="kw">byte</span>&gt; jsonType = <span class="str">"application/json"u8</span>;
+ReadOnlySpan&lt;<span class="kw">byte</span>&gt; authHeader = <span class="str">"Authorization"u8</span>;
+
+<span class="cmt">// ✅ 配合 Raw String Literals</span>
+ReadOnlySpan&lt;<span class="kw">byte</span>&gt; json = <span class="str">"""</span>
+<span class="str">    {"name": "Alice", "age": 30}</span>
+<span class="str">    """u8</span>;  <span class="cmt">// Raw String Literal + UTF-8 → 编译期生成完整 JSON 字节</span></code></pre>
+
+<h3>5.4 限制</h3>
+
+<table>
+  <tr><th>限制</th><th>说明</th></tr>
+  <tr><td>只接受<strong>编译时常量</strong></td><td>不能 <code>$"hello {name}"u8</code>——内插后就不是常量了</td></tr>
+  <tr><td>只能是 <code>ReadOnlySpan&lt;byte&gt;</code></td><td>不能隐式转为 <code>byte[]</code>——需要则显式 <code>.ToArray()</code></td></tr>
+  <tr><td>不能是 <code>const</code></td><td><code>const ReadOnlySpan&lt;byte&gt; x = "..."u8</code> 不合法——ref struct 不能是常量</td></tr>
+  <tr><td>和 Raw String Literal 完美配合</td><td><code>"""..."""u8</code>——多行 JSON/XML 直接编译为 UTF-8 字节</td></tr>
+</table>
+
+<!-- ====== SECTION 6: COMBO ====== -->
+
+<h2>六、组合拳——这四个特性怎么一起用？</h2>
+
+<pre><code><span class="cmt">// 一个高性能 Minimal API 端点——用上了四个 C# 11 特性</span>
+
+<span class="cmt">// Required Members：配置对象</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">CreateUserRequest</span>
+{
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Email { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="kw">public</span> <span class="kw">string</span>[] Tags { <span class="kw">get</span>; <span class="kw">init</span>; } = [];
+}
+
+<span class="kw">namespace</span> <span class="type">MyApp</span>;  <span class="cmt">// File-scoped (C# 10)</span>
+
+<span class="cmt">// List Patterns：路由 / 权限检查</span>
+app.MapPost(<span class="str">"/api/users"</span>, (CreateUserRequest req) =>
+{
+    <span class="cmt">// 检查 Tags 列表</span>
+    <span class="kw">var</span> description = req.Tags <span class="kw">switch</span>
+    {
+        [] => <span class="str">"新用户，无标签"</span>,
+        [<span class="kw">var</span> single] => $<span class="str">"标签：{single}"</span>,
+        [<span class="str">"vip"</span>, ..] => <span class="str">"VIP 用户"</span>,
+        [.., <span class="str">"admin"</span>] => <span class="str">"管理员用户"</span>,
+        _ => <span class="str">"多标签用户"</span>,
+    };
+
+    <span class="cmt">// UTF-8 String Literals：高性能响应</span>
+    <span class="kw">var</span> response = $<span class="str">"""</span>
+<span class="str">        {{ "id": 1, "name": "{req.Name}", "desc": "{description}" }}</span>
+<span class="str">        """u8</span>;  <span class="cmt">// Raw String Literal + UTF-8 → 零开销 JSON</span>
+
+    <span class="kw">return</span> Results.Bytes(response, <span class="str">"application/json"u8</span>);
+});
+
+app.Run();</code></pre>
+
+<p>这个端点里：<strong>Required</strong> 保证请求体不会缺字段（编译时），<strong>List Patterns</strong> 让标签判断直观易读，<strong>Raw String Literal + UTF-8</strong> 让 JSON 输出零分配、零编码开销。C# 10 的 File-scoped Namespace / Global Usings / Top-level Statements 把仪式代码消干净——C# 11 在此基础上把业务逻辑的摩擦也消掉了。</p>
+
+<!-- ====== QUIZ ====== -->
+
+<h2>📝 小测验</h2>
+
+<div class="quiz" id="q1">
+  <h3>Q1. 关于 Raw String Literal，哪个说法是<strong>正确</strong>的？</h3>
+  <div class="question">选择正确的描述：</div>
+  <label><input type="radio" name="q1" value="a"> 必须用 4 个双引号开始和结束</label>
+  <label><input type="radio" name="q1" value="b"> 编译器以<strong>开始标记的缩进</strong>为基准去除每行空白</label>
+  <label><input type="radio" name="q1" value="c"> 它是纯粹的编译时预处理——运行时和手写转义字符串一模一样</label>
+  <label><input type="radio" name="q1" value="d"> 内部不能包含任何双引号</label>
+  <button onclick="check('q1','c')">确认</button>
+  <div class="feedback" id="f_q1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>Q2. 以下哪个列表模式<strong>能匹配</strong> <code>int[] { 1, 2, 3, 4, 5 }</code>？</h3>
+  <div class="question">选择能成功匹配的模式：</div>
+  <label><input type="radio" name="q2" value="a"><code>[1, 2, 3]</code></label>
+  <label><input type="radio" name="q2" value="b"><code>[0, ..]</code></label>
+  <label><input type="radio" name="q2" value="c"><code>[1, 2, 3, 4, 5, 6]</code></label>
+  <label><input type="radio" name="q2" value="d"><code>[1, .., 5]</code></label>
+  <button onclick="check('q2','d')">确认</button>
+  <div class="feedback" id="f_q2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>Q3. 关于 <code>required</code>，哪个说法是<strong>错误</strong>的？</h3>
+  <div class="question">选择不正确的描述：</div>
+  <label><input type="radio" name="q3" value="a"> 编译器在 IL 层面生成运行时代码来检查 required 成员是否被赋值</label>
+  <label><input type="radio" name="q3" value="b"> <code>[SetsRequiredMembers]</code> 告诉编译器"这个构造函数保证覆盖所有 required 成员"</label>
+  <label><input type="radio" name="q3" value="c"> <code>required</code> 可以和 <code>init</code> 配合，创建"必须赋值的不可变属性"</label>
+  <label><input type="radio" name="q3" value="d"> required 成员必须通过对象初始化器赋值，除非构造函数标记了 <code>[SetsRequiredMembers]</code></label>
+  <button onclick="check('q3','a')">确认</button>
+  <div class="feedback" id="f_q3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>Q4. 关于 UTF-8 String Literals，哪个说法是<strong>正确</strong>的？</h3>
+  <div class="question">选择正确的描述：</div>
+  <label><input type="radio" name="q4" value="a"> 返回 <code>byte[]</code> 类型，可直接当字节数组使用</label>
+  <label><input type="radio" name="q4" value="b"> 运行时调用 <code>Encoding.UTF8.GetBytes</code> 但结果被缓存</label>
+  <label><input type="radio" name="q4" value="c"> 返回 <code>ReadOnlySpan&lt;byte&gt;</code>，编译期编码，零运行时开销</label>
+  <label><input type="radio" name="q4" value="d"> 只支持 ASCII 字符，不支持中文等非 ASCII 字符</label>
+  <button onclick="check('q4','c')">确认</button>
+  <div class="feedback" id="f_q4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>Q5. 关于 List Patterns 支持的类型，哪个说法正确？</h3>
+  <div class="question">选择正确的描述：</div>
+  <label><input type="radio" name="q5" value="a"> 只支持 <code>int[]</code> 和 <code>List&lt;int&gt;</code></label>
+  <label><input type="radio" name="q5" value="b"> 支持任何有 <code>Length</code>/<code>Count</code> + 可访问索引器的类型——包括 <code>Span&lt;T&gt;</code> 和 <code>string</code></label>
+  <label><input type="radio" name="q5" value="c"> 类型必须实现 <code>IList&lt;T&gt;</code> 接口</label>
+  <label><input type="radio" name="q5" value="d"> 只支持 C# 内置类型，不支持自定义集合</label>
+  <button onclick="check('q5','b')">确认</button>
+  <div class="feedback" id="f_q5"></div>
+</div>
+
+<div class="quiz" id="q6">
+  <h3>Q6.（场景题）你需要定义一个配置类，有 5 个必填属性 + 3 个可选属性。对象创建后不允许修改任何属性。最佳方案是？</h3>
+  <div class="question">选择最合适的定义方式：</div>
+  <label><input type="radio" name="q6" value="a"> 构造函数接收 5 个必填参数 + 可选参数用默认值</label>
+  <label><input type="radio" name="q6" value="b"><code>record class</code>——positional 参数 = 必填，可选属性用 init 有默认值</label>
+  <label><input type="radio" name="q6" value="c"><code>class</code> + <code>required</code> + <code>init</code> 属性</label>
+  <label><input type="radio" name="q6" value="d"><code>record struct</code>——比 class 快</label>
+  <button onclick="check('q6','b')">确认</button>
+  <div class="feedback" id="f_q6"></div>
+</div>
+
+<div class="quiz" id="q7">
+  <h3>Q7. 以下 Raw String Literal 哪个<strong>不能编译</strong>？</h3>
+  <div class="question">选择有编译错误的写法：</div>
+  <label><input type="radio" name="q7" value="a"><code>var s = """Hello""";</code></label>
+  <label><input type="radio" name="q7" value="b"><code>var s = """\n    Line1\n    """</code></label>
+  <label><input type="radio" name="q7" value="c"><code>var s = $"""Value: {x}"""</code></label>
+  <label><input type="radio" name="q7" value="d"><code>var s = """" {"key":"val"} """"</code></label>
+  <button onclick="check('q7','a')">确认</button>
+  <div class="feedback" id="f_q7"></div>
+</div>
+
+<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<p class="mild">
+  Lesson 10 · C# 11 · 下一课预告：<strong>C# 12</strong>——Primary Constructors、Collection Expressions、Ref Readonly Parameters、Inline Arrays
+</p>
+<p class="mild">
+  有任何不清楚的地方？<strong>直接在对话中追问</strong>——Agent 就是你的私教。
+</p>
+
+<script>
+function check(qid, correct) {
+  var f = document.getElementById('f_' + qid);
+  var selected = document.querySelector('input[name="' + qid + '"]:checked');
+  if (!selected) {
+    f.textContent = '⚠️ 请先选择一个答案。';
+    f.className = 'feedback show wrong';
+    return;
+  }
+  var isCorrect = selected.value === correct;
+  var answers = {
+    q1: {
+      correct: '✅ 正确！Raw String Literal 是纯粹的编译时预处理——编译器在编译时完成缩进去除，IL 中就是普通字符串。至少 3 个（不是 4 个）双引号（a 错），以<strong>结束</strong>（不是开始）标记的缩进为基准（b 错），内部可以包含引号——只要引号连续数量少于包裹标记的数量（d 错）。',
+      wrong:   '❌ 答案是 c。Raw String Literal = 编译时预处理，IL 和手写转义字符串完全一样。a：至少 3 个（不是 4 个）；b：以<strong>结束</strong>标记缩进为基准；d：内部可以含引号——只要小于包裹标记数量。'
+    },
+    q2: {
+      correct: '✅ 正确！<code>[1, .., 5]</code> 匹配：第一个 = 1，最后一个 = 5，中间任意数量（含零个）。a 错——长度不匹配（3 ≠ 5）；b 错——第一个元素是 1，不是 0；c 错——长度不匹配（6 ≠ 5）。',
+      wrong:   '❌ 答案是 d。<code>[1, .., 5]</code>：第一个元素 1=1 ✅，最后一个元素 5=5 ✅，<code>..</code> 匹配中间任意元素。a 长度 3 ≠ 5；b 第一个元素是 1 ≠ 0；c 长度 6 ≠ 5。'
+    },
+    q3: {
+      correct: '✅ 正确！a 是错的。required 是<strong>纯粹的编译时检查</strong>——IL 层面没有运行时代码验证 required 成员是否被赋值。b、c、d 都是正确的：<code>[SetsRequiredMembers]</code> 给构造函数背书，<code>required + init</code> 是最佳组合，对象初始化器是标准赋值方式。',
+      wrong:   '❌ 答案是 a（错误的描述）。required 的检查 100% 发生在编译时——IL 中没有运行时验证代码。b 对（<code>[SetsRequiredMembers]</code> 是契约），c 对（required + init = 编译期强制不可变），d 对（对象初始化器是标准方式，构造函数+特性可替代）。'
+    },
+    q4: {
+      correct: '✅ 正确！UTF-8 String Literal 返回 <code>ReadOnlySpan&lt;byte&gt;</code>，编译时直接将字符串编码为 UTF-8 字节序列嵌入 PE 文件——零运行时开销。不是 <code>byte[]</code>（a 错），不调用 <code>GetBytes</code>（b 错），完全支持非 ASCII（d 错——UTF-8 能编码所有 Unicode 字符）。',
+      wrong:   '❌ 答案是 c。UTF-8 String Literal：类型 = <code>ReadOnlySpan&lt;byte&gt;</code>，编码 = 编译时，开销 = 零。a：类型不对（不是 byte[]）；b：不调用 GetBytes；d：UTF-8 覆盖全部 Unicode。'
+    },
+    q5: {
+      correct: '✅ 正确！List Patterns 采用鸭子类型——编译器不要求实现 <code>IList&lt;T&gt;</code>，只要类型有 <code>Length</code>/<code>Count</code> + 可访问索引器即可。这包括了数组、<code>List&lt;T&gt;</code>、<code>Span&lt;T&gt;</code>、<code>string</code>、以及任何满足条件的自定义集合。',
+      wrong:   '❌ 答案是 b。List Patterns 不要求接口实现（c 错），支持 <code>Span&lt;T&gt;</code> 和 <code>string</code>（a 错），当然支持自定义集合（d 错）——只要满足鸭子类型条件。'
+    },
+    q6: {
+      correct: '✅ 正确！这道题的核心陷阱：5 个必填属性如果用构造函数（a），8 个参数的构造函数很难读、IDE 提示也很差。<code>record</code>（b）的 positional 参数自带 init-only + 不可变性，完美契合"必填 + 不可变"场景。<br><br>c 也可以——但 <code>record</code> 额外提供值相等、Deconstruct、ToString，是更好的选择。d 不适合——配置对象通常生命周期长，struct 频繁拷贝反而亏。',
+      wrong:   '❌ 答案是 b。<code>record class</code> 的 positional 参数天然 = required + init-only + 值相等，是最适合"必填 + 不可变"配置对象的工具。a：5 个参数的构造函数可读性差；c：也能用，但缺 record 的值相等和 Deconstruct；d：配置对象生命周期长，struct 会频繁拷贝。'
+    },
+    q7: {
+      correct: '✅ 正确！<code>var s = """Hello""";</code> 不能编译——开始 <code>"""</code> 后必须<strong>换行</strong>，内容是 "Hello" 但不换行就是语法错误。<br><br>b 能编译（开始引号后换行了），c 能编译（内插 Raw String Literal），d 能编译（4 个引号包裹含 3 个引号的内容）。',
+      wrong:   '❌ 答案是 a。<code>"""Hello"""</code> 不合法——开始 <code>"""</code> 后必须换行，内容从下一行开始。b 虽然用了转义写法但可以编译（开始在引号后换行），c 和 d 都合法。'
+    }
+  };
+  var a = answers[qid];
+  f.textContent = isCorrect ? a.correct : a.wrong;
+  f.className = 'feedback show ' + (isCorrect ? 'correct' : 'wrong');
+}
+</script>
+
+</body>
+</html>

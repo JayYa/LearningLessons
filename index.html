@@ -72,6 +72,36 @@
     font-weight: 500;
   }
   .course-card a:hover { color: #2563eb; text-decoration: underline; }
+  .ref-section {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed #e0e3e8;
+  }
+  .ref-section h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #888;
+    margin-bottom: 0.4rem;
+  }
+  .ref-section ul {
+    list-style: none;
+    padding: 0;
+  }
+  .ref-section li {
+    counter-increment: none;
+    padding: 0.25rem 0;
+    border-bottom: none;
+    font-size: 0.9rem;
+  }
+  .ref-section li::before {
+    content: "📄";
+    display: inline;
+    min-width: unset;
+    height: unset;
+    background: none;
+    margin-right: 0.4rem;
+    font-size: 0.8rem;
+  }
   footer {
     text-align: center;
     margin-top: 3rem;
@@ -95,23 +125,45 @@
   <div class="course-card">
     <h2>Morden .NET</h2>
     <ol>
-      <li><a href="Morden%20.NET/01-csharp8-nullable-reference-types.html">Lesson 01: C# 8 Nullable Reference Types — 从 Framework 4.8 到现代 .NET</a></li>
-      <li><a href="Morden%20.NET/02-csharp8-switch-using-indices.html">Lesson 02: C# 8 Switch Expressions · Using Declarations · Indices/Ranges</a></li>
-      <li><a href="Morden%20.NET/03-sync-yield-return-iterators.html">Lesson 03: C# yield return 同步迭代器</a></li>
-      <li><a href="Morden%20.NET/04-csharp8-async-streams.html">Lesson 04: C# 8 Async Streams — 异步流</a></li>
-      <li><a href="Morden%20.NET/05-async-await-synchronizationcontext.html">Lesson 05: SynchronizationContext — await 续延调度的核心机制</a></li>
-      <li><a href="Morden%20.NET/06-csharp8-wrapup-default-interface-methods.html">Lesson 06: C# 8 收尾 — Default Interface Methods 与其他实用特性</a></li>
-      <li><a href="Morden%20.NET/07-csharp9-records.html">Lesson 07: C# 9 Records — 不可变引用类型与值相等语义</a></li>
-      <li><a href="Morden%20.NET/08-csharp9-small-features.html">Lesson 08: C# 9 小特性集 — Top-level Statements · Pattern Matching 增强 · Target-typed new · Covariant Returns</a></li>
-      <li><a href="Morden%20.NET/09-csharp10-record-structs-global-usings.html">Lesson 09: C# 10 — Record Structs · Global Usings · File-scoped Namespaces · Constant Interpolated Strings</a></li>
+      <li><a href="Morden%20.NET/lessons/01-csharp8-nullable-reference-types.html">Lesson 01: C# 8 Nullable Reference Types — 从 Framework 4.8 到现代 .NET</a></li>
+      <li><a href="Morden%20.NET/lessons/02-csharp8-switch-using-indices.html">Lesson 02: C# 8 Switch Expressions · Using Declarations · Indices/Ranges</a></li>
+      <li><a href="Morden%20.NET/lessons/03-sync-yield-return-iterators.html">Lesson 03: C# yield return 同步迭代器</a></li>
+      <li><a href="Morden%20.NET/lessons/04-csharp8-async-streams.html">Lesson 04: C# 8 Async Streams — 异步流</a></li>
+      <li><a href="Morden%20.NET/lessons/05-async-await-synchronizationcontext.html">Lesson 05: SynchronizationContext — await 续延调度的核心机制</a></li>
+      <li><a href="Morden%20.NET/lessons/06-csharp8-wrapup-default-interface-methods.html">Lesson 06: C# 8 收尾 — Default Interface Methods 与其他实用特性</a></li>
+      <li><a href="Morden%20.NET/lessons/07-csharp9-records.html">Lesson 07: C# 9 Records — 不可变引用类型与值相等语义</a></li>
+      <li><a href="Morden%20.NET/lessons/08-csharp9-small-features.html">Lesson 08: C# 9 小特性集 — Top-level Statements · Pattern Matching 增强 · Target-typed new · Covariant Returns</a></li>
+      <li><a href="Morden%20.NET/lessons/09-csharp10-record-structs-global-usings.html">Lesson 09: C# 10 — Record Structs · Global Usings · File-scoped Namespaces · Constant Interpolated Strings</a></li>
+      <li><a href="Morden%20.NET/lessons/10-csharp11-raw-strings-list-patterns-required.html">Lesson 10: C# 11 — Raw String Literals · List Patterns · Required Members · UTF-8 String Literals</a></li>
     </ol>
+    <div class="ref-section">
+      <h3>参考资料</h3>
+      <ul>
+        <li><a href="Morden%20.NET/reference/async-streams-cheatsheet.html">异步流速查 · Async Streams · C# 8</a></li>
+        <li><a href="Morden%20.NET/reference/csharp9-small-features-cheatsheet.html">C# 9 小特性速查</a></li>
+        <li><a href="Morden%20.NET/reference/indices-ranges-cheatsheet.html">索引与范围速查 · Indices & Ranges · C# 8</a></li>
+        <li><a href="Morden%20.NET/reference/nrt-cheatsheet.html">NRT 速查 · Nullable Reference Types · C# 8+</a></li>
+        <li><a href="Morden%20.NET/reference/pattern-matching-cheatsheet.html">模式匹配速查 · Pattern Matching · C# 8+</a></li>
+        <li><a href="Morden%20.NET/reference/records-cheatsheet.html">Records 速查 · C# 9+</a></li>
+        <li><a href="Morden%20.NET/reference/sync-iterators-cheatsheet.html">yield return 同步迭代器 · 速查表</a></li>
+        <li><a href="Morden%20.NET/reference/synchronizationcontext-cheatsheet.html">SynchronizationContext &amp; await 续延调度</a></li>
+      </ul>
+    </div>
   </div>
 
   <div class="course-card">
     <h2>Vinland Saga</h2>
     <ol>
-      <li><a href="Vinland%20Saga/0001-viking-age-overview.html">Lesson 0001 — 维京时代概览：冰海战纪的历史舞台</a></li>
+      <li><a href="Vinland%20Saga/lessons/0001-viking-age-overview.html">Lesson 0001 — 维京时代概览：冰海战纪的历史舞台</a></li>
+      <li><a href="Vinland%20Saga/lessons/0002-character-prototypes.html">Lesson 0002 — 漫画 vs 史实：《冰海战纪》角色原型对照</a></li>
     </ol>
+    <div class="ref-section">
+      <h3>参考资料</h3>
+      <ul>
+        <li><a href="Vinland%20Saga/reference/viking-age-timeline.html">维京时代大事年表 — Vinland Saga 历史参考</a></li>
+        <li><a href="Vinland%20Saga/reference/vinland-saga-character-reference.html">角色-史实对照表 — Vinland Saga 历史参考</a></li>
+      </ul>
+    </div>
   </div>
 
   <footer>自动生成</footer>

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NRT 速查 · Nullable Reference Types · C# 8+</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --warn: #9a6700; --warn-bg: #fff8c5; --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.65;
+    max-width: 780px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 0.15rem; }
+  h2 { font-size: 1.15rem; margin: 1.75rem 0 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.35rem; color: var(--accent); }
+  .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+  .en { color: var(--text-muted); font-size: 0.88em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 0.6rem 0 1rem; font-size: 0.88rem;
+  }
+  th, td { text-align: left; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border); }
+  th { background: #f0efeb; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); }
+  tr:last-child td { border-bottom: none; }
+  td code { white-space: nowrap; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 0.75rem 1rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.8rem; line-height: 1.5; margin: 0.5rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: #f0efeb; padding: 0.12em 0.3em; border-radius: 3px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 0.5rem 0 1rem; }
+  @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 0.75rem 1rem;
+  }
+  .card h4 { font-size: 0.85rem; margin-bottom: 0.35rem; }
+
+  .gotcha {
+    background: var(--warn-bg); border-left: 3px solid var(--warn);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+  .gotcha::before { content: '⚠️ '; }
+
+  .print-only { display: none; }
+  @media print {
+    body { font-size: 10pt; padding: 0.5in; max-width: none; }
+    h2 { page-break-after: avoid; }
+    .no-print { display: none; }
+    .print-only { display: block; }
+  }
+</style>
+</head>
+<body>
+
+<h1>📋 NRT 速查 <span class="en">Nullable Reference Types</span></h1>
+<p class="subtitle">C# 8 引入 · 编译时静态分析 · 无运行时开销 · <a href="../lessons/01-csharp8-nullable-reference-types.html">📖 完整课程</a></p>
+
+<!-- ====== ENABLE ====== -->
+<h2>开启方式</h2>
+<table>
+  <tr><th>方式</th><th>写法</th><th>作用范围</th></tr>
+  <tr><td>项目级</td><td><code>&lt;Nullable&gt;enable&lt;/Nullable&gt;</code> in .csproj</td><td>整个项目</td></tr>
+  <tr><td>文件级</td><td><code>#nullable enable</code> 在文件顶部</td><td>当前文件</td></tr>
+  <tr><td>局部关闭</td><td><code>#nullable disable</code></td><td>从该行到文件尾（或 restore）</td></tr>
+  <tr><td>恢复项目设置</td><td><code>#nullable restore</code></td><td>回到 .csproj 的设定</td></tr>
+</table>
+
+<!-- ====== CORE OPERATORS ====== -->
+<h2>核心语法 / 四个角色</h2>
+<table>
+  <tr><th>写法</th><th>名称</th><th>含义</th><th>编译器行为</th></tr>
+  <tr>
+    <td><code>string name</code></td>
+    <td>非 null 引用</td>
+    <td>"我承诺这不是 null"</td>
+    <td>若赋值 null → ⚠️ 警告</td>
+  </tr>
+  <tr>
+    <td><code>string? name</code></td>
+    <td>可空引用</td>
+    <td>"这可能是 null"</td>
+    <td>若直接访问成员 → ⚠️ 警告</td>
+  </tr>
+  <tr>
+    <td><code>name!</code></td>
+    <td>空包容操作符<span class="en">Null-forgiving</span></td>
+    <td>"我断言它不是 null——闭嘴"</td>
+    <td>抑制该表达式上的所有 NRT 警告</td>
+  </tr>
+  <tr>
+    <td><code>name ?? "default"</code></td>
+    <td>空合并<span class="en">Null-coalescing</span></td>
+    <td>左边是 null 时取右边</td>
+    <td>结果被追踪为 not-null</td>
+  </tr>
+  <tr>
+    <td><code>x ??= y</code></td>
+    <td>空合并赋值 (C# 8)</td>
+    <td>若 x 为 null 则赋值 y</td>
+    <td>短路求值</td>
+  </tr>
+</table>
+
+<!-- ====== FLOW ANALYSIS ====== -->
+<h2>流分析<span class="en">Flow Analysis</span> —— 编译器如何追踪</h2>
+
+<p>编译器追踪变量在每条执行路径上的 <strong>null 状态</strong>：<code>MaybeNull</code> / <code>NotNull</code>。</p>
+
+<div class="grid-2">
+  <div class="card">
+    <h4>✅ 编译器放行（自动推断 NotNull）</h4>
+<pre><code><span class="type">string?</span> name = GetName();
+
+<span class="cmt">// null 检查后</span>
+<span class="kw">if</span> (name != <span class="kw">null</span>)
+    Use(name.Length); <span class="cmt">// ✅ NotNull</span>
+
+<span class="cmt">// throw 守卫后</span>
+<span class="kw">if</span> (name == <span class="kw">null</span>)
+    <span class="kw">throw new</span> ArgumentNullException();
+Use(name.Length); <span class="cmt">// ✅ NotNull</span>
+
+<span class="cmt">// null-coalescing 后</span>
+<span class="kw">var</span> s = name ?? <span class="str">""</span>;
+Use(s.Length); <span class="cmt">// ✅ NotNull</span></code></pre>
+  </div>
+  <div class="card">
+    <h4>⚠️ 编译器警告（无法证明 NotNull）</h4>
+<pre><code><span class="type">string?</span> name = GetName();
+Use(name.Length); <span class="cmt">// ⚠️ MaybeNull</span>
+
+<span class="cmt">// 跨方法调用后状态重置</span>
+<span class="kw">if</span> (name != <span class="kw">null</span>)
+{
+    DoSomething();     <span class="cmt">// 编译器不跨方法追踪</span>
+    Use(name.Length); <span class="cmt">// ✅ 仍在 if 块内</span>
+}
+
+<span class="cmt">// 赋值 T? → T</span>
+<span class="type">string?</span> a = <span class="kw">null</span>;
+<span class="type">string</span> b = a; <span class="cmt">// ⚠️ 警告</span></code></pre>
+  </div>
+</div>
+
+<!-- ====== ATTRIBUTES ====== -->
+<h2>Null-state 分析 Attribute</h2>
+<table>
+  <tr><th>Attribute</th><th>用途</th></tr>
+  <tr><td><code>[NotNullWhen(true)]</code></td><td>TryXxx 模式：返回 true 时 out 参数为 NotNull</td></tr>
+  <tr><td><code>[NotNullWhen(false)]</code></td><td>返回 false 时 out 参数为 NotNull</td></tr>
+  <tr><td><code>[MaybeNullWhen(true)]</code></td><td>返回 true 时 out 参数可能为 null</td></tr>
+  <tr><td><code>[MemberNotNull(nameof(field))]</code></td><td>方法调用后指定字段不为 null（如 <code>OnInit</code>）</td></tr>
+</table>
+
+<pre><code><span class="kw">public</span> <span class="type">bool</span> TryGetUser(<span class="type">int</span> id,
+    [NotNullWhen(<span class="kw">true</span>)] <span class="kw">out</span> <span class="type">User?</span> user)
+{
+    user = _users.FirstOrDefault(u => u.Id == id);
+    <span class="kw">return</span> user != <span class="kw">null</span>;
+}
+<span class="cmt">// 调用侧：if (TryGetUser(42, out var u)) → u 自动 NotNull</span></code></pre>
+
+<!-- ====== COMMON PATTERNS ====== -->
+<h2>常见模式</h2>
+
+<h3>DI 构造注入</h3>
+<pre><code><span class="cmt">// 构造函数中赋值 → 编译器追踪到 → 不警告</span>
+<span class="kw">public class</span> <span class="type">UserService</span>
+{
+    <span class="kw">private</span> <span class="type">ILogger</span> _logger;
+    <span class="kw">public</span> UserService(<span class="type">ILogger</span> logger) { _logger = logger; }
+}</code></pre>
+
+<h3>EF Core 导航属性</h3>
+<pre><code><span class="kw">public</span> <span class="type">Customer</span> Customer { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="kw">null!</span>;
+<span class="cmt">// null! = 给初始值 null + ! 让编译器别管（EF 反射填充）</span></code></pre>
+
+<div class="gotcha">
+<strong>NRT 是编译时检查，不是运行时保证。</strong>JIT 不插入 null 检查。通过反射调用、或未开 nullable 的代码仍可传入 null。BCL 公开 API 仍保留显式 <code>ThrowIfNull</code>（.NET 6+）。
+</div>
+
+<!-- ====== MIGRATION ====== -->
+<h2>迁移策略<span class="en">Migration</span></h2>
+<ol>
+  <li>开 <code>warnings</code> 先不报错：<code>&lt;Nullable&gt;warnings&lt;/Nullable&gt;</code></li>
+  <li>逐文件加 <code>#nullable enable</code>，修完一个再下一个</li>
+  <li>公共 API 优先 → internal 代码 → 测试项目</li>
+  <li>DI / EF Core / 反射场景善用 <code>null!</code></li>
+</ol>
+
+<!-- ====== CROSS-REF ====== -->
+<h2>相关速查</h2>
+<ul>
+  <li><a href="pattern-matching-cheatsheet.html">模式匹配<span class="en">Pattern Matching</span></a> — <code>is not null</code>、<code>{ }</code> 判非 null</li>
+  <li><a href="indices-ranges-cheatsheet.html">索引与范围<span class="en">Indices &amp; Ranges</span></a></li>
+  <li><a href="async-streams-cheatsheet.html">异步流<span class="en">Async Streams</span></a></li>
+</ul>
+
+<p style="margin-top:2rem; font-size:0.82rem; color: var(--text-muted);">
+  来自 Lesson 01 · 有疑问？向 Claude 老师追问。<br>
+  引用：<a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/nullable-references">Microsoft Learn: Nullable Reference Types</a>
+</p>
+
+</body>
+</html>

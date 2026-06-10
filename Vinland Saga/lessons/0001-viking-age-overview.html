@@ -115,17 +115,49 @@
     font-size: 0.9rem;
   }
   .tl-text { font-size: 0.95rem; }
-  /* Map placeholder */
+  /* Map box — now prominent at top */
   .map-box {
-    background: var(--highlight);
-    border: 2px dashed var(--border);
+    background: #fffdf8;
+    border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 2rem;
+    padding: 1.5rem;
     text-align: center;
-    color: var(--muted);
-    margin: 1.2rem 0;
+    margin: 1.2rem 0 1.8rem;
   }
-  .map-box svg { max-width: 100%; }
+  .map-box svg { max-width: 100%; height: auto; }
+  .map-legend {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.8rem;
+    font-size: 0.85rem;
+  }
+  .map-legend span { display: flex; align-items: center; gap: 0.3rem; }
+  .legend-w { display: inline-block; width: 24px; height: 2px; border-top: 2px dashed #c62828; }
+  .legend-s { display: inline-block; width: 24px; height: 2px; border-top: 2px dashed #2e7d32; }
+  .legend-e { display: inline-block; width: 24px; height: 2px; border-top: 2px dashed #1565c0; }
+  /* Region highlight cards */
+  .region-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+    margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .region-grid { grid-template-columns: 1fr; } }
+  .region-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+    font-size: 0.9rem;
+  }
+  .region-card h4 {
+    font-size: 0.95rem;
+    color: var(--accent);
+    margin: 0 0 0.3rem;
+  }
+  .region-card p { margin: 0; font-size: 0.85rem; color: var(--muted); }
   /* Tags */
   .tag {
     display: inline-block;
@@ -207,13 +239,110 @@
 <p class="subtitle">Lesson 0001 — 维京时代概览（约公元793–1066年）</p>
 
 <p class="lead">
-  《冰海战纪》的故事不是凭空虚构——它植根于一段真实存在的、波澜壮阔的历史：<strong>维京时代</strong>（Viking Age）。理解这个时代的基本轮廓，是读懂这部漫画的第一步。
+  《冰海战纪》的故事不是凭空虚构——它植根于一段真实存在的、波澜壮阔的历史：<strong>维京时代</strong>（Viking Age）。在本课中，我们将首先建立地理框架，再展开时间脉络，帮助你在阅读漫画时快速定位"谁在哪里做什么"。
 </p>
 
-<h2>一、什么是"维京时代"？</h2>
+<!-- ==================== SECTION 1: MAP FIRST ==================== -->
+<h2>一、先看地图：维京人的世界</h2>
 
 <p>
-  历史学家用"维京时代"（Viking Age）指代<strong>公元8世纪末至11世纪中叶</strong>这段时期。在这近300年间，来自斯堪的纳维亚（今天的挪威、丹麦、瑞典）的北欧人——维京人——驾驶他们的长船，南下欧洲、西越大西洋、东入俄罗斯，进行贸易、殖民与劫掠，彻底改变了欧洲的政治版图。
+  在学习任何历史之前，先建立<strong>空间感</strong>至关重要。请看下面这张地形示意图——它展示了维京人活动的核心区域和三大扩张方向。在你往下读之前，先花一分钟熟悉这些地名和它们的相对位置。
+</p>
+
+<div class="map-box">
+  <svg viewBox="0 0 700 380" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;">
+    <!-- Background ocean -->
+    <rect width="700" height="380" fill="#e8f0f8" rx="6"/>
+
+    <!-- Simplified landmasses -->
+    <!-- Scandinavia -->
+    <path d="M280,30 L310,25 L335,30 L345,50 L340,70 L330,90 L320,110 L310,130 L295,150 L275,140 L265,120 L270,95 L275,70 L273,50 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1.2"/>
+    <!-- British Isles -->
+    <path d="M170,135 L195,125 L210,130 L215,145 L205,160 L195,170 L175,175 L165,165 L160,150 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1.2"/>
+    <!-- Iceland -->
+    <ellipse cx="220" cy="72" rx="18" ry="13" fill="#d4c5a9" stroke="#a09070" stroke-width="1.2"/>
+    <!-- Greenland -->
+    <path d="M120,40 L150,30 L165,38 L160,55 L140,65 L120,58 L112,48 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1.2"/>
+    <!-- Vinland (Newfoundland) -->
+    <path d="M50,70 L75,62 L90,68 L85,82 L65,90 L50,85 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1.2"/>
+    <!-- Frankish Empire / Europe -->
+    <path d="M160,180 L200,170 L290,165 L350,175 L380,190 L370,210 L340,225 L300,230 L250,225 L180,220 L155,205 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1.2"/>
+    <!-- Rus / Eastern Europe -->
+    <path d="M410,100 L460,95 L510,105 L530,120 L520,145 L490,155 L450,150 L430,135 L415,115 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1.2"/>
+    <!-- Byzantium / Mediterranean -->
+    <path d="M350,260 L400,250 L460,255 L500,270 L480,290 L430,300 L380,295 L355,280 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1.2"/>
+
+    <!-- Labels -->
+    <text x="305" y="95" font-size="10" fill="#2c2416" font-family="serif" font-weight="bold">斯堪的纳维亚</text>
+    <text x="308" y="108" font-size="7.5" fill="#6b5e4a" font-family="serif">（挪威·丹麦·瑞典）</text>
+    <text x="170" y="158" font-size="10" fill="#2c2416" font-family="serif" font-weight="bold">英格兰</text>
+    <text x="210" y="68" font-size="9" fill="#2c2416" font-family="serif">冰岛</text>
+    <text x="125" y="52" font-size="9" fill="#2c2416" font-family="serif">格陵兰</text>
+    <text x="55" y="78" font-size="9" fill="#2c2416" font-family="serif">文兰</text>
+    <text x="235" y="205" font-size="9.5" fill="#2c2416" font-family="serif" font-weight="bold">法兰克/欧洲大陆</text>
+    <text x="445" y="130" font-size="9.5" fill="#2c2416" font-family="serif" font-weight="bold">罗斯/东方</text>
+    <text x="385" y="282" font-size="9" fill="#2c2416" font-family="serif">拜占庭</text>
+    <text x="390" y="295" font-size="8" fill="#6b5e4a" font-family="serif">（米克拉加德）</text>
+
+    <!-- Routes -->
+    <!-- Western route (to Vinland) -->
+    <path d="M295,95 Q250,75 220,72 Q180,68 130,50 Q90,55 75,68" fill="none" stroke="#c62828" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <!-- Southern route (to England/France) -->
+    <path d="M295,130 Q250,140 210,145" fill="none" stroke="#2e7d32" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <path d="M290,145 Q260,155 230,180" fill="none" stroke="#2e7d32" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <!-- Eastern route (to Rus/Byzantium) -->
+    <path d="M335,110 Q380,105 420,105 Q470,110 500,130" fill="none" stroke="#1565c0" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <path d="M500,140 Q490,180 460,230 Q430,270 395,275" fill="none" stroke="#1565c0" stroke-width="1.8" stroke-dasharray="6,3"/>
+
+    <!-- Route legend -->
+    <rect x="510" y="305" width="182" height="68" fill="#fffdf8" stroke="#d4c5a9" stroke-width="0.5" rx="4"/>
+    <text x="520" y="321" font-size="8.5" fill="#2c2416" font-family="serif" font-weight="bold">三大航海路线：</text>
+    <line x1="520" y1="332" x2="545" y2="332" stroke="#c62828" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <text x="550" y="336" font-size="8" fill="#2c2416" font-family="serif">西线 — 冰岛→格陵兰→文兰</text>
+    <line x1="520" y1="348" x2="545" y2="348" stroke="#2e7d32" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <text x="550" y="352" font-size="8" fill="#2c2416" font-family="serif">南线 — 英格兰→法兰克</text>
+    <line x1="520" y1="364" x2="545" y2="364" stroke="#1565c0" stroke-width="1.8" stroke-dasharray="6,3"/>
+    <text x="550" y="368" font-size="8" fill="#2c2416" font-family="serif">东线 — 罗斯→拜占庭</text>
+  </svg>
+  <p style="margin-top:0.5rem;font-size:0.85rem;color:var(--muted);">
+    ▲ 注意：此为示意图，海岸线经大幅简化。重点在地名之间的<strong>相对方位</strong>和<strong>航线方向</strong>。
+  </p>
+</div>
+
+<h3>快速定位：漫画涉及的关键地点</h3>
+
+<div class="region-grid">
+  <div class="region-card">
+    <h4>🏠 斯堪的纳维亚</h4>
+    <p><strong>核心区</strong>（今挪威、丹麦、瑞典）。维京人的"老家"。漫画中托尔芬的出身地（冰岛实为挪威人殖民地）、克努特的丹麦王庭所在地。长船技术的发源地。</p>
+  </div>
+  <div class="region-card">
+    <h4>⚔️ 英格兰</h4>
+    <p><strong>漫画前半段主战场</strong>。丹麦人反复入侵和定居的目标。漫画中阿谢拉特佣兵团在此作战，伦敦攻防战、斯韦恩王入侵均在此发生。</p>
+  </div>
+  <div class="region-card">
+    <h4>🧊 冰岛 → 格陵兰 → 文兰</h4>
+    <p><strong>漫画"西进"线</strong>。挪威人→冰岛（870年代）→格陵兰（985年）→文兰即今加拿大纽芬兰（约1000年）。漫画角色<strong>雷夫</strong>（历史标准译名<strong>莱夫·埃里克森</strong>，红发埃里克之子）口中的"文兰"就是这条线的终点。漫画后期托尔芬的目的地。</p>
+  </div>
+  <div class="region-card">
+    <h4>🧭 罗斯 → 拜占庭</h4>
+    <p><strong>漫画当前线</strong>（东方远征篇）。瑞典维京人（瓦良格人）沿俄罗斯河流南下，到达君士坦丁堡（维京人称"米克拉加德"）。漫画中托尔芬一行当前正在这条路线附近。</p>
+  </div>
+  <div class="region-card">
+    <h4>🏰 法兰克/诺曼底</h4>
+    <p><strong>维京扩张南线</strong>。911年罗洛获得诺曼底封地——他的后代威廉于1066年征服英格兰。漫画不直接涉及，但它是维京时代终结的关键伏笔。</p>
+  </div>
+  <div class="region-card">
+    <h4>🌊 波罗的海</h4>
+    <p><strong>约姆斯维京人的活动范围</strong>。漫画中约姆斯堡所在地。波罗的海是维京人内部争霸和贸易的重要水域。</p>
+  </div>
+</div>
+
+<!-- ==================== SECTION 2: WHAT IS VIKING AGE ==================== -->
+<h2>二、什么是"维京时代"？</h2>
+
+<p>
+  有了地图上的空间锚点，我们现在来理解时间概念。历史学家用"维京时代"（Viking Age）指代<strong>公元8世纪末至11世纪中叶</strong>这段时期。在这近300年间，来自斯堪的纳维亚（今天的挪威、丹麦、瑞典）的北欧人——维京人——驾驶他们的长船，南下欧洲、西越大西洋、东入俄罗斯，进行贸易、殖民与劫掠，彻底改变了欧洲的政治版图。
 </p>
 
 <div class="card">
@@ -223,7 +352,8 @@
   </p>
 </div>
 
-<h2>二、舞台搭建之前——斯堪的纳维亚的"前维京时代"</h2>
+<!-- ==================== SECTION 3: PRE-VIKING AGE ==================== -->
+<h2>三、舞台搭建之前——斯堪的纳维亚的"前维京时代"</h2>
 
 <p>
   维京人不是从真空中突然冒出来的。在维京时代爆发之前，斯堪的纳维亚经历了漫长的演变：
@@ -237,58 +367,60 @@
   </ul>
 </div>
 
-<h2>三、维京时代的时间框架</h2>
+<!-- ==================== SECTION 4: TIMELINE ==================== -->
+<h2>四、维京时代的时间框架</h2>
 
-<p>历史学家通常以两个标志性事件界定维京时代的起止：</p>
+<p>历史学家通常以两个标志性事件界定维京时代的起止。现在你已经知道了每个地点在地图上的位置——在脑海中将下面的事件"放"到对应的地点上。</p>
 
 <div class="timeline">
   <div class="tl-item">
-    <div class="tl-year">793年 — 开端</div>
+    <div class="tl-year">📍 英格兰 · 793年 — 开端</div>
     <div class="tl-text"><strong>林迪斯法恩修道院洗劫</strong>（英格兰东北沿海）。维京人突袭了这座神圣的基督教修道院，屠杀僧侣、掠夺财宝。这一事件震惊了整个基督教欧洲，被视为维京时代的开始。<span class="tag tag-history">史实</span></div>
   </div>
   <div class="tl-item">
-    <div class="tl-year">845年</div>
+    <div class="tl-year">📍 法兰克 · 845年</div>
     <div class="tl-text">维京人洗劫巴黎。传奇领袖拉格纳·洛德布罗克（Ragnar Lothbrok）率120艘长船溯塞纳河而上。</div>
   </div>
   <div class="tl-item">
-    <div class="tl-year">865–878年</div>
+    <div class="tl-year">📍 英格兰 · 865–878年</div>
     <div class="tl-text"><strong>维京大军（Great Heathen Army）入侵英格兰</strong>。大批丹麦维京人征服了英格兰东北部，建立了<strong>丹麦法区</strong>（Danelaw）——一片由维京法律和习俗统治的区域。</div>
   </div>
   <div class="tl-item">
-    <div class="tl-year">约870–930年</div>
+    <div class="tl-year">📍 冰岛 · 约870–930年</div>
     <div class="tl-text"><strong>冰岛的定居</strong>（Landnám）。挪威人为了逃避国王"金发哈拉尔"（Harald Fairhair）的集权统治，大批迁往冰岛。这一时期被称为"定居时代"。</div>
   </div>
   <div class="tl-item">
-    <div class="tl-year">约985年</div>
-    <div class="tl-text"><strong>红发埃里克（Erik the Red）发现并定居格陵兰</strong>。他给这片冰雪覆盖的土地取名"绿色之地"（Greenland）以吸引移民。<span class="tag tag-manga">漫画</span> 雷夫·埃里克森的父亲。</div>
+    <div class="tl-year">📍 格陵兰 · 约985年</div>
+    <div class="tl-text"><strong>红发埃里克（Erik the Red，父）发现并定居格陵兰</strong>。他给这片冰雪覆盖的土地取名"绿色之地"（Greenland）以吸引移民。<span class="tag tag-manga">漫画</span> 其子即莱夫·埃里克森（漫画译名"雷夫"）。</div>
   </div>
   <div class="tl-item">
-    <div class="tl-year">约986年</div>
+    <div class="tl-year">📍 波罗的海 · 约986年</div>
     <div class="tl-text"><strong>赫约龙格瓦格海战</strong>（Battle of Hjörungavágr）。约姆斯维京人vs挪威势力的关键海战。<span class="tag tag-manga">漫画</span> 动画第一集的历史背景。⚠️ 此役为萨迦记载，史学界对其真实性存在争议；约姆斯维京人本身也是半传说性质的团体。</div>
   </div>
   <div class="tl-item">
-    <div class="tl-year">约1000年</div>
-    <div class="tl-text"><strong>莱夫·埃里克森（Leif Erikson）发现文兰</strong>（Vinland，今加拿大纽芬兰）。比哥伦布到达美洲早约500年。<span class="tag tag-manga">漫画</span> 雷夫口中的"文兰"——托尔芬的终极目的地。</div>
+    <div class="tl-year">📍 文兰（纽芬兰） · 约1000年</div>
+    <div class="tl-text"><strong>莱夫·埃里克森（Leif Erikson，子，漫画译名"雷夫"）发现文兰</strong>（Vinland，今加拿大纽芬兰）。比哥伦布到达美洲早约500年。他是红发埃里克之子。<span class="tag tag-manga">漫画</span> 漫画中雷夫口中的"文兰"——托尔芬的终极目的地。</div>
   </div>
   <div class="tl-item">
-    <div class="tl-year">1002年11月13日</div>
+    <div class="tl-year">📍 英格兰 · 1002年11月13日</div>
     <div class="tl-text"><strong>圣布里斯节大屠杀</strong>（St. Brice's Day Massacre）。英格兰国王下令屠杀境内丹麦人。<span class="tag tag-manga">漫画</span> 直接触发斯韦恩王入侵英格兰的导火索。</div>
   </div>
   <div class="tl-item">
-    <div class="tl-year">1013–1016年</div>
+    <div class="tl-year">📍 英格兰 · 1013–1016年</div>
     <div class="tl-text"><strong>斯韦恩王与克努特征服英格兰</strong>。斯韦恩（八字胡斯韦恩）于1013年圣诞节加冕英格兰国王，数周后去世；其子<strong>克努特</strong>击败埃德蒙·艾恩赛德，于1016年正式成为英格兰国王。<span class="tag tag-manga">漫画</span> 《冰海战纪》前半部分的核心历史背景。</div>
   </div>
   <div class="tl-item">
-    <div class="tl-year">1018–1035年</div>
+    <div class="tl-year">📍 北海帝国 · 1018–1035年</div>
     <div class="tl-text"><strong>北海帝国（North Sea Empire）全盛期</strong>。克努特大帝统治英格兰、丹麦、挪威三国。这是斯堪的纳维亚政治力量的巅峰。<span class="tag tag-manga">漫画</span> 漫画中克努特的政治野心所向。</div>
   </div>
   <div class="tl-item">
-    <div class="tl-year">1066年 — 终结</div>
+    <div class="tl-year">📍 英格兰 · 1066年 — 终结</div>
     <div class="tl-text"><strong>斯坦福桥战役</strong>（Battle of Stamford Bridge）。挪威国王哈拉尔·哈德拉达（Harald Hardrada）入侵英格兰失败，战死。同年诺曼底公爵威廉征服英格兰（黑斯廷斯战役）。传统上被视为维京时代的终结。</div>
   </div>
 </div>
 
-<h2>四、维京时代之后——北海帝国的瓦解与遗产</h2>
+<!-- ==================== SECTION 5: AFTERMATH ==================== -->
+<h2>五、维京时代之后——北海帝国的瓦解与遗产</h2>
 
 <p>1066年斯坦福桥战役之后，传统意义上的"维京时代"结束了。但这不意味着北欧人从历史舞台上消失：</p>
 
@@ -297,75 +429,17 @@
     <li><strong>北海帝国的崩溃（1035）：</strong>克努特大帝去世后，他的三个儿子未能维持统一。英格兰、丹麦、挪威各自为政。到1042年，英格兰王位已回到旧威塞克斯王系的忏悔者爱德华手中。</li>
     <li><strong>诺曼征服（1066）：</strong>征服者威廉是维京人罗洛的后代——诺曼人本质上是被法兰克化的维京人。黑斯廷斯战役后，维京人的后裔以统治阶级的身份统治了英格兰。</li>
     <li><strong>北欧三王国定型：</strong>丹麦、挪威、瑞典在11-13世纪逐步完成了基督教化和王权集权化，成为中世纪欧洲的一部分。北欧的"维京人"变成了"斯堪的纳维亚人"。</li>
-    <li><strong>格陵兰定居点的消失（约15世纪）：</strong>红发埃里克建立的格陵兰殖民地维持了约400年，最终因气候变化（小冰期）、与因纽特人的冲突和孤立而消亡。</li>
+    <li><strong>格陵兰定居点的消失（约15世纪）：</strong>红发埃里克（莱夫之父）建立的格陵兰殖民地维持了约400年，最终因气候变化（小冰期）、与因纽特人的冲突和孤立而消亡。</li>
   </ul>
 </div>
 
-<h2>五、维京人的世界地图</h2>
-
-<p>维京人并非只向西扩张。他们的足迹遍及已知世界的各个方向：</p>
-
-<div class="map-box">
-  <svg viewBox="0 0 700 380" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;">
-    <!-- Background ocean -->
-    <rect width="700" height="380" fill="#e8f0f8" rx="6"/>
-
-    <!-- Simplified landmasses -->
-    <!-- Scandinavia -->
-    <path d="M280,30 L310,25 L335,30 L345,50 L340,70 L330,90 L320,110 L310,130 L295,150 L275,140 L265,120 L270,95 L275,70 L273,50 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1"/>
-    <!-- British Isles -->
-    <path d="M170,135 L195,125 L210,130 L215,145 L205,160 L195,170 L175,175 L165,165 L160,150 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1"/>
-    <!-- Iceland -->
-    <ellipse cx="220" cy="72" rx="18" ry="13" fill="#d4c5a9" stroke="#a09070" stroke-width="1"/>
-    <!-- Greenland -->
-    <path d="M120,40 L150,30 L165,38 L160,55 L140,65 L120,58 L112,48 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1"/>
-    <!-- Vinland (Newfoundland) -->
-    <path d="M50,70 L75,62 L90,68 L85,82 L65,90 L50,85 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1"/>
-    <!-- Frankish Empire / Europe -->
-    <path d="M160,180 L200,170 L290,165 L350,175 L380,190 L370,210 L340,225 L300,230 L250,225 L180,220 L155,205 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1"/>
-    <!-- Rus / Eastern Europe -->
-    <path d="M410,100 L460,95 L510,105 L530,120 L520,145 L490,155 L450,150 L430,135 L415,115 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1"/>
-    <!-- Byzantium / Mediterranean -->
-    <path d="M350,260 L400,250 L460,255 L500,270 L480,290 L430,300 L380,295 L355,280 Z" fill="#d4c5a9" stroke="#a09070" stroke-width="1"/>
-
-    <!-- Labels -->
-    <text x="310" y="100" font-size="10" fill="#2c2416" font-family="serif" font-weight="bold">斯堪的纳维亚</text>
-    <text x="170" y="158" font-size="10" fill="#2c2416" font-family="serif" font-weight="bold">英格兰</text>
-    <text x="210" y="68" font-size="9" fill="#2c2416" font-family="serif">冰岛</text>
-    <text x="125" y="52" font-size="9" fill="#2c2416" font-family="serif">格陵兰</text>
-    <text x="55" y="78" font-size="9" fill="#2c2416" font-family="serif">文兰</text>
-    <text x="240" y="200" font-size="10" fill="#2c2416" font-family="serif" font-weight="bold">法兰克/欧洲大陆</text>
-    <text x="450" y="130" font-size="10" fill="#2c2416" font-family="serif" font-weight="bold">罗斯/东方</text>
-    <text x="390" y="280" font-size="9" fill="#2c2416" font-family="serif">拜占庭/地中海</text>
-
-    <!-- Routes -->
-    <!-- Western route (to Vinland) -->
-    <path d="M295,95 Q250,75 220,72 Q180,68 130,50 Q90,55 75,68" fill="none" stroke="#c62828" stroke-width="1.5" stroke-dasharray="5,3"/>
-    <!-- Southern route (to England/France) -->
-    <path d="M295,130 Q250,140 210,145" fill="none" stroke="#2e7d32" stroke-width="1.5" stroke-dasharray="5,3"/>
-    <!-- Eastern route (to Rus/Byzantium) -->
-    <path d="M335,110 Q380,105 420,105 Q470,110 500,130" fill="none" stroke="#1565c0" stroke-width="1.5" stroke-dasharray="5,3"/>
-
-    <!-- Route legend -->
-    <rect x="520" y="310" width="170" height="62" fill="#fffdf8" stroke="#d4c5a9" stroke-width="0.5" rx="4"/>
-    <text x="530" y="326" font-size="8" fill="#2c2416" font-family="serif" font-weight="bold">航海路线：</text>
-    <line x1="530" y1="336" x2="555" y2="336" stroke="#c62828" stroke-width="1.5" stroke-dasharray="5,3"/>
-    <text x="560" y="339" font-size="8" fill="#2c2416" font-family="serif">西线 — 向大西洋（冰岛→文兰）</text>
-    <line x1="530" y1="351" x2="555" y2="351" stroke="#2e7d32" stroke-width="1.5" stroke-dasharray="5,3"/>
-    <text x="560" y="354" font-size="8" fill="#2c2416" font-family="serif">南线 — 向英格兰/法兰克</text>
-    <line x1="530" y1="366" x2="555" y2="366" stroke="#1565c0" stroke-width="1.5" stroke-dasharray="5,3"/>
-    <text x="560" y="369" font-size="8" fill="#2c2416" font-family="serif">东线 — 向罗斯/拜占庭</text>
-  </svg>
-  <p style="margin-top:0.5rem;">▲ 维京人的三大扩张方向：<strong style="color:#c62828;">西线</strong>（冰岛→格陵兰→文兰）、<strong style="color:#2e7d32;">南线</strong>（英格兰→法兰克）、<strong style="color:#1565c0;">东线</strong>（罗斯→拜占庭→阿拉伯）<br>
-  <span class="cite">注意：此为示意图，实际海岸线经过大幅简化。</span></p>
-</div>
-
+<!-- ==================== SECTION 6: CAUSES ==================== -->
 <h2>六、为什么是维京人？——扩张的原因</h2>
 
 <div class="card">
   <p style="margin-bottom:0.5rem;">维京时代的爆发不是单一原因造成的。历史学家提出了几种解释：</p>
   <ul style="padding-left:1.3rem;">
-    <li><strong>人口压力：</strong>斯堪的纳维亚可耕地有限，人口增长迫使年轻人出海寻找土地。</li>
+    <li><strong>人口压力：</strong>斯堪的纳维亚可耕地有限（看看地图上斯堪的纳维亚半岛的形状——山脉纵贯、峡湾破碎），人口增长迫使年轻人出海寻找土地。</li>
     <li><strong>造船技术突破：</strong>维京长船（langskip）轻便、快速、吃水浅，既可远洋航行，也可在内陆河流中穿梭——这是一种技术革命。</li>
     <li><strong>政治集权：</strong>北欧从分散的部落社会向集权王国过渡，反对集权的首领带着追随者出海寻找自由。</li>
     <li><strong>财富诱惑：</strong>欧洲的修道院和贸易中心"装满了金银但防守薄弱"——用阿谢拉特的话说，"这是做生意的好机会"。</li>
@@ -373,6 +447,7 @@
   </ul>
 </div>
 
+<!-- ==================== SECTION 7: MANGA CORRELATION ==================== -->
 <h2>七、维京时代中的《冰海战纪》</h2>
 
 <table>
@@ -418,6 +493,7 @@
   </tr>
 </table>
 
+<!-- ==================== SECTION 8: KEY TERMS ==================== -->
 <h2>八、关键概念速览</h2>
 
 <div class="card">
@@ -434,13 +510,14 @@
   </table>
 </div>
 
+<!-- ==================== QUIZ ==================== -->
 <h2>🎯 自我检测</h2>
 
 <div class="quiz" id="q1">
-  <p class="q">1. 维京时代通常以哪两个事件作为起止标志？</p>
-  <label><input type="radio" name="q1" value="a">A. 罗马陷落（476）— 十字军东征（1096）</label>
-  <label><input type="radio" name="q1" value="b">B. 林迪斯法恩洗劫（793）— 斯坦福桥战役（1066）</label>
-  <label><input type="radio" name="q1" value="c">C. 查理曼加冕（800）— 黑死病爆发（1347）</label>
+  <p class="q">1. 维京人的三大扩张方向中，<strong>东线</strong>通往哪里？</p>
+  <label><input type="radio" name="q1" value="a">A. 英格兰和法兰克</label>
+  <label><input type="radio" name="q1" value="b">B. 冰岛、格陵兰和文兰</label>
+  <label><input type="radio" name="q1" value="c">C. 罗斯和拜占庭</label>
   <button onclick="checkQ1()">确认答案</button>
   <div class="feedback" id="f1"></div>
 </div>
@@ -455,17 +532,27 @@
 </div>
 
 <div class="quiz" id="q3">
-  <p class="q">3. 维京人朝三个方向扩张。以下哪条路线是正确的？</p>
-  <label><input type="radio" name="q3" value="a">A. 西线→文兰（北美）；南线→英格兰/法兰克；东线→罗斯/拜占庭</label>
-  <label><input type="radio" name="q3" value="b">B. 西线→英格兰；南线→文兰；东线→日本</label>
-  <label><input type="radio" name="q3" value="c">C. 西线→格陵兰；南线→非洲；东线→中国</label>
+  <p class="q">3. 维京时代通常以哪两个事件作为起止标志？</p>
+  <label><input type="radio" name="q3" value="a">A. 罗马陷落（476）— 十字军东征（1096）</label>
+  <label><input type="radio" name="q3" value="b">B. 林迪斯法恩洗劫（793）— 斯坦福桥战役（1066）</label>
+  <label><input type="radio" name="q3" value="c">C. 查理曼加冕（800）— 黑死病爆发（1347）</label>
   <button onclick="checkQ3()">确认答案</button>
   <div class="feedback" id="f3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <p class="q">4. 在地图上，从斯堪的纳维亚到文兰的正确路径顺序是什么？</p>
+  <label><input type="radio" name="q4" value="a">A. 斯堪的纳维亚 → 英格兰 → 冰岛 → 文兰</label>
+  <label><input type="radio" name="q4" value="b">B. 斯堪的纳维亚 → 冰岛 → 格陵兰 → 文兰</label>
+  <label><input type="radio" name="q4" value="c">C. 斯堪的纳维亚 → 格陵兰 → 冰岛 → 文兰</label>
+  <button onclick="checkQ4()">确认答案</button>
+  <div class="feedback" id="f4"></div>
 </div>
 
 <div class="reminder">
   <strong>💡 学完这课，现在看漫画时你可以留意：</strong><br>
   <ul style="padding-left:1.2rem; margin-top:0.3rem;">
+    <li>翻开地图：每个事件发生在哪里？在心里把漫画场景"放"到地图对应的位置上。</li>
     <li>漫画的背景设定在维京时代<strong>末期</strong>（约1002–1018年前后），不是维京扩张的全盛期。</li>
     <li>斯堪的纳维亚已经开始基督教化，所谓"全员狂热崇拜瓦尔哈拉"是一种艺术夸张。</li>
     <li>"文兰"不是虚构的乌托邦——它是被考古证实的真实地点（加拿大纽芬兰的L'Anse aux Meadows）。</li>
@@ -474,7 +561,7 @@
 
 <div class="reminder" style="background:#e3f0ff;border-color:#90c4f9;">
   <strong>🤖 有疑问？</strong> 随时向你的AI老师提问！例如：<br>
-  <span style="font-size:0.88rem;">"维京时代之前，斯堪的纳维亚是什么样子？"<br>"为什么维京长船在军事上如此成功？"<br>"漫画里的约姆斯维京人在历史上真的存在吗？"</span>
+  <span style="font-size:0.88rem;">"维京时代之前，斯堪的纳维亚是什么样子？"<br>"为什么维京长船在军事上如此成功？"<br>"漫画里的约姆斯维京人在历史上真的存在吗？"<br>"东线的瓦良格人到拜占庭走了哪些河流？"</span>
 </div>
 
 <hr>
@@ -488,17 +575,21 @@
   · <a href="https://movie.douban.com/review/13348793/">豆瓣 — 《诸神的黄昏，心灵的远航》</a>
 </p>
 
+<p style="text-align:center;font-size:0.85rem;color:var(--muted);margin-top:1.5rem;">
+  📄 关联参考：<a href="../reference/viking-age-timeline.html">维京时代大事年表</a>（可打印版本）
+</p>
+
 <script>
 function checkQ1() {
   var f = document.getElementById('f1');
   var sel = document.querySelector('input[name="q1"]:checked');
   if (!sel) { f.className = 'feedback incorrect'; f.textContent = '请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
+  if (sel.value === 'c') {
     f.className = 'feedback correct';
-    f.textContent = '✅ 正确！793年林迪斯法恩修道院洗劫标志着维京时代的开始，1066年斯坦福桥战役标志着传统意义上的终结。';
+    f.textContent = '✅ 正确！东线（瑞典维京人/瓦良格人）经俄罗斯的河流南下，到达拜占庭帝国（君士坦丁堡，维京人称"米克拉加德"）和阿拉伯世界。漫画"东方远征篇"就是这条路线。';
   } else {
     f.className = 'feedback incorrect';
-    f.textContent = '❌ 不对。正确答案是B：793年林迪斯法恩洗劫—1066年斯坦福桥战役。';
+    f.textContent = '❌ 不对。正确答案是C：罗斯和拜占庭。西线通往冰岛→格陵兰→文兰，南线通往英格兰和法兰克。';
   }
 }
 function checkQ2() {
@@ -517,12 +608,24 @@ function checkQ3() {
   var f = document.getElementById('f3');
   var sel = document.querySelector('input[name="q3"]:checked');
   if (!sel) { f.className = 'feedback incorrect'; f.textContent = '请先选择一个答案。'; return; }
-  if (sel.value === 'a') {
+  if (sel.value === 'b') {
     f.className = 'feedback correct';
-    f.textContent = '✅ 正确！西线越过大西洋到文兰，南线袭击英格兰和法兰克，东线穿越罗斯和拜占庭。';
+    f.textContent = '✅ 正确！793年林迪斯法恩修道院洗劫标志着维京时代的开始，1066年斯坦福桥战役标志着传统意义上的终结。';
   } else {
     f.className = 'feedback incorrect';
-    f.textContent = '❌ 不对。正确答案是A：西线→文兰，南线→英格兰/法兰克，东线→罗斯/拜占庭。';
+    f.textContent = '❌ 不对。正确答案是B：793年林迪斯法恩洗劫—1066年斯坦福桥战役。';
+  }
+}
+function checkQ4() {
+  var f = document.getElementById('f4');
+  var sel = document.querySelector('input[name="q4"]:checked');
+  if (!sel) { f.className = 'feedback incorrect'; f.textContent = '请先选择一个答案。'; return; }
+  if (sel.value === 'b') {
+    f.className = 'feedback correct';
+    f.textContent = '✅ 正确！挪威人先定居冰岛（870年代），再从冰岛向西发现格陵兰（985年），最后从格陵兰到达文兰（约1000年）。这是一条逐步"跳岛"的北大西洋航线。';
+  } else {
+    f.className = 'feedback incorrect';
+    f.textContent = '❌ 不对。正确答案是B：斯堪的纳维亚 → 冰岛 → 格陵兰 → 文兰。这是北大西洋"跳岛"航线的正确顺序。';
   }
 }
 </script>

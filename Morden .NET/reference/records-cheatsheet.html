@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Records 速查 · C# 9+</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --warn: #9a6700; --warn-bg: #fff8c5; --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.65;
+    max-width: 780px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 0.15rem; }
+  h2 { font-size: 1.15rem; margin: 1.75rem 0 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.35rem; color: var(--accent); }
+  .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+  .en { color: var(--text-muted); font-size: 0.88em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 0.6rem 0 1rem; font-size: 0.88rem;
+  }
+  th, td { text-align: left; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border); }
+  th { background: #f0efeb; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); }
+  tr:last-child td { border-bottom: none; }
+  td code { white-space: nowrap; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 0.75rem 1rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.8rem; line-height: 1.5; margin: 0.5rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: #f0efeb; padding: 0.12em 0.3em; border-radius: 3px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 0.5rem 0 1rem; }
+  @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 0.75rem 1rem;
+  }
+  .card h4 { font-size: 0.85rem; margin-bottom: 0.35rem; }
+
+  .gotcha {
+    background: var(--warn-bg); border-left: 3px solid var(--warn);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>记录类型速查 <span class="en">Records Cheatsheet</span></h1>
+<p class="subtitle">C# 9+ · 不可变引用类型 · 值相等语义</p>
+
+<h2>声明语法</h2>
+
+<table>
+  <tr><th>形式</th><th>语法</th><th>编译器生成</th></tr>
+  <tr>
+    <td>位置记录 <span class="en">Positional</span></td>
+    <td><code>record Person(string Name, int Age);</code></td>
+    <td>属性 + 构造 + Equals + GetHashCode + ToString + Deconstruct + &lt;Clone&gt;$</td>
+  </tr>
+  <tr>
+    <td>命名记录 <span class="en">Nominal</span></td>
+    <td><code>record Person { public string Name { get; init; } }</code></td>
+    <td>Equals + GetHashCode + ToString + &lt;Clone&gt;$（不含构造和 Deconstruct）</td>
+  </tr>
+  <tr>
+    <td>密封记录</td>
+    <td><code>sealed record Point(int X, int Y);</code></td>
+    <td>同上，阻止继承</td>
+  </tr>
+</table>
+
+<h2>值相等 <span class="en">Value Equality</span> 语义</h2>
+
+<pre><code><span class="kw">var</span> a = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"A"</span>, <span class="num">30</span>);
+<span class="kw">var</span> b = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"A"</span>, <span class="num">30</span>);
+
+a == b          <span class="cmt">// True  ← class 则是 False</span>
+a.Equals(b)     <span class="cmt">// True</span>
+ReferenceEquals(a, b)  <span class="cmt">// False —— 不同的堆对象</span></code></pre>
+
+<h2>编译器生成的 7 个方法</h2>
+
+<table>
+  <tr><th>#</th><th>方法</th><th>行为</th></tr>
+  <tr><td>1</td><td>构造函数 + init 属性</td><td>位置参数 → init-only 属性 + 赋值</td></tr>
+  <tr><td>2</td><td><code>Equals(R other)</code> + <code>IEquatable&lt;R&gt;</code></td><td>所有属性用 <code>EqualityComparer&lt;T&gt;.Default</code> 比较</td></tr>
+  <tr><td>3</td><td><code>==</code> / <code>!=</code> 运算符</td><td>委托给 <code>Equals</code></td></tr>
+  <tr><td>4</td><td><code>GetHashCode()</code></td><td><code>HashCode.Combine</code> 所有属性</td></tr>
+  <tr><td>5</td><td><code>ToString()</code></td><td><code>Person { Name = Alice, Age = 30 }</code></td></tr>
+  <tr><td>6</td><td><code>Deconstruct()</code></td><td>按位置参数顺序解构（仅位置记录）</td></tr>
+  <tr><td>7</td><td><code>&lt;Clone&gt;$()</code></td><td><code>MemberwiseClone()</code> 浅拷贝——<code>with</code> 的底层</td></tr>
+</table>
+
+<h2>With 表达式 <span class="en">With Expressions</span></h2>
+
+<pre><code><span class="kw">var</span> next = original <span class="kw">with</span> { Prop = newValue };
+<span class="cmt">// ① 调用 &lt;Clone&gt;$() 创建浅拷贝
+// ② 给指定属性赋新值
+// ③ 返回新对象——原对象不变</span></code></pre>
+
+<h2>Init-only 属性 <span class="en">Init-only Properties</span></h2>
+
+<pre><code><span class="kw">public</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">init</span>; }  <span class="cmt">// init = 只能在构造 / 初始化器 / with 中赋值</span>
+
+<span class="kw">var</span> p = <span class="kw">new</span> <span class="type">Person</span> { Name = <span class="str">"Bob"</span> };  <span class="cmt">// ✅ 初始化器</span>
+<span class="kw">var</span> p2 = p <span class="kw">with</span> { Name = <span class="str">"Alice"</span> };  <span class="cmt">// ✅ with 表达式</span>
+p.Name = <span class="str">"Charlie"</span>;  <span class="cmt">// ❌ CS8852 编译错误</span></code></pre>
+
+<h2>Record vs Class vs Struct</h2>
+
+<table>
+  <tr><th>维度</th><th>Class</th><th>Record (C# 9)</th><th>Struct</th></tr>
+  <tr><td>类型</td><td>引用类型</td><td>引用类型</td><td>值类型</td></tr>
+  <tr><td>相等语义</td><td>引用相等</td><td><strong>值相等</strong></td><td>值相等（反射）</td></tr>
+  <tr><td>可变性</td><td>默认可变</td><td><strong>默认不可变</strong></td><td>默认可变</td></tr>
+  <tr><td>继承</td><td>✅</td><td>✅（仅 record ↔ record）</td><td>❌</td></tr>
+  <tr><td>样板代码</td><td>手写</td><td><strong>编译器生成</strong></td><td>手写</td></tr>
+  <tr><td>典型用途</td><td>实体、服务</td><td>DTO、值对象、消息</td><td>小数据容器</td></tr>
+</table>
+
+<h2>继承规则</h2>
+
+<table>
+  <tr><th>场景</th><th>允许</th></tr>
+  <tr><td>Record → Record</td><td>✅</td></tr>
+  <tr><td>Record → Class</td><td>❌</td></tr>
+  <tr><td>Class → Record</td><td>❌</td></tr>
+  <tr><td><code>sealed record</code></td><td>✅ 阻止继承</td></tr>
+</table>
+
+<h2>注意事项</h2>
+
+<div class="gotcha">
+<strong>⚠ With 做的是浅拷贝</strong>——嵌套引用类型属性共享同一实例。修改嵌套对象要手动用嵌套 <code>with</code>。
+</div>
+
+<div class="gotcha">
+<strong>⚠ 集合属性小心值相等</strong>——<code>List&lt;T&gt;</code> 不支持值相等。用 <code>ImmutableList&lt;T&gt;</code> 或 <code>IReadOnlyList&lt;T&gt;</code>。
+</div>
+
+<div class="gotcha">
+<strong>⚠ 继承 + 值相等</strong>——编译器插入 <code>EqualityContract</code> 属性，确保 Student 和 Teacher（即使属性相同）不相等。
+</div>
+
+<div class="gotcha">
+<strong>⚠ EF Core 实体的局限</strong>——主实体建议用 class（需要变更追踪），从 EF Core 6 开始 Record 可作为 Owned Entity 使用。
+</div>
+
+</body>
+</html>

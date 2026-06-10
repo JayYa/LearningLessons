@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C# 9 小特性速查 · Top-level Statements · Pattern Matching · Target-typed new · Covariant Returns</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --warn: #9a6700; --warn-bg: #fff8c5; --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.65;
+    max-width: 820px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 0.15rem; }
+  h2 { font-size: 1.15rem; margin: 1.75rem 0 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.35rem; color: var(--accent); }
+  .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+  .en { color: var(--text-muted); font-size: 0.88em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 0.6rem 0 1rem; font-size: 0.88rem;
+  }
+  th, td { text-align: left; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border); }
+  th { background: #f0efeb; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); }
+  tr:last-child td { border-bottom: none; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 0.75rem 1rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.8rem; line-height: 1.5; margin: 0.5rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: #f0efeb; padding: 0.12em 0.3em; border-radius: 3px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 0.5rem 0 1rem; }
+  @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .gotcha {
+    background: var(--warn-bg); border-left: 3px solid var(--warn);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+  .gotcha::before { content: '⚠️ '; }
+
+  .rule {
+    background: #eef1ff; border-left: 3px solid var(--accent);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+  .rule::before { content: '📌 '; }
+
+  @media print {
+    body { font-size: 10pt; padding: 0.5in; max-width: none; }
+    h2 { page-break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>⚡ C# 9 小特性速查</h1>
+<p class="subtitle">Top-level Statements · Pattern Matching 增强 · Target-typed new · Covariant Returns · <a href="../lessons/08-csharp9-small-features.html">📖 完整课程</a></p>
+
+<!-- ====== TOP-LEVEL STATEMENTS ====== -->
+<h2>顶级语句<span class="en">Top-level Statements</span></h2>
+
+<div class="grid-2">
+  <div>
+    <h3>C# 8 及之前</h3>
+<pre><code><span class="kw">using</span> System;
+<span class="kw">namespace</span> App {
+  <span class="kw">class</span> Program {
+    <span class="kw">static</span> <span class="kw">void</span> Main(string[] a) {
+      Console.WriteLine(<span class="str">"Hi"</span>);
+    }
+  }
+}</code></pre>
+  </div>
+  <div>
+    <h3>C# 9</h3>
+<pre><code>Console.WriteLine(<span class="str">"Hi"</span>);</code></pre>
+  </div>
+</div>
+
+<table>
+  <tr><th>能力</th><th>支持？</th></tr>
+  <tr><td><code>using</code> 导入</td><td>✅ 文件开头</td></tr>
+  <tr><td><code>await</code> 异步</td><td>✅ 自动生成 async Task Main</td></tr>
+  <tr><td>访问 <code>args</code></td><td>✅ 隐式可用</td></tr>
+  <tr><td><code>return</code> exit code</td><td>✅</td></tr>
+  <tr><td>定义类/方法（放语句后）</td><td>✅</td></tr>
+  <tr><td>一个项目多个文件用</td><td>❌ 只能一个文件</td></tr>
+</table>
+
+<div class="gotcha">
+  编译器把顶级语句合成为 <code>internal class Program { static void $Main(string[] args) { ... } }</code>。需要暴露 Program 给集成测试？另建文件写 <code>public partial class Program { }</code>——自动合并。
+</div>
+
+<!-- ====== PATTERN MATCHING COMBINATORS ====== -->
+<h2>模式组合器<span class="en">Pattern Combinators</span> (C# 9)</h2>
+
+<table>
+  <tr><th>关键字</th><th>含义</th><th>写法示例</th></tr>
+  <tr><td><code>not</code></td><td>反转模式</td><td><code>x is not null</code>、<code>x is not 0</code></td></tr>
+  <tr><td><code>and</code></td><td>同时满足（交集）</td><td><code>x is > 0 and < 100</code></td></tr>
+  <tr><td><code>or</code></td><td>满足其一（并集）</td><td><code>ch is 'a' or 'e' or 'i' or 'o' or 'u'</code></td></tr>
+</table>
+
+<div class="rule">
+  <strong>优先级：</strong><code>not</code> > <code>and</code> > <code>or</code>（和 <code>!</code> > <code>&amp;&amp;</code> > <code>||</code> 一致）。<strong>不能用括号分组模式</strong>——复杂场景用 <code>when</code> 代替。
+</div>
+
+<div class="gotcha">
+  <code>is not null</code> ≠ <code>!= null</code>。前者是模式匹配——不走 <code>operator !=</code> 重载，更安全。C# 9+ 推荐作为首选的 null 检查写法。
+</div>
+
+<h3>关系模式<span class="en">Relational Patterns</span> (C# 9)</h3>
+
+<pre><code><span class="cmt">// 直接写比较——不再需要 when</span>
+<span class="kw">return</span> score <span class="kw">switch</span>
+{
+    >= <span class="num">90</span> => <span class="str">"A"</span>,
+    >= <span class="num">80</span> => <span class="str">"B"</span>,
+    >= <span class="num">60</span> => <span class="str">"C"</span>,
+    < <span class="num">60</span> => <span class="str">"F"</span>,
+};
+
+<span class="cmt">// 关系模式 + 属性模式</span>
+<span class="kw">return</span> order <span class="kw">switch</span>
+{
+    { IsVip: <span class="kw">true</span>, Total: >= <span class="num">1000</span> } => 0.20m,
+    { IsVip: <span class="kw">true</span> }                   => 0.10m,
+    { Total: >= <span class="num">500</span> }                   => 0.05m,
+    _                                   => 0m,
+};</code></pre>
+
+<div class="gotcha">
+  关系模式只能比较常量/字面量，不能调用方法。涉及方法调用（<code>StartsWith</code>）或跨变量比较（<code>w == h</code>）仍用 <code>when</code>。
+</div>
+
+<!-- ====== TARGET-TYPED NEW ====== -->
+<h2>目标类型 <code>new</code><span class="en">Target-typed new</span></h2>
+
+<table>
+  <tr><th>场景</th><th>C# 8</th><th>C# 9</th></tr>
+  <tr><td>局部变量</td><td><code>List&lt;string&gt; x = new List&lt;string&gt;();</code></td><td><code>List&lt;string&gt; x = new();</code></td></tr>
+  <tr><td>字段初始化</td><td><code>private List&lt;int&gt; _nums = new List&lt;int&gt;();</code></td><td><code>private List&lt;int&gt; _nums = new();</code></td></tr>
+  <tr><td>方法参数</td><td><code>Process(new List&lt;string&gt;());</code></td><td><code>Process(new());</code></td></tr>
+  <tr><td>throw 表达式</td><td><code>throw new ArgumentNullException(...)</code></td><td>同样——但类型推断不适用</td></tr>
+</table>
+
+<div class="gotcha">
+  <strong>不能用的情况：</strong><code>var x = new();</code>（无目标类型）、<code>dynamic d = new();</code>（无编译期类型）、方法重载歧义。
+</div>
+
+<!-- ====== COVARIANT RETURNS ====== -->
+<h2>协变返回<span class="en">Covariant Returns</span></h2>
+
+<div class="grid-2">
+  <div>
+    <h3>C# 8 及之前</h3>
+<pre><code><span class="kw">abstract</span> <span class="kw">class</span> Animal {
+  <span class="kw">abstract</span> Animal Clone();
+}
+<span class="kw">class</span> Dog : Animal {
+  <span class="kw">override</span> Animal Clone()
+    => <span class="kw">new</span> Dog();
+}
+
+<span class="cmt">// 每次都要 cast</span>
+Dog d = (Dog)original.Clone();</code></pre>
+  </div>
+  <div>
+    <h3>C# 9</h3>
+<pre><code><span class="kw">abstract</span> <span class="kw">class</span> Animal {
+  <span class="kw">abstract</span> Animal Clone();
+}
+<span class="kw">class</span> Dog : Animal {
+  <span class="kw">override</span> Dog Clone()
+    => <span class="kw">new</span> Dog();
+}
+
+<span class="cmt">// 不需要 cast！</span>
+Dog d = original.Clone();</code></pre>
+  </div>
+</div>
+
+<table>
+  <tr><th>规则</th><th>说明</th></tr>
+  <tr><td>只限引用类型</td><td>class / record / delegate / interface——struct 不行</td></tr>
+  <tr><td>更具体的类型</td><td>派生类返回类型必须比基类更具体（有隐式引用转换）</td></tr>
+  <tr><td>不是泛型协变</td><td><code>List&lt;Dog&gt;</code> 不能替代 <code>List&lt;Animal&gt;</code>——那是泛型的事</td></tr>
+</table>
+
+<div class="rule">
+  <strong>编译器生成两个方法：</strong>① 你写的 <code>override Dog Clone()</code>（真正的方法体）；② 隐式桥接 <code>override Animal Clone()</code>（调用① + 向上转型返回）。
+</div>
+
+<!-- ====== CROSS-REF ====== -->
+<h2>相关速查</h2>
+<ul>
+  <li><a href="pattern-matching-cheatsheet.html">模式匹配速查</a> — C# 7~8 基础 + C# 9 增强</li>
+  <li><a href="records-cheatsheet.html">Records 速查</a> — C# 9 的另一个重量级特性</li>
+  <li><a href="nrt-cheatsheet.html">NRT 速查</a> — <code>is not null</code> 与可空引用类型</li>
+</ul>
+
+<p style="margin-top:2rem; font-size:0.82rem; color: var(--text-muted);">
+  来自 Lesson 08 · 有疑问？向 Claude 老师追问。<br>
+  引用：<a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/whats-new/csharp-9">Microsoft Learn: What's new in C# 9</a> ·
+  <a href="https://github.com/dotnet/csharplang">dotnet/csharplang</a>
+</p>
+
+</body>
+</html>

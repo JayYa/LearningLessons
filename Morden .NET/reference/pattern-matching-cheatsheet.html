@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>模式匹配速查 · Pattern Matching · C# 8+</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --warn: #9a6700; --warn-bg: #fff8c5; --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.65;
+    max-width: 820px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 0.15rem; }
+  h2 { font-size: 1.15rem; margin: 1.75rem 0 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.35rem; color: var(--accent); }
+  .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+  .en { color: var(--text-muted); font-size: 0.88em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 0.6rem 0 1rem; font-size: 0.88rem;
+  }
+  th, td { text-align: left; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border); }
+  th { background: #f0efeb; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); }
+  tr:last-child td { border-bottom: none; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 0.75rem 1rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.8rem; line-height: 1.5; margin: 0.5rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: #f0efeb; padding: 0.12em 0.3em; border-radius: 3px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 0.5rem 0 1rem; }
+  @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .gotcha {
+    background: var(--warn-bg); border-left: 3px solid var(--warn);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+  .gotcha::before { content: '⚠️ '; }
+
+  .rule {
+    background: #eef1ff; border-left: 3px solid var(--accent);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+  .rule::before { content: '📌 '; }
+
+  @media print {
+    body { font-size: 10pt; padding: 0.5in; max-width: none; }
+    h2 { page-break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>🎯 模式匹配速查 <span class="en">Pattern Matching</span></h1>
+<p class="subtitle">C# 7 引入基础 · C# 8 强化 · 持续演进到 C# 14 · <a href="../lessons/02-csharp8-switch-using-indices.html">📖 完整课程</a></p>
+
+<!-- ====== SWITCH EXPRESSION ====== -->
+<h2>Switch 表达式<span class="en">Switch Expression</span> (C# 8)</h2>
+
+<div class="grid-2">
+  <div>
+    <h3>旧：switch 语句</h3>
+<pre><code><span class="kw">string</span> result;
+<span class="kw">switch</span> (x)
+{
+    <span class="kw">case</span> 1: result = <span class="str">"一"</span>; <span class="kw">break</span>;
+    <span class="kw">case</span> 2: result = <span class="str">"二"</span>; <span class="kw">break</span>;
+    <span class="kw">default</span>: result = <span class="str">"?"</span>; <span class="kw">break</span>;
+}
+<span class="kw">return</span> result;</code></pre>
+  </div>
+  <div>
+    <h3>新：switch 表达式</h3>
+<pre><code><span class="kw">return</span> x <span class="kw">switch</span>
+{
+    1 => <span class="str">"一"</span>,
+    2 => <span class="str">"二"</span>,
+    _ => <span class="str">"?"</span>,
+};</code></pre>
+  </div>
+</div>
+
+<div class="rule">
+  <strong>穷尽性：</strong>switch 表达式必须覆盖所有可能值。必须提供 <code>_</code> 兜底（除非穷举所有枚举值）。
+</div>
+
+<!-- ====== ALL PATTERNS ====== -->
+<h2>所有模式一览</h2>
+<table>
+  <tr><th>模式</th><th>写法</th><th>匹配条件</th><th>引入版本</th></tr>
+  <tr><td>常量模式<span class="en">Constant</span></td><td><code>42</code>, <code>"hello"</code>, <code>null</code></td><td>值相等</td><td>C# 7</td></tr>
+  <tr><td>类型模式<span class="en">Type</span></td><td><code>Circle c</code>, <code>Rectangle</code></td><td>是该类型（自动排除 null）</td><td>C# 7</td></tr>
+  <tr><td>丢弃模式<span class="en">Discard</span></td><td><code>_</code></td><td>匹配一切（代替 <code>default</code>）</td><td>C# 8</td></tr>
+  <tr><td>var 模式<span class="en">Var</span></td><td><code>var x</code></td><td>匹配一切 + 绑定变量（含 null）</td><td>C# 8</td></tr>
+  <tr><td>属性模式<span class="en">Property</span></td><td><code>{ Name: "张三", Age: >= 18 }</code></td><td>属性形状匹配（AND 关系，递归）</td><td>C# 8</td></tr>
+  <tr><td>元组模式<span class="en">Tuple</span></td><td><code>("rock", "paper")</code></td><td>多值同时匹配</td><td>C# 8</td></tr>
+  <tr><td>关系模式<span class="en">Relational</span></td><td><code>&gt; 0</code>, <code>&lt;= 100</code></td><td>大小比较</td><td>C# 9</td></tr>
+  <tr><td>组合模式<span class="en">Combinator</span></td><td><code>or</code>, <code>and</code>, <code>not</code></td><td>模式逻辑组合（关键字，非运算符）</td><td>C# 9</td></tr>
+</table>
+
+<!-- ====== PROPERTY PATTERN ====== -->
+<h2>属性模式<span class="en">Property Pattern</span></h2>
+
+<pre><code><span class="cmt">// 基础：多个属性 = AND 关系</span>
+order <span class="kw">switch</span>
+{
+    { IsVip: <span class="kw">true</span>, Total: >= 1000 } => 0.2m,
+    { IsVip: <span class="kw">true</span> }                  => 0.1m,
+    { Total: >= 500 }                   => 0.05m,
+    _                                   => 0m,
+};
+
+<span class="cmt">// 嵌套：属性的值本身也是模式（递归）</span>
+p <span class="kw">switch</span>
+{
+    { Address: { City: <span class="str">"北京"</span> } } => <span class="str">"北京居民"</span>,
+    _                              => <span class="str">"其他"</span>,
+};
+
+<span class="cmt">// 空属性模式：{ } 匹配所有非 null 实例</span>
+obj <span class="kw">is</span> { }        <span class="cmt">// 等价于 obj is not null</span>
+obj <span class="kw">is</span> { } notNull <span class="cmt">// 绑定到 notNull 变量</span>
+
+<span class="cmt">// 类型 + 属性组合：先查类型，再解构属性</span>
+shape <span class="kw">switch</span>
+{
+    <span class="type">Circle</span> { Radius: > 100 }              => <span class="str">"大圆"</span>,
+    <span class="type">Rectangle</span> { Width: <span class="kw">var</span> w, Height: <span class="kw">var</span> h } <span class="kw">when</span> w == h => <span class="str">"正方形"</span>,
+    <span class="type">Rectangle</span>                              => <span class="str">"矩形"</span>,
+    <span class="kw">null</span>                                   => <span class="str">"空"</span>,
+    _                                        => <span class="str">"未知"</span>,
+};</code></pre>
+
+<div class="gotcha">
+  <code>Rectangle</code> 不写 <code>{ }</code> 也是有效的——纯类型模式，自动排除 null。写 <code>Rectangle { }</code> 等同于纯类型模式（匹配所有非 null 的 Rectangle 实例）。
+</div>
+
+<!-- ====== TUPLE PATTERN ====== -->
+<h2>元组模式<span class="en">Tuple Pattern</span></h2>
+
+<pre><code><span class="cmt">// 多维决策表——替代层层 if-else</span>
+<span class="kw">string</span> GameResult(string p1, string p2) => (p1, p2) <span class="kw">switch</span>
+{
+    (<span class="str">"rock"</span>, <span class="str">"scissors"</span>) => <span class="str">"胜"</span>,
+    (<span class="str">"rock"</span>, <span class="str">"paper"</span>)    => <span class="str">"负"</span>,
+    (<span class="str">"rock"</span>, <span class="str">"rock"</span>)     => <span class="str">"平"</span>,
+    _                    => <span class="str">"?"</span>,
+};
+
+<span class="cmt">// 每个位置可以是任意子模式</span>
+(x, y) <span class="kw">switch</span>
+{
+    (0, 0)     => <span class="str">"原点"</span>,
+    (_, 0)     => <span class="str">"X 轴"</span>,
+    (> 0, > 0) => <span class="str">"第一象限"</span>,
+    _          => <span class="str">"其他"</span>,
+};
+
+<span class="cmt">// 元组 + 属性模式混用</span>
+(user, product) <span class="kw">switch</span>
+{
+    ({ IsVip: <span class="kw">true</span> }, _)                 => <span class="str">"VIP 不限购"</span>,
+    (_, { Stock: 0 })                   => <span class="str">"缺货"</span>,
+    ({ Age: &lt; 18 }, { Category: <span class="str">"成人"</span> }) => <span class="str">"年龄不符"</span>,
+    _                                   => <span class="str">"可购买"</span>,
+};</code></pre>
+
+<!-- ====== WHEN ====== -->
+<h2>when 子句<span class="en">When Clause</span></h2>
+
+<div class="rule">
+  <strong>执行顺序：</strong>模式先匹配 → <code>when</code> 再过滤 → <code>when</code> 失败则继续试下一个分支（不抛异常）。
+</div>
+
+<table>
+  <tr><th>场景</th><th>模式能做吗</th><th>用 when</th></tr>
+  <tr><td>匹配常量</td><td>✅</td><td>不需要</td></tr>
+  <tr><td>范围比较</td><td>✅ 关系模式</td><td>不需要</td></tr>
+  <tr><td>null 检查</td><td>✅ <code>null</code> / <code>not null</code></td><td>不需要</td></tr>
+  <tr><td>比较两个变量</td><td>❌</td><td><code>when w == h</code></td></tr>
+  <tr><td>调用方法</td><td>❌</td><td><code>when s.StartsWith("ERR")</code></td></tr>
+  <tr><td>访问集合元素</td><td>❌</td><td><code>when list.Count > 0</code></td></tr>
+</table>
+
+<pre><code><span class="cmt">// when 必要：条件涉及方法调用</span>
+s <span class="kw">switch</span>
+{
+    <span class="kw">null</span>                                   => <span class="str">"null"</span>,
+    <span class="kw">string</span> x <span class="kw">when</span> x.Trim().Length == 0    => <span class="str">"空白"</span>,
+    <span class="kw">string</span> x <span class="kw">when</span> x.StartsWith(<span class="str">"ERR"</span>)    => <span class="str">"错误"</span>,
+    _                                      => <span class="str">"普通"</span>,
+};
+
+<span class="cmt">// 陷阱：when 失败→跳过，不是报错</span>
+score <span class="kw">switch</span>
+{
+    >= 90 <span class="kw">when</span> score &lt;= 100  => <span class="str">"A"</span>,   <span class="cmt">// score=110: 模式命中, when 失败→跳过→进下一行</span>
+    >= 80                   => <span class="str">"B"</span>,
+    _                       => <span class="str">"C"</span>,
+};</code></pre>
+
+<!-- ====== KEY FACTS ====== -->
+<h2>关键事实</h2>
+
+<div class="gotcha">
+  <strong>为什么 <code>or</code>/<code>and</code>/<code>not</code> 是关键字不是运算符？</strong>
+  <code>|</code>/<code>&amp;</code> 已是位运算符——对值做运算产出新值。模式匹配是描述<strong>形状</strong>，不是计算值。用关键字彻底隔离优先级歧义。三者一致（<code>!</code> 不能当 <code>not</code> 因为 <code>x is !null</code> 语义奇怪）。
+</div>
+
+<div class="gotcha">
+  <strong>分支匹配顺序：从上到下，不是"最匹配"。</strong>这和传统 switch 语句一样。永远把更具体的分支放上面。
+</div>
+
+<!-- ====== CROSS-REF ====== -->
+<h2>相关速查</h2>
+<ul>
+  <li><a href="nrt-cheatsheet.html">NRT 速查</a> — <code>is not null</code>、<code>{ }</code> 判非 null</li>
+  <li><a href="indices-ranges-cheatsheet.html">索引与范围<span class="en">Indices &amp; Ranges</span></a></li>
+  <li><a href="async-streams-cheatsheet.html">异步流<span class="en">Async Streams</span></a></li>
+</ul>
+
+<p style="margin-top:2rem; font-size:0.82rem; color: var(--text-muted);">
+  来自 Lesson 02 · 有疑问？向 Claude 老师追问。<br>
+  引用：<a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/language-reference/operators/patterns">Microsoft Learn: Patterns</a> ·
+  <a href="https://github.com/dotnet/csharplang">dotnet/csharplang</a>
+</p>
+
+</body>
+</html>
