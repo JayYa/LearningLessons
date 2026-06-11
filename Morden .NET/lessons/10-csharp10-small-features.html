@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 10: C# 10 — 文件范围命名空间 · 全局引用 · 常量内插字符串</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+  .callout { padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem; }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafaf9; }
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg); padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; }
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button { margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer; }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback { margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem; }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; } li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+  .badge { display: inline-block; padding: 0.15em 0.55em; border-radius: 100px; font-size: 0.78rem; font-weight: 600; }
+  .badge--val { background: #dafbe1; color: #1a7f37; }
+</style>
+</head>
+<body>
+
+<h1>Lesson 10: C# 10 — 小特性集</h1>
+<p class="subtitle">File-scoped Namespaces · Global Usings · Constant Interpolated Strings——消灭项目中每个文件都重复的样板</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="09-csharp10-record-structs.html">Lesson 09（Record Structs）</a> 和 <a href="08-csharp9-small-features.html">Lesson 08（C# 9 小特性集——Top-level Statements）</a>。<br>
+<strong>C# 10 ↔ .NET 6 LTS：</strong>2021.11 发布。<br>
+<strong>本课目标：</strong>File-scoped Namespaces、Global Usings（含隐式导入）、Constant Interpolated Strings——以及它们如何组合成 .NET 6 一行代码的项目模板。
+</div>
+
+<!-- ========== 1. HOOK ========== -->
+
+<h2>一、从 11 行到 1 行——少了什么？</h2>
+
+<div class="comparison">
+  <div class="old"><h4>😣 .NET 5 控制台项目</h4>
+<pre><code><span class="kw">using</span> System;
+<span class="kw">using</span> System.Collections.Generic;
+<span class="kw">using</span> System.Linq;
+<span class="kw">using</span> System.Threading.Tasks;
+
+<span class="kw">namespace</span> <span class="type">MyConsoleApp</span>
+{
+    <span class="kw">class</span> <span class="type">Program</span>
+    {
+        <span class="kw">static</span> <span class="kw">void</span> Main(<span class="kw">string</span>[] args)
+        {
+            Console.WriteLine(<span class="str">"Hello"</span>);
+        }
+    }
+}</code></pre>
+  </div>
+  <div class="new"><h4>😎 .NET 6 控制台项目</h4>
+<pre><code>Console.WriteLine(<span class="str">"Hello, World!"</span>);</code></pre>
+  </div>
+</div>
+
+<p>Top-level Statements（C# 9）消掉了 class Program 和 Main。但那些 <code>using</code> 去哪了？<code>namespace</code> 去哪了？——这就是 C# 10 的答案。</p>
+
+<!-- ========== 2. FILE-SCOPED NS ========== -->
+
+<h2>二、文件范围命名空间 <span class="en">File-scoped Namespaces</span></h2>
+
+<h3>2.1 痛点——整个文件白缩进一级</h3>
+
+<pre><code><span class="cmt">// 传统：所有代码被 namespace 大括号包着——全体缩进 4 格</span>
+<span class="kw">namespace</span> <span class="type">MyApp.Services</span>
+{
+    <span class="kw">public</span> <span class="kw">class</span> <span class="type">OrderService</span>  <span class="cmt">// ← 4 格</span>
+    {
+        <span class="kw">public</span> <span class="kw">async</span> Task&lt;<span class="type">Order</span>&gt; GetAsync(<span class="kw">int</span> id)  <span class="cmt">// ← 8 格</span>
+        {
+            <span class="cmt">// ... 真正的代码 ← 12 格</span>
+        }
+    }
+}
+
+<span class="cmt">// C# 10：分号结尾，不缩进</span>
+<span class="kw">namespace</span> <span class="type">MyApp.Services</span>;
+
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">OrderService</span>  <span class="cmt">// ← 顶格写</span>
+{
+    <span class="kw">public</span> <span class="kw">async</span> Task&lt;<span class="type">Order</span>&gt; GetAsync(<span class="kw">int</span> id)
+    {
+        <span class="cmt">// ... ← 少一级缩进</span>
+    }
+}</code></pre>
+
+<p><strong>纯粹的语法糖——编译产物完全一样。</strong>一个文件一个 namespace 是 99% 的场景，为什么要为这 99% 多缩进一级？</p>
+
+<div class="callout callout--warn">
+<strong>限制：</strong>一个文件只能有一个 File-scoped Namespace。嵌套 namespace（<code>namespace A { namespace B { } }</code>）不能用此语法。
+</div>
+
+<h3>2.2 隐式命名空间——SDK 自动注入的 namespace</h3>
+
+<p>.NET 6 的 Program.cs 连 <code>namespace</code> 都没有写——但编译器仍然把它放进了命名空间。这是 SDK 的<strong>隐式命名空间</strong><span class="en">Implicit Namespace</span>：</p>
+
+<pre><code><span class="cmt">// 你看到的 Program.cs：</span>
+Console.WriteLine(<span class="str">"Hello"</span>);
+
+<span class="cmt">// 编译器实际编译的等价代码：</span>
+<span class="cmt">// namespace MyApp;  ← SDK 根据 .csproj 的 RootNamespace 自动注入</span>
+<span class="cmt">// internal partial class Program {</span>
+<span class="cmt">//     private static void $Main(string[] args) {</span>
+<span class="cmt">//         Console.WriteLine("Hello");</span>
+<span class="cmt">//     }</span>
+<span class="cmt">// }</span></code></pre>
+
+<p>根命名空间来自 <code>.csproj</code> 中的 <code>&lt;RootNamespace&gt;</code> 或项目文件名。<strong>只有 Top-level Statements 文件且没有显式 namespace 声明时，隐式命名空间才生效。</strong></p>
+
+<!-- ========== 3. GLOBAL USINGS ========== -->
+
+<h2>三、全局引用 <span class="en">Global Usings</span></h2>
+
+<h3>3.1 痛点——每个文件头顶都重复同样的 10 行 using</h3>
+
+<pre><code><span class="cmt">// C# 10 之前——每个 .cs 文件都以这堆开头：</span>
+<span class="kw">using</span> System;
+<span class="kw">using</span> System.Collections.Generic;
+<span class="kw">using</span> System.Linq;
+<span class="kw">using</span> Microsoft.Extensions.Logging;
+<span class="cmt">// ... 重复 N 次</span>
+
+<span class="cmt">// C# 10——GlobalUsings.cs 一个文件管整个项目：</span>
+<span class="kw">global using</span> System;
+<span class="kw">global using</span> System.Collections.Generic;
+<span class="kw">global using</span> System.Linq;
+<span class="kw">global using</span> Microsoft.Extensions.Logging;
+<span class="cmt">// 其他 .cs 文件不再需要这些 using</span></code></pre>
+
+<h3>3.2 完整语法</h3>
+
+<pre><code><span class="cmt">// ① 基本：整个项目可见</span>
+<span class="kw">global using</span> System.Text.Json;
+
+<span class="cmt">// ② global + static：全局静态导入</span>
+<span class="kw">global using static</span> System.Math;  <span class="cmt">// 所有文件都能直接用 Abs(), PI</span>
+
+<span class="cmt">// ③ global + alias：全局别名</span>
+<span class="kw">global using</span> <span class="type">MyDict</span> = Dictionary&lt;<span class="kw">string</span>, <span class="kw">object</span>&gt;;</code></pre>
+
+<h3>3.3 <code>GlobalUsings.cs</code> vs <code>.csproj &lt;Using&gt;</code></h3>
+
+<table>
+  <tr><th></th><th><code>GlobalUsings.cs</code> <span class="badge badge--val">推荐</span></th><th><code>.csproj</code> <code>&lt;Using&gt;</code></th></tr>
+  <tr><td>可见性</td><td>Solution Explorer 里一眼看到</td><td>藏在 .csproj 里，多数人不点开</td></tr>
+  <tr><td>新人上手</td><td>打开文件立刻知道全局有什么</td><td>没人告诉就不知道这里藏了 using</td></tr>
+  <tr><td>Code Review</td><td>PR 里改这个文件很明显</td><td>.csproj 改动容易被忽略</td></tr>
+  <tr><td>编译产物</td><td colspan="2" style="text-align:center;color:var(--good);font-weight:600;">完全一样——都生成程序集级 using 指令</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>社区共识：用 GlobalUsings.cs。</strong>代码是写给人看的。.NET 官方项目模板也都采用此模式。.csproj 的 <code>&lt;Using&gt;</code> 主要是 SDK 的隐式导入在用——那是 SDK 的活，不是你该管的。
+</div>
+
+<h3>3.4 隐式导入 <span class="en">Implicit Usings</span></h3>
+
+<p>.NET 6+ SDK 根据项目类型自动注入一套 global using：</p>
+
+<pre><code><span class="cmt">// 控制台/类库 → SDK 自动注入：
+//   System, System.Collections.Generic, System.IO,
+//   System.Linq, System.Net.Http, System.Threading,
+//   System.Threading.Tasks
+
+// ASP.NET Core → 额外注入：
+//   Microsoft.AspNetCore.Builder,
+//   Microsoft.Extensions.DependencyInjection,
+//   Microsoft.Extensions.Hosting,
+//   Microsoft.Extensions.Logging, ...</span></code></pre>
+
+<p>隐式导入是 SDK 自动生成的 global using——机制相同，来源不同。你自己的 <code>global using</code> 会叠加在上面。通过 <code>&lt;ImplicitUsings&gt;disable&lt;/ImplicitUsings&gt;</code> 可关闭。</p>
+
+<!-- ========== 4. CONST INTERPOLATED ========== -->
+
+<h2>四、常量内插字符串 <span class="en">Constant Interpolated Strings</span></h2>
+
+<h3>4.1 痛点——const 和 $ 水火不容</h3>
+
+<pre><code><span class="cmt">// C# 9：const + 插值 = 编译错误</span>
+<span class="kw">const</span> <span class="kw">string</span> Base = <span class="str">"https://api.example.com"</span>;
+<span class="kw">const</span> <span class="kw">string</span> Ver = <span class="str">"v1"</span>;
+<span class="kw">const</span> <span class="kw">string</span> Url = $<span class="str">"{Base}/{Ver}"</span>;  <span class="cmt">// ❌ C# 9: 编译错误</span>
+<span class="kw">const</span> <span class="kw">string</span> Url = Base + <span class="str">"/"</span> + Ver;  <span class="cmt">// ✅ 只能用 +</span>
+
+<span class="cmt">// C# 10：所有插值部分都是常量 → 合法</span>
+<span class="kw">const</span> <span class="kw">string</span> Url = $<span class="str">"{Base}/{Ver}"</span>;  <span class="cmt">// ✅ 编译时求值 → "https://api.example.com/v1"</span></code></pre>
+
+<table>
+  <tr><th>规则</th><th>示例</th></tr>
+  <tr><td>所有插值部分必须是常量</td><td><code>$"pi = {Math.PI}"</code> ❌——Math.PI 是静态字段，不是 const</td></tr>
+  <tr><td>可以用数字常量</td><td><code>$"v{3}"</code> ✅</td></tr>
+  <tr><td>可以用 <code>nameof()</code></td><td><code>$"Class:{nameof(MyClass)}"</code> ✅——nameof 是编译时常量表达式</td></tr>
+  <tr><td>零运行时开销</td><td>IL 直接是最终拼接好的字符串——和手写一样</td></tr>
+</table>
+
+<pre><code><span class="cmt">// ✅ 真实场景——URL 模板、日志前缀、连接名</span>
+<span class="kw">const</span> <span class="kw">string</span> BaseUrl = <span class="str">"https://api.example.com"</span>;
+<span class="kw">const</span> <span class="kw">string</span> UsersEndpoint = $<span class="str">"{BaseUrl}/users"</span>;
+<span class="kw">const</span> <span class="kw">string</span> AppName = <span class="str">"MyApp"</span>;
+<span class="kw">const</span> <span class="kw">string</span> ConnName = $<span class="str">"{AppName}Db"</span>;  <span class="cmt">// "MyAppDb"</span></code></pre>
+
+<!-- ========== 5. COMBO ========== -->
+
+<h2>五、组合拳——.NET 6 项目模板全貌</h2>
+
+<pre><code><span class="cmt">// ===== Program.cs (.NET 6 console) =====</span>
+<span class="cmt">// 你看不到 using（隐式导入 + GlobalUsings）</span>
+<span class="cmt">// 你看不到 namespace（隐式命名空间 = SDK 自动注入的 File-scoped Namespace）</span>
+Console.WriteLine(<span class="str">"Hello, World!"</span>);  <span class="cmt">// Top-level Statements (C# 9)</span>
+
+<span class="cmt">// ===== ASP.NET Core Minimal API 全貌 =====</span>
+<span class="cmt">// GlobalUsings.cs 里有:</span>
+<span class="cmt">//   global using Microsoft.AspNetCore.Builder; ...</span>
+
+<span class="kw">namespace</span> <span class="type">MyApi</span>;  <span class="cmt">// File-scoped (C# 10)</span>
+
+<span class="kw">var</span> builder = WebApplication.CreateBuilder(args);  <span class="cmt">// Top-level (C# 9)</span>
+builder.Services.AddSingleton&lt;<span class="type">Database</span>&gt;(<span class="kw">new</span>());     <span class="cmt">// Target-typed new (C# 9)</span>
+<span class="kw">var</span> app = builder.Build();
+app.MapGet(<span class="str">"/"</span>, () => <span class="str">"Hello"</span>);
+app.Run();</code></pre>
+
+<p>从 11 行样板到 1 行业务逻辑——不是某个特性特别强，是 C# 9 + 10 组合起来消灭了几乎所有的仪式代码。</p>
+
+<!-- ========== 6. QUIZ ========== -->
+
+<h2>六、小测验</h2>
+
+<div class="quiz" id="q1">
+<div class="question">1/3 · File-scoped Namespace 和传统 namespace，编译产物有什么区别？</div>
+<label><input type="radio" name="q1" value="a">IL 不同——去掉了大括号导致元数据变化</label>
+<label><input type="radio" name="q1" value="b">完全相同——纯粹语法糖，编译器在解析时把分号变回大括号</label>
+<label><input type="radio" name="q1" value="c">File-scoped 生成的 IL 更小——少了一层嵌套</label>
+<label><input type="radio" name="q1" value="d">只能在 Top-level Statements 文件中使用</label>
+<div class="feedback" id="fb1"></div>
+</div>
+
+<div class="quiz" id="q2">
+<div class="question">2/3 · 隐式导入和 global using 的关系是？</div>
+<label><input type="radio" name="q2" value="a">同一个东西的不同叫法</label>
+<label><input type="radio" name="q2" value="b">隐式导入是 SDK 自动生成的 global using——机制相同，来源不同</label>
+<label><input type="radio" name="q2" value="c">隐式导入只在 ASP.NET Core 中生效</label>
+<label><input type="radio" name="q2" value="d">开启了隐式导入就不能再用自己的 global using</label>
+<div class="feedback" id="fb2"></div>
+</div>
+
+<div class="quiz" id="q3">
+<div class="question">3/3 · <code>const string s = $"{nameof(MyClass)}_v3";</code> 能编译吗？</div>
+<label><input type="radio" name="q3" value="a">不能——nameof 不是常量</label>
+<label><input type="radio" name="q3" value="b">能——nameof 和数字字面量都是编译时常量表达式</label>
+<label><input type="radio" name="q3" value="c">不能——const 不能用插值</label>
+<label><input type="radio" name="q3" value="d">能——但会产生运行时 String.Format 开销</label>
+<div class="feedback" id="fb3"></div>
+
+<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
+<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+</div>
+
+<script>
+const answers = { q1: 'b', q2: 'b', q3: 'b' };
+const explanations = {
+  q1: { correct: "✅ 正确！File-scoped Namespace 是纯粹语法糖——编译产物和传统 namespace 完全一样。面试常考这个'语法糖'定位。", wrong: "❌ 答案是 b。编译产物完全相同。可以在任何文件中使用（d错），IL 不更小（c错），元数据不变（a错）。" },
+  q2: { correct: "✅ 正确！隐式导入是 SDK 自动生成的 global using——机制完全相同（都编译为全局可见的 using 指令），只是来源不同（SDK vs 你手写）。两者可叠加。", wrong: "❌ 答案是 b。不是同一东西（a错），控制台和类库也有（c错），可以和你的 global using 叠加（d错）。" },
+  q3: { correct: "✅ 正确！nameof() 是编译时常量表达式——编译器在编译时知道类名。数字字面量 3 也是常量。两个都是常量 → const 插值合法。零运行时开销。", wrong: "❌ 答案是 b。nameof 是编译时常量——可以用于 const 插值。不能用于 const 插值的是 Math.PI（静态字段）、DateTime.Now（运行时属性）等。" },
+};
+function checkAll() {
+  let correct = 0;
+  for (let qid of ['q1','q2','q3']) {
+    const selected = document.querySelector(`input[name="${qid}"]:checked`);
+    const fb = document.getElementById('fb' + qid.slice(1));
+    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
+    if (selected.value === answers[qid]) { fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++; }
+    else { fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show'; }
+  }
+  const scoreEl = document.getElementById('score');
+  scoreEl.style.display = 'block';
+  scoreEl.textContent = `得分：${correct} / 3`;
+  scoreEl.style.color = correct === 3 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
+}
+</script>
+
+<h2>七、下一步</h2>
+<ul>
+  <li><strong>动手：</strong>在项目里创建 <code>GlobalUsings.cs</code>，把高频 using 集中进去。找出所有 <code>namespace X { }</code> 大括号包裹的单 namespace 文件，改成 <code>namespace X;</code>。</li>
+  <li><strong>下一课：</strong><a href="11-csharp11-raw-string-literals.html">Lesson 11 — C# 11: Raw String Literals</a>。</li>
+</ul>
+
+<div class="callout callout--info" style="margin-top:2rem;">
+<strong>💬 有问题？</strong>不确定 GlobalUsings.cs 里该放哪些 using？对隐式导入和手写 global using 的优先级有疑问？随时问。
+</div>
+
+</body>
+</html>

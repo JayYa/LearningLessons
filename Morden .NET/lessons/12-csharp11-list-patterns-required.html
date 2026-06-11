@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 12: C# 11 — List Patterns · Required Members</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+  .callout { padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem; }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
+  th { background: var(--code-bg); font-weight: 600; }
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg); padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; }
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button { margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer; }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback { margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem; }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; } li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+  .diagram {
+    background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 1.5rem; margin: 1.5rem 0;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 0.82rem; line-height: 1.6; white-space: pre; overflow-x: auto; color: #333;
+  }
+</style>
+</head>
+<body>
+
+<h1>Lesson 12: C# 11 — 列表模式 + 必需成员</h1>
+<p class="subtitle">用模式匹配描述集合形状 · 用编译期检查替代运行时报错</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="11-csharp11-raw-string-literals.html">Lesson 11（Raw String Literals）</a>；理解 <a href="../reference/pattern-matching-cheatsheet.html">模式匹配</a> 和 <a href="../reference/span-readonlyspan-cheatsheet.html">Span/ReadOnlySpan</a>。<br>
+<strong>本课：</strong>List Patterns + Required Members。UTF-8 String Literals 在 <a href="13-csharp11-utf8-combo.html">Lesson 13</a>。
+</div>
+
+<!-- ==================== PART 1: LIST PATTERNS ==================== -->
+
+<h2>第一部分：列表模式 <span class="en">List Patterns</span></h2>
+
+<h3>一、痛点——检查数组前三个元素？写一大堆</h3>
+
+<div class="comparison">
+  <div class="old"><h4>😣 C# 10</h4>
+<pre><code><span class="kw">if</span> (arr.Length == <span class="num">3</span>
+    && arr[<span class="num">0</span>] == <span class="num">1</span>
+    && arr[<span class="num">1</span>] >= <span class="num">10</span>
+    && arr[<span class="num">2</span>] &lt;= <span class="num">100</span>) { }</code></pre>
+  </div>
+  <div class="new"><h4>😎 C# 11</h4>
+<pre><code><span class="kw">if</span> (arr <span class="kw">is</span> [<span class="num">1</span>, >= <span class="num">10</span>, &lt;= <span class="num">100</span>]) { }</code></pre>
+  </div>
+</div>
+
+<p>方括号里的不是值——是<strong>模式</strong>。这就是 List Patterns：用模式匹配来解构和检查集合。</p>
+
+<h3>二、完整语法</h3>
+
+<pre><code><span class="cmt">// ① 精确匹配——长度和元素都相等</span>
+<span class="kw">int</span>[] arr = { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span> };
+Console.WriteLine(arr <span class="kw">is</span> [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>]);   <span class="cmt">// True</span>
+Console.WriteLine(arr <span class="kw">is</span> [<span class="num">1</span>, <span class="num">2</span>]);        <span class="cmt">// False——长度不匹配</span>
+
+<span class="cmt">// ② 元素使用任意模式（常量、关系、类型、属性……）</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [<span class="kw">not</span> <span class="num">0</span>, ..]) { }  <span class="cmt">// 第一项不是 0</span>
+
+<span class="cmt">// ③ 切片模式（..）——匹配任意数量元素（含零个）</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [<span class="num">1</span>, ..]) { }          <span class="cmt">// 第一个是 1，后面随便</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [.., <span class="num">9</span>]) { }          <span class="cmt">// 最后一个是 9</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [<span class="num">1</span>, .., <span class="num">9</span>]) { }        <span class="cmt">// 第一个 1，最后 9</span>
+
+<span class="cmt">// ④ 嵌套模式——元素是对象时匹配属性</span>
+<span class="kw">if</span> (orders <span class="kw">is</span> [{ Status: <span class="str">"New"</span> }, .., { Total: >= <span class="num">1000</span> }]) { }
+
+<span class="cmt">// ⑤ var 捕获——提取匹配到的元素</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [<span class="kw">var</span> first, .. <span class="kw">var</span> middle, <span class="kw">var</span> last])
+{ <span class="cmt">// first=arr[0], middle=arr[1..^1], last=arr[^1]</span> }</code></pre>
+
+<h3>三、鸭子类型——不要求实现 IList</h3>
+
+<p>列表模式不要求实现特定接口。编译器只检查：<strong>是否有 Length 或 Count 属性 + 可访问索引器</strong>。支持的类型：</p>
+
+<table>
+  <tr><th>类型</th><th>支持？</th><th>说明</th></tr>
+  <tr><td><code>int[]</code> / <code>T[]</code></td><td>✅</td><td>数组原生支持</td></tr>
+  <tr><td><code>List&lt;T&gt;</code></td><td>✅</td><td>有 Count + 索引器</td></tr>
+  <tr><td><code>Span&lt;T&gt;</code> / <code>ReadOnlySpan&lt;T&gt;</code></td><td>✅</td><td>C# 11 新增——Span 模式匹配</td></tr>
+  <tr><td><code>string</code></td><td>✅</td><td>有 Length + char 索引器</td></tr>
+  <tr><td>自定义集合</td><td>✅</td><td>满足鸭子类型条件即可</td></tr>
+</table>
+
+<h3>四、switch 表达式——最自然的用法</h3>
+
+<pre><code><span class="kw">static</span> <span class="kw">string</span> Describe(<span class="kw">int</span>[] arr) => arr <span class="kw">switch</span>
+{
+    []                    => <span class="str">"空数组"</span>,
+    [<span class="num">0</span>]                   => <span class="str">"只有一个 0"</span>,
+    [<span class="kw">var</span> x, <span class="kw">var</span> y]           => $<span class="str">"两个元素：{x}, {y}"</span>,
+    [<span class="num">1</span>, .., <span class="num">1</span>]              => <span class="str">"首尾都是 1"</span>,
+    [.., <span class="num">0</span>]                => <span class="str">"最后一个元素是 0"</span>,
+    [<span class="kw">not</span> <span class="num">0</span>, ..]             => <span class="str">"第一个不是 0"</span>,
+    _                     => <span class="str">"其他"</span>,
+};
+
+<span class="cmt">// 实战：REST API 路由解析</span>
+<span class="kw">static</span> <span class="kw">string</span> ParseRoute(<span class="kw">string</span>[] segments) => segments <span class="kw">switch</span>
+{
+    [<span class="str">"api"</span>, <span class="str">"users"</span>]             => <span class="str">"用户列表"</span>,
+    [<span class="str">"api"</span>, <span class="str">"users"</span>, <span class="kw">var</span> id]    => $<span class="str">"用户详情 {id}"</span>,
+    [<span class="str">"api"</span>, <span class="str">"users"</span>, <span class="kw">var</span> id, <span class="str">"orders"</span>] => $<span class="str">"用户 {id} 的订单"</span>,
+    _                            => <span class="str">"未知"</span>,
+};</code></pre>
+
+<!-- ==================== PART 2: REQUIRED MEMBERS ==================== -->
+
+<h2>第二部分：必需成员 <span class="en">Required Members</span></h2>
+
+<h3>五、痛点——"这个属性必须设"靠嘴说</h3>
+
+<div class="comparison">
+  <div class="old"><h4>😣 C# 10</h4>
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+}
+<span class="cmt">// 忘了设 Name？运行时才发现为 null</span>
+<span class="kw">var</span> p = <span class="kw">new</span> <span class="type">Person</span>();  <span class="cmt">// 😱 编译器没意见</span></code></pre>
+  </div>
+  <div class="new"><h4>😎 C# 11</h4>
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span>
+{
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+}
+<span class="cmt">// ❌ CS9035：Name is required</span>
+<span class="kw">var</span> p = <span class="kw">new</span> <span class="type">Person</span> { Name = <span class="str">"Alice"</span> };  <span class="cmt">// ✅</span></code></pre>
+  </div>
+</div>
+
+<p><code>required</code> 关键字将"必填属性"从<strong>运行时报错变成编译时错误</strong>。IDE 在你没写完代码时就显示红色波浪线。</p>
+
+<h3>六、两条赋值路径</h3>
+
+<div class="diagram">
+  new Person()  ← 你 new 了一个对象
+     │
+     ├── 路径 A：对象初始化器
+     │      new Person { Name = "A", Email = "x@y.com" }
+     │      编译器比对：required 成员都出现了吗？
+     │
+     └── 路径 B：构造函数体内赋值
+           构造函数有 [SetsRequiredMembers] → 编译器放行
+           构造函数无 [SetsRequiredMembers] → 调用者必须用初始化器补齐
+</div>
+
+<h4>路径 A：纯对象初始化器</h4>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span>
+{
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Email { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">int</span> Age { <span class="kw">get</span>; <span class="kw">set</span>; }  <span class="cmt">// 没有 required——可选</span>
+}
+
+<span class="kw">var</span> p1 = <span class="kw">new</span> <span class="type">Person</span> { Name = <span class="str">"Alice"</span>, Email = <span class="str">"a@b.com"</span> };  <span class="cmt">// ✅</span>
+<span class="kw">var</span> p2 = <span class="kw">new</span> <span class="type">Person</span> { Name = <span class="str">"Alice"</span> };                  <span class="cmt">// ❌ CS9035: Email 未赋值</span>
+<span class="kw">var</span> p3 = <span class="kw">new</span> <span class="type">Person</span>();                                     <span class="cmt">// ❌ CS9035: Name 和 Email 都未赋值</span></code></pre>
+
+<h4>路径 B：构造函数 + [SetsRequiredMembers]</h4>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span>
+{
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Email { <span class="kw">get</span>; <span class="kw">set</span>; }
+
+    <span class="cmt">// 有 SetsRequiredMembers → 编译器信任此构造函数</span>
+    [<span class="type">SetsRequiredMembers</span>]
+    <span class="kw">public</span> <span class="type">Person</span>(<span class="kw">string</span> name, <span class="kw">string</span> email)
+    {
+        Name = name;
+        Email = email;
+    }
+
+    <span class="cmt">// 无 SetsRequiredMembers → 调用者必须用初始化器补齐 Email</span>
+    <span class="kw">public</span> <span class="type">Person</span>(<span class="kw">string</span> name)
+    {
+        Name = name;
+        <span class="cmt">// Email 未赋值 → required 悬空</span>
+    }
+}
+
+<span class="kw">var</span> p1 = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>, <span class="str">"a@b.com"</span>);  <span class="cmt">// ✅ 无需初始化器</span>
+<span class="kw">var</span> p2 = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>) { Email = <span class="str">"a@b.com"</span> };  <span class="cmt">// ✅ 必须补齐</span>
+<span class="kw">var</span> p3 = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>);  <span class="cmt">// ❌ CS9035: Email 悬空</span></code></pre>
+
+<div class="callout callout--warn">
+<strong><code>[SetsRequiredMembers]</code> 是承诺，不是验证。</strong>编译器<strong>不检查</strong>构造函数是否真的设置了所有 required 成员——你承诺了，编译器就信你。这是一个"信任程序员"的契约。
+</div>
+
+<h3>七、常用模式——混合路径</h3>
+
+<pre><code><span class="cmt">// 构造函数设默认值，初始化器补 required 差额——最常见模式</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">ApiClient</span>
+{
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> BaseUrl { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> ApiKey { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">int</span> Timeout { <span class="kw">get</span>; <span class="kw">set</span>; }
+
+    <span class="kw">public</span> <span class="type">ApiClient</span>() { Timeout = <span class="num">30</span>; }  <span class="cmt">// 不加 SetsRequiredMembers</span>
+}
+
+<span class="kw">var</span> client = <span class="kw">new</span> <span class="type">ApiClient</span> { BaseUrl = <span class="str">"https://..."</span>, ApiKey = <span class="str">"sk-xxx"</span> };
+<span class="cmt">// ✅ Timeout=30（构造函数），BaseUrl 和 ApiKey（初始化器）</span></code></pre>
+
+<h3>八、Required + init = 编译期强制不可变</h3>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">ApiConfig</span>
+{
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> BaseUrl { <span class="kw">get</span>; <span class="kw">init</span>; }   <span class="cmt">// 必须设值，设了就不能改</span>
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> ApiKey { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="kw">public</span> <span class="kw">int</span> Timeout { <span class="kw">get</span>; <span class="kw">init</span>; } = <span class="num">30</span>;       <span class="cmt">// 有默认值——不需要 required</span>
+}</code></pre>
+
+<div class="callout callout--info">
+<strong>required 是纯粹编译时检查——IL 中没有运行时代码。</strong>编译后 required 属性就是普通属性，所有检查在编译时完成。
+</div>
+
+<!-- ========== QUIZ ========== -->
+
+<h2>九、小测验</h2>
+
+<div class="quiz" id="q1">
+<div class="question">1/4 · <code>int[] { 1, 2, 3, 4, 5 }</code> 能被哪个模式匹配？</div>
+<label><input type="radio" name="q1" value="a"><code>[1, 2, 3]</code></label>
+<label><input type="radio" name="q1" value="b"><code>[1, .., 5]</code></label>
+<label><input type="radio" name="q1" value="c"><code>[0, ..]</code></label>
+<label><input type="radio" name="q1" value="d"><code>[1, 2, 3, 4, 5, 6]</code></label>
+<div class="feedback" id="fb1"></div>
+</div>
+
+<div class="quiz" id="q2">
+<div class="question">2/4 · List Patterns 只支持数组和 List&lt;T&gt;？</div>
+<label><input type="radio" name="q2" value="a">是的——必须实现 IList 接口</label>
+<label><input type="radio" name="q2" value="b">不是——鸭子类型：有 Length/Count + 索引器即可，包括 Span 和 string</label>
+<label><input type="radio" name="q2" value="c">是的——只支持 T[]</label>
+<label><input type="radio" name="q2" value="d">不是——但只支持 C# 内置类型</label>
+<div class="feedback" id="fb2"></div>
+</div>
+
+<div class="quiz" id="q3">
+<div class="question">3/4 · <code>[SetsRequiredMembers]</code> 做了什么？</div>
+<label><input type="radio" name="q3" value="a">编译器验证该构造函数确实设置了所有 required 成员</label>
+<label><input type="radio" name="q3" value="b">告诉编译器"这个构造函数保证覆盖所有 required 成员"——是承诺，不是验证</label>
+<label><input type="radio" name="q3" value="c">运行时抛出异常，如果 required 成员真的未赋值</label>
+<label><input type="radio" name="q3" value="d">自动生成所有 required 成员的赋值代码</label>
+<div class="feedback" id="fb3"></div>
+</div>
+
+<div class="quiz" id="q4">
+<div class="question">4/4 · 关于 required 的 IL——正确的是？</div>
+<label><input type="radio" name="q4" value="a">编译后在 IL 中生成运行时代码来检查 required 成员是否赋值</label>
+<label><input type="radio" name="q4" value="b">required 是纯粹编译时检查——IL 层面没有验证代码</label>
+<label><input type="radio" name="q4" value="c">required 属性在 IL 中标记为 <code>[Required]</code> attribute</label>
+<label><input type="radio" name="q4" value="d">required 只能用于属性，不能用于字段</label>
+<div class="feedback" id="fb4"></div>
+
+<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
+<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+</div>
+
+<script>
+const answers = { q1: 'b', q2: 'b', q3: 'b', q4: 'b' };
+const explanations = {
+  q1: { correct: "✅ 正确！[1, .., 5] 匹配：第一个=1，最后=5，中间任意数量。a长度3≠5，c第一元素1≠0，d长度6≠5。", wrong: "❌ 答案是 b。[1, .., 5] 首尾正确，.. 匹配中间任意。其他都因长度或首元素不匹配。" },
+  q2: { correct: "✅ 正确！List Patterns 用鸭子类型——不要求接口。Span、ReadOnlySpan、string、自定义集合只要满足条件都支持。", wrong: "❌ 答案是 b。List Patterns 不要求 IList——编译器检查的是 Length/Count 属性 + 索引器的实际存在。" },
+  q3: { correct: "✅ 正确！SetsRequiredMembers 是契约——你承诺、编译器信任。编译器不验证、不生成验证代码。承诺了但没做到 = 未定义行为。", wrong: "❌ 答案是 b。是承诺不是验证。编译器不检查（a错），不生成检查代码（c错），不自动生成赋值（d错）。" },
+  q4: { correct: "✅ 正确！required 100% 编译时——IL 中没有运行时代码检查。required 属性能用于字段，且不生成 [Required] attribute（那是不同的东西）。", wrong: "❌ 答案是 b。required 是纯粹编译时检查。required 也可用于字段，且不生成 [Required] attribute（那是 DataAnnotations 的）。" },
+};
+function checkAll() {
+  let correct = 0;
+  for (let qid of ['q1','q2','q3','q4']) {
+    const selected = document.querySelector(`input[name="${qid}"]:checked`);
+    const fb = document.getElementById('fb' + qid.slice(1));
+    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
+    if (selected.value === answers[qid]) { fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++; }
+    else { fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show'; }
+  }
+  const scoreEl = document.getElementById('score');
+  scoreEl.style.display = 'block';
+  scoreEl.textContent = `得分：${correct} / 4`;
+  scoreEl.style.color = correct === 4 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
+}
+</script>
+
+<h2>十、下一步</h2>
+<ul>
+  <li><strong>List Patterns：</strong>找到一个用 if-else 手动检查数组长度的 switch 语句，改用 switch 表达式 + 列表模式重写。</li>
+  <li><strong>Required：</strong>在配置/DTO 类上把"必须设值"的属性加上 <code>required</code>——看编译器在哪些 new 处报错。</li>
+  <li><strong>下一课：</strong><a href="13-csharp11-utf8-combo.html">Lesson 13 — UTF-8 String Literals + C# 11 总结</a>。</li>
+</ul>
+
+<div class="callout callout--info" style="margin-top:2rem;">
+<strong>💬 有问题？</strong>List Patterns 的 slice 语法不清楚？Required 的赋值路径有困惑？随时问。
+</div>
+
+</body>
+</html>

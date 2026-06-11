@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 09: C# 10 — Record Structs（记录结构体）</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+  .callout { padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem; }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafaf9; }
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg); padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; }
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button { margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer; }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback { margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem; }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; } li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+  .badge { display: inline-block; padding: 0.15em 0.55em; border-radius: 100px; font-size: 0.78rem; font-weight: 600; }
+  .badge--val { background: #dafbe1; color: #1a7f37; }
+  .badge--ref { background: #ede4ff; color: #512bd4; }
+  .diagram {
+    background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 1.5rem; margin: 1.5rem 0;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 0.82rem; line-height: 1.6; white-space: pre; overflow-x: auto; color: #333;
+  }
+</style>
+</head>
+<body>
+
+<h1>Lesson 09: C# 10 — 记录结构体 <span class="en">Record Structs</span></h1>
+<p class="subtitle">C# 9 说"record 只能是 class"——C# 10 说"struct 也可以"</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="07-csharp9-records.html">Lesson 07（C# 9 Records）</a>——理解 record class 的 positional 参数、值相等、with 表达式、编译器生成。<br>
+<strong>C# 10 ↔ .NET 6 LTS：</strong>2021.11 发布。<br>
+<strong>本课只讲一个特性：Record Structs</strong>——C# 10 的 File-scoped Namespaces、Global Usings、Constant Interpolated Strings 在 <a href="10-csharp10-small-features.html">Lesson 10</a>。
+</div>
+
+<!-- ========== 1. HOOK ========== -->
+
+<h2>一、C# 9 留下的缺口</h2>
+
+<div class="comparison">
+  <div class="old"><h4>😣 C# 9：record 只能是 class</h4>
+<pre><code><span class="cmt">// 想做一个轻量 Point？</span>
+<span class="kw">public</span> <span class="kw">record</span> <span class="type">Point</span>(<span class="kw">double</span> X, <span class="kw">double</span> Y);
+<span class="cmt">// → record class：堆分配，每次 new 都 GC 跟踪</span>
+
+<span class="cmt">// 想用 struct 的性能？只能手写：</span>
+<span class="kw">public</span> <span class="kw">struct</span> <span class="type">Point</span> : IEquatable&lt;<span class="type">Point</span>&gt;
+{
+    <span class="kw">public</span> <span class="kw">double</span> X { <span class="kw">get</span>; }
+    <span class="kw">public</span> <span class="kw">double</span> Y { <span class="kw">get</span>; }
+    <span class="kw">public</span> <span class="type">Point</span>(<span class="kw">double</span> x, <span class="kw">double</span> y) { X=x; Y=y; }
+    <span class="kw">public</span> <span class="kw">bool</span> Equals(<span class="type">Point</span> o) => X==o.X && Y==o.Y;
+    <span class="kw">public</span> <span class="kw">override</span> <span class="kw">bool</span> Equals(<span class="kw">object</span> o) => o <span class="kw">is</span> <span class="type">Point</span> p && Equals(p);
+    <span class="kw">public</span> <span class="kw">override</span> <span class="kw">int</span> GetHashCode() => HashCode.Combine(X,Y);
+    <span class="kw">public</span> <span class="kw">override</span> <span class="kw">string</span> ToString() => $<span class="str">"Point {{ X = {X}, Y = {Y} }}"</span>;
+    <span class="kw">public</span> <span class="kw">void</span> Deconstruct(<span class="kw">out</span> <span class="kw">double</span> x, <span class="kw">out</span> <span class="kw">double</span> y) { x=X; y=Y; }
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">bool</span> <span class="kw">operator</span> ==(<span class="type">Point</span> a, <span class="type">Point</span> b) => a.Equals(b);
+    <span class="cmt">// ... 还要 != operator、Clone 方法 ...</span>
+}</code></pre>
+  </div>
+  <div class="new"><h4>😎 C# 10：一行</h4>
+<pre><code><span class="kw">public</span> <span class="kw">readonly</span> <span class="kw">record</span> <span class="kw">struct</span> <span class="type">Point</span>(<span class="kw">double</span> X, <span class="kw">double</span> Y);
+
+<span class="kw">var</span> p1 = <span class="kw">new</span> <span class="type">Point</span>(<span class="num">3</span>, <span class="num">4</span>);
+<span class="kw">var</span> p2 = <span class="kw">new</span> <span class="type">Point</span>(<span class="num">3</span>, <span class="num">4</span>);
+Console.WriteLine(p1 == p2);  <span class="cmt">// True——值相等</span>
+<span class="cmt">// 栈上分配，无 GC 压力，自动生成全部方法</span></code></pre>
+  </div>
+</div>
+
+<!-- ========== 2. CLASS VS STRUCT ========== -->
+
+<h2>二、<code>record class</code> vs <code>record struct</code></h2>
+
+<table>
+  <tr><th></th><th><code>record class</code> <span class="badge badge--ref">引用类型</span></th><th><code>record struct</code> <span class="badge badge--val">值类型</span></th></tr>
+  <tr><td>分配位置</td><td>堆 <span class="en">Heap</span></td><td>栈（优先）<span class="en">Stack</span></td></tr>
+  <tr><td>GC 压力</td><td>有——每次 new 产生堆分配</td><td>无——除非装箱</td></tr>
+  <tr><td>可为 null</td><td>✅ 引用类型天然可 null</td><td>❌ 值类型不可 null（需 <code>Point?</code>）</td></tr>
+  <tr><td>值相等</td><td>✅ Equals 基于所有属性</td><td>✅ Equals 基于所有属性（且不走反射）</td></tr>
+  <tr><td>with 表达式</td><td>✅ shallow clone（调用 &lt;Clone&gt;$）</td><td>✅ 值拷贝（直接用构造函数）</td></tr>
+  <tr><td>ToString()</td><td>✅ 自动生成</td><td>✅ 自动生成</td></tr>
+  <tr><td>Deconstruct</td><td>✅ 自动生成</td><td>✅ 自动生成</td></tr>
+  <tr><td>继承</td><td>✅ record class 之间可继承</td><td>❌ struct 不支持继承</td></tr>
+  <tr><td><code>&lt;Clone&gt;$</code></td><td>✅ 编译器生成</td><td>❌ 不需要——值类型直接拷贝</td></tr>
+  <tr><td><code>EqualityContract</code></td><td>✅ 用于继承判别</td><td>❌ 不需要——无继承</td></tr>
+</table>
+
+<!-- ========== 3. READONLY ========== -->
+
+<h2>三、<code>readonly record struct</code> vs <code>record struct</code></h2>
+
+<pre><code><span class="cmt">// ① readonly record struct —— 完全不可变（推荐默认）</span>
+<span class="kw">public</span> <span class="kw">readonly</span> <span class="kw">record</span> <span class="kw">struct</span> <span class="type">Point</span>(<span class="kw">double</span> X, <span class="kw">double</span> Y);
+<span class="cmt">// 所有属性自动 { get; init; }，编译器强制不可变</span>
+
+<span class="kw">var</span> p = <span class="kw">new</span> <span class="type">Point</span>(<span class="num">1</span>, <span class="num">2</span>);
+<span class="cmt">// p.X = 3;  // ❌ 编译错误——readonly</span>
+
+<span class="cmt">// ② record struct（不加 readonly）——可变值类型 record</span>
+<span class="kw">public</span> <span class="kw">record</span> <span class="kw">struct</span> <span class="type">Counter</span>(<span class="kw">int</span> Value);
+<span class="cmt">// 属性 { get; set; }，可修改</span>
+
+<span class="kw">var</span> c = <span class="kw">new</span> <span class="type">Counter</span>(<span class="num">0</span>);
+c.Value++;  <span class="cmt">// ✅ 可以——不是 readonly</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>几乎总是用 <code>readonly record struct</code>。</strong>可变 struct 有反直觉的防御性拷贝<span class="en">Defensive Copy</span>陷阱。不加 <code>readonly</code> 只在极少场景：你需要一个高频修改的小数据载体（计数器、累加器），且完全清楚可变 struct 的后果。
+</div>
+
+<!-- ========== 4. WHY NOT DEFAULT ========== -->
+
+<h2>四、为什么 <code>record struct</code> 不默认 <code>readonly</code>？</h2>
+
+<p>你会发现一个不对称：<code>record class</code> 默认不可变，<code>record struct</code> 默认可变。这是<strong>刻意设计</strong>，三个根因：</p>
+
+<h3>根因 1：值类型天然隔离，引用类型天然共享</h3>
+
+<pre><code><span class="cmt">// struct：赋值 = 拷贝，修改副本不影响原值</span>
+<span class="kw">var</span> p1 = <span class="kw">new</span> <span class="type">Point</span>(<span class="num">1</span>, <span class="num">2</span>);
+<span class="kw">var</span> p2 = p1;       <span class="cmt">// 完整拷贝——两个独立对象</span>
+p2.X = <span class="num">5</span>;           <span class="cmt">// p1.X 还是 1——安全 ✅</span>
+
+<span class="cmt">// class：赋值 = 拷贝引用，修改影响所有持有者</span>
+<span class="kw">var</span> r1 = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>, <span class="num">30</span>);
+<span class="kw">var</span> r2 = r1;       <span class="cmt">// 拷贝引用——指向同一个对象</span>
+r2.Name = <span class="str">"Bob"</span>;    <span class="cmt">// r1.Name 也变成 "Bob"——危险 ❌</span></code></pre>
+
+<p>"拷贝即隔离"意味着可变 struct 的破坏力远小于可变 class。对 class，不可变是安全必需品；对 struct，不可变是锦上添花。</p>
+
+<h3>根因 2：struct 的 <code>readonly</code> 有历史传承</h3>
+
+<table>
+  <tr><th>版本</th><th>特性</th><th>设计逻辑</th></tr>
+  <tr><td>C# 7.2</td><td><code>readonly struct</code></td><td>编译器可跳过防御性拷贝——性能优化</td></tr>
+  <tr><td>C# 8.0</td><td><code>readonly</code> 实例方法</td><td>声明"此方法不修改状态"</td></tr>
+  <tr><td>C# 10</td><td><code>readonly record struct</code></td><td>延续："struct 默认可变，按需锁定"</td></tr>
+</table>
+
+<h3>根因 3：高性能场景有时需要可变 struct</h3>
+
+<pre><code><span class="cmt">// 热循环中的累加器——可变 struct 是刻意为之</span>
+<span class="kw">public</span> <span class="kw">record</span> <span class="kw">struct</span> <span class="type">Stats</span>(<span class="kw">int</span> Count, <span class="kw">double</span> Sum);
+
+<span class="kw">var</span> stats = <span class="kw">new</span> <span class="type">Stats</span>(<span class="num">0</span>, <span class="num">0</span>);
+<span class="kw">foreach</span> (<span class="kw">var</span> item <span class="kw">in</span> items)
+{
+    stats.Count++;   <span class="cmt">// 原位修改——如果 readonly 就要每次 new 一个新对象</span>
+    stats.Sum += item.Value;
+}</code></pre>
+
+<div class="callout callout--good">
+<strong>面试金句：</strong>"C# 的不可变性策略遵循类型身份——引用类型默认不可变（安全第一），值类型按需不可变（性能第一）。<code>record</code> 关键字尊重了这一哲学。"
+</div>
+
+<!-- ========== 5. WITH ========== -->
+
+<h2>五、<code>with</code> 表达式——浅拷贝的真相</h2>
+
+<p><code>with</code> 做的是<strong>浅拷贝</strong>。但 struct 有个关键特性：如果只含值类型字段，效果上就是深拷贝：</p>
+
+<pre><code><span class="cmt">// 场景 1：纯值类型字段 → 效果 = 深拷贝 ✅</span>
+<span class="kw">public</span> <span class="kw">readonly</span> <span class="kw">record</span> <span class="kw">struct</span> <span class="type">Point</span>(<span class="kw">double</span> X, <span class="kw">double</span> Y);
+<span class="kw">var</span> p1 = <span class="kw">new</span> <span class="type">Point</span>(<span class="num">3</span>, <span class="num">4</span>);
+<span class="kw">var</span> p2 = p1 <span class="kw">with</span> { X = <span class="num">5</span> };  <span class="cmt">// 逐字段拷贝——p1 和 p2 完全独立</span>
+
+<span class="cmt">// 场景 2：含引用类型字段 → 浅拷贝陷阱 ⚠</span>
+<span class="kw">public</span> <span class="kw">readonly</span> <span class="kw">record</span> <span class="kw">struct</span> <span class="type">Person</span>(<span class="kw">string</span> Name, List&lt;<span class="kw">string</span>&gt; Tags);
+<span class="kw">var</span> p1 = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>, <span class="kw">new</span> List&lt;<span class="kw">string</span>&gt; { <span class="str">"admin"</span> });
+<span class="kw">var</span> p2 = p1 <span class="kw">with</span> { Name = <span class="str">"Bob"</span> };
+p2.Tags.Add(<span class="str">"staff"</span>);
+Console.WriteLine(p1.Tags.Count);  <span class="cmt">// 2——p1.Tags 和 p2.Tags 指向同一个 List！</span></code></pre>
+
+<div class="callout callout--info">
+<strong>struct 的 with 不需要 <code>&lt;Clone&gt;$</code>：</strong> <code>p1 with { X = 5 }</code> 等价于 <code>new Point(X: 5, Y: p1.Y)</code>——直接调用构造函数。值类型赋值就是天然的 clone，不需要额外机制。
+</div>
+
+<!-- ========== 6. COMPILER ========== -->
+
+<h2>六、编译器生成了什么？</h2>
+
+<pre><code><span class="cmt">// 你写：</span>
+<span class="kw">public</span> <span class="kw">readonly</span> <span class="kw">record</span> <span class="kw">struct</span> <span class="type">Point</span>(<span class="kw">double</span> X, <span class="kw">double</span> Y);
+
+<span class="cmt">// 编译器生成（简化）：
+//   - init-only 属性 X, Y（因为 readonly）
+//   - 主构造函数，赋值给属性
+//   - Equals(Point other) —— 逐字段比较，不经反射
+//   - Equals(object) 装箱重载
+//   - == 和 != 运算符
+//   - GetHashCode() —— HashCode.Combine 模式
+//   - ToString() —— "Point { X = 3, Y = 4 }"
+//   - Deconstruct(out double X, out double Y)
+//   - 没有 &lt;Clone&gt;$ —— struct 直接拷贝
+//   - 没有 EqualityContract —— struct 不支持继承</span></code></pre>
+
+<div class="callout callout--info">
+<strong>和 record class 的关键区别：</strong>① 没有 <code>&lt;Clone&gt;$</code>——值类型赋值就是拷贝；② 没有 <code>EqualityContract</code>——struct 不能继承；③ <code>Equals</code> 不走反射，纯字段比较——更快。
+</div>
+
+<!-- ========== 7. WHEN ========== -->
+
+<h2>七、什么时候用 record struct？</h2>
+
+<table>
+  <tr><th>选择</th><th>场景</th></tr>
+  <tr><td><code>readonly record struct</code></td><td>小且不可变（≤ 16B）、高频创建销毁、无 GC 要求——Point、Color、UserId</td></tr>
+  <tr><td><code>record class</code></td><td>需要继承、可能为 null、字段多（> 16B）、生命周期长</td></tr>
+  <tr><td><code>record struct</code>（非 readonly）</td><td>需要可变 + 值语义——极少用，几乎总是选 readonly</td></tr>
+</table>
+
+<pre><code><span class="cmt">// ✅ 完美场景</span>
+<span class="kw">public</span> <span class="kw">readonly</span> <span class="kw">record</span> <span class="kw">struct</span> <span class="type">GeoPoint</span>(<span class="kw">double</span> Lat, <span class="kw">double</span> Lng);
+<span class="kw">public</span> <span class="kw">readonly</span> <span class="kw">record</span> <span class="kw">struct</span> <span class="type">Color</span>(<span class="kw">byte</span> R, <span class="kw">byte</span> G, <span class="kw">byte</span> B);
+
+<span class="cmt">// ✅ 高频创建——无 GC 压力</span>
+<span class="kw">var</span> points = Enumerable.Range(<span class="num">0</span>, <span class="num">10000</span>)
+    .Select(i => <span class="kw">new</span> <span class="type">Point</span>(i, i * <span class="num">2</span>))  <span class="cmt">// 零堆分配</span>
+    .ToList();
+
+<span class="cmt">// ❌ 不适合：需要继承（record class）、大对象频繁拷贝（struct 全量拷贝反而慢）</span></code></pre>
+
+<!-- ========== 8. QUIZ ========== -->
+
+<h2>八、小测验</h2>
+
+<div class="quiz" id="q1">
+<div class="question">1/3 · <code>record struct</code> 和 <code>record class</code> 的关键区别？</div>
+<label><input type="radio" name="q1" value="a">record struct 不支持 with 表达式</label>
+<label><input type="radio" name="q1" value="b">record struct 是值类型——无堆分配、无继承、无 &lt;Clone&gt;$、Equals 不走反射</label>
+<label><input type="radio" name="q1" value="c">record struct 不自动生成 Equals 和 GetHashCode</label>
+<label><input type="radio" name="q1" value="d">record struct 只能配合 readonly 使用</label>
+<div class="feedback" id="fb1"></div>
+</div>
+
+<div class="quiz" id="q2">
+<div class="question">2/3 · 为什么 <code>record struct</code> 不默认 <code>readonly</code>？</div>
+<label><input type="radio" name="q2" value="a">C# 团队的疏漏——C# 11 修复了</label>
+<label><input type="radio" name="q2" value="b">值类型拷贝即隔离 + struct 世界有 "opt-in to readonly" 传统 + 高性能场景需要可变</label>
+<label><input type="radio" name="q2" value="c">因为 readonly struct 的性能更差</label>
+<label><input type="radio" name="q2" value="d">技术上做不到——CLR 不支持</label>
+<div class="feedback" id="fb2"></div>
+</div>
+
+<div class="quiz" id="q3">
+<div class="question">3/3 · 热循环中每秒创建百万个不可变 Vector3 实例——选哪个？</div>
+<label><input type="radio" name="q3" value="a"><code>record class Vector3(float X, Y, Z)</code></label>
+<label><input type="radio" name="q3" value="b"><code>readonly record struct Vector3(float X, Y, Z)</code></label>
+<label><input type="radio" name="q3" value="c"><code>record struct Vector3(float X, Y, Z)</code>——不加 readonly</label>
+<label><input type="radio" name="q3" value="d">手写 struct——record 生成的 Equals 太慢</label>
+<div class="feedback" id="fb3"></div>
+
+<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
+<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+</div>
+
+<script>
+const answers = { q1: 'b', q2: 'b', q3: 'b' };
+const explanations = {
+  q1: { correct: "✅ 正确！record struct 的核心差异来自值类型身份：无堆分配、无继承（无 EqualityContract）、无 &lt;Clone&gt;$（值类型直接拷贝）、Equals 是纯粹字段比较不经反射。with 照样支持，readonly 只是推荐不是强制。", wrong: "❌ 答案是 b。record struct 支持 with（a错），自动生成 Equals/GetHashCode（c错），readonly 只是推荐（d错）。" },
+  q2: { correct: "✅ 正确！三个根因：值类型天然隔离（拷贝即安全）、struct 世界 "opt-in to readonly" 的历史一致性、高性能场景需要可变性。", wrong: "❌ 答案是 b。这是刻意的语言设计，不是疏漏。readonly struct 性能更好（消除防御性拷贝），技术上完全可行。" },
+  q3: { correct: "✅ 正确！热循环百万实例 → 必须避免堆分配（排除 a）。Vector3 是不可变数据（不能 c）。record struct 的 Equals 是编译时生成的逐字段比较，不经反射——性能等同于手写（d 没必要）。12 字节 ≤ 16 字节阈值。", wrong: "❌ 答案是 b。readonly record struct：栈分配无 GC + 不可变安全 + 自动生成方法性能等同于手写。12 字节是 record struct 的理想大小。" },
+};
+function checkAll() {
+  let correct = 0;
+  for (let qid of ['q1','q2','q3']) {
+    const selected = document.querySelector(`input[name="${qid}"]:checked`);
+    const fb = document.getElementById('fb' + qid.slice(1));
+    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
+    if (selected.value === answers[qid]) { fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++; }
+    else { fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show'; }
+  }
+  const scoreEl = document.getElementById('score');
+  scoreEl.style.display = 'block';
+  scoreEl.textContent = `得分：${correct} / 3`;
+  scoreEl.style.color = correct === 3 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
+}
+</script>
+
+<h2>九、下一步</h2>
+<ul>
+  <li><strong>动手：</strong>找一个手写了 Equals/GetHashCode 的 struct，改用 <code>readonly record struct</code>——看省了多少行。</li>
+  <li><strong>SharpLab：</strong>对比 record class 和 readonly record struct 的 IL 差异——确认没有 &lt;Clone&gt;$ 和 EqualityContract。</li>
+  <li><strong>下一课：</strong><a href="10-csharp10-small-features.html">Lesson 10 — C# 10 小特性集</a>（File-scoped Namespaces、Global Usings、Constant Interpolated Strings）。</li>
+</ul>
+
+<div class="callout callout--info" style="margin-top:2rem;">
+<strong>💬 有问题？</strong>不确定该用 record class 还是 record struct？对 with 的浅拷贝行为有疑问？随时追问。
+</div>
+
+</body>
+</html>

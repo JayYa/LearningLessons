@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 11: C# 11 — Raw String Literals（原始字符串字面量）</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+  .callout { padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem; }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafaf9; }
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg); padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; }
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button { margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer; }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback { margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem; }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; } li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<h1>Lesson 11: C# 11 — 原始字符串字面量 <span class="en">Raw String Literals</span></h1>
+<p class="subtitle">不再转义、不再拼接——所见即所得的多行字符串</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="10-csharp10-small-features.html">Lesson 10（C# 10 小特性集）</a>。<br>
+<strong>C# 11 ↔ .NET 7：</strong>2022.11 发布。.NET 7 不是 LTS，但 C# 11 特性是纯语言级别——在 .NET 6/8 上设 LangVersion=11 即可使用。<br>
+<strong>本课只讲 Raw String Literals</strong>——List Patterns、Required Members、UTF-8 String Literals 在 <a href="12-csharp11-list-patterns-required.html">Lesson 12</a> 和 <a href="13-csharp11-utf8-combo.html">13</a>。
+</div>
+
+<!-- ========== 1. HOOK ========== -->
+
+<h2>一、字符串地狱三兄弟</h2>
+
+<div class="comparison">
+  <div class="old"><h4>😣 C# 10 及以前</h4>
+<pre><code><span class="cmt">// ① 转义地狱：每个引号加反斜杠</span>
+<span class="kw">var</span> json = <span class="str">"{\"name\":\"Alice\"}"</span>;
+
+<span class="cmt">// ② 拼接地狱：多行字符串用 +</span>
+<span class="kw">var</span> sql = <span class="str">"SELECT Id "</span> +
+         <span class="str">"FROM Users "</span> +
+         <span class="str">"WHERE Status = 1"</span>;
+
+<span class="cmt">// ③ Verbatim（@）只解决一半</span>
+<span class="kw">var</span> xml = <span class="str">@"&lt;item name=""book""/&gt;"</span>;
+<span class="cmt">// 引号还是要双双写</span></code></pre>
+  </div>
+  <div class="new"><h4>😎 C# 11</h4>
+<pre><code><span class="cmt">// 所见即所得——至少三个双引号</span>
+<span class="kw">var</span> json = <span class="str">"""</span>
+<span class="str">    {"name": "Alice"}</span>
+<span class="str">    """</span>;
+
+<span class="kw">var</span> sql = <span class="str">"""</span>
+<span class="str">    SELECT Id</span>
+<span class="str">    FROM Users</span>
+<span class="str">    WHERE Status = 1</span>
+<span class="str">    """</span>;
+
+<span class="kw">var</span> xml = <span class="str">"""</span>
+<span class="str">    &lt;item name="book"/&gt;</span>
+<span class="str">    """</span>;</code></pre>
+  </div>
+</div>
+
+<!-- ========== 2. RULES ========== -->
+
+<h2>二、核心规则</h2>
+
+<table>
+  <tr><th>规则</th><th>说明</th></tr>
+  <tr><td><strong>至少三个 <code>"</code></strong></td><td>开始/结束各至少 3 个双引号——<code>"""..."""</code> 或 <code>""""...""""</code></td></tr>
+  <tr><td><strong>内容中 <code>"</code> 少于包裹数就安全</strong></td><td>内容含 3 个连续引号 → 用 4 个 <code>""""</code> 包裹；内容含 4 个 → 用 5 个……以此类推</td></tr>
+  <tr><td><strong>开始 <code>"""</code> 后必须换行</strong></td><td>内容从下一行开始——<code>"""Hello"""</code> 不合法（开始引号后无换行）</td></tr>
+  <tr><td><strong>自动缩进修剪</strong></td><td>编译器以<strong>结束标记的缩进</strong>为基准，去掉每行前面共同的空白</td></tr>
+  <tr><td><strong>支持内插</strong></td><td><code>$"""...{x}..."""</code>——内插正常使用；<code>$$"""...{{x}}..."""</code>——减少花括号冲突</td></tr>
+</table>
+
+<h3>缩进修剪——编译器怎么决定去留？</h3>
+
+<pre><code><span class="cmt">// 你写（结束 """ 在第 4 列缩进）：</span>
+<span class="kw">var</span> text = <span class="str">"""</span>
+<span class="str">        Line 1</span>
+<span class="str">            Line 2</span>
+<span class="str">        Line 3</span>
+<span class="str">    """</span>;
+
+<span class="cmt">// 编译器：结束 """ 从第 4 列开始 → 基准缩进 = 4 格 → 每行去掉 4 格
+// Line 1
+//     Line 2    ← 这行额外 4 格保留（相对于基准缩进）
+// Line 3</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>基准只看结束 <code>"""</code> 的位置。</strong>如果结束标记在深层缩进里（如 8 格），每行都去掉 8 格。如果某行实际少于 8 格空白——编译器报错。
+</div>
+
+<h3>末尾换行——不可能三角</h3>
+
+<pre><code><span class="cmt">// 正常写法：结束 """ 独占一行 → 末尾自动包含 \r\n</span>
+<span class="kw">var</span> s = <span class="str">"""</span>
+<span class="str">    hello</span>
+<span class="str">    """</span>;  <span class="cmt">// → "hello\r\n"  ← 末尾有换行</span>
+
+<span class="cmt">// 无末尾换行：结束 """ 紧跟内容 → 缩进修剪失效</span>
+<span class="kw">var</span> s = <span class="str">"""</span>
+<span class="str">    hello"""</span>;  <span class="cmt">// → "    hello"  ← 缩进保留了！基准=0</span>
+
+<span class="cmt">// 折衷：正常写，末尾 Trim</span>
+<span class="kw">var</span> s = <span class="str">"""</span>
+<span class="str">    hello</span>
+<span class="str">    """</span>.TrimEnd(<span class="str">"\r\n"</span>);  <span class="cmt">// → "hello"  ← TrimEnd 对 ReadOnlySpan 零分配</span></code></pre>
+
+<div class="callout callout--info">
+<strong>不可能三角：</strong>缩进修剪好用 / 无末尾换行 / 结束 <code>"""</code> 独占一行——三者只能取其二。大多数场景（JSON、SQL、HTML）末尾多个换行不碍事。
+</div>
+
+<!-- ========== 3. COMPILER ========== -->
+
+<h2>三、编译器生成——零运行时开销</h2>
+
+<pre><code><span class="cmt">// 你写：</span>
+<span class="kw">var</span> json = <span class="str">"""</span>
+<span class="str">    {"name": "Alice"}</span>
+<span class="str">    """</span>;
+
+<span class="cmt">// 编译器生成（简化）：
+//   - 编译时完成缩进去除（纯编译器预处理）
+//   - IL：ldstr "{\"name\": \"Alice\"}\r\n"
+//   - 和手写转义字符串完全一样的 IL
+//   - 内插版本 → DefaultInterpolatedStringHandler（和普通 $"..." 一样）</span></code></pre>
+
+<p>Raw String Literal 是<strong>纯粹的编译时预处理</strong>。IL 和手写转义字符串一模一样——它只是让你写的时候不用转义。</p>
+
+<div class="callout callout--info">
+<strong>IL 中的 <code>\r\n</code>：</strong>源文件 Windows 换行（CRLF）就是内容的一部分。编译器只修剪缩进空格/制表符，<strong>不修剪换行符</strong>——因为换行符是你敲的 Enter，是内容的分隔符。
+</div>
+
+<!-- ========== 4. REAL USE ========== -->
+
+<h2>四、真实场景</h2>
+
+<pre><code><span class="cmt">// ✅ 单元测试中的期望 JSON</span>
+<span class="kw">var</span> expected = <span class="str">"""</span>
+<span class="str">    {</span>
+<span class="str">        "id": 1,</span>
+<span class="str">        "name": "Alice"</span>
+<span class="str">    }</span>
+<span class="str">    """</span>;
+
+<span class="cmt">// ✅ SQL 查询模板</span>
+<span class="kw">var</span> sql = <span class="str">"""</span>
+<span class="str">    SELECT u.Id, u.Name, o.Total</span>
+<span class="str">    FROM Users u</span>
+<span class="str">    JOIN Orders o ON u.Id = o.UserId</span>
+<span class="str">    WHERE u.Status = @status</span>
+<span class="str">    """</span>;
+
+<span class="cmt">// ✅ $ 内插——配合 JSON/XML 使用</span>
+<span class="kw">var</span> name = <span class="str">"Alice"</span>;
+<span class="kw">var</span> json = $<span class="str">"""</span>
+<span class="str">    {{ "name": "{name}", "ts": "{DateTime.Now:O}" }}</span>
+<span class="str">    """</span>;  <span class="cmt">// $ + """ → {name} 是内插，字面 { 需 {{ 转义</span>
+
+<span class="cmt">// ✅ $$ 内插——避免和 JSON 花括号冲突</span>
+<span class="kw">var</span> json2 = $$<span class="str">"""</span>
+<span class="str">    { "name": "{{name}}", "count": {{count}} }</span>
+<span class="str">    """</span>;  <span class="cmt">// $$ → {{name}} 是内插，{ 是字面</span></code></pre>
+
+<!-- ========== 5. QUIZ ========== -->
+
+<h2>五、小测验</h2>
+
+<div class="quiz" id="q1">
+<div class="question">1/3 · <code>var s = """Hello""";</code> 能编译吗？</div>
+<label><input type="radio" name="q1" value="a">能——内容为 "Hello"</label>
+<label><input type="radio" name="q1" value="b">不能——开始 """ 后必须换行</label>
+<label><input type="radio" name="q1" value="c">能——但需要 4 个双引号</label>
+<label><input type="radio" name="q1" value="d">能——编译为 "Hello"</label>
+<div class="feedback" id="fb1"></div>
+</div>
+
+<div class="quiz" id="q2">
+<div class="question">2/3 · 缩进修剪的基准是什么？</div>
+<label><input type="radio" name="q2" value="a">开始 """ 的缩进</label>
+<label><input type="radio" name="q2" value="b">第一行内容的缩进</label>
+<label><input type="radio" name="q2" value="c">结束 """ 的缩进</label>
+<label><input type="radio" name="q2" value="d">最少缩进的那一行</label>
+<div class="feedback" id="fb2"></div>
+</div>
+
+<div class="quiz" id="q3">
+<div class="question">3/3 · <code>$"""..."""</code> 和 <code>$$"""..."""</code> 的区别是？</div>
+<label><input type="radio" name="q3" value="a">$" 支持内插，$$" 不支持内插</label>
+<label><input type="radio" name="q3" value="b">$ 是字符串，$$ 是 byte[]</label>
+<label><input type="radio" name="q3" value="c">$$ 减少内插所需的花括号数——{{name}} 代替 {name}</label>
+<label><input type="radio" name="q3" value="d">没有 $$——这是无效语法</label>
+<div class="feedback" id="fb3"></div>
+
+<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
+<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+</div>
+
+<script>
+const answers = { q1: 'b', q2: 'c', q3: 'c' };
+const explanations = {
+  q1: { correct: "✅ 正确！开始 """ 后必须换行，内容从下一行开始。这是语法规则。", wrong: "❌ 答案是 b。开始 """ 后必须换行——这是 Raw String Literal 的硬性语法要求。" },
+  q2: { correct: "✅ 正确！基准纯粹看结束 """ 的缩进位置。编译器在去空白之前不做"检测所有行最小缩进"之类的事。", wrong: "❌ 答案是 c。只看结束 """ 的位置——不是开始标记，不是首行内容，也不是最小缩进。" },
+  q3: { correct: "✅ 正确！$$ 把内插标记从 {x} 变成 {{x}}——适合内容本身含有大量 { } 的场景（如 JSON）。两者都支持内插。", wrong: "❌ 答案是 c。$$ 是合法语法——把内插所需的花括号数加倍，用于避免和内容中的 { } 冲突。两者都支持内插。" },
+};
+function checkAll() {
+  let correct = 0;
+  for (let qid of ['q1','q2','q3']) {
+    const selected = document.querySelector(`input[name="${qid}"]:checked`);
+    const fb = document.getElementById('fb' + qid.slice(1));
+    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
+    if (selected.value === answers[qid]) { fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++; }
+    else { fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show'; }
+  }
+  const scoreEl = document.getElementById('score');
+  scoreEl.style.display = 'block';
+  scoreEl.textContent = `得分：${correct} / 3`;
+  scoreEl.style.color = correct === 3 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
+}
+</script>
+
+<h2>六、下一步</h2>
+<ul>
+  <li><strong>动手：</strong>在项目里找出所有 <code>"{\"..."</code> 和 <code>@"..."</code> 字符串——用 Raw String Literal 重写。</li>
+  <li><strong>SharpLab：</strong>对比 Raw String Literal 和手写转义字符串的 IL——验证它们完全一致。</li>
+  <li><strong>下一课：</strong><a href="12-csharp11-list-patterns-required.html">Lesson 12 — List Patterns + Required Members</a>。</li>
+</ul>
+
+<div class="callout callout--info" style="margin-top:2rem;">
+<strong>💬 有问题？</strong>对缩进修剪规则不清楚？不确定什么时候用 4 个引号而不是 3 个？随时问。
+</div>
+
+</body>
+</html>

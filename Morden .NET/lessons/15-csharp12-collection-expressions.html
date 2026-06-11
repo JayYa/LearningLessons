@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lesson 12: C# 12 — Collection Expressions（集合表达式）</title>
+<title>Lesson 15: C# 12 — Collection Expressions（集合表达式）</title>
 <style>
   :root {
     --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
@@ -97,11 +97,11 @@
 </head>
 <body>
 
-<h1>Lesson 12: C# 12 — 集合表达式 <span class="en">Collection Expressions</span></h1>
+<h1>Lesson 15: C# 12 — 集合表达式 <span class="en">Collection Expressions</span></h1>
 <p class="subtitle">一个方括号语法统一四种集合创建方式——编译器还帮你做优化</p>
 
 <div class="callout callout--info">
-<strong>前置：</strong>已完成 <a href="11-csharp12-primary-constructors.html">Lesson 11（C# 12 Primary Constructors）</a>；理解 <a href="../reference/span-readonlyspan-cheatsheet.html">Span/ReadOnlySpan</a> 概念。<br>
+<strong>前置：</strong>已完成 <a href="14-csharp12-primary-constructors.html">Lesson 14（C# 12 Primary Constructors）</a>；理解 <a href="../reference/span-readonlyspan-cheatsheet.html">Span/ReadOnlySpan</a> 概念。<br>
 <strong>阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/language-reference/operators/collection-expressions">Microsoft Learn: 集合表达式</a> · <a href="https://devblogs.microsoft.com/dotnet/announcing-csharp-12/">.NET Blog: Announcing C# 12</a>
 </div>
 
@@ -339,7 +339,7 @@ function checkAll() {
   <li><strong>动手：</strong>在项目里搜索 <code>new[] {</code>、<code>new List</code>、<code>Array.Empty</code>——全部替换成 <code>[ ]</code>。Visual Studio 有自动分析器建议这个替换。</li>
   <li><strong>SharpLab：</strong>分别用 <code>[1,2,3]</code> 和 <code>new[] {1,2,3}</code> 创建数组，对比 IL——它们应该完全一致。再对比 List 创建——你会看到补 compiler 生成的优化路径不同。</li>
   <li><strong>阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/language-reference/operators/collection-expressions">Microsoft Learn: 集合表达式</a> · <a href="https://github.com/dotnet/csharplang/blob/main/proposals/csharp-12.0/collection-expressions.md">功能设计提案</a></li>
-  <li><strong>下一课：</strong><a href="13-csharp12-ref-readonly-inline-arrays.html">Lesson 13 — ref readonly + Inline Arrays</a>。</li>
+  <li><strong>下一课：</strong><a href="16-csharp12-ref-readonly-inline-arrays.html">Lesson 16 — ref readonly + Inline Arrays</a>。</li>
 </ul>
 
 <div class="callout callout--info" style="margin-top:2rem;">
