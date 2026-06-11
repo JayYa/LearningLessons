@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 11: C# 12 — Primary Constructors（主构造函数）</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  .callout {
+    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
+  }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
+
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafaf9; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+
+  .diagram {
+    background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 1.5rem; margin: 1.5rem 0;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 0.82rem; line-height: 1.6; white-space: pre; overflow-x: auto;
+    color: #333;
+  }
+  .badge {
+    display: inline-block; padding: 0.15em 0.55em; border-radius: 100px;
+    font-size: 0.78rem; font-weight: 600;
+  }
+  .badge--pro { background: #dafbe1; color: #1a7f37; }
+  .badge--lts { background: #ede4ff; color: #512bd4; }
+</style>
+</head>
+<body>
+
+<h1>Lesson 11: C# 12 — 主构造函数 <span class="en">Primary Constructors</span></h1>
+<p class="subtitle">不是"Record 的构造函数搬到 class"——它是一套全新的参数捕获机制</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="07-csharp9-records.html">Lesson 07（C# 9 Records）</a>——理解 Record 的 positional 参数和编译器自动生成属性。<br>
+<strong>C# 12 ↔ .NET 8 LTS <span class="badge badge--lts">LTS</span>：</strong>2023.11 发布，三年支持。本课只讲 Primary Constructors——C# 12 的 Collection Expressions、ref readonly、Inline Arrays 等将在后续课程中逐一深入。<br>
+<strong>阅读：</strong><a href="https://devblogs.microsoft.com/dotnet/announcing-csharp-12/">.NET Blog: Announcing C# 12</a> · <a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/whats-new/csharp-12">Microsoft Learn: C# 12</a>
+</div>
+
+<!-- ============================== 1. HOOK ============================== -->
+
+<h2>一、这 7 行，你写过多少次？</h2>
+
+<div class="comparison">
+  <div class="old"><h4>😣 C# 11：构造函数样板</h4>
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">OrderService</span>
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="type">ILogger</span>&lt;OrderService&gt; _logger;
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="type">IOrderRepo</span> _repo;
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="type">IEmailService</span> _email;
+
+    <span class="kw">public</span> OrderService(
+        <span class="type">ILogger</span>&lt;OrderService&gt; logger,
+        <span class="type">IOrderRepo</span> repo,
+        <span class="type">IEmailService</span> email)
+    {
+        _logger = logger;
+        _repo = repo;
+        _email = email;
+    }
+    <span class="cmt">// ... 实际业务方法 ...</span>
+}</code></pre>
+  </div>
+  <div class="new"><h4>😎 C# 12：声明即注入</h4>
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">OrderService</span>(
+    <span class="type">ILogger</span>&lt;OrderService&gt; _logger,
+    <span class="type">IOrderRepo</span> _repo,
+    <span class="type">IEmailService</span> _email)
+{
+    <span class="kw">public</span> <span class="kw">async</span> Task Place(Order o)
+    {
+        _logger.LogInfo(<span class="str">"Placing..."</span>);
+        <span class="kw">await</span> _repo.SaveAsync(o);
+        <span class="kw">await</span> _email.SendAsync(o);
+    }
+}</code></pre>
+  </div>
+</div>
+
+<p>这不是"少写几行"的问题——是<strong>构造函数从代码的"结构噪音"变成了类型签名的一部分</strong>。读代码的人一眼看到"这个服务依赖三个东西"，而不是跳过 10 行样板才看到业务逻辑。</p>
+
+<!-- ============================== 2. FIRST PRINCIPLE ============================== -->
+
+<h2>二、第一性原理——它不是 Record 的那套</h2>
+
+<p>你已经学过 <a href="07-csharp9-records.html">Lesson 07（Records）</a>：<code>record Person(string Name, int Age);</code> 一行，编译器自动生成 <code>Name</code>、<code>Age</code> 两个 init-only 属性 + 构造函数 + Equals + Deconstruct……</p>
+
+<p>C# 12 把 <code>(参数)</code> 这个语法<strong>也给了 class 和 struct</strong>——但<strong>编译器行为完全不同</strong>。如果你带着 Record 的预期去看 class 的主构造函数，一定会踩坑。</p>
+
+<div class="callout callout--warn">
+<strong>核心差异：</strong>Record 的主构造函数生成 <strong>public property</strong>。Class/struct 的主构造函数<strong>什么属性都不生成</strong>——参数只是"类的全局变量"，编译器<strong>按需</strong>捕获为私有字段。
+</div>
+
+<pre><code><span class="cmt">// ===== Record（C# 9+）=====</span>
+<span class="kw">public</span> <span class="kw">record</span> <span class="type">Person</span>(<span class="kw">string</span> Name, <span class="kw">int</span> Age);
+<span class="cmt">// ↑ Name 和 Age 是 init-only public 属性——外部可直接访问</span>
+<span class="cmt">//   person.Name → "Alice" ✅</span>
+
+<span class="cmt">// ===== Class（C# 12）=====</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span>(<span class="kw">string</span> name, <span class="kw">int</span> age)
+{
+    <span class="cmt">// name 和 age 不是属性！外部访问不到。</span>
+    <span class="cmt">// 你要暴露？自己写：</span>
+    <span class="kw">public</span> <span class="kw">string</span> Name => name;   <span class="cmt">// ← 手写属性，引用主构造参数</span>
+    <span class="kw">public</span> <span class="kw">int</span> Age => age;        <span class="cmt">// ← 同上</span>
+}
+<span class="cmt">//   new Person("Alice", 30).name → ❌ 编译错误：name 不存在
+//   new Person("Alice", 30).Name → ✅ "Alice"  （手写的属性）</span></code></pre>
+
+<p>这个设计是<strong>有意为之</strong>——class 不是数据载体（那是 Record 的职责），class 是行为载体。它的参数通常是<strong>依赖</strong>（如 ILogger），不应该暴露为公开属性。</p>
+
+<!-- ============================== 3. CAPTURE SEMANTICS ============================== -->
+
+<h2>三、捕获语义 <span class="en">Capture Semantics</span>——编译器什么时候分配字段？</h2>
+
+<p>这是 Primary Constructor <strong>最关键的内部机制</strong>。参数不一定被存为字段——编译器做逃逸分析：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Widget</span>(<span class="kw">string</span> name, <span class="kw">int</span> width, <span class="kw">int</span> height, <span class="kw">int</span> depth)
+    : <span class="type">NamedItem</span>(name)                    <span class="cmt">// ← name 只在这里出现 → 不捕获为字段</span>
+{
+    <span class="kw">public</span> <span class="kw">int</span> WidthInCM => width;        <span class="cmt">// ← width 出现在属性体 → 捕获</span>
+    <span class="kw">public</span> <span class="kw">int</span> HeightInCM => height;      <span class="cmt">// ← height 出现在属性体 → 捕获</span>
+    <span class="kw">public</span> <span class="kw">int</span> DepthInCM => depth;        <span class="cmt">// ← depth 出现在属性体 → 捕获</span>
+    <span class="kw">public</span> <span class="kw">int</span> Volume => width * height * depth;
+}
+
+<span class="cmt">// 到 SharpLab 验证——编译器生成的 IL 近似：</span>
+<span class="cmt">// .class public Widget extends NamedItem {</span>
+<span class="cmt">//   .field private int32 '&lt;width&gt;P'    // ← 编译器命名，不可在 C# 中直接引用</span>
+<span class="cmt">//   .field private int32 '&lt;height&gt;P'</span>
+<span class="cmt">//   .field private int32 '&lt;depth&gt;P'</span>
+<span class="cmt">// </span>
+<span class="cmt">//   .method public ctor(string name, int32 width, int32 height, int32 depth) {</span>
+<span class="cmt">//     ldarg.0; ldarg.1; call base(name)  // name 直接传给 base，不存字段</span>
+<span class="cmt">//     ldarg.0; ldarg.2; stfld '&lt;width&gt;P'  // width 存入私有字段</span>
+<span class="cmt">//     ldarg.0; ldarg.3; stfld '&lt;height&gt;P' // height 存入私有字段</span>
+<span class="cmt">//     ldarg.0; ldarg 4;  stfld '&lt;depth&gt;P' // depth 存入私有字段</span>
+<span class="cmt">//     ret</span>
+<span class="cmt">//   }</span>
+<span class="cmt">//   // name 没有任何字段！因为它只出现在 base() 调用中</span>
+<span class="cmt">// }</span></code></pre>
+
+<table>
+  <tr><th>参数在哪里被引用</th><th>编译器行为</th><th>有字段分配？</th></tr>
+  <tr><td>仅 <code>base(...)</code> 或 <code>this(...)</code></td><td>直接在调用链中传递，不存字段</td><td>❌ 不分配</td></tr>
+  <tr><td>仅属性/字段初始化器<br><span class="mild">如 <code>public string X => x;</code></span></td><td>不存字段——初始化器在构造时执行，之后不需要 x</td><td>❌ 不分配</td></tr>
+  <tr><td>方法体、属性 getter、实例成员</td><td>捕获为私有字段，IL 名如 <code>&lt;param&gt;P</code></td><td>✅ 分配</td></tr>
+  <tr><td>未被任何成员引用</td><td><strong>编译警告</strong>——参数未被使用</td><td>❌ 不分配</td></tr>
+</table>
+
+<div class="callout callout--info">
+<strong>为什么初始化器不捕获？</strong> <code>public string Name => name;</code> 只在构造函数执行时读一次 name，赋给自动生成的 <code>&lt;Name&gt;k__BackingField</code>。之后再也不需要 name 了——所以编译器不单独存它。<br><br>
+<strong>什么时候捕获？</strong> 比如你在 <code>ToString()</code> 方法体里写了 <code>name</code>——那编译器必须在对象整个生命周期中都能访问 name，所以必须捕获为字段。
+</div>
+
+<h3>动手验证</h3>
+
+<p>打开 <a href="https://sharplab.io/">sharplab.io</a>，贴入上面的 Widget 代码，分别看：</p>
+<ol>
+  <li><strong>无成员引用 name</strong> 时——编译结果中只有 width/height/depth 三个字段</li>
+  <li><strong>在 ToString() 中加一句 <code>name</code></strong>——编译结果多出一个 <code>&lt;name&gt;P</code> 字段</li>
+</ol>
+<p class="mild">这就是"编译器比你更精确"的体现——你不用操心内存，编译器帮你做逃逸分析。</p>
+
+<!-- ============================== 4. DI ============================== -->
+
+<h2>四、天作之合——依赖注入</h2>
+
+<p>ASP.NET Core 的 DI 容器<strong>不关心构造函数语法</strong>——它看到构造函数参数就解析依赖，不管参数写在 class 行还是构造函数体里。这意味着 Primary Constructor 和 DI 是天然搭档：</p>
+
+<pre><code><span class="cmt">// ===== 典型的 Controller/Service：每个依赖减少 4 行样板 =====</span>
+
+<span class="cmt">// 之前（C# 11）——16 行，其中 10 行是样板</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">ProductsController</span> : <span class="type">ControllerBase</span>
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="type">IProductService</span> _service;
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="type">IMapper</span> _mapper;
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="type">ILogger</span>&lt;ProductsController&gt; _logger;
+
+    <span class="kw">public</span> ProductsController(
+        <span class="type">IProductService</span> service, <span class="type">IMapper</span> mapper,
+        <span class="type">ILogger</span>&lt;ProductsController&gt; logger)
+    {
+        _service = service; _mapper = mapper; _logger = logger;
+    }
+
+    <span class="kw">public</span> <span class="type">IActionResult</span> Get(<span class="kw">int</span> id)
+    {
+        _logger.LogInformation(<span class="str">"Get {Id}"</span>, id);
+        <span class="kw">var</span> dto = _mapper.Map&lt;ProductDto&gt;(_service.Get(id));
+        <span class="kw">return</span> Ok(dto);
+    }
+}
+
+<span class="cmt">// 现在（C# 12）——9 行，样板清零</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">ProductsController</span>(
+    <span class="type">IProductService</span> _service,
+    <span class="type">IMapper</span> _mapper,
+    <span class="type">ILogger</span>&lt;ProductsController&gt; _logger) : <span class="type">ControllerBase</span>
+{
+    <span class="kw">public</span> <span class="type">IActionResult</span> Get(<span class="kw">int</span> id)
+    {
+        _logger.LogInformation(<span class="str">"Get {Id}"</span>, id);
+        <span class="kw">var</span> dto = _mapper.Map&lt;ProductDto&gt;(_service.Get(id));
+        <span class="kw">return</span> Ok(dto);
+    }
+}</code></pre>
+
+<div class="callout callout--good">
+<strong>关键洞察：</strong>下划线前缀 <code>_logger</code> 不仅是命名约定——它告诉读者"这是被捕获的依赖字段"。在 Primary Constructor 中你直接写 <code>_logger</code> 作为参数名，编译器捕获它，类体内直接使用，完全没有命名转换——名字即是名字。
+</div>
+
+<!-- ============================== 5. MUTATION ============================== -->
+
+<h2>五、参数能被修改吗？——可以，但要小心</h2>
+
+<p>Primary Constructor 参数<strong>不是 readonly</strong>。你可以在方法体内修改它——但如果只有一个赋值点，<strong>编译器可能优化掉字段</strong>：</p>
+
+<pre><code><span class="cmt">// ✅ 可以改——但改了之后参数的"依赖"语义就崩塌了</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Counter</span>(<span class="kw">int</span> start)
+{
+    <span class="kw">public</span> <span class="kw">int</span> Next() => start++;  <span class="cmt">// start 被修改 → 捕获为字段</span>
+}
+
+<span class="cmt">// ⚠ 危险操作——参数成了可变状态</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Service</span>(<span class="type">IServiceProvider</span> sp)
+{
+    <span class="kw">public</span> T Resolve&lt;T&gt;() => sp.GetService&lt;T&gt;();  <span class="cmt">// ✅ 只读</span>
+    <span class="cmt">// sp = null;  ← 如果你写这句，代码审查会被拒绝</span>
+}</code></pre>
+
+<div class="callout callout--warn">
+<strong>当前限制：</strong>C# 12 不支持 <code>readonly</code> 修饰主构造函数参数。你不能写 <code>class Foo(readonly int x)</code>。语言团队在 C# 13 中也没有加这个——还在讨论。<br>
+<strong>实践建议：</strong>把主构造函数参数当作 <strong>"构造后不可变"</strong> 来用——这是约定，编译器不强制。DI 场景中你的依赖字段本来就是 readonly 的——只是现在这个 readonly 是隐式的（你在类体里不写 = 就行了）。
+</div>
+
+<!-- ============================== 6. EXPLICIT CTOR ============================== -->
+
+<h2>六、显式构造函数 + 主构造函数的协作</h2>
+
+<p>有了主构造函数后，所有<strong>显式构造函数必须通过 <code>this(...)</code> 调用主构造函数</strong>——这是编译器的硬性要求，确保参数"一定被赋值"：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">BankAccount</span>(<span class="kw">string</span> id, <span class="kw">string</span> owner)
+{
+    <span class="kw">public</span> <span class="kw">string</span> Id { <span class="kw">get</span>; } = id;
+    <span class="kw">public</span> <span class="kw">string</span> Owner { <span class="kw">get</span>; } = owner;
+    <span class="kw">public</span> <span class="kw">decimal</span> Balance { <span class="kw">get</span>; <span class="kw">private</span> <span class="kw">set</span>; }
+
+    <span class="cmt">// 无参构造：给主构造参数提供默认值</span>
+    <span class="kw">public</span> BankAccount() : <span class="kw">this</span>(<span class="str">"0000"</span>, <span class="str">"Unknown"</span>) { }
+
+    <span class="cmt">// 带初始余额的构造：必须先 this(id, owner)，再做额外工作</span>
+    <span class="kw">public</span> BankAccount(<span class="kw">string</span> id, <span class="kw">string</span> owner, <span class="kw">decimal</span> balance)
+        : <span class="kw">this</span>(id, owner)
+    {
+        Balance = balance;
+    }
+}</code></pre>
+
+<div class="callout callout--warn">
+<strong>重要：</strong>class 有主构造函数后，编译器<strong>不再生成隐式无参构造函数</strong>。你需要 <code>new BankAccount()</code>？必须像上面那样显式写一个带 <code>this(...)</code> 的无参构造。
+</div>
+
+<h3>struct 的例外</h3>
+
+<p>struct <strong>永远有无参构造函数</strong>（CLR 类型系统要求），不管你有没有主构造函数：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">struct</span> <span class="type">Point</span>(<span class="kw">double</span> x, <span class="kw">double</span> y)
+{
+    <span class="kw">public</span> <span class="kw">double</span> X => x;
+    <span class="kw">public</span> <span class="kw">double</span> Y => y;
+}
+
+<span class="kw">var</span> p1 = <span class="kw">new</span> Point(<span class="num">3</span>, <span class="num">4</span>);  <span class="cmt">// x=3, y=4</span>
+<span class="kw">var</span> p2 = <span class="kw">new</span> Point();          <span class="cmt">// x=0, y=0——struct 始终有无参构造，初始化为 default</span>
+<span class="cmt">// 注意：p2 中主构造参数被初始化为 default(double) = 0，不是主构造里传的值</span></code></pre>
+
+<!-- ============================== 7. ATTRIBUTE TARGET ============================== -->
+
+<h2>七、给主构造函数加 Attribute</h2>
+
+<p>主构造函数本质上是一个<strong>方法</strong>——你可以用 <code>method:</code> 目标给它加 Attribute：</p>
+
+<pre><code><span class="cmt">// [Obsolete] 放在 class 上 → 标记类本身过时</span>
+[<span class="type">Obsolete</span>(<span class="str">"Use V2"</span>)]
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">OldService</span>(<span class="type">IDb</span> db) { }
+
+<span class="cmt">// 用 method: 目标 → 标记的是构造函数本身</span>
+[<span class="kw">method</span>: <span class="type">Obsolete</span>(<span class="str">"Use V2 ctor"</span>)]
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">OldService</span>(<span class="type">IDb</span> db) { }
+
+<span class="cmt">// 实际应用——JetBrains 注解标记构造方法的纯函数性：</span>
+[<span class="kw">method</span>: <span class="type">JetBrains.Annotations.Pure</span>]
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">MyService</span>(<span class="type">IDb</span> db) { }</code></pre>
+
+<!-- ============================== 8. WHEN NOT TO USE ============================== -->
+
+<h2>八、什么时候<strong>不应该</strong>用主构造函数？</h2>
+
+<ol>
+  <li><strong>构造函数体有复杂逻辑</strong>——主构造函数没有"函数体"，初始化逻辑只能写在字段初始化器中。如果需要参数校验、抛出具体异常、或者多步骤初始化——用传统构造函数。</li>
+  <li><strong>参数过多（4+）</strong>——class 声明行变得很长，反而降低可读性。传统构造函数有明确的函数体，可以格式化、加注释。</li>
+  <li><strong>需要 readonly 保证</strong>——如果你必须确保某个依赖字段不被修改，目前只能靠传统构造函数 + <code>readonly</code> 字段。</li>
+  <li><strong>继承层次中参数混乱</strong>——基类和派生类都有主构造函数时，参数到底是谁的？可读性可能不升反降。</li>
+</ol>
+
+<pre><code><span class="cmt">// ⚠ 反面例子：参数太多，还不如传统写法清晰</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">ReportGenerator</span>(
+    <span class="type">IDbContext</span> _db, <span class="type">IMapper</span> _mapper, <span class="type">IEmailService</span> _email,
+    <span class="type">ITemplateEngine</span> _engine, <span class="type">IConfiguration</span> _config,
+    <span class="type">ILogger</span>&lt;ReportGenerator&gt; _logger)
+{
+    <span class="cmt">// 这行长度已经超过了合理的可读范围</span>
+    <span class="cmt">// 但这种依赖数可能提示另一个问题——这个类是否违反了 SRP？</span>
+}</code></pre>
+
+<!-- ============================== 9. QUIZ ============================== -->
+
+<h2>九、小测验</h2>
+
+<div class="quiz" id="q1">
+<div class="question">1/3 · C# 12 中，class 的主构造函数参数和 record 的主构造函数参数最大的区别是？</div>
+<label><input type="radio" name="q1" value="0">A. class 的参数有默认值，record 的没有</label>
+<label><input type="radio" name="q1" value="1">B. record 自动生成 public 属性，class 不生成属性——需要手动暴露</label>
+<label><input type="radio" name="q1" value="2">C. class 的参数只能有一个，record 可以有多个</label>
+<label><input type="radio" name="q1" value="3">D. 两者行为完全一致，只是语法位置不同</label>
+<div class="feedback" id="fb1"></div>
+</div>
+
+<div class="quiz" id="q2">
+<div class="question">2/3 · 关于捕获语义——以下哪个参数需要编译器分配私有字段？</div>
+<label><input type="radio" name="q2" value="0">A. 只出现在 <code>base(name)</code> 中的 <code>name</code></label>
+<label><input type="radio" name="q2" value="1">B. 只出现在 <code>public string X => x;</code> 初始化器中的 <code>x</code></label>
+<label><input type="radio" name="q2" value="2">C. 出现在方法体 <code>ToString() => name;</code> 中的 <code>name</code></label>
+<label><input type="radio" name="q2" value="3">D. 出现在 <code>this(id, "default")</code> 中的 <code>id</code></label>
+<div class="feedback" id="fb2"></div>
+</div>
+
+<div class="quiz" id="q3">
+<div class="question">3/3 · 一个 class 有主构造函数后，以下哪个说法正确？</div>
+<label><input type="radio" name="q3" value="0">A. 编译器仍然生成隐式无参构造函数</label>
+<label><input type="radio" name="q3" value="1">B. 不能写任何额外的显式构造函数</label>
+<label><input type="radio" name="q3" value="2">C. 显式构造函数必须通过 <code>this(...)</code> 调用主构造函数</label>
+<label><input type="radio" name="q3" value="3">D. 主构造函数的参数自动变为 readonly</label>
+<div class="feedback" id="fb3"></div>
+
+<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
+<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+</div>
+
+<script>
+const answers = { q1: 1, q2: 2, q3: 2 };
+const explanations = {
+  q1: {
+    correct: "✅ 正确！Record 生成 public init-only 属性；class 不生成——参数只在类体内可用，外部不可见。这是最核心的区别。",
+    wrong: "❌ 不是。Record 自动生成 public 属性，class 不生成。正确答案是 B。这是 Primary Constructor 最重要的第一性原理。"
+  },
+  q2: {
+    correct: "✅ 正确！方法体在对象整个生命周期中可能被调用，所以编译器必须将参数捕获为实例字段。base/this 调用和初始化器只在构造时执行一次，不需要持久存储。",
+    wrong: "❌ 不是。只有出现在方法体中的参数才需要捕获。base/this 调用和初始化器都在构造时执行一次——之后不需要参数了。正确答案是 C。"
+  },
+  q3: {
+    correct: "✅ 正确！这是编译器的硬性要求——确保主构造函数参数在所有构造路径中都被赋值。",
+    wrong: "❌ 不是。有主构造函数后隐式无参构造消失，你可以写显式构造但必须用 this(...)。参数不是 readonly（C# 12 不支持）。正确答案是 C。"
+  },
+};
+
+function checkAll() {
+  let correct = 0;
+  for (let qid of ['q1','q2','q3']) {
+    const selected = document.querySelector(`input[name="${qid}"]:checked`);
+    const fb = document.getElementById('fb' + qid.slice(1));
+    if (!selected) {
+      fb.textContent = '⚠ 请选择一个答案';
+      fb.className = 'feedback wrong show';
+      continue;
+    }
+    if (parseInt(selected.value) === answers[qid]) {
+      fb.textContent = explanations[qid].correct;
+      fb.className = 'feedback correct show';
+      correct++;
+    } else {
+      fb.textContent = explanations[qid].wrong;
+      fb.className = 'feedback wrong show';
+    }
+  }
+  const scoreEl = document.getElementById('score');
+  scoreEl.style.display = 'block';
+  scoreEl.textContent = `得分：${correct} / 3`;
+  scoreEl.style.color = correct === 3 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
+}
+</script>
+
+<!-- ============================== 10. NEXT ============================== -->
+
+<h2>十、下一步</h2>
+
+<ul>
+  <li><strong>动手：</strong>打开你手头的 ASP.NET Core 项目，找出所有"构造函数三行赋值"的 Service/Controller，改用 Primary Constructor。数一数少了多少行。</li>
+  <li><strong>SharpLab：</strong>在 <a href="https://sharplab.io/">sharplab.io</a> 写一个 Primary Constructor class，确认"不捕获的参数真的不生成字段"。</li>
+  <li><strong>阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/programming-guide/classes-and-structs/instance-constructors#primary-constructors">Microsoft Learn: 主构造函数</a> · <a href="https://github.com/dotnet/csharplang/blob/main/proposals/csharp-12.0/primary-constructors.md">C# 语言设计提案</a></li>
+  <li><strong>下一课：</strong><a href="12-csharp12-collection-expressions.html">Lesson 12 — Collection Expressions（集合表达式）</a>——<code>[1, 2, 3]</code> 一个语法统一数组、List、Span。</li>
+</ul>
+
+<div class="callout callout--info" style="margin-top:2rem;">
+<strong>💬 有问题？</strong>捕获语义没有完全理解？不确定该不该用 Primary Constructor？想知道在继承层次中怎么处理？随时追问。
+</div>
+
+</body>
+</html>

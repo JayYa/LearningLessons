@@ -238,7 +238,9 @@ ReadOnlySpan&lt;<span class="kw">byte</span>&gt; bytes = <span class="str">"hell
   <tr>
     <td><strong>内容中 <code>"</code> 少于开始标记数就安全</strong></td>
     <td>如果内容含 3 个连续引号，就用 4 个 <code>""""</code> 包裹</td>
-    <td><code>""""{"key":"val""extra"}""""</code></td>
+    <td><pre style="margin:0;font-size:0.78rem;"><code>""""
+{"key":"val""extra"}
+""""</code></pre><span style="font-size:0.74rem;color:var(--good);">✅ 开始/结束标记后各需换行</span></td>
   </tr>
   <tr>
     <td><strong>自动缩进修剪</strong></td>
@@ -296,6 +298,30 @@ ReadOnlySpan&lt;<span class="kw">byte</span>&gt; bytes = <span class="str">"hell
 //   - $"""...""" 内插版本 → 编译时展开为 string.Format / DefaultInterpolatedStringHandler</span></code></pre>
 
 <p>Raw String Literal 是<strong>纯粹的编译时预处理</strong>——编译结果和手写转义字符串一模一样。它只是让你<strong>写的时候</strong>不用转义。</p>
+
+<div class="callout callout--info">
+<strong>为什么 IL 中有 <code>\r\n</code>？</strong>回到上面的例子——源文件中 <code>{"name": "Alice"}</code> 这一行末尾你按了 Enter，那个换行符（Windows 上为 CRLF，即 <code>\r\n</code>）<strong>就是内容的一部分</strong>。编译器只修剪缩进空格/制表符，<strong>不修剪换行符</strong>——因为换行符不是空白，是你亲自敲的内容分隔符。源文件换行是什么（CRLF / LF），IL 里就是什么。
+</div>
+
+<h4>2.4.1 如果不想要末尾换行？</h4>
+
+<p>结束 <code>"""</code> 独占一行 → 它前面的换行归入内容 → 末尾有 <code>\r\n</code>。如果不想要，把结束 <code>"""</code> <strong>紧跟</strong>最后一行内容——但这也意味着<strong>缩进修剪失效</strong>（结束标记前没有独立空白行当基准）：</p>
+
+<pre><code><span class="cmt">// 末尾无换行——结束 """ 紧跟内容</span>
+<span class="kw">var</span> s = <span class="str">"""</span>
+<span class="str">    hello"""</span>;
+<span class="cmt">// 结果: "    hello"  ← 缩进保留了！因为结束 """ 前无空白，基准 = 0</span>
+
+<span class="cmt">// 折衷：正常写，末尾 Trim</span>
+<span class="kw">var</span> s = <span class="str">"""</span>
+<span class="str">    hello</span>
+<span class="str">    """</span>
+    .TrimEnd(<span class="str">"\r\n"</span>);
+<span class="cmt">// 结果: "hello"——TrimEnd 对 ReadOnlySpan 零分配</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>不可能三角：</strong>缩进修剪好用 / 无末尾换行 / 结束 <code>"""</code> 独占一行——三者只能取其二。大多数场景末尾多个换行不碍事（JSON、SQL、HTML），不纠结。
+</div>
 
 <h3>2.5 真实场景</h3>
 
@@ -474,10 +500,117 @@ Console.WriteLine(arr <span class="kw">is</span> [<span class="num">1</span>, <s
   <tr><th>规则</th><th>说明</th></tr>
   <tr><td>只能用在属性和字段上</td><td><code>required string Name</code>（字段）、<code>required string Name { get; set; }</code>（属性）</td></tr>
   <tr><td>访问级别必须 ≥ 类型</td><td>如果类是 <code>public</code>，required 成员也必须 ≥ <code>public</code> 的构造函数能访问到</td></tr>
-  <tr><td>必须通过<strong>对象初始化器</strong>赋值</td><td><code>new Person { Name = "A" }</code> 而非 <code>new Person("A")</code></td></tr>
-  <tr><td>构造函数参数可替代对象初始化器</td><td>构造函数里给 required 属性赋值了 → 可以不写对象初始化器</td></tr>
+  <tr><td>两条赋值路径</td><td><strong>对象初始化器</strong>或<strong>构造函数</strong>——详见 4.2.1</td></tr>
   <tr><td><code>[SetsRequiredMembers]</code> 可标记构造函数</td><td>告诉编译器"这个构造函数保证设置所有 required 成员"</td></tr>
 </table>
+
+<h3>4.2.1 两条赋值路径——对象初始化器 vs 构造函数</h3>
+
+<p><code>required</code> 的核心问题是：<strong>谁来给 required 成员赋值？</strong>编译器要确保"每个 required 成员在构造结束时一定有值"。答案有两条路——你可以走其中一条，也可以两条都走：</p>
+
+<div class="diagram">
+  new Person()  ← 你 new 了一个对象
+     │
+     ├── 路径 A：对象初始化器
+     │      new Person { Name = "A", Email = "x@y.com" }
+     │      编译器逐字段比对：required 成员都出现了吗？缺了就报错
+     │
+     └── 路径 B：构造函数体内赋值
+           构造函数里 Name = "xxx"; Email = "yyy";
+           构造函数有 [SetsRequiredMembers] → 编译器放行，不再检查初始化器
+           构造函数没有 [SetsRequiredMembers] → 编译器要求初始化器补上未赋值的 required 成员
+</div>
+
+<h4>路径 A：纯对象初始化器</h4>
+
+<p>类型没有 <code>[SetsRequiredMembers]</code> 构造函数（或根本没有自定义构造函数）时，<strong>所有</strong> required 成员必须出现在对象初始化器中：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span>
+{
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Email { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">int</span> Age { <span class="kw">get</span>; <span class="kw">set</span>; }  <span class="cmt">// 没有 required——可以不写</span>
+}
+
+<span class="cmt">// ✅ 两个 required 成员都在对象初始化器里</span>
+<span class="kw">var</span> p1 = <span class="kw">new</span> <span class="type">Person</span> { Name = <span class="str">"Alice"</span>, Email = <span class="str">"a@b.com"</span> };
+
+<span class="cmt">// ❌ CS9035：Email 是 required 但未在初始化器中赋值</span>
+<span class="kw">var</span> p2 = <span class="kw">new</span> <span class="type">Person</span> { Name = <span class="str">"Alice"</span> };
+
+<span class="cmt">// ❌ CS9035：连初始化器都不写——编译器不知道这两个 required 怎么填</span>
+<span class="kw">var</span> p3 = <span class="kw">new</span> <span class="type">Person</span>();</code></pre>
+
+<div class="callout callout--info">
+<strong>对象初始化器的本质：</strong>编译器把 <code>new Person { Name = "A" }</code> 翻译成：<br>
+<code>var tmp = new Person(); tmp.Name = "A";</code><br>
+然后编译器检查：在分号之前，所有 required 成员都被 tmp.xxx 赋值过一次吗？<br>
+注意：对象初始化器走的是 <strong>无参构造函数 + setter</strong>——所以属性必须有 setter（或 init）。
+</div>
+
+<h4>路径 B：构造函数体内赋值</h4>
+
+<p>构造函数里可以直接给 required 成员赋值。关键在于要不要 <code>[SetsRequiredMembers]</code>：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span>
+{
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> Email { <span class="kw">get</span>; <span class="kw">set</span>; }
+
+    <span class="cmt">// ── 有 [SetsRequiredMembers] 的构造函数 ──</span>
+    <span class="cmt">// 编译器收到承诺："这个构造函数走完，所有 required 都齐了"</span>
+    [<span class="type">SetsRequiredMembers</span>]
+    <span class="kw">public</span> <span class="type">Person</span>(<span class="kw">string</span> name, <span class="kw">string</span> email)
+    {
+        Name = name;
+        Email = email;
+    }
+
+    <span class="cmt">// ── 没有 [SetsRequiredMembers] 的构造函数 ──</span>
+    <span class="cmt">// 编译器看到：这个构造函数只设了 Name，Email 还悬着</span>
+    <span class="cmt">// → 调用者必须用对象初始化器补齐 Email</span>
+    <span class="kw">public</span> <span class="type">Person</span>(<span class="kw">string</span> name)
+    {
+        Name = name;
+        <span class="cmt">// Email 未赋值</span>
+    }
+}
+
+<span class="cmt">// 走有 [SetsRequiredMembers] 的构造函数——不需要初始化器</span>
+<span class="kw">var</span> p1 = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>, <span class="str">"a@b.com"</span>);  <span class="cmt">// ✅</span>
+
+<span class="cmt">// 走没有 [SetsRequiredMembers] 的构造函数——必须用初始化器补 Email</span>
+<span class="kw">var</span> p2 = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>) { Email = <span class="str">"a@b.com"</span> };  <span class="cmt">// ✅</span>
+<span class="kw">var</span> p3 = <span class="kw">new</span> <span class="type">Person</span>(<span class="str">"Alice"</span>);  <span class="cmt">// ❌ CS9035：Email 悬空</span></code></pre>
+
+<div class="callout callout--warn">
+<strong><code>[SetsRequiredMembers]</code> 是承诺，不是验证。</strong>编译器<strong>不检查</strong>这个构造函数是否真的设置了所有 required 成员——你承诺了，编译器就信你。如果承诺了但没做到，运行时访问未初始化的属性就是未定义行为。这是一个"信任程序员"的契约。
+</div>
+
+<h4>两条路径可以混合</h4>
+
+<p>用的最多的模式：<strong>构造函数设置一部分，对象初始化器补齐剩下的。</strong>构造函数不加 <code>[SetsRequiredMembers]</code>，只设非 required 成员或部分 required 成员，其余的由调用方在初始化器里写：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">ApiClient</span>
+{
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> BaseUrl { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">required</span> <span class="kw">string</span> ApiKey { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">int</span> Timeout { <span class="kw">get</span>; <span class="kw">set</span>; }
+
+    <span class="cmt">// 只设默认值——不加 [SetsRequiredMembers]</span>
+    <span class="kw">public</span> <span class="type">ApiClient</span>()
+    {
+        Timeout = 30;  <span class="cmt">// 给个默认值</span>
+        <span class="cmt">// BaseUrl 和 ApiKey 没设——required 悬空</span>
+    }
+}
+
+<span class="cmt">// 构造函数设了 Timeout，初始化器补 BaseUrl 和 ApiKey</span>
+<span class="kw">var</span> client = <span class="kw">new</span> <span class="type">ApiClient</span>
+{
+    BaseUrl = <span class="str">"https://api.example.com"</span>,
+    ApiKey = <span class="str">"sk-xxx"</span>,
+};  <span class="cmt">// ✅ Timeout=30, BaseUrl=..., ApiKey=...</span></code></pre>
 
 <h3>4.3 SetsRequiredMembers——当构造函数搞定一切</h3>
 
@@ -575,7 +708,52 @@ ReadOnlySpan&lt;<span class="kw">byte</span>&gt; contentType = <span class="str"
 <span class="cmt">// 等价于运行时手动编码——但没有任何运行时开销</span>
 <span class="cmt">// 编译器直接在 IL 中生成 UTF-8 字节数组</span></code></pre>
 
-<h3>5.2 本质——不是 <code>byte[]</code>，是 <code>ReadOnlySpan&lt;byte&gt;</code></h3>
+<h3>5.2 为什么网络世界选了 UTF-8 而不是 UTF-16？</h3>
+
+<p>先看逐字符对比：</p>
+
+<table>
+  <tr><th>字符</th><th>UTF-16（C# 内部）</th><th>UTF-8</th><th>谁更省</th></tr>
+  <tr><td><code>A</code> (U+0041)</td><td><code>41 00</code>（2 字节）</td><td><code>41</code>（1 字节）</td><td>UTF-8 省一半</td></tr>
+  <tr><td><code>你</code> (U+4F60)</td><td><code>60 4F</code>（2 字节）</td><td><code>E4 BD A0</code>（3 字节）</td><td>UTF-16 省 1/3</td></tr>
+  <tr><td><code>é</code> (U+00E9)</td><td><code>E9 00</code>（2 字节）</td><td><code>C3 A9</code>（2 字节）</td><td>持平</td></tr>
+</table>
+
+<p>中英文互有胜负——<strong>没有谁绝对"更小"</strong>。UTF-8 赢在网络，靠的是三个实用理由：</p>
+
+<table>
+  <tr><th>优势</th><th>说明</th></tr>
+  <tr><td><strong>ASCII 兼容</strong></td><td>HTTP 头、JSON key、HTML 标签全是 ASCII——UTF-8 对 ASCII 原样 1 字节，老工具不炸。UTF-16 的 <code>41 00</code> 会被老工具当成 <code>A</code> + 空字符。</td></tr>
+  <tr><td><strong>无字节序问题</strong></td><td>UTF-16 有 Big/Little Endian 之争（需 BOM <code>FE FF</code> / <code>FF FE</code>）。UTF-8 字节顺序固定。</td></tr>
+  <tr><td><strong>自同步</strong></td><td>UTF-8 每字节有明确"角色"：首字节标识序列长度，续字节全是 <code>10xxxxxx</code>。从中间开始读也能快速定位下一个字符边界——对流式解析至关重要。</td></tr>
+</table>
+
+<div class="callout callout--info">
+<strong>一句话：</strong>UTF-16 是 C# 的"母语"（string 内部即 UTF-16），UTF-8 是互联网的"通用语"。<code>"hello"u8</code> 让你在代码里直接用通用语写常量，省掉了翻译步骤。
+</div>
+
+<h3>5.3 实际性能提升——不是 12 纳秒的事，是 GC 的事</h3>
+
+<p>单次 <code>Encoding.UTF8.GetBytes("hello")</code> 的开销：堆分配 (~16B) + 编码 (~12ns)。绝对值微乎其微。但放大之后：</p>
+
+<pre><code><span class="cmt">// 场景：10000 RPS 的 ASP.NET Core 服务，每个请求涉及 5 个 UTF-8 常量</span>
+<span class="cmt">// 传统方式：每秒 10000 × 5 = 50000 次 Encoding.UTF8.GetBytes</span>
+<span class="cmt">//          ≈ 每秒 ~1 MB 临时分配 → Gen 0 GC 频繁触发 → P99 延迟毛刺</span>
+<span class="cmt">// "..."u8：0 次分配，GC 完全不知道它们存在</span></code></pre>
+
+<table>
+  <tr><th>✅ 值得用</th><th>❌ 不必纠结</th></tr>
+  <tr><td>ASP.NET Core 中间件、热路径</td><td>应用启动时读配置（只跑一次）</td></tr>
+  <tr><td><code>Utf8JsonWriter</code> 序列化属性名</td><td>错误日志字符串（冷路径）</td></tr>
+  <tr><td>HTTP 请求头常量（<code>"Authorization"u8</code>）</td><td>WPF/WinForms 事件处理（不涉及 UTF-8）</td></tr>
+  <tr><td>每秒成千上万次调用的高频路径</td><td>可读性优先的业务逻辑</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>本质：</strong><code>"hello"u8</code> 消除的不是 12 纳秒的编码时间，而是<strong>累积分配引发的 GC 暂停</strong>。单次无所谓，每秒十万次就很在乎。System.Text.Json 内部全部用 <code>"..."u8</code>——这就是它比 Newtonsoft.Json 快的底层原因之一。
+</div>
+
+<h3>5.4 本质——不是 <code>byte[]</code>，是 <code>ReadOnlySpan&lt;byte&gt;</code></h3>
 
 <table>
   <tr><th>属性</th><th>说明</th></tr>
@@ -589,7 +767,7 @@ ReadOnlySpan&lt;<span class="kw">byte</span>&gt; contentType = <span class="str"
 <strong>编译器实现：</strong>和 const string 的常量折叠类似。编译器在编译时将 <code>"hello"u8</code> 转为 <code>ReadOnlySpan&lt;byte&gt;</code> 指向 PE 数据段中的 UTF-8 编码字节序列。最终 IL 是 <code>ldsflda</code>（加载静态字段地址）——连分配都不需要。
 </div>
 
-<h3>5.3 真实场景——哪里用？</h3>
+<h3>5.5 真实场景——哪里用？</h3>
 
 <pre><code><span class="cmt">// ✅ HTTP Headers / Content-Type</span>
 <span class="kw">var</span> request = <span class="kw">new</span> HttpRequestMessage();
@@ -611,7 +789,7 @@ ReadOnlySpan&lt;<span class="kw">byte</span>&gt; json = <span class="str">"""</s
 <span class="str">    {"name": "Alice", "age": 30}</span>
 <span class="str">    """u8</span>;  <span class="cmt">// Raw String Literal + UTF-8 → 编译期生成完整 JSON 字节</span></code></pre>
 
-<h3>5.4 限制</h3>
+<h3>5.6 限制</h3>
 
 <table>
   <tr><th>限制</th><th>说明</th></tr>
@@ -725,7 +903,7 @@ app.Run();</code></pre>
   <h3>Q6.（场景题）你需要定义一个配置类，有 5 个必填属性 + 3 个可选属性。对象创建后不允许修改任何属性。最佳方案是？</h3>
   <div class="question">选择最合适的定义方式：</div>
   <label><input type="radio" name="q6" value="a"> 构造函数接收 5 个必填参数 + 可选参数用默认值</label>
-  <label><input type="radio" name="q6" value="b"><code>record class</code>——positional 参数 = 必填，可选属性用 init 有默认值</label>
+  <label><input type="radio" name="q6" value="b"><code>record class</code>——positional 参数<span class="en">位置参数</span> = 必填，可选属性用 init 有默认值</label>
   <label><input type="radio" name="q6" value="c"><code>class</code> + <code>required</code> + <code>init</code> 属性</label>
   <label><input type="radio" name="q6" value="d"><code>record struct</code>——比 class 快</label>
   <button onclick="check('q6','b')">确认</button>
@@ -783,8 +961,8 @@ function check(qid, correct) {
       wrong:   '❌ 答案是 b。List Patterns 不要求接口实现（c 错），支持 <code>Span&lt;T&gt;</code> 和 <code>string</code>（a 错），当然支持自定义集合（d 错）——只要满足鸭子类型条件。'
     },
     q6: {
-      correct: '✅ 正确！这道题的核心陷阱：5 个必填属性如果用构造函数（a），8 个参数的构造函数很难读、IDE 提示也很差。<code>record</code>（b）的 positional 参数自带 init-only + 不可变性，完美契合"必填 + 不可变"场景。<br><br>c 也可以——但 <code>record</code> 额外提供值相等、Deconstruct、ToString，是更好的选择。d 不适合——配置对象通常生命周期长，struct 频繁拷贝反而亏。',
-      wrong:   '❌ 答案是 b。<code>record class</code> 的 positional 参数天然 = required + init-only + 值相等，是最适合"必填 + 不可变"配置对象的工具。a：5 个参数的构造函数可读性差；c：也能用，但缺 record 的值相等和 Deconstruct；d：配置对象生命周期长，struct 会频繁拷贝。'
+      correct: '✅ 正确！这道题的核心陷阱：5 个必填属性如果用构造函数（a），8 个参数的构造函数很难读、IDE 提示也很差。<code>record</code>（b）的 positional 参数<span class="en">位置参数，见 Lesson 07</span>自带 init-only + 不可变性，完美契合"必填 + 不可变"场景。<br><br>c 也可以——但 <code>record</code> 额外提供值相等、Deconstruct、ToString，是更好的选择。d 不适合——配置对象通常生命周期长，struct 频繁拷贝反而亏。',
+      wrong:   '❌ 答案是 b。<code>record class</code> 的 positional 参数<span class="en">位置参数，见 Lesson 07</span>天然 = required + init-only + 值相等，是最适合"必填 + 不可变"配置对象的工具。a：5 个参数的构造函数可读性差；c：也能用，但缺 record 的值相等和 Deconstruct；d：配置对象生命周期长，struct 会频繁拷贝。'
     },
     q7: {
       correct: '✅ 正确！<code>var s = """Hello""";</code> 不能编译——开始 <code>"""</code> 后必须<strong>换行</strong>，内容是 "Hello" 但不换行就是语法错误。<br><br>b 能编译（开始引号后换行了），c 能编译（内插 Raw String Literal），d 能编译（4 个引号包裹含 3 个引号的内容）。',

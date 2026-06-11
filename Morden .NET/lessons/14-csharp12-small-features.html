@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 14: C# 12 — Lambda 默认参数 · 任意类型别名 · Experimental · Interceptors</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+  .callout { padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem; }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+  .badge { display: inline-block; padding: 0.15em 0.55em; border-radius: 100px; font-size: 0.78rem; font-weight: 600; }
+  .badge--preview { background: #fff8c5; color: #9a6700; }
+  .badge--daily { background: #dafbe1; color: #1a7f37; }
+</style>
+</head>
+<body>
+
+<h1>Lesson 14: C# 12 — 小特性集</h1>
+<p class="subtitle">Lambda 默认参数 · 任意类型别名 · Experimental · Interceptors</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="11-csharp12-primary-constructors.html">Lesson 11</a>、<a href="12-csharp12-collection-expressions.html">12</a>、<a href="13-csharp12-ref-readonly-inline-arrays.html">13</a>，覆盖了 C# 12 的四个主要特性。本课收尾剩余四个小特性。<br>
+<strong>阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/whats-new/csharp-12">Microsoft Learn: C# 12</a>
+</div>
+
+<!-- ========================== 1. DEFAULT LAMBDA PARAMS ========================== -->
+
+<h2>一、Lambda 默认参数 <span class="en">Default Lambda Parameters</span> <span class="badge badge--daily">每日用</span></h2>
+
+<h3>1.1 Lambda 和普通方法终于平权</h3>
+
+<div class="comparison">
+  <div class="old"><h4>😣 C# 11</h4>
+<pre><code><span class="cmt">// Lambda 不支持默认参数</span>
+<span class="cmt">// 只能：</span>
+<span class="cmt">// ① 每次调用都传全部参数</span>
+<span class="cmt">// ② 或者写 delegate 代替 lambda</span>
+Func&lt;<span class="kw">int</span>, <span class="kw">int</span>, <span class="kw">int</span>&gt; add = (a, b) => a + b;
+add(<span class="num">5</span>, <span class="num">1</span>);  <span class="cmt">// 必须两个都传</span>
+</code></pre>
+  </div>
+  <div class="new"><h4>😎 C# 12</h4>
+<pre><code><span class="kw">var</span> add = (<span class="kw">int</span> a, <span class="kw">int</span> b = <span class="num">1</span>) => a + b;
+add(<span class="num">5</span>);    <span class="cmt">// 6  —— b 用默认值</span>
+add(<span class="num">5</span>, <span class="num">2</span>); <span class="cmt">// 7  —— b 覆盖</span>
+</code></pre>
+  </div>
+</div>
+
+<pre><code><span class="cmt">// 实际场景：LINQ 中更灵活</span>
+<span class="kw">var</span> byStep = (<span class="kw">int</span> x, <span class="kw">int</span> step = <span class="num">2</span>) => x + step;
+items.Select(x => byStep(x));       <span class="cmt">// step=2（默认）</span>
+items.Select(x => byStep(x, <span class="num">10</span>));    <span class="cmt">// step=10（覆盖）</span>
+
+<span class="cmt">// 规则——和普通方法完全一致：</span>
+<span class="cmt">// ✅ 有默认值的参数必须在无默认值参数的后面</span>
+<span class="kw">var</span> f1 = (<span class="kw">int</span> a, <span class="kw">int</span> b = <span class="num">1</span>) => a + b;      <span class="cmt">// ✅</span>
+<span class="kw">var</span> f2 = (<span class="kw">int</span> a = <span class="num">1</span>, <span class="kw">int</span> b) => a + b;      <span class="cmt">// ❌</span>
+
+<span class="cmt">// ⚠ 默认值在调用时求值——不是定义时</span>
+<span class="kw">int</span> x = <span class="num">10</span>;
+<span class="kw">var</span> get = (<span class="kw">int</span> offset = <span class="num">1</span>) => x + offset;
+<span class="kw">int</span> r1 = get();       <span class="cmt">// 11 —— x=10 + offset=1</span>
+x = <span class="num">20</span>;
+<span class="kw">int</span> r2 = get();       <span class="cmt">// 21 —— x=20 + offset=1</span>
+<span class="cmt">// 如果默认值在定义时求值，r1 和 r2 应该一样——但结果不同</span></code></pre>
+
+<!-- ========================== 2. ALIAS ANY TYPE ========================== -->
+
+<h2>二、任意类型别名 <span class="en">Alias Any Type</span> <span class="badge badge--daily">每日用</span></h2>
+
+<h3>2.1 以前只有命名类型能取别名——现在都可以</h3>
+
+<pre><code><span class="cmt">// ❌ C# 11：这些全部编译失败</span>
+<span class="cmt">// using Ints = int[];</span>
+<span class="cmt">// using Point = (int X, int Y);</span>
+<span class="cmt">// using unsafe Ptr = int*;</span>
+
+<span class="cmt">// ✅ C# 12：全部合法</span>
+<span class="kw">using</span> Ints = <span class="kw">int</span>[];                         <span class="cmt">// 数组</span>
+<span class="kw">using</span> Point2D = (<span class="kw">int</span> X, <span class="kw">int</span> Y);           <span class="cmt">// 元组——最实用！</span>
+<span class="kw">using</span> Coordinate = (<span class="kw">double</span> Lat, <span class="kw">double</span> Lng);
+<span class="kw">using</span> unsafe IntPtr = <span class="kw">int</span>*;               <span class="cmt">// 指针（需 unsafe 上下文）</span>
+<span class="kw">using</span> MyMap = Dictionary&lt;<span class="kw">string</span>, <span class="kw">object</span>&gt;; <span class="cmt">// 泛型实例（以前也可以）</span></code></pre>
+
+<h3>2.2 元组别名——最实用的场景</h3>
+
+<pre><code><span class="cmt">// C# 11：元组类型散落各处，没有统一名字</span>
+<span class="kw">public</span> (<span class="kw">int</span> x, <span class="kw">int</span> y) Transform((<span class="kw">int</span> x, <span class="kw">int</span> y) input) { ... }
+<span class="cmt">// 如果某天要加第三个值？改 N 处。编译不报错但逻辑错。</span>
+
+<span class="cmt">// C# 12：定义一次，到处使用</span>
+<span class="kw">using</span> Point2D = (<span class="kw">int</span> X, <span class="kw">int</span> Y);
+<span class="kw">public</span> Point2D Transform(Point2D input) { ... }
+<span class="cmt">// 改结构只改一行。编译帮你在所有使用处报错。</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>限制：</strong>开放泛型别名仍不支持——<code>using MyList&lt;T&gt; = List&lt;T&gt;;</code> 不行。语言团队还在讨论语义。
+</div>
+
+<h3>2.3 和 global using 组合</h3>
+
+<pre><code><span class="cmt">// GlobalUsings.cs——全局可用</span>
+<span class="kw">global</span> <span class="kw">using</span> Coordinate = (<span class="kw">double</span> Lat, <span class="kw">double</span> Lng);
+<span class="kw">global</span> <span class="kw">using</span> UserId = System.Guid;</code></pre>
+
+<!-- ========================== 3. EXPERIMENTAL ========================== -->
+
+<h2>三、Experimental 属性 <span class="en">ExperimentalAttribute</span></h2>
+
+<p>标记类型、方法、程序集为"实验性"。<strong>使用者编译时收到警告</strong>——不是错误，但明确提示"这个 API 可能变"。</p>
+
+<pre><code><span class="cmt">// 库作者——标记实验 API：</span>
+[<span class="type">Experimental</span>(<span class="str">"DIAG001"</span>)]
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">NewFeature</span> { }
+
+[<span class="type">Experimental</span>(<span class="str">"DIAG002"</span>, UrlFormat = <span class="str">"https://docs.mylib.com/migration/{0}"</span>)]
+<span class="kw">public</span> <span class="kw">void</span> BetaMethod() { }
+
+<span class="cmt">// 使用者——编译时收到警告：</span>
+<span class="kw">var</span> x = <span class="kw">new</span> NewFeature();  <span class="cmt">// ⚠ 警告 DIAG001: 'NewFeature' is experimental</span>
+
+<span class="cmt">// 有意识地抑制警告（表示你接受实验性 API 的风险）：</span>
+<span class="pre">#pragma</span> warning disable DIAG001
+<span class="kw">var</span> x = <span class="kw">new</span> NewFeature();
+<span class="pre">#pragma</span> warning restore DIAG001
+
+<span class="cmt">// 也可以在 .csproj 中全局抑制：</span>
+<span class="cmt">// &lt;NoWarn&gt;DIAG001;DIAG002&lt;/NoWarn&gt;</span></code></pre>
+
+<div class="callout callout--info">
+<strong>用途：</strong>库作者发布新 API 时，先标记为 Experimental，给用户试用但不承诺稳定。等 API 稳定后去掉标记——这是语义版本控制的编译时表达。<br>
+<strong>继承规则：</strong>标记在类型上 → 所有成员继承；标记在程序集上 → 整个程序集的类型都是实验性的。
+</div>
+
+<!-- ========================== 4. INTERCEPTORS ========================== -->
+
+<h2>四、拦截器 <span class="en">Interceptors</span> <span class="badge badge--preview">Preview</span></h2>
+
+<p>拦截器允许在<strong>编译时</strong>把某个方法调用替换为另一个方法调用——是源生成器<span class="en">Source Generator</span>的高级玩法。</p>
+
+<div class="callout callout--warn">
+<strong>⚠ 这是实验性预览特性。</strong>可能在 C# 13 或 14 中大幅改动甚至删除。目前<strong>不推荐在生产中使用</strong>。了解即可。
+</div>
+
+<pre><code><span class="cmt">// 使用拦截器的前提——csproj 中声明允许的命名空间：</span>
+<span class="cmt">// &lt;InterceptorsPreviewNamespaces&gt;</span>
+<span class="cmt">//   $(InterceptorsPreviewNamespaces);MyGen;MyLib.Generated</span>
+<span class="cmt">// &lt;/InterceptorsPreviewNamespaces&gt;</span>
+
+<span class="cmt">// 原理（伪代码）：
+// 1. 源生成器扫描代码，找到特定的方法调用位置
+// 2. 生成一个拦截器方法，声明它要"替换"该位置的调用
+// 3. 编译时，Roslyn 在目标位置插入对拦截器方法的调用
+// 而不是原始方法</span></code></pre>
+
+<p class="mild">拦截器的主要应用场景是<strong>编译时 AOT 优化</strong>——比如 ASP.NET Core 的请求管道可以用拦截器把反射调用替换为编译时生成的代码。普通应用开发者不需要直接使用。</p>
+
+<!-- ========================== 5. QUIZ ========================== -->
+
+<h2>五、小测验</h2>
+
+<div class="quiz" id="q1">
+<div class="question">1/3 · Lambda 默认参数——调用 <code>var f = (int a, int b = 10) => a + b; f(5)</code> 返回什么？</div>
+<label><input type="radio" name="q1" value="0">A. 5</label>
+<label><input type="radio" name="q1" value="1">B. 10</label>
+<label><input type="radio" name="q1" value="2">C. 15</label>
+<label><input type="radio" name="q1" value="3">D. 编译错误——Lambda 不支持默认参数</label>
+<div class="feedback" id="fb1"></div>
+</div>
+
+<div class="quiz" id="q2">
+<div class="question">2/3 · C# 12 中 <code>using Point = (int X, int Y);</code> 在 C# 11 中是什么状态？</div>
+<label><input type="radio" name="q2" value="0">A. 完全一样——元组别名一直支持</label>
+<label><input type="radio" name="q2" value="1">B. 编译错误——C# 11 不支持元组类型的 using 别名</label>
+<label><input type="radio" name="q2" value="2">C. 在 C# 11 中是警告，C# 12 中变为合法</label>
+<label><input type="radio" name="q2" value="3">D. C# 11 中用 <code>typedef</code> 关键字替代</label>
+<div class="feedback" id="fb2"></div>
+</div>
+
+<div class="quiz" id="q3">
+<div class="question">3/3 · 关于 ExperimentalAttribute，哪个说法正确？</div>
+<label><input type="radio" name="q3" value="0">A. 标记为 Experimental 的方法在编译时产生错误，代码不能生成</label>
+<label><input type="radio" name="q3" value="1">B. 标记为 Experimental 的方法产生编译警告，可被 pragma 抑制</label>
+<label><input type="radio" name="q3" value="2">C. Experimental 只在运行时生效（抛出异常）</label>
+<label><input type="radio" name="q3" value="3">D. Experimental 只能标记在方法上，不能标记在类或程序集上</label>
+<div class="feedback" id="fb3"></div>
+
+<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
+<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+</div>
+
+<script>
+const answers = { q1: 2, q2: 1, q3: 1 };
+const explanations = {
+  q1: { correct: "✅ 正确！a=5, b 用默认值 10 → 5 + 10 = 15。C# 12 后 Lambda 和普通方法的默认参数行为完全一致。", wrong: "❌ 不是。a=5, b 用默认值 10 → 15。C# 12 支持 Lambda 默认参数，和普通方法行为一致。正确答案是 C。" },
+  q2: { correct: "✅ 正确！C# 11 的 using 别名只能用于命名类型——元组类型不行。C# 12 扩展了别名支持范围。", wrong: "❌ 不是。C# 11 不支持元组、数组、指针等非命名类型的别名。这是 C# 12 新增的能力。正确答案是 B。" },
+  q3: { correct: "✅ 正确！Experimental 是编译时警告（不是错误），可以用 pragma 或 NoWarn 抑制。它可标记在方法、类型、程序集上。", wrong: "❌ 不是。Experimental 产生编译时警告（不是错误，不是运行时异常），可标记方法/类型/程序集。正确答案是 B。" },
+};
+function checkAll() {
+  let correct = 0;
+  for (let qid of ['q1','q2','q3']) {
+    const selected = document.querySelector(`input[name="${qid}"]:checked`);
+    const fb = document.getElementById('fb' + qid.slice(1));
+    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
+    if (parseInt(selected.value) === answers[qid]) {
+      fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++;
+    } else {
+      fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show';
+    }
+  }
+  const scoreEl = document.getElementById('score');
+  scoreEl.style.display = 'block';
+  scoreEl.textContent = `得分：${correct} / 3`;
+  scoreEl.style.color = correct === 3 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
+}
+</script>
+
+<!-- ========================== 6. C# 12 SUMMARY ========================== -->
+
+<h2>六、C# 12 四课总结</h2>
+
+<table>
+  <tr><th>课程</th><th>内容</th><th>日常频率</th></tr>
+  <tr><td><a href="11-csharp12-primary-constructors.html">11. Primary Constructors</a></td><td>消灭 DI 样板；捕获语义；class vs record 差异</td><td>⭐⭐⭐⭐⭐</td></tr>
+  <tr><td><a href="12-csharp12-collection-expressions.html">12. Collection Expressions</a></td><td><code>[ ]</code> 统一语法；<code>..</code> 展开；编译器优化</td><td>⭐⭐⭐⭐⭐</td></tr>
+  <tr><td><a href="13-csharp12-ref-readonly-inline-arrays.html">13. ref readonly + Inline Arrays</a></td><td>参数语义三角；安全固定缓冲区</td><td>⭐⭐⭐</td></tr>
+  <tr><td>14. 小特性集（本课）</td><td>Lambda 默认参数；类型别名；Experimental；拦截器</td><td>⭐⭐⭐⭐</td></tr>
+</table>
+
+<h2>七、下一步</h2>
+
+<ul>
+  <li><strong>下一阶段：</strong>C# 13（随 .NET 9，2024.11）——params collections、新 lock 对象、<code>\e</code> 转义、ref struct 实现接口、方法组自然类型改进。</li>
+  <li><strong>回顾 C# 12 全局：</strong>你已经从 C# 8（Framework 4.8 时代）一路学到了 C# 12（.NET 8 LTS）。这覆盖了现代 .NET 的整个 LTS 路线——面试中足以展示完整的版本演进知识。</li>
+</ul>
+
+<div class="callout callout--info" style="margin-top:2rem;">
+<strong>💬 有问题？</strong>C# 12 四个特性还有模糊的地方？Lambda 默认参数和普通方法有哪些细微差异？随时问。
+</div>
+
+</body>
+</html>

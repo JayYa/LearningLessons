@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Span / ReadOnlySpan 速查 · C# 7.2+ · 现代 .NET 高性能基石</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.65;
+    max-width: 780px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 0.15rem; }
+  h2 { font-size: 1.15rem; margin: 1.75rem 0 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.35rem; color: var(--accent); }
+  .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+  .en { color: var(--text-muted); font-size: 0.88em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 0.6rem 0 1rem; font-size: 0.88rem;
+  }
+  th, td { text-align: left; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border); }
+  th { background: #f0efeb; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); }
+  tr:last-child td { border-bottom: none; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 0.75rem 1rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.8rem; line-height: 1.5; margin: 0.5rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: #f0efeb; padding: 0.12em 0.3em; border-radius: 3px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 0.5rem 0 1rem; }
+  @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .gotcha {
+    background: var(--warn-bg); border-left: 3px solid var(--warn);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+  .gotcha::before { content: '⚠️ '; }
+
+  .rule {
+    background: #eef1ff; border-left: 3px solid var(--accent);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+  .rule::before { content: '📌 '; }
+
+  .good {
+    background: #dafbe1; border-left: 3px solid var(--good);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+  .good::before { content: '✅ '; }
+
+  .diagram {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1rem 1.25rem; margin: 0.6rem 0;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 0.78rem; line-height: 1.5; white-space: pre; overflow-x: auto;
+    color: #333;
+  }
+
+  @media print {
+    body { font-size: 10pt; padding: 0.5in; max-width: none; }
+    h2 { page-break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>📦 Span / ReadOnlySpan 速查</h1>
+<p class="subtitle">C# 7.2 引入 · 栈上类型安全内存视图 · 零分配切片 · 现代 .NET 高性能基石</p>
+
+<!-- ====== WHAT IS ====== -->
+<h2>一句话定义</h2>
+
+<div class="rule">
+  <strong><code>Span&lt;T&gt;</code> = 指向连续内存的"窗口"</strong>——包含一个 ref 指针 + 一个长度。它<strong>不拥有</strong>内存，只是<strong>查看</strong>。切片/读/写全部零堆分配。
+</div>
+
+<div class="diagram">
+  原始数组（堆上）:
+    int[] arr = [10, 20, 30, 40, 50]
+                 0    1    2    3    4
+
+  Span&lt;int&gt; window = arr.AsSpan().Slice(1, 3);
+    ┌──────────────────────────────┐
+    │  ref ────→ arr[1]（地址）     │
+    │  length = 3                  │
+    │  内容：[20, 30, 40]          │
+    └──────────────────────────────┘
+  window[0] = 99  →  arr[1] 也 = 99  ← 同一块内存！
+</div>
+
+<!-- ====== SPAN vs ROS ====== -->
+<h2>Span vs ReadOnlySpan</h2>
+
+<table>
+  <tr><th></th><th><code>Span&lt;T&gt;</code></th><th><code>ReadOnlySpan&lt;T&gt;</code></th></tr>
+  <tr><td>读</td><td>✅</td><td>✅</td></tr>
+  <tr><td>写</td><td>✅</td><td>❌</td></tr>
+  <tr><td>从数组</td><td><code>arr.AsSpan()</code></td><td><code>arr.AsSpan()</code>（隐式转换）</td></tr>
+  <tr><td>从 string</td><td>❌（string 不可变）</td><td><code>str.AsSpan()</code></td></tr>
+  <tr><td>从 stackalloc</td><td>✅ 直接赋值</td><td>✅ 隐式转换</td></tr>
+  <tr><td>从非托管内存</td><td><code>new Span&lt;T&gt;(ptr, len)</code></td><td><code>new ReadOnlySpan&lt;T&gt;(ptr, len)</code></td></tr>
+  <tr><td>典型场景</td><td>缓冲区读写</td><td>子串、UTF-8 字面量、数据解析</td></tr>
+</table>
+
+<!-- ====== MEMORY SOURCES ====== -->
+<h2>五种内存来源</h2>
+
+<pre><code><span class="cmt">// ① 托管数组（堆上）——最常见</span>
+<span class="type">int</span>[] arr = [1, 2, 3, 4, 5];
+Span&lt;<span class="type">int</span>&gt; s1 = arr.AsSpan();             <span class="cmt">// 整个数组</span>
+Span&lt;<span class="type">int</span>&gt; s2 = arr.AsSpan(2, 3);         <span class="cmt">// 索引 2 起 3 个</span>
+
+<span class="cmt">// ② 栈上分配——stackalloc（无 GC）</span>
+Span&lt;<span class="type">byte</span>&gt; buf = <span class="kw">stackalloc</span> <span class="type">byte</span>[256];   <span class="cmt">// 栈上 256 字节，方法结束自动回收</span>
+
+<span class="cmt">// ③ 字符串——ReadOnlySpan&lt;char&gt;</span>
+ReadOnlySpan&lt;<span class="type">char</span>&gt; sub = <span class="str">"Hello World"</span>.AsSpan(6, 5);  <span class="cmt">// "World"，零分配！</span>
+
+<span class="cmt">// ④ 非托管内存（native heap）</span>
+<span class="kw">unsafe</span> {
+    <span class="type">void</span>* ptr = NativeMemory.Alloc(1024);
+    Span&lt;<span class="type">byte</span>&gt; s = <span class="kw">new</span> Span&lt;<span class="type">byte</span>&gt;(ptr, 1024);
+}
+
+<span class="cmt">// ⑤ UTF-8 字面量（C# 11）——编译期编码</span>
+ReadOnlySpan&lt;<span class="type">byte</span>&gt; utf8 = <span class="str">"hello"u8</span>;  <span class="cmt">// PE 数据段，零运行时开销</span></code></pre>
+
+<!-- ====== COMMON API ====== -->
+<h2>常用 API</h2>
+
+<table>
+  <tr><th>方法</th><th>作用</th><th>分配？</th></tr>
+  <tr><td><code>.Slice(start, length)</code></td><td>切片——取子窗口</td><td>❌ 零分配</td></tr>
+  <tr><td><code>[start..end]</code></td><td>范围切片（C# 8 索引/范围语法）</td><td>❌ 零分配</td></tr>
+  <tr><td><code>.CopyTo(destination)</code></td><td>复制到另一个 Span</td><td>❌ 零分配</td></tr>
+  <tr><td><code>.TryCopyTo(destination)</code></td><td>尝试复制，目标不够长则返回 false</td><td>❌ 零分配</td></tr>
+  <tr><td><code>.ToArray()</code></td><td>复制到新数组</td><td>✅ 新数组！</td></tr>
+  <tr><td><code>.ToString()</code></td><td>Span→string（仅 char 类型）</td><td>✅ 新字符串！</td></tr>
+  <tr><td><code>.IndexOf(value)</code></td><td>查找元素索引</td><td>❌ 零分配</td></tr>
+  <tr><td><code>.IndexOfAny(values)</code></td><td>查找任意匹配项（C# 12+ SearchValues 优化）</td><td>❌ 零分配</td></tr>
+  <tr><td><code>.StartsWith()</code> / <code>.EndsWith()</code></td><td>前缀/后缀匹配</td><td>❌ 零分配</td></tr>
+  <tr><td><code>.SequenceEqual(other)</code></td><td>逐元素比较</td><td>❌ 零分配</td></tr>
+  <tr><td><code>.Trim()</code> / <code>.TrimStart()</code></td><td>去首尾空白（仅 char/byte）</td><td>❌ 零分配</td></tr>
+  <tr><td><code>.Fill(value)</code></td><td>填充统一值</td><td>❌ 零分配</td></tr>
+  <tr><td><code>.Clear()</code></td><td>清零</td><td>❌ 零分配</td></tr>
+</table>
+
+<pre><code><span class="cmt">// 范围语法（C# 8）——Span 原生支持</span>
+Span&lt;<span class="type">int</span>&gt; s = arr.AsSpan();
+<span class="kw">var</span> first3 = s[..3];      <span class="cmt">// 前 3 个</span>
+<span class="kw">var</span> last3 = s[^3..];     <span class="cmt">// 后 3 个</span>
+<span class="kw">var</span> middle = s[2..^1];   <span class="cmt">// 索引 2 到倒数第 2（不含）</span></code></pre>
+
+<!-- ====== REF STRUCT ====== -->
+<h2>最关键的约束：ref struct</h2>
+
+<div class="rule">
+  <code>Span&lt;T&gt;</code> 被声明为 <strong><code>ref struct</code></strong>——它只能在<strong>栈上</strong>存在。这是它零开销的根本原因，也是它最大的使用限制。
+</div>
+
+<table>
+  <tr><th>✅ 可以</th><th>❌ 不可以</th></tr>
+  <tr><td>局部变量、方法参数、返回值</td><td>作为 class / struct 的字段</td></tr>
+  <tr><td>同步方法内使用</td><td>跨越 <code>await</code>（async 方法中 await 前后不能有 Span）</td></tr>
+  <tr><td><code>stackalloc</code> 赋给 Span</td><td>装箱（<code>object obj = span</code>）</td></tr>
+  <tr><td>传给泛型方法（编译器特判）</td><td>实现接口（<code>IEnumerable&lt;T&gt;</code> 等）</td></tr>
+  <tr><td>ref struct 泛型参数（C# 11+）</td><td>Lambda 闭包捕获 / LINQ</td></tr>
+  <tr><td>数组池租用（<code>ArrayPool&lt;T&gt;</code> 配合 Span）</td><td>作为 <code>dynamic</code> 类型</td></tr>
+</table>
+
+<pre><code><span class="cmt">// ❌ 典型错误</span>
+<span class="kw">class</span> <span class="type">MyBuffer</span> {
+    Span&lt;<span class="type">byte</span>&gt; _data;  <span class="cmt">// CS8345: 字段不能是 ref struct</span>
+}
+
+<span class="kw">async</span> Task&lt;<span class="type">void</span>&gt; ProcessAsync() {
+    Span&lt;<span class="type">byte</span>&gt; buf = <span class="kw">stackalloc</span> <span class="type">byte</span>[64];
+    <span class="kw">await</span> Task.Delay(1);  <span class="cmt">// CS4012: ref struct 不能跨越 await</span>
+    buf[0] = 0xFF;
+}
+
+<span class="cmt">// ✅ 需要存储/跨 async → 用 Memory&lt;T&gt;</span>
+<span class="kw">class</span> <span class="type">MyBuffer</span> {
+    Memory&lt;<span class="type">byte</span>&gt; _data;  <span class="cmt">// ✅ Memory 可以放堆上</span>
+}
+
+<span class="kw">async</span> Task&lt;<span class="type">void</span>&gt; ProcessAsync() {
+    Memory&lt;<span class="type">byte</span>&gt; mem = <span class="kw">new</span> <span class="type">byte</span>[64];
+    <span class="kw">await</span> Task.Delay(1);
+    <span class="kw">var</span> span = mem.Span;  <span class="cmt">// 在 await 之后取 Span 使用</span>
+    span[0] = 0xFF;
+}</code></pre>
+
+<div class="gotcha">
+  <strong>ref struct 不能实现接口，但编译器有特殊处理。</strong>foreach 可以遍历 Span（编译器生成索引器循环而不是 IEnumerator），C# 13 还允许 ref struct 实现接口——但在此之前 Span 完全是编译器特殊照顾。
+</div>
+
+<!-- ====== SPAN vs MEMORY ====== -->
+<h2>Span 三兄弟：Span · Memory · ReadOnlySequence</h2>
+
+<table>
+  <tr><th>类型</th><th>可存储</th><th>可跨 async</th><th>连续内存</th><th>典型用途</th></tr>
+  <tr><td><code>Span&lt;T&gt;</code></td><td>❌ 仅栈</td><td>❌</td><td>✅ 单段</td><td>同步热路径：切片、解析、写入缓冲</td></tr>
+  <tr><td><code>Memory&lt;T&gt;</code></td><td>✅ 可做字段</td><td>✅</td><td>✅ 单段</td><td>异步 IO、Pipeline、配置属性</td></tr>
+  <tr><td><code>ReadOnlySequence&lt;T&gt;</code></td><td>✅</td><td>✅</td><td>❌ 多段</td><td>Pipe 读取（数据可能跨多个 buffer）</td></tr>
+</table>
+
+<div class="good">
+  <strong>经验法则：</strong>同步用 Span，需要存储或跨 await 用 Memory，遇到 Pipe 的多段数据用 ReadOnlySequence。Memory 用前加 <code>.Span</code> 即可取回 Span。
+</div>
+
+<!-- ====== STRING vs SPAN ====== -->
+<h2>String 操作：分配 vs 零分配对照</h2>
+
+<pre><code><span class="cmt">// 传统方式——每次都分配新字符串</span>
+<span class="kw">var</span> s = <span class="str">"Hello World"</span>;
+<span class="kw">var</span> sub = s.Substring(6, 5);         <span class="cmt">// "World"——堆分配</span>
+<span class="kw">var</span> trimmed = s.Trim();               <span class="cmt">// 新字符串</span>
+<span class="kw">var</span> replaced = s.Replace(<span class="str">'l'</span>, <span class="str">'x'</span>);  <span class="cmt">// 新字符串</span>
+
+<span class="cmt">// Span 方式——零分配</span>
+ReadOnlySpan&lt;<span class="type">char</span>&gt; span = <span class="str">"Hello World"</span>.AsSpan();
+<span class="kw">var</span> sub2 = span.Slice(6, 5);          <span class="cmt">// 只是移动指针，零分配</span>
+<span class="kw">var</span> trimmed2 = span.Trim();           <span class="cmt">// 零分配</span>
+
+<span class="cmt">// ⚠️ 什么时候需要 ToString()？</span>
+<span class="cmt">// 传给接受 string 的 API 时——如 Console.WriteLine、Path.Combine、旧版 ORM</span></code></pre>
+
+<!-- ====== COMMON PATTERNS ====== -->
+<h2>常见模式</h2>
+
+<h3>① 解析分隔字符串（CSV、URL 路径等）</h3>
+<pre><code>ReadOnlySpan&lt;<span class="type">char</span>&gt; line = <span class="str">"Alice,30,Engineer"</span>;
+<span class="kw">int</span> comma1 = line.IndexOf(<span class="str">','</span>);
+<span class="kw">int</span> comma2 = line.Slice(comma1 + 1).IndexOf(<span class="str">','</span>) + comma1 + 1;
+
+<span class="kw">var</span> name = line[..comma1];                    <span class="cmt">// "Alice"</span>
+<span class="kw">var</span> age = line[(comma1 + 1)..comma2];         <span class="cmt">// "30"</span>
+<span class="kw">var</span> role = line[(comma2 + 1)..];              <span class="cmt">// "Engineer"</span>
+<span class="cmt">// 整个过程零分配！</span></code></pre>
+
+<h3>② 栈缓冲区替代小数组</h3>
+<pre><code><span class="cmt">// 旧：哪怕 32 字节也走堆</span>
+<span class="kw">byte</span>[] temp = <span class="kw">new</span> <span class="type">byte</span>[32];
+
+<span class="cmt">// 新：256 字节以下考虑栈</span>
+Span&lt;<span class="type">byte</span>&gt; temp = <span class="kw">stackalloc</span> <span class="type">byte</span>[32];
+<span class="cmt">// 方法结束自动回收，GC 永远不知道它存在过</span></code></pre>
+
+<h3>③ List Patterns 匹配 Span（C# 11）</h3>
+<pre><code>ReadOnlySpan&lt;<span class="type">int</span>&gt; nums = [1, 2, 3, 4, 5];
+<span class="kw">if</span> (nums <span class="kw">is</span> [1, .., 5]) { }              <span class="cmt">// ✅ Span 原生支持 List Patterns</span>
+<span class="kw">if</span> (nums <span class="kw">is</span> [>= 0, >= 0, .., >= 0]) { } <span class="cmt">// 全部 ≥ 0</span></code></pre>
+
+<h3>④ 从 ArrayPool 租用（超大临时缓冲）</h3>
+<pre><code><span class="type">byte</span>[]? rented = <span class="kw">null</span>;
+<span class="kw">try</span> {
+    rented = ArrayPool&lt;<span class="type">byte</span>&gt;.Shared.Rent(4096);
+    Span&lt;<span class="type">byte</span>&gt; buf = rented.AsSpan(0, 4096);  <span class="cmt">// Span 包装租用的数组</span>
+    <span class="cmt">// ... 处理 ...</span>
+} <span class="kw">finally</span> {
+    <span class="kw">if</span> (rented != <span class="kw">null</span>) ArrayPool&lt;<span class="type">byte</span>&gt;.Shared.Return(rented);
+}</code></pre>
+
+<!-- ====== WHEN TO USE ====== -->
+<h2>什么时候用 Span？</h2>
+
+<table>
+  <tr><th>✅ 用 Span</th><th>❌ 不必用 Span</th></tr>
+  <tr><td>热路径上的字符串/数组切片</td><td>冷路径——代码可读性优先</td></tr>
+  <tr><td>解析：JSON、CSV、URL、协议头</td><td>只需要一次性的 Substring</td></tr>
+  <tr><td>文件 IO 缓冲（.NET 6+ File.ReadAllBytes 也提供 Span 重载）</td><td>老式 API 只接受 string——硬转反而多分配</td></tr>
+  <tr><td>ASP.NET Core 中间件处理请求体</td><td>业务逻辑层——用 POCO 更清晰</td></tr>
+  <tr><td>System.Text.Json 高性能序列化</td><td>Newtonsoft.Json 迁移不完全的场景</td></tr>
+  <tr><td>编码转换：Base64、Hex、UTF-8</td><td>跨度大、逻辑复杂的字符串拼接</td></tr>
+</table>
+
+<!-- ====== PERFORMANCE ====== -->
+<h2>性能本质</h2>
+
+<div class="grid-2">
+  <div>
+    <h3>Span 操作</h3>
+    <pre><code>ReadOnlySpan&lt;<span class="type">char</span>&gt; s = str.AsSpan();
+s = s.Trim();
+s = s[1..^1];
+<span class="cmt">// IL：几个 mov/lea/add 指令
+// 没有 call new
+// 没有 GC 跟踪</span></code></pre>
+  </div>
+  <div>
+    <h3>等价的 string 操作</h3>
+    <pre><code><span class="kw">var</span> s = str.Trim();
+s = s.Substring(1, s.Length - 2);
+<span class="cmt">// IL：call Substring
+//     call FastAllocateString
+//     每次分配新对象</span></code></pre>
+  </div>
+</div>
+
+<div class="rule">
+  Span 的 Slice = 指针偏移 + 长度减法（几个 CPU 指令）。string 的 Substring = 分配新堆对象 + 内存复制（GC 分配路径）。在每秒百万次调用的热路径上，差异从微秒变毫秒。
+</div>
+
+<div class="gotcha">
+  <strong>Span 不消除边界检查。</strong>每次索引访问 <code>s[i]</code>，JIT 仍然会检查 <code>i &lt; length</code>——但 JIT 对 Span 的边界检查消除<span class="en">Bounds Check Elimination</span>做得很好，循环中通常会被优化掉。
+</div>
+
+<!-- ====== EVOLUTION ====== -->
+<h2>版本演进</h2>
+
+<table>
+  <tr><th>版本</th><th>Span 相关</th></tr>
+  <tr><td>C# 7.2</td><td><code>Span&lt;T&gt;</code> / <code>ReadOnlySpan&lt;T&gt;</code> 首次引入（需 <code>System.Memory</code> NuGet）</td></tr>
+  <tr><td>.NET Core 2.1</td><td>BCL 全面 Span 化——<code>AsSpan()</code>、<code>TryFormat</code> 等 API</td></tr>
+  <tr><td>C# 8</td><td>索引/范围语法（<code>^</code> / <code>..</code>）原生支持 Span</td></tr>
+  <tr><td>C# 11</td><td>UTF-8 String Literals（<code>"text"u8</code>）、List Patterns 支持 Span、ref struct 泛型参数</td></tr>
+  <tr><td>.NET 6+</td><td>Span 全覆盖——几乎所有 IO API 都有 Span 重载</td></tr>
+  <tr><td>C# 12</td><td><code>ref readonly</code> 参数、内联数组<span class="en">Inline Arrays</span></td></tr>
+  <tr><td>C# 13</td><td>ref struct 可实现接口（预览）</td></tr>
+</table>
+
+<!-- ====== MEMORY API LIST ====== -->
+<h2>MemoryExtensions —— Span 的 LINQ</h2>
+
+<p>这些扩展方法都在 <code>System.MemoryExtensions</code> 类中，专门为 Span 设计——全部零分配：</p>
+
+<table>
+  <tr><th>类别</th><th>方法</th></tr>
+  <tr><td>搜索</td><td><code>IndexOf</code> · <code>LastIndexOf</code> · <code>IndexOfAny</code> · <code>Contains</code> · <code>IndexOfAnyExcept</code></td></tr>
+  <tr><td>比较</td><td><code>StartsWith</code> · <code>EndsWith</code> · <code>SequenceEqual</code> · <code>SequenceCompareTo</code> · <code>CommonPrefixLength</code></td></tr>
+  <tr><td>写入</td><td><code>Fill</code> · <code>Reverse</code> · <code>Replace</code> · <code>CopyTo</code></td></tr>
+  <tr><td>修剪</td><td><code>Trim</code> · <code>TrimStart</code> · <code>TrimEnd</code>（仅 char/byte 类型）</td></tr>
+  <tr><td>分割</td><td><code>Split</code>（返回 <code>SpanSplitEnumerator&lt;T&gt;</code>——零分配 foreach）</td></tr>
+  <tr><td>编码</td><td><code>ToLower</code> · <code>ToUpper</code> · <code>AsciiToUpper</code> · <code>AsciiToLower</code></td></tr>
+</table>
+
+<pre><code><span class="cmt">// Span.Split ——零分配分割</span>
+ReadOnlySpan&lt;<span class="type">char</span>&gt; csv = <span class="str">"a,b,c,d"</span>;
+<span class="kw">foreach</span> (<span class="kw">var</span> segment <span class="kw">in</span> csv.Split(<span class="str">','</span>)) {
+    <span class="cmt">// segment 是 Range ——零分配！</span>
+    Console.WriteLine(csv[segment].ToString());  <span class="cmt">// 需要时才调用 ToString</span>
+}</code></pre>
+
+<!-- ====== CROSS-REF ====== -->
+<h2>相关速查 & 课程</h2>
+<ul>
+  <li><a href="indices-ranges-cheatsheet.html">索引与范围<span class="en">Indices &amp; Ranges</span></a>— <code>^</code> 和 <code>..</code> 在 Span 上原生工作</li>
+  <li><a href="pattern-matching-cheatsheet.html">模式匹配<span class="en">Pattern Matching</span></a>— List Patterns 支持 Span（C# 11）</li>
+  <li><a href="../lessons/10-csharp11-raw-strings-list-patterns-required.html">Lesson 10：C# 11</a>— UTF-8 String Literals → <code>ReadOnlySpan&lt;byte&gt;</code>；List Patterns 匹配 Span</li>
+  <li>下一课：<strong>C# 12</strong>— Inline Arrays、Ref Readonly Parameters 等 Span 生态扩展</li>
+</ul>
+
+<p style="margin-top:2rem; font-size:0.82rem; color: var(--text-muted);">
+  来自 Claude 老师速查系列 · 有疑问直接追问。<br>
+  引用：
+  <a href="https://learn.microsoft.com/zh-cn/dotnet/api/system.span-1">Microsoft Learn: Span&lt;T&gt;</a> ·
+  <a href="https://learn.microsoft.com/zh-cn/dotnet/api/system.readonlyspan-1">ReadOnlySpan&lt;T&gt;</a> ·
+  <a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/language-reference/builtin-types/ref-struct">ref struct</a> ·
+  <a href="https://learn.microsoft.com/zh-cn/dotnet/standard/memory-and-spans/">Memory and Span usage guidelines</a>
+</p>
+
+</body>
+</html>

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 12: C# 12 — Collection Expressions（集合表达式）</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+  .callout {
+    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
+  }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  tr:nth-child(even) td { background: #fafaf9; }
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+  .badge {
+    display: inline-block; padding: 0.15em 0.55em; border-radius: 100px;
+    font-size: 0.78rem; font-weight: 600;
+  }
+  .badge--fast { background: #dafbe1; color: #1a7f37; }
+</style>
+</head>
+<body>
+
+<h1>Lesson 12: C# 12 — 集合表达式 <span class="en">Collection Expressions</span></h1>
+<p class="subtitle">一个方括号语法统一四种集合创建方式——编译器还帮你做优化</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="11-csharp12-primary-constructors.html">Lesson 11（C# 12 Primary Constructors）</a>；理解 <a href="../reference/span-readonlyspan-cheatsheet.html">Span/ReadOnlySpan</a> 概念。<br>
+<strong>阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/language-reference/operators/collection-expressions">Microsoft Learn: 集合表达式</a> · <a href="https://devblogs.microsoft.com/dotnet/announcing-csharp-12/">.NET Blog: Announcing C# 12</a>
+</div>
+
+<!-- ============ 1. HOOK ============ -->
+
+<h2>一、你每次创建集合都要走一遍决策树</h2>
+
+<div class="comparison">
+  <div class="old"><h4>😣 C# 11：四种类型 = 四种语法</h4>
+<pre><code><span class="cmt">// 数组：new + 类型</span>
+<span class="kw">int</span>[] arr = <span class="kw">new</span> <span class="kw">int</span>[] { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span> };
+
+<span class="cmt">// List：new() + 花括号</span>
+List&lt;<span class="kw">int</span>&gt; list = <span class="kw">new</span>() { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span> };
+
+<span class="cmt">// Span：stackalloc</span>
+Span&lt;<span class="kw">int</span>&gt; span = <span class="kw">stackalloc</span> <span class="kw">int</span>[] { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span> };
+
+<span class="cmt">// 空数组：Array.Empty 或 new int[0]</span>
+<span class="kw">int</span>[] empty = Array.Empty&lt;<span class="kw">int</span>&gt;();
+</code></pre>
+  </div>
+  <div class="new"><h4>😎 C# 12：一个方括号</h4>
+<pre><code><span class="cmt">// 数组：</span>
+<span class="kw">int</span>[] arr = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];
+
+<span class="cmt">// List：</span>
+List&lt;<span class="kw">int</span>&gt; list = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];
+
+<span class="cmt">// Span：</span>
+Span&lt;<span class="kw">int</span>&gt; span = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];
+
+<span class="cmt">// 空集合：</span>
+<span class="kw">int</span>[] empty = [];
+</code></pre>
+  </div>
+</div>
+
+<p>这不仅是语法的统一——<strong>编译器根据目标类型选择最优实现</strong>。对数组直接分配精确大小，对 List 预分配 capacity，对空集合直接返回 <code>Array.Empty&lt;T&gt;()</code> 单例。你写的是统一的 <code>[ ]</code>，得到的是定制优化。</p>
+
+<!-- ============ 2. ALL TYPES ============ -->
+
+<h2>二、一个语法，支持所有集合类型</h2>
+
+<pre><code><span class="cmt">// ===== 内置类型——全支持 =====</span>
+<span class="kw">int</span>[] a1 = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];                    <span class="cmt">// T[]</span>
+List&lt;<span class="kw">string</span>&gt; a2 = [<span class="str">"a"</span>, <span class="str">"b"</span>, <span class="str">"c"</span>];          <span class="cmt">// List&lt;T&gt;</span>
+Span&lt;<span class="kw">char</span>&gt; a3 = [<span class="str">'x'</span>, <span class="str">'y'</span>, <span class="str">'z'</span>];            <span class="cmt">// Span&lt;T&gt;</span>
+ReadOnlySpan&lt;<span class="kw">byte</span>&gt; a4 = [<span class="num">0x00</span>, <span class="num">0x01</span>];     <span class="cmt">// ReadOnlySpan&lt;T&gt;</span>
+ImmutableArray&lt;<span class="kw">int</span>&gt; a5 = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];       <span class="cmt">// ImmutableArray&lt;T&gt;</span>
+
+<span class="cmt">// ===== 交错数组——自然嵌套 =====</span>
+<span class="kw">int</span>[][] matrix = [[<span class="num">1</span>, <span class="num">2</span>], [<span class="num">3</span>, <span class="num">4</span>], [<span class="num">5</span>, <span class="num">6</span>]];
+
+<span class="cmt">// ===== 方法参数——直接传集合字面量 =====</span>
+<span class="kw">void</span> Write(ReadOnlySpan&lt;<span class="kw">byte</span>&gt; data) { ... }
+Write([<span class="num">0x1B</span>, <span class="num">0x5B</span>, <span class="num">0x31</span>]);  <span class="cmt">// 不用先声明变量</span>
+
+<span class="cmt">// ===== 空集合 =====</span>
+<span class="kw">int</span>[] none = [];  <span class="cmt">// 编译为 Array.Empty&lt;int&gt;()——零堆分配</span></code></pre>
+
+<!-- ============ 3. SPREAD ============ -->
+
+<h2>三、展开运算符 <span class="en">Spread Element</span>——<code>..</code></h2>
+
+<p>这是集合表达式中<strong>最有表现力</strong>的部分：</p>
+
+<pre><code><span class="kw">int</span>[] odds = [<span class="num">1</span>, <span class="num">3</span>, <span class="num">5</span>];
+<span class="kw">int</span>[] evens = [<span class="num">2</span>, <span class="num">4</span>, <span class="num">6</span>];
+
+<span class="cmt">// 内联展开——比 Concat 更直观、更高效：</span>
+<span class="kw">int</span>[] all = [..odds, <span class="num">0</span>, ..evens];
+<span class="cmt">// → [1, 3, 5, 0, 2, 4, 6]</span>
+
+<span class="cmt">// 合并多个集合：</span>
+<span class="kw">string</span>[] admins = [<span class="str">"alice"</span>, <span class="str">"bob"</span>];
+<span class="kw">string</span>[] mods = [<span class="str">"charlie"</span>];
+<span class="kw">string</span>[] everyone = [..admins, ..mods, <span class="str">"super"</span>];
+<span class="cmt">// → ["alice", "bob", "charlie", "super"]</span>
+
+<span class="cmt">// 方法返回值也可以展开：</span>
+<span class="kw">int</span>[] result = [..GetActiveIds(), ..GetPendingIds()];</code></pre>
+
+<div class="callout callout--info">
+<strong>展开 vs Concat/LINQ：</strong><code>[..a, ..b]</code> 是<strong>编译时操作</strong>——编译器知道目标类型，可以直接分配精确大小的数组，然后依次拷贝元素。而 <code>a.Concat(b).ToArray()</code> 走迭代器 + 动态扩容。<strong>前者更快、分配更少。</strong>
+</div>
+
+<!-- ============ 4. COMPILER ============ -->
+
+<h2>四、编译器生成了什么？</h2>
+
+<p>集合表达式不是简单的语法糖——编译器根据<strong>目标类型</strong>走不同的代码生成路径：</p>
+
+<table>
+  <tr><th>目标类型</th><th>编译器策略</th></tr>
+  <tr>
+    <td><code>T[]</code></td>
+    <td>直接 <code>new T[N]</code> 分配精确大小，逐元素赋值</td>
+  </tr>
+  <tr>
+    <td><code>List&lt;T&gt;</code></td>
+    <td><code>new List&lt;T&gt;(N)</code> 预分配 capacity，通过 <code>CollectionsMarshal.SetCount</code> + Span 写入</td>
+  </tr>
+  <tr>
+    <td><code>Span&lt;T&gt;</code></td>
+    <td><code>stackalloc T[N]</code> 栈分配（若元素少），或指向静态数据段（若内容可确定）</td>
+  </tr>
+  <tr>
+    <td><code>ReadOnlySpan&lt;T&gt;</code></td>
+    <td>同 Span；若内容为常量，直接指向 PE 数据段的只读区域——<strong>零运行时分配</strong></td>
+  </tr>
+  <tr>
+    <td>空 <code>[]</code> 转 <code>T[]</code></td>
+    <td><code>Array.Empty&lt;T&gt;()</code> 单例——不分配！</td>
+  </tr>
+  <tr>
+    <td>空 <code>[]</code> 转 <code>Span&lt;T&gt;</code></td>
+    <td><code>default</code>——空 Span，零成本</td>
+  </tr>
+  <tr>
+    <td><code>ImmutableArray&lt;T&gt;</code></td>
+    <td>空集合返回 <code>ImmutableArray&lt;T&gt;.Empty</code></td>
+  </tr>
+</table>
+
+<pre><code><span class="cmt">// 你写：</span>
+List&lt;<span class="kw">int</span>&gt; list = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>, <span class="num">4</span>, <span class="num">5</span>];
+
+<span class="cmt">// 编译器生成（SharpLab 可查，简化版）：</span>
+<span class="cmt">// List&lt;int&gt; list = new List&lt;int&gt;(5);          // 预分配 capacity = 5</span>
+<span class="cmt">// Span&lt;int&gt; span = CollectionsMarshal.AsSpan(list);</span>
+<span class="cmt">// span[0] = 1; span[1] = 2; ... span[4] = 5;   // 通过 Span 写入</span>
+<span class="cmt">// CollectionsMarshal.SetCount(list, 5);</span></code></pre>
+
+<div class="callout callout--good">
+<strong>空集合是亮点：</strong>你手写 <code>new int[0]</code> 每次分配一个新数组对象（虽然零长度但对象头存在）。编译器把 <code>int[] x = [];</code> 变成 <code>Array.Empty&lt;int&gt;()</code>——一个全局单例。<strong>零分配，零 GC 压力。</strong>
+</div>
+
+<!-- ============ 5. CUSTOM ============ -->
+
+<h2>五、自定义类型如何接入？</h2>
+
+<p>通过 <code>[CollectionBuilder]</code> 属性，你的类型也能使用 <code>[ ]</code> 语法：</p>
+
+<pre><code><span class="cmt">// 条件 1：类型实现 IEnumerable&lt;T&gt;</span>
+<span class="cmt">// 条件 2：指定 Builder 类型和 Create 方法</span>
+
+[<span class="type">CollectionBuilder</span>(<span class="kw">typeof</span>(MySet), <span class="str">"Create"</span>)]
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">MySet</span>&lt;T&gt; : IEnumerable&lt;T&gt;
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> HashSet&lt;T&gt; _items;
+
+    <span class="cmt">// 编译器调用这个方法——传入 ReadOnlySpan&lt;T&gt;</span>
+    <span class="kw">public</span> <span class="kw">static</span> MySet&lt;T&gt; Create(ReadOnlySpan&lt;T&gt; items)
+    {
+        <span class="kw">var</span> set = <span class="kw">new</span> MySet&lt;T&gt;();
+        <span class="kw">foreach</span> (<span class="kw">var</span> item <span class="kw">in</span> items) set._items.Add(item);
+        <span class="kw">return</span> set;
+    }
+
+    <span class="kw">public</span> IEnumerator&lt;T&gt; GetEnumerator() => _items.GetEnumerator();
+    <span class="cmt">// ...</span>
+}
+
+<span class="cmt">// 现在可以用 [ ] 了：</span>
+MySet&lt;<span class="kw">int</span>&gt; set = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];  <span class="cmt">// ✅ 编译器调用 MySet&lt;int&gt;.Create([1,2,3])</span></code></pre>
+
+<p class="mild">大多数时候你不需要写这个——list、array、Span、ImmutableArray 等常用类型已经内置支持。</p>
+
+<!-- ============ 6. QUIZ ============ -->
+
+<h2>六、小测验</h2>
+
+<div class="quiz" id="q1">
+<div class="question">1/3 · C# 12 中，<code>int[] a = [];</code> 在运行时做了什么？</div>
+<label><input type="radio" name="q1" value="0">A. 分配一个零长度数组——等同于 <code>new int[0]</code></label>
+<label><input type="radio" name="q1" value="1">B. 编译器优化为 <code>Array.Empty&lt;int&gt;()</code>——零堆分配</label>
+<label><input type="radio" name="q1" value="2">C. 编译错误——空集合表达式不允许用于数组</label>
+<label><input type="radio" name="q1" value="3">D. 分配一个长度为 1 的数组，元素为 default(int)</label>
+<div class="feedback" id="fb1"></div>
+</div>
+
+<div class="quiz" id="q2">
+<div class="question">2/3 · 关于 <code>..</code> 展开运算符，以下哪个说法正确？</div>
+<label><input type="radio" name="q2" value="0">A. <code>..</code> 只能展开数组，不能展开 List</label>
+<label><input type="radio" name="q2" value="1">B. <code>..e</code> 和 <code>e.ToArray()</code> 的行为和性能完全相同</label>
+<label><input type="radio" name="q2" value="2">C. <code>..e</code> 是编译时展开——编译器知道目标大小，可精确分配</label>
+<label><input type="radio" name="q2" value="3">D. <code>..</code> 只能在集合表达式的开头使用</label>
+<div class="feedback" id="fb2"></div>
+</div>
+
+<div class="quiz" id="q3">
+<div class="question">3/3 · <code>List&lt;int&gt; list = [1, 2, 3];</code> 编译器做了什么优化？</div>
+<label><input type="radio" name="q3" value="0">A. 和 <code>new List&lt;int&gt; { 1, 2, 3 }</code> 生成完全一样的 IL</label>
+<label><input type="radio" name="q3" value="1">B. 预分配 capacity = 3，通过 <code>CollectionsMarshal</code> 写入</label>
+<label><input type="radio" name="q3" value="2">C. 转换为数组再拷贝到 List——所以比直接初始化慢</label>
+<label><input type="radio" name="q3" value="3">D. 每次都调用 <code>list.Add()</code> 三次，和手动写一样</label>
+<div class="feedback" id="fb3"></div>
+
+<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
+<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+</div>
+
+<script>
+const answers = { q1: 1, q2: 2, q3: 1 };
+const explanations = {
+  q1: { correct: "✅ 正确！编译器将空集合表达式优化为 Array.Empty&lt;T&gt;()，返回全局单例，零堆分配。这比手写 new int[0] 更好——后者每次分配一个新对象。", wrong: "❌ 不是。编译器将其优化为 Array.Empty&lt;int&gt;()，零分配。这比 new int[0] 更好。正确答案是 B。" },
+  q2: { correct: "✅ 正确！.. 是编译时展开。编译器知道所有展开源和元素的总数，可以一次性分配目标集合的精确大小——比 LINQ Concat 的动态扩容更高效。", wrong: "❌ 不是。.. 是编译时展开，可用于任何实现了正确模式的集合类型，可出现在集合表达式的任意位置。正确答案是 C。" },
+  q3: { correct: "✅ 正确！对于 List&lt;T&gt;，编译器预分配 capacity = N，然后通过 CollectionsMarshal.AsSpan 获取内部 Span 直接写入——绕过了 Add() 方法的边界检查和容量检查。", wrong: "❌ 不是。编译器预分配 capacity 并通过 Span 直接写入 List 内部缓冲区——比逐个 Add() 更高效。正确答案是 B。" },
+};
+function checkAll() {
+  let correct = 0;
+  for (let qid of ['q1','q2','q3']) {
+    const selected = document.querySelector(`input[name="${qid}"]:checked`);
+    const fb = document.getElementById('fb' + qid.slice(1));
+    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
+    if (parseInt(selected.value) === answers[qid]) {
+      fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++;
+    } else {
+      fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show';
+    }
+  }
+  const scoreEl = document.getElementById('score');
+  scoreEl.style.display = 'block';
+  scoreEl.textContent = `得分：${correct} / 3`;
+  scoreEl.style.color = correct === 3 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
+}
+</script>
+
+<!-- ============ 7. NEXT ============ -->
+
+<h2>七、下一步</h2>
+
+<ul>
+  <li><strong>动手：</strong>在项目里搜索 <code>new[] {</code>、<code>new List</code>、<code>Array.Empty</code>——全部替换成 <code>[ ]</code>。Visual Studio 有自动分析器建议这个替换。</li>
+  <li><strong>SharpLab：</strong>分别用 <code>[1,2,3]</code> 和 <code>new[] {1,2,3}</code> 创建数组，对比 IL——它们应该完全一致。再对比 List 创建——你会看到补 compiler 生成的优化路径不同。</li>
+  <li><strong>阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/language-reference/operators/collection-expressions">Microsoft Learn: 集合表达式</a> · <a href="https://github.com/dotnet/csharplang/blob/main/proposals/csharp-12.0/collection-expressions.md">功能设计提案</a></li>
+  <li><strong>下一课：</strong><a href="13-csharp12-ref-readonly-inline-arrays.html">Lesson 13 — ref readonly + Inline Arrays</a>。</li>
+</ul>
+
+<div class="callout callout--info" style="margin-top:2rem;">
+<strong>💬 有问题？</strong>不确定某个集合类型是否支持 <code>[ ]</code>？想知道编译器对特定类型的优化路径？随时问。
+</div>
+
+</body>
+</html>

@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 13: C# 12 — ref readonly 参数 + 内联数组</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+  .callout { padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem; }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+  .badge { display: inline-block; padding: 0.15em 0.55em; border-radius: 100px; font-size: 0.78rem; font-weight: 600; }
+  .badge--new { background: #dafbe1; color: #1a7f37; }
+  .triad {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin: 1rem 0;
+  }
+  @media (max-width: 650px) { .triad { grid-template-columns: 1fr; } }
+  .triad > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 0.9rem 1rem; font-size: 0.88rem;
+  }
+  .triad > div h5 { font-size: 0.9rem; margin-bottom: 0.4rem; }
+</style>
+</head>
+<body>
+
+<h1>Lesson 13: C# 12 — ref readonly 参数 + 内联数组 <span class="en">Inline Arrays</span></h1>
+<p class="subtitle">补全参数传递的语义三角 + 安全代码里的固定大小缓冲区</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="11-csharp12-primary-constructors.html">Lesson 11（Primary Constructors）</a> 和 <a href="12-csharp12-collection-expressions.html">Lesson 12（Collection Expressions）</a>；理解 <a href="../reference/span-readonlyspan-cheatsheet.html">Span/ReadOnlySpan</a>。<br>
+<strong>阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/language-reference/keywords/method-parameters#ref-readonly-modifier">ref readonly 修饰符</a> · <a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/language-reference/builtin-types/struct#inline-arrays">内联数组</a>
+</div>
+
+<!-- ========================================== PART 1: REF READONLY ========================================== -->
+
+<h2>第一部分：ref readonly 参数</h2>
+
+<h3>一、语义三角——ref / ref readonly / in 各管什么</h3>
+
+<p>在 C# 12 之前，引用传递只有两个选项：<code>ref</code>（可写引用）和 <code>in</code>（只读引用，可能复制）。中间缺了一格——<strong>"我需要原始内存位置，但不会修改它"</strong>。</p>
+
+<div class="triad">
+  <div>
+    <h5><code>ref</code></h5>
+    <p>可写引用。必须传变量。方法可以修改值。调用方必须写 <code>ref</code>。</p>
+    <p class="mild">Swap、TryGet、Interlocked</p>
+  </div>
+  <div>
+    <h5><code>ref readonly</code> <span class="badge badge--new">C# 12</span></h5>
+    <p>只读引用，<strong>保证指向原地址</strong>。必须传变量。方法<strong>不能</strong>修改值。调用方必须写 <code>ref</code>。</p>
+    <p class="mild">互操作、大 struct 只读检查、IsNullRef</p>
+  </div>
+  <div>
+    <h5><code>in</code></h5>
+    <p>只读引用，<strong>编译器可能复制</strong>到临时变量。可传字面量/表达式。调用方可省略 <code>in</code>。</p>
+    <p class="mild">大 struct 传参优化</p>
+  </div>
+</div>
+
+<table>
+  <tr><th></th><th><code>ref</code></th><th><code>ref readonly</code> <span class="badge badge--new">新</span></th><th><code>in</code></th></tr>
+  <tr><td>必须传变量</td><td>✅</td><td>✅</td><td>❌ 值/表达式均可</td></tr>
+  <tr><td>方法可修改</td><td>✅</td><td>❌</td><td>❌</td></tr>
+  <tr><td>保证指向原地址</td><td>✅</td><td>✅</td><td>❌ 编译器可能复制</td></tr>
+  <tr><td>调用方写修饰符</td><td>必须写 <code>ref</code></td><td>必须写 <code>ref</code></td><td>可省略</td></tr>
+</table>
+
+<h3>二、in 不够用的场景</h3>
+
+<pre><code><span class="cmt">// 场景 1：需要内存地址的方法——in 不能保证</span>
+<span class="kw">bool</span> IsNull&lt;T&gt;(<span class="kw">ref</span> <span class="kw">readonly</span> T value) => Unsafe.IsNullRef(<span class="kw">ref</span> value);
+<span class="cmt">// ↑ 如果 value 是 in，编译器可能复制到一个临时变量——IsNullRef 就判断错了</span>
+
+<span class="cmt">// 场景 2：更新旧 API——ref 改成 ref readonly 不是 Breaking Change</span>
+<span class="cmt">// 旧：void Process(ref LargeStruct data) { /* 只读 */ }</span>
+<span class="cmt">// 新：void Process(ref readonly LargeStruct data) { /* 只读 */ }</span>
+<span class="cmt">// 调用方已经写了 ref，行为不变——但现在编译器会阻止方法内意外修改</span>
+
+<span class="cmt">// 场景 3：in 能传字面量——但你不需要这个灵活性</span>
+M(<span class="kw">in</span> <span class="num">42</span>);  <span class="cmt">// ✅——但 42 被复制到临时变量，不是原始位置</span>
+M(<span class="kw">ref</span> <span class="kw">readonly</span> <span class="num">42</span>);  <span class="cmt">// ❌ 编译错误——字面量没有地址</span></code></pre>
+
+<h3>三、调用方写 <code>ref</code>——不是 <code>ref readonly</code></h3>
+
+<p>这是最反直觉的点：</p>
+
+<pre><code><span class="kw">void</span> Print(<span class="kw">ref</span> <span class="kw">readonly</span> <span class="kw">int</span> x) => Console.WriteLine(x);
+
+<span class="kw">var</span> v = <span class="num">42</span>;
+Print(<span class="kw">ref</span> v);            <span class="cmt">// ✅ 调用方写 ref</span>
+Print(<span class="kw">ref</span> <span class="kw">readonly</span> v);    <span class="cmt">// ❌ 编译错误——调用方没有 ref readonly 语法</span>
+Print(v);               <span class="cmt">// ❌ 编译错误——必须写 ref</span>
+Print(<span class="kw">ref</span> <span class="num">42</span>);           <span class="cmt">// ⚠ 编译警告——字面量创建临时变量，ref 失去意义</span></code></pre>
+
+<div class="callout callout--info">
+<strong>为什么这样设计？</strong><code>ref readonly</code> 是<strong>被调用方的承诺</strong>（"我承诺不修改"），不是调用方要关心的新语法。调用方看到 <code>ref</code> 就知道"我在传引用"——这已经是最大的信息量了。方法是否修改那是方法的事。这和 <code>in</code> 的设计哲学不同——<code>in</code> 对调用方完全透明（可省略），因为它承诺的是"我不在乎是不是引用"。
+</div>
+
+<!-- ========================================== PART 2: INLINE ARRAYS ========================================== -->
+
+<h2>第二部分：内联数组 <span class="en">Inline Arrays</span></h2>
+
+<h3>四、问题——高性能缓冲区总要 unsafe</h3>
+
+<p>以前在 struct 里嵌入固定大小数组，只能用 <code>unsafe fixed</code>：</p>
+
+<pre><code><span class="cmt">// ❌ 旧世界：unsafe 是硬门槛</span>
+<span class="kw">unsafe</span> <span class="kw">struct</span> <span class="type">Buffer</span>
+{
+    <span class="kw">public</span> <span class="kw">fixed</span> <span class="kw">int</span> items[<span class="num">10</span>];  <span class="cmt">// 只能在 unsafe 上下文中使用</span>
+}
+<span class="cmt">// 使用也必须 unsafe</span>
+<span class="kw">unsafe</span> { <span class="kw">var</span> x = buffer.items[<span class="num">0</span>]; }</code></pre>
+
+<h3>五、C# 12 的答案——<code>[InlineArray]</code> 属性</h3>
+
+<p>一个属性 + 一个 struct + 一个字段 = 固定大小的安全数组：</p>
+
+<pre><code><span class="cmt">// ✅ C# 12：纯 safe code</span>
+[System.Runtime.CompilerServices.InlineArray(<span class="num">10</span>)]
+<span class="kw">public</span> <span class="kw">struct</span> <span class="type">Buffer10</span>
+{
+    <span class="kw">private</span> <span class="kw">int</span> _element0;  <span class="cmt">// "哨兵字段"——编译器据此推断元素类型和布局</span>
+}
+
+<span class="cmt">// 使用：和普通数组完全一样</span>
+<span class="kw">var</span> buf = <span class="kw">new</span> Buffer10();
+<span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">0</span>; i &lt; <span class="num">10</span>; i++) buf[i] = i;  <span class="cmt">// 索引器</span>
+<span class="kw">foreach</span> (<span class="kw">var</span> v <span class="kw">in</span> buf) Console.WriteLine(v);   <span class="cmt">// foreach</span>
+
+<span class="cmt">// 关键：零开销转 Span</span>
+Span&lt;<span class="kw">int</span>&gt; span = buf;  <span class="cmt">// 隐式转换——struct 直接在内存中就是 Span 指向的区域</span></code></pre>
+
+<h3>六、编译器做了什么？</h3>
+
+<pre><code><span class="cmt">// 你写：</span>
+[InlineArray(<span class="num">3</span>)]
+<span class="kw">public</span> <span class="kw">struct</span> <span class="type">Triple</span> { <span class="kw">private</span> <span class="kw">int</span> _e0; }
+
+<span class="cmt">// 编译器生成：</span>
+<span class="cmt">// 1. struct Triple 的大小 = 3 × sizeof(int) = 12 字节</span>
+<span class="cmt">// 2. 索引器：public ref int this[int index] { get { ... } }</span>
+<span class="cmt">// 3. GetEnumerator() → 支持 foreach</span>
+<span class="cmt">// 4. 隐式转换 → Span&lt;int&gt; / ReadOnlySpan&lt;int&gt;</span>
+<span class="cmt">//</span>
+<span class="cmt">// 本质上 = 把 unsafe fixed size buffer 包装成安全特性</span></code></pre>
+
+<h3>七、vs stackalloc——什么时候用哪个？</h3>
+
+<table>
+  <tr><th></th><th><code>stackalloc</code></th><th>内联数组 <code>[InlineArray]</code></th></tr>
+  <tr><td>安全上下文</td><td>Span 接收可免 unsafe；否则需要</td><td>✅ 纯 safe code</td></tr>
+  <tr><td>存储位置</td><td>只能在栈上（局部变量）</td><td>可以做 struct 字段——嵌入任何位置</td></tr>
+  <tr><td>是否可以传递</td><td>只能通过 Span 传递（不能返回原始 stackalloc）</td><td>整个 struct 可传、可返、可做泛型参数</td></tr>
+  <tr><td>典型用户</td><td>应用开发者写临时缓冲区</td><td>运行时/库作者暴露高性能 API</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>你会怎么遇到它？</strong>你不会自己声明 <code>[InlineArray]</code>——这是运行时团队的底层工具。但你写的 <code>SearchValues.Create("abc"u8)</code> 内部就在用它存储字节查找表。你的代码间接受益——更快的字符串搜索、更少的堆分配。
+</div>
+
+<!-- ========================================== QUIZ ========================================== -->
+
+<h2>八、小测验</h2>
+
+<div class="quiz" id="q1">
+<div class="question">1/3 · ref readonly vs in——以下哪个场景必须用 ref readonly 而不能用 in？</div>
+<label><input type="radio" name="q1" value="0">A. 传递一个大 struct 以提高性能</label>
+<label><input type="radio" name="q1" value="1">B. 需要检查参数的内存地址（如 Unsafe.IsNullRef）</label>
+<label><input type="radio" name="q1" value="2">C. 传递 int 类型的字面量</label>
+<label><input type="radio" name="q1" value="3">D. 传递一个只读的字符串</label>
+<div class="feedback" id="fb1"></div>
+</div>
+
+<div class="quiz" id="q2">
+<div class="question">2/3 · 调用 <code>void M(ref readonly int x)</code> 时，调用方怎么写？</div>
+<label><input type="radio" name="q2" value="0">A. <code>M(v);</code></label>
+<label><input type="radio" name="q2" value="1">B. <code>M(in v);</code></label>
+<label><input type="radio" name="q2" value="2">C. <code>M(ref v);</code></label>
+<label><input type="radio" name="q2" value="3">D. <code>M(ref readonly v);</code></label>
+<div class="feedback" id="fb2"></div>
+</div>
+
+<div class="quiz" id="q3">
+<div class="question">3/3 · 关于内联数组，哪个说法正确？</div>
+<label><input type="radio" name="q3" value="0">A. 内联数组需要 unsafe 上下文才能使用索引器</label>
+<label><input type="radio" name="q3" value="1">B. 内联数组是纯 safe code，可隐式转为 Span，是 unsafe fixed buffer 的安全替代</label>
+<label><input type="radio" name="q3" value="2">C. 内联数组可以动态调整大小</label>
+<label><input type="radio" name="q3" value="3">D. 内联数组只能用 stackalloc 分配在栈上</label>
+<div class="feedback" id="fb3"></div>
+
+<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
+<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+</div>
+
+<script>
+const answers = { q1: 1, q2: 2, q3: 1 };
+const explanations = {
+  q1: { correct: "✅ 正确！in 可能复制到临时变量——所以 Unsafe.IsNullRef(in value) 的结果不可靠。ref readonly 保证指向原始地址。", wrong: "❌ 不是。传递大 struct 是 in 的典型场景。A/C/D 用 in 就可以甚至更方便。需要原始内存地址时（如互操作）才必须 ref readonly。正确答案是 B。" },
+  q2: { correct: "✅ 正确！调用方写 <code>ref</code>，不是 ref readonly。ref readonly 是被调用方的承诺——调用方不需要学新语法。", wrong: "❌ 不是。调用方写 <code>ref</code> + 变量。ref readonly 是对被调用方的约束，不影响调用方语法。正确答案是 C。" },
+  q3: { correct: "✅ 正确！内联数组的核心价值就是：把 unsafe fixed size buffer 变成 safe code，完整支持 Span 集成。", wrong: "❌ 不是。内联数组是 safe code，大小在编译时固定（由 [InlineArray(N)] 决定），可以做 struct 字段（不限于栈）。正确答案是 B。" },
+};
+function checkAll() {
+  let correct = 0;
+  for (let qid of ['q1','q2','q3']) {
+    const selected = document.querySelector(`input[name="${qid}"]:checked`);
+    const fb = document.getElementById('fb' + qid.slice(1));
+    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
+    if (parseInt(selected.value) === answers[qid]) {
+      fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++;
+    } else {
+      fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show';
+    }
+  }
+  const scoreEl = document.getElementById('score');
+  scoreEl.style.display = 'block';
+  scoreEl.textContent = `得分：${correct} / 3`;
+  scoreEl.style.color = correct === 3 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
+}
+</script>
+
+<!-- ========================================== NEXT ========================================== -->
+
+<h2>九、下一步</h2>
+
+<ul>
+  <li><strong>回顾 in：</strong>回看 <a href="08-csharp9-small-features.html">Lesson 08</a> 中关于 <code>in</code> 参数的章节——对比 ref readonly 加深理解。</li>
+  <li><strong>阅读：</strong><a href="https://github.com/dotnet/csharplang/blob/main/proposals/csharp-12.0/ref-readonly-parameters.md">ref readonly 设计提案</a> · <a href="https://github.com/dotnet/runtime/blob/main/src/libraries/System.Private.CoreLib/src/System/Runtime/CompilerServices/InlineArrayAttribute.cs">InlineArray 运行时源码</a></li>
+  <li><strong>下一课：</strong><a href="14-csharp12-small-features.html">Lesson 14 — C# 12 小特性集</a>（Lambda 默认参数、Alias Any Type、Experimental、Interceptors）。</li>
+</ul>
+
+<div class="callout callout--info" style="margin-top:2rem;">
+<strong>💬 有问题？</strong>ref readonly 和 in 的边界仍然模糊？想知道自己有没有受益于内联数组？随时问。
+</div>
+
+</body>
+</html>

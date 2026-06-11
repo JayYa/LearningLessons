@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>模式匹配速查 · Pattern Matching · C# 8+</title>
+<title>模式匹配速查 · Pattern Matching · C# 7~12</title>
 <style>
   :root {
     --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
     --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
-    --good: #1a7f37; --warn: #9a6700; --warn-bg: #fff8c5; --radius: 10px;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --radius: 10px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -61,6 +62,21 @@
   }
   .rule::before { content: '📌 '; }
 
+  .good {
+    background: var(--good-bg); border-left: 3px solid var(--good);
+    padding: 0.5rem 0.75rem; margin: 0.5rem 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.88rem;
+  }
+  .good::before { content: '✅ '; }
+
+  .diagram {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1rem 1.25rem; margin: 0.6rem 0;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 0.82rem; line-height: 1.5; white-space: pre; overflow-x: auto;
+    color: #333;
+  }
+
   @media print {
     body { font-size: 10pt; padding: 0.5in; max-width: none; }
     h2 { page-break-after: avoid; }
@@ -70,7 +86,65 @@
 <body>
 
 <h1>🎯 模式匹配速查 <span class="en">Pattern Matching</span></h1>
-<p class="subtitle">C# 7 引入基础 · C# 8 强化 · 持续演进到 C# 14 · <a href="../lessons/02-csharp8-switch-using-indices.html">📖 完整课程</a></p>
+<p class="subtitle">C# 7 引入 · C# 8~12 持续增强 · 用"形状"描述数据而非用步骤</p>
+
+<!-- ====== WHAT IS A PATTERN ====== -->
+<h2>一、什么是"模式"<span class="en">What Is a Pattern</span></h2>
+
+<div class="rule">
+  <strong>模式 = 一个表达式，描述"我期待数据长什么样"。</strong><br>
+  它做三件事：① <strong>测试</strong>这个值是否符合条件 ② 符合时<strong>提取</strong>感兴趣的部分到变量 ③ 不满足则<strong>走下一分支</strong>，绝不抛异常。
+</div>
+
+<p>你早就用过模式的雏形：</p>
+
+<pre><code><span class="cmt">// if + == 就是最简单的手工模式——但 == 只能做"等于"</span>
+<span class="kw">if</span> (status == 3) { ... }
+
+<span class="cmt">// 真正的模式可以做更多：类型检查 + 变量绑定，一步完成</span>
+<span class="kw">if</span> (obj <span class="kw">is</span> <span class="kw">string</span> s && s.Length > 0) { ... }
+<span class="cmt">//        └──────模式──────┘  └─when─┘</span></code></pre>
+
+<div class="good">
+  <strong><code>is</code> 是模式入口，<code>switch</code> 是模式分发器。</strong>所有模式都可以放在 <code>is</code> 后面（返回 bool），也可以放在 <code>switch { }</code> 表达式/语句里作为分支条件。
+</div>
+
+<div class="gotcha">
+  <strong>三个"模式"，中文极易混淆：</strong><br>
+  ① <strong>Pattern</strong>（模式匹配）= C# 语法，<code>is</code>/<code>switch</code> 里的形状描述 → 本速查<br>
+  ② <strong>Design Pattern</strong>（设计模式）= GoF 23 种，软件工程概念 → 无关<br>
+  ③ <strong>Regular Expression</strong>（正则表达式）= 文本匹配 DSL → 无关
+</div>
+
+<!-- ====== VERSION EVOLUTION ====== -->
+<h2>模式版本演进</h2>
+
+<table>
+  <tr><th>版本</th><th>新增</th><th>能做什么</th><th>对应课程</th></tr>
+  <tr><td>C# 7</td><td>常量模式、类型模式、<code>var</code> 模式</td><td><code>x is 3</code>、<code>x is string s</code></td><td>—</td></tr>
+  <tr><td>C# 8</td><td>属性模式、元组模式、switch 表达式、丢弃 <code>_</code></td><td><code>{ Name: "A" }</code>、<code>(a,b)</code></td><td><a href="../lessons/02-csharp8-switch-using-indices.html">L02</a></td></tr>
+  <tr><td>C# 9</td><td>关系模式、<code>and</code>/<code>or</code>/<code>not</code></td><td><code>&gt;= 18 and &lt;= 65</code></td><td><a href="../lessons/08-csharp9-small-features.html">L08</a></td></tr>
+  <tr><td>C# 10</td><td>扩展属性模式</td><td><code>{ Address.City: "上海" }</code></td><td><a href="../lessons/09-csharp10-record-structs-global-usings.html">L09</a></td></tr>
+  <tr><td>C# 11</td><td><strong>列表模式</strong></td><td><code>arr is [1, .., 9]</code></td><td><a href="../lessons/10-csharp11-raw-strings-list-patterns-required.html">L10</a></td></tr>
+  <tr><td>C# 12+</td><td>（无新模式，巩固现有）</td><td>—</td><td>—</td></tr>
+</table>
+
+<!-- ====== ALL PATTERNS ====== -->
+<h2>所有模式一览</h2>
+<table>
+  <tr><th>模式</th><th>写法</th><th>匹配条件</th><th>版本</th></tr>
+  <tr><td>常量<span class="en">Constant</span></td><td><code>42</code>, <code>"hello"</code>, <code>null</code></td><td><code>Equals</code> 相等（null 特殊处理）</td><td>C# 7</td></tr>
+  <tr><td>类型<span class="en">Type</span></td><td><code>Circle c</code>, <code>Rectangle</code></td><td>是该类型（null 自动排除）</td><td>C# 7</td></tr>
+  <tr><td>var<span class="en">Var</span></td><td><code>var x</code></td><td>匹配一切 + 绑定（含 null）</td><td>C# 7</td></tr>
+  <tr><td>丢弃<span class="en">Discard</span></td><td><code>_</code></td><td>匹配一切，不绑定</td><td>C# 8</td></tr>
+  <tr><td>属性<span class="en">Property</span></td><td><code>{ Name: "A", Age: &gt;= 18 }</code></td><td>属性形状匹配（AND 递归）</td><td>C# 8</td></tr>
+  <tr><td>元组<span class="en">Tuple</span></td><td><code>("rock", "paper")</code></td><td>多值同时匹配，每位可嵌套子模式</td><td>C# 8</td></tr>
+  <tr><td>关系<span class="en">Relational</span></td><td><code>&gt; 0</code>, <code>&lt;= 100</code></td><td>大小比较（作用于 CompareTo/IComparable）</td><td>C# 9</td></tr>
+  <tr><td>组合<span class="en">Combinator</span></td><td><code>and</code>, <code>or</code>, <code>not</code></td><td>模式逻辑组合（关键字，非运算符）</td><td>C# 9</td></tr>
+  <tr><td>否定<span class="en">Negated</span></td><td><code>not null</code>, <code>not &gt; 100</code></td><td>反转任意子模式</td><td>C# 9</td></tr>
+  <tr><td>扩展属性<span class="en">Extended Property</span></td><td><code>{ A.B: 1 }</code></td><td>嵌套属性直接打点（C# 10 语法糖）</td><td>C# 10</td></tr>
+  <tr><td><strong>列表<span class="en">List</span></strong></td><td><code>[1, .., 9]</code></td><td>集合长度 + 元素模式（鸭子类型）</td><td>C# 11</td></tr>
+</table>
 
 <!-- ====== SWITCH EXPRESSION ====== -->
 <h2>Switch 表达式<span class="en">Switch Expression</span> (C# 8)</h2>
@@ -99,33 +173,84 @@
 </div>
 
 <div class="rule">
-  <strong>穷尽性：</strong>switch 表达式必须覆盖所有可能值。必须提供 <code>_</code> 兜底（除非穷举所有枚举值）。
+  <strong>穷尽性：</strong>switch 表达式必须覆盖所有可能值。必须有 <code>_</code> 兜底（除非穷举所有枚举/布尔值）。编译时检查。
 </div>
 
-<!-- ====== ALL PATTERNS ====== -->
-<h2>所有模式一览</h2>
-<table>
-  <tr><th>模式</th><th>写法</th><th>匹配条件</th><th>引入版本</th></tr>
-  <tr><td>常量模式<span class="en">Constant</span></td><td><code>42</code>, <code>"hello"</code>, <code>null</code></td><td>值相等</td><td>C# 7</td></tr>
-  <tr><td>类型模式<span class="en">Type</span></td><td><code>Circle c</code>, <code>Rectangle</code></td><td>是该类型（自动排除 null）</td><td>C# 7</td></tr>
-  <tr><td>丢弃模式<span class="en">Discard</span></td><td><code>_</code></td><td>匹配一切（代替 <code>default</code>）</td><td>C# 8</td></tr>
-  <tr><td>var 模式<span class="en">Var</span></td><td><code>var x</code></td><td>匹配一切 + 绑定变量（含 null）</td><td>C# 8</td></tr>
-  <tr><td>属性模式<span class="en">Property</span></td><td><code>{ Name: "张三", Age: >= 18 }</code></td><td>属性形状匹配（AND 关系，递归）</td><td>C# 8</td></tr>
-  <tr><td>元组模式<span class="en">Tuple</span></td><td><code>("rock", "paper")</code></td><td>多值同时匹配</td><td>C# 8</td></tr>
-  <tr><td>关系模式<span class="en">Relational</span></td><td><code>&gt; 0</code>, <code>&lt;= 100</code></td><td>大小比较</td><td>C# 9</td></tr>
-  <tr><td>组合模式<span class="en">Combinator</span></td><td><code>or</code>, <code>and</code>, <code>not</code></td><td>模式逻辑组合（关键字，非运算符）</td><td>C# 9</td></tr>
-</table>
+<!-- ====== RELATIONAL PATTERNS ====== -->
+<h2>关系模式<span class="en">Relational Patterns</span> (C# 9)</h2>
+
+<div class="rule">
+  将 <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code> 用于模式匹配——底层调用 <code>IComparable.CompareTo</code>，不是运算符重载。
+</div>
+
+<pre><code><span class="cmt">// is 表达式</span>
+<span class="kw">if</span> (score <span class="kw">is</span> >= 90 and &lt;= 100) { }    <span class="cmt">// 90~100</span>
+<span class="kw">if</span> (temp <span class="kw">is</span> &lt; 0 or > 40) { }           <span class="cmt">// 异常温度</span>
+
+<span class="cmt">// switch 表达式——干净的分段逻辑</span>
+<span class="kw">string</span> Grade(<span class="kw">int</span> score) => score <span class="kw">switch</span>
+{
+    >= 90 =&gt; <span class="str">"A"</span>,
+    >= 80 =&gt; <span class="str">"B"</span>,
+    >= 70 =&gt; <span class="str">"C"</span>,
+    >= 60 =&gt; <span class="str">"D"</span>,
+    _     =&gt; <span class="str">"F"</span>,
+};
+
+<span class="cmt">// 和属性模式嵌套</span>
+order <span class="kw">switch</span>
+{
+    { Total: &gt;= 1000, IsVip: <span class="kw">true</span> } =&gt; 0.3m,
+    { Total: &gt;= 1000 }                   =&gt; 0.2m,
+    { Total: &gt;= 500 }                    =&gt; 0.1m,
+    _                                     =&gt; 0m,
+};</code></pre>
+
+<div class="gotcha">
+  关系模式有<strong>穷尽性盲区</strong>。编译器无法推断 <code>&gt;= 90</code> 和 <code>&gt;= 80</code> 合在一起是否覆盖了所有整数——所以仍需要 <code>_</code> 兜底。
+</div>
+
+<!-- ====== COMBINATOR PATTERNS ====== -->
+<h2>组合模式<span class="en">Combinator Patterns</span> — and / or / not (C# 9)</h2>
+
+<div class="rule">
+  <strong><code>and</code>/<code>or</code>/<code>not</code> 是关键字，不是运算符。</strong>它们是模式系统的一部分，只存在于 <code>is</code> 和 <code>switch</code> 的模式上下文中。优先级：<code>not</code> &gt; <code>and</code> &gt; <code>or</code>。
+</div>
+
+<pre><code><span class="cmt">// and：同时满足（交集）</span>
+x <span class="kw">is</span> &gt;= 0 <span class="kw">and</span> &lt;= 100              <span class="cmt">// 0 ≤ x ≤ 100</span>
+
+<span class="cmt">// or：满足其一（并集）</span>
+c <span class="kw">is</span> <span class="str">'a'</span> <span class="kw">or</span> <span class="str">'e'</span> <span class="kw">or</span> <span class="str">'i'</span> <span class="kw">or</span> <span class="str">'o'</span> <span class="kw">or</span> <span class="str">'u'</span>  <span class="cmt">// 元音字母</span>
+
+<span class="cmt">// not：否定（补集）</span>
+obj <span class="kw">is</span> <span class="kw">not</span> <span class="kw">null</span>                       <span class="cmt">// is not null——NRT 时代的标准写法</span>
+value <span class="kw">is</span> <span class="kw">not</span> &gt; 100                   <span class="cmt">// ≤ 100（含负数）</span>
+
+<span class="cmt">// 嵌套——括号控制优先级</span>
+status <span class="kw">is</span> ((&gt;= 200 <span class="kw">and</span> &lt; 300) <span class="kw">or</span> (== 304))  <span class="cmt">// 2xx 或 304</span></code></pre>
+
+<pre><code><span class="cmt">// 典型范式：switch 表达式 + 关系模式 + 组合模式</span>
+<span class="kw">static</span> <span class="kw">string</span> Describe(<span class="kw">int</span> age) => age <span class="kw">switch</span>
+{
+    &lt; 0                        =&gt; <span class="str">"无效"</span>,
+    &gt;= 0 <span class="kw">and</span> &lt; 12               =&gt; <span class="str">"儿童"</span>,
+    &gt;= 12 <span class="kw">and</span> &lt; 18              =&gt; <span class="str">"青少年"</span>,
+    &gt;= 18 <span class="kw">and</span> &lt; 60              =&gt; <span class="str">"成年人"</span>,
+    &gt;= 60 <span class="kw">and</span> <span class="kw">not</span> > 120          =&gt; <span class="str">"老年人"</span>,
+    _                          =&gt; <span class="str">"不可能"</span>,
+};</code></pre>
 
 <!-- ====== PROPERTY PATTERN ====== -->
-<h2>属性模式<span class="en">Property Pattern</span></h2>
+<h2>属性模式<span class="en">Property Pattern</span> (C# 8) &amp; 扩展属性模式 (C# 10)</h2>
 
 <pre><code><span class="cmt">// 基础：多个属性 = AND 关系</span>
 order <span class="kw">switch</span>
 {
-    { IsVip: <span class="kw">true</span>, Total: >= 1000 } => 0.2m,
+    { IsVip: <span class="kw">true</span>, Total: &gt;= 1000 } => 0.2m,
     { IsVip: <span class="kw">true</span> }                  => 0.1m,
-    { Total: >= 500 }                   => 0.05m,
-    _                                   => 0m,
+    { Total: &gt;= 500 }                   => 0.05m,
+    _                                    => 0m,
 };
 
 <span class="cmt">// 嵌套：属性的值本身也是模式（递归）</span>
@@ -133,6 +258,13 @@ p <span class="kw">switch</span>
 {
     { Address: { City: <span class="str">"北京"</span> } } => <span class="str">"北京居民"</span>,
     _                              => <span class="str">"其他"</span>,
+};
+
+<span class="cmt">// C# 10 扩展属性模式——省一层嵌套</span>
+p <span class="kw">switch</span>
+{
+    { Address.City: <span class="str">"北京"</span> } => <span class="str">"北京居民"</span>,  <span class="cmt">// 直接打点！</span>
+    _                       => <span class="str">"其他"</span>,
 };
 
 <span class="cmt">// 空属性模式：{ } 匹配所有非 null 实例</span>
@@ -150,11 +282,11 @@ shape <span class="kw">switch</span>
 };</code></pre>
 
 <div class="gotcha">
-  <code>Rectangle</code> 不写 <code>{ }</code> 也是有效的——纯类型模式，自动排除 null。写 <code>Rectangle { }</code> 等同于纯类型模式（匹配所有非 null 的 Rectangle 实例）。
+  <code>Rectangle</code> 不写 <code>{ }</code> 也是类型模式——自动排除 null。写 <code>Rectangle { }</code> 等同于纯类型模式。但如果想匹配"是 Rectangle 且某属性满足条件"，必须加 <code>{ }</code>。
 </div>
 
 <!-- ====== TUPLE PATTERN ====== -->
-<h2>元组模式<span class="en">Tuple Pattern</span></h2>
+<h2>元组模式<span class="en">Tuple Pattern</span> (C# 8)</h2>
 
 <pre><code><span class="cmt">// 多维决策表——替代层层 if-else</span>
 <span class="kw">string</span> GameResult(string p1, string p2) => (p1, p2) <span class="kw">switch</span>
@@ -183,6 +315,67 @@ shape <span class="kw">switch</span>
     _                                   => <span class="str">"可购买"</span>,
 };</code></pre>
 
+<!-- ====== LIST PATTERNS ====== -->
+<h2>列表模式<span class="en">List Patterns</span> (C# 11)</h2>
+
+<div class="rule">
+  模式匹配扩展到集合——用 <code>[...]</code> 描述集合的长度和元素形状。支持任何有 <code>Length</code>/<code>Count</code> + 可访问索引器的类型（鸭子类型），包括 <code>T[]</code>、<code>List&lt;T&gt;</code>、<code>Span&lt;T&gt;</code>、<code>string</code>。
+</div>
+
+<h3>完整语法</h3>
+
+<pre><code><span class="cmt">// ① 精确匹配——长度和元素都相等</span>
+arr <span class="kw">is</span> [1, 2, 3]              <span class="cmt">// {1,2,3} → true; {1,2} → false; {1,2,3,4} → false</span>
+
+<span class="cmt">// ② 元素使用任意子模式</span>
+arr <span class="kw">is</span> [1, &gt;= 10, &lt;= 100]    <span class="cmt">// 第一个=1, 第二个≥10, 第三个≤100</span>
+arr <span class="kw">is</span> [<span class="kw">not</span> 0, ..]              <span class="cmt">// 第一项不是 0</span>
+
+<span class="cmt">// ③ 切片模式（..）——匹配任意数量元素（含零个）</span>
+arr <span class="kw">is</span> [1, ..]                <span class="cmt">// 第一个是 1，后面随便</span>
+arr <span class="kw">is</span> [.., 9]                <span class="cmt">// 最后一个是 9</span>
+arr <span class="kw">is</span> [1, .., 9]             <span class="cmt">// 首 1 尾 9，中间任意（含零个）</span>
+arr <span class="kw">is</span> [1, .. { Length: 2 }, 9] <span class="cmt">// 1, [任意两个], 9</span>
+
+<span class="cmt">// ④ var 捕获——提取匹配到的元素</span>
+<span class="kw">if</span> (arr <span class="kw">is</span> [<span class="kw">var</span> first, .. <span class="kw">var</span> middle, <span class="kw">var</span> last])
+    <span class="cmt">// first=arr[0], middle=arr[1..^1], last=arr[^1]</span>
+
+<span class="cmt">// ⑤ 嵌套模式——元素是对象时匹配属性</span>
+orders <span class="kw">is</span> [{ Status: <span class="str">"New"</span> }, .., { Total: &gt;= 1000 }]</code></pre>
+
+<h3>switch 表达式中的列表模式</h3>
+
+<pre><code><span class="kw">static</span> <span class="kw">string</span> Describe(<span class="kw">int</span>[] arr) => arr <span class="kw">switch</span>
+{
+    []              => <span class="str">"空"</span>,
+    [<span class="kw">var</span> x]          => $<span class="str">"单元素 {x}"</span>,
+    [<span class="kw">var</span> x, <span class="kw">var</span> y]    => $<span class="str">"两元素 {x}, {y}"</span>,
+    [1, .., 1]      => <span class="str">"首尾都是 1"</span>,
+    [<span class="kw">not</span> 0, ..]      => <span class="str">"首非零"</span>,
+    _               => <span class="str">"其他"</span>,
+};
+
+<span class="cmt">// 实战：REST 路由</span>
+<span class="kw">static</span> <span class="kw">string</span> Route(<span class="kw">string</span>[] seg) => seg <span class="kw">switch</span>
+{
+    [<span class="str">"api"</span>, <span class="str">"users"</span>]             => <span class="str">"用户列表"</span>,
+    [<span class="str">"api"</span>, <span class="str">"users"</span>, <span class="kw">var</span> id]    => $<span class="str">"用户 {id}"</span>,
+    [<span class="str">"api"</span>, ..]                    => <span class="str">"其他 API"</span>,
+    _                            => <span class="str">"不匹配"</span>,
+};</code></pre>
+
+<h3>支持的类型 & 编译器判断</h3>
+
+<table>
+  <tr><th>类型</th><th>支持？</th><th>原因</th></tr>
+  <tr><td><code>T[]</code></td><td>✅</td><td>原生数组</td></tr>
+  <tr><td><code>List&lt;T&gt;</code></td><td>✅</td><td>有 <code>Count</code> + 索引器</td></tr>
+  <tr><td><code>Span&lt;T&gt;</code> / <code>ReadOnlySpan&lt;T&gt;</code></td><td>✅</td><td>C# 11 新增，有 <code>Length</code> + 索引器</td></tr>
+  <tr><td><code>string</code></td><td>✅</td><td>有 <code>Length</code> + <code>char</code> 索引器</td></tr>
+  <tr><td>自定义集合</td><td>✅</td><td>有 <code>Length</code>/<code>Count</code> + <code>this[int]</code> 或 <code>Slice</code> 方法</td></tr>
+</table>
+
 <!-- ====== WHEN ====== -->
 <h2>when 子句<span class="en">When Clause</span></h2>
 
@@ -197,7 +390,7 @@ shape <span class="kw">switch</span>
   <tr><td>null 检查</td><td>✅ <code>null</code> / <code>not null</code></td><td>不需要</td></tr>
   <tr><td>比较两个变量</td><td>❌</td><td><code>when w == h</code></td></tr>
   <tr><td>调用方法</td><td>❌</td><td><code>when s.StartsWith("ERR")</code></td></tr>
-  <tr><td>访问集合元素</td><td>❌</td><td><code>when list.Count > 0</code></td></tr>
+  <tr><td>集合计数/索引访问</td><td>❌（C# 11 列表模式可做部分）</td><td><code>when list.Count > 5</code></td></tr>
 </table>
 
 <pre><code><span class="cmt">// when 必要：条件涉及方法调用</span>
@@ -212,35 +405,59 @@ s <span class="kw">switch</span>
 <span class="cmt">// 陷阱：when 失败→跳过，不是报错</span>
 score <span class="kw">switch</span>
 {
-    >= 90 <span class="kw">when</span> score &lt;= 100  => <span class="str">"A"</span>,   <span class="cmt">// score=110: 模式命中, when 失败→跳过→进下一行</span>
-    >= 80                   => <span class="str">"B"</span>,
+    &gt;= 90 <span class="kw">when</span> score &lt;= 100  => <span class="str">"A"</span>,   <span class="cmt">// score=110: 模式命中, when 失败→跳过→进下一行</span>
+    &gt;= 80                   => <span class="str">"B"</span>,
     _                       => <span class="str">"C"</span>,
 };</code></pre>
+
+<!-- ====== PATTERN NESTING ====== -->
+<h2>模式的本质：可递归嵌套</h2>
+
+<p>所有模式可以嵌套——这是模式匹配超越 <code>if-else</code> 的根本原因：</p>
+
+<pre><code><span class="cmt">// 一个表达式检查多层结构——每层都可以有测试 + 提取</span>
+<span class="kw">if</span> (obj <span class="kw">is</span> <span class="type">Order</span> {
+    Status: <span class="str">"Paid"</span> <span class="kw">or</span> <span class="str">"Shipped"</span>,
+    Items: [_, .., { Price: &gt;= 1000 }],
+    Customer: { Address.City: <span class="str">"上海"</span> <span class="kw">or</span> <span class="str">"北京"</span> }
+}) { ... }
+<span class="cmt">// └─类型──┘└────属性────────────┘└────列表───────────┘└────扩展属性──────────────┘
+// 每一个 {}、[]、not、and 都是一个子模式——组合成深层结构描述</span></code></pre>
 
 <!-- ====== KEY FACTS ====== -->
 <h2>关键事实</h2>
 
 <div class="gotcha">
   <strong>为什么 <code>or</code>/<code>and</code>/<code>not</code> 是关键字不是运算符？</strong>
-  <code>|</code>/<code>&amp;</code> 已是位运算符——对值做运算产出新值。模式匹配是描述<strong>形状</strong>，不是计算值。用关键字彻底隔离优先级歧义。三者一致（<code>!</code> 不能当 <code>not</code> 因为 <code>x is !null</code> 语义奇怪）。
+  <code>|</code>/<code>&amp;</code> 已是位运算符——对值做运算产出新值。模式匹配是描述<strong>形状</strong>，不是计算值。用关键字彻底隔离优先级歧义。<code>!</code> 不能当 <code>not</code> 因为 <code>x is !null</code> 语义奇怪。
 </div>
 
 <div class="gotcha">
-  <strong>分支匹配顺序：从上到下，不是"最匹配"。</strong>这和传统 switch 语句一样。永远把更具体的分支放上面。
+  <strong>分支匹配顺序：从上到下，不是"最匹配"。</strong>永远把更具体的分支放上面。
+</div>
+
+<div class="gotcha">
+  <strong>switch 表达式的 <code>_</code> 是丢弃模式，不是 default。</strong>它匹配一切但丢弃值。<code>var x</code> 也匹配一切但绑定变量。二者的共同点是都覆盖所有情况。
 </div>
 
 <!-- ====== CROSS-REF ====== -->
-<h2>相关速查</h2>
+<h2>相关速查 & 课程</h2>
 <ul>
   <li><a href="nrt-cheatsheet.html">NRT 速查</a> — <code>is not null</code>、<code>{ }</code> 判非 null</li>
-  <li><a href="indices-ranges-cheatsheet.html">索引与范围<span class="en">Indices &amp; Ranges</span></a></li>
-  <li><a href="async-streams-cheatsheet.html">异步流<span class="en">Async Streams</span></a></li>
+  <li><a href="indices-ranges-cheatsheet.html">索引与范围<span class="en">Indices &amp; Ranges</span></a> — <code>..</code> 在列表模式里做切片</li>
+  <li><a href="span-readonlyspan-cheatsheet.html">Span / ReadOnlySpan</a> — 列表模式支持 Span 匹配</li>
+  <li><a href="records-cheatsheet.html">Records 速查</a> — record 天然匹配属性模式</li>
+  <li><a href="csharp9-small-features-cheatsheet.html">C# 9 小特性</a> — 关系模式 &amp; 组合模式</li>
+  <li><a href="../lessons/02-csharp8-switch-using-indices.html">Lesson 02</a> — Switch 表达式 &amp; 属性模式（C# 8）</li>
+  <li><a href="../lessons/08-csharp9-small-features.html">Lesson 08</a> — 关系模式 &amp; and/or/not（C# 9）</li>
+  <li><a href="../lessons/10-csharp11-raw-strings-list-patterns-required.html">Lesson 10</a> — 列表模式（C# 11）</li>
 </ul>
 
 <p style="margin-top:2rem; font-size:0.82rem; color: var(--text-muted);">
-  来自 Lesson 02 · 有疑问？向 Claude 老师追问。<br>
+  来自 Claude 老师速查系列 · 有疑问直接追问。<br>
   引用：<a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/language-reference/operators/patterns">Microsoft Learn: Patterns</a> ·
-  <a href="https://github.com/dotnet/csharplang">dotnet/csharplang</a>
+  <a href="https://github.com/dotnet/csharplang">dotnet/csharplang</a> ·
+  <a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/fundamentals/functional/pattern-matching">Pattern Matching Overview</a>
 </p>
 
 </body>
