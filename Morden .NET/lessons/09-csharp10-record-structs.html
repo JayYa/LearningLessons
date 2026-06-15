@@ -323,7 +323,7 @@ Console.WriteLine(p1.Tags.Count);  <span class="cmt">// 2——p1.Tags 和 p2.Ta
 const answers = { q1: 'b', q2: 'b', q3: 'b' };
 const explanations = {
   q1: { correct: "✅ 正确！record struct 的核心差异来自值类型身份：无堆分配、无继承（无 EqualityContract）、无 &lt;Clone&gt;$（值类型直接拷贝）、Equals 是纯粹字段比较不经反射。with 照样支持，readonly 只是推荐不是强制。", wrong: "❌ 答案是 b。record struct 支持 with（a错），自动生成 Equals/GetHashCode（c错），readonly 只是推荐（d错）。" },
-  q2: { correct: "✅ 正确！三个根因：值类型天然隔离（拷贝即安全）、struct 世界 "opt-in to readonly" 的历史一致性、高性能场景需要可变性。", wrong: "❌ 答案是 b。这是刻意的语言设计，不是疏漏。readonly struct 性能更好（消除防御性拷贝），技术上完全可行。" },
+  q2: { correct: "✅ 正确！三个根因：值类型天然隔离（拷贝即安全）、struct 世界 \"opt-in to readonly\" 的历史一致性、高性能场景需要可变性。", wrong: "❌ 答案是 b。这是刻意的语言设计，不是疏漏。readonly struct 性能更好（消除防御性拷贝），技术上完全可行。" },
   q3: { correct: "✅ 正确！热循环百万实例 → 必须避免堆分配（排除 a）。Vector3 是不可变数据（不能 c）。record struct 的 Equals 是编译时生成的逐字段比较，不经反射——性能等同于手写（d 没必要）。12 字节 ≤ 16 字节阈值。", wrong: "❌ 答案是 b。readonly record struct：栈分配无 GC + 不可变安全 + 自动生成方法性能等同于手写。12 字节是 record struct 的理想大小。" },
 };
 function checkAll() {

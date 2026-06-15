@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Primary Constructors 速查 · C# 12</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --warn: #9a6700; --warn-bg: #fff8c5; --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.65;
+    max-width: 820px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 0.15rem; }
+  h2 { font-size: 1.15rem; margin: 1.75rem 0 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1rem; margin: 1.25rem 0 0.35rem; color: var(--accent); }
+  .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
+  .en { color: var(--text-muted); font-size: 0.88em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 0.6rem 0 1rem; font-size: 0.88rem;
+  }
+  th, td { text-align: left; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border); }
+  th { background: #f0efeb; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); }
+  tr:last-child td { border-bottom: none; }
+  td code { white-space: nowrap; }
+
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 0.75rem 1rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.8rem; line-height: 1.5; margin: 0.5rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: #f0efeb; padding: 0.12em 0.3em; border-radius: 3px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; }
+
+  .callout {
+    padding: 0.65rem 0.9rem; border-radius: 6px; margin: 0.6rem 0; font-size: 0.88rem;
+    border-left: 3px solid var(--accent); background: #eef1ff;
+  }
+  .callout--warn { background: var(--warn-bg); border-left-color: #9a6700; }
+  .callout--good { background: #eaf7ee; border-left-color: var(--good); }
+
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin: 0.6rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 0.75rem 1rem;
+  }
+  .comparison > div h4 { font-size: 0.85rem; margin-bottom: 0.35rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: #cf222e; }
+  .comparison > div.new h4 { color: var(--good); }
+
+  .badge {
+    display: inline-block; padding: 0.1em 0.45em; border-radius: 100px;
+    font-size: 0.72rem; font-weight: 600;
+  }
+  .badge--lts { background: #ede4ff; color: #512bd4; }
+  .badge--ok { background: #dafbe1; color: #1a7f37; }
+  .badge--bad { background: #ffebe9; color: #cf222e; }
+  ul { margin: 0.3rem 0 0.3rem 1.3rem; font-size: 0.9rem; }
+  li { margin: 0.15rem 0; }
+</style>
+</head>
+<body>
+
+<h1>Primary Constructors 速查 <span class="badge badge--lts">C# 12 / .NET 8 LTS</span></h1>
+<p class="subtitle">class/struct 主构造函数——参数捕获机制、DI 模式、继承规则</p>
+
+<!-- ====== Record vs Class ====== -->
+<h2>Record vs Class — 根本区别</h2>
+
+<div class="comparison">
+  <div class="old"><h4>Record（C# 9+）</h4>
+<pre><code><span class="kw">public</span> <span class="kw">record</span> <span class="type">Person</span>(<span class="kw">string</span> Name, <span class="kw">int</span> Age);
+<span class="cmt">// Name, Age → public init-only 属性 + Deconstruct + Equals…</span></code></pre>
+  </div>
+  <div class="new"><h4>Class/Struct（C# 12）</h4>
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Person</span>(<span class="kw">string</span> name, <span class="kw">int</span> age)
+{
+    <span class="kw">public</span> <span class="kw">string</span> Name => name;   <span class="cmt">// 手动暴露</span>
+    <span class="kw">public</span> <span class="kw">int</span> Age => age;
+}
+<span class="cmt">// name, age → 不是属性，外部不可见</span></code></pre>
+  </div>
+</div>
+
+<div class="callout">
+<strong>核心：</strong>class 的主构造函数<strong>不生成任何属性</strong>。参数是"类内全局变量"，编译器按需捕获为 private 字段。
+</div>
+
+<!-- ====== Capture Semantics ====== -->
+<h2>捕获语义 <span class="en">Capture Semantics</span></h2>
+
+<p>编译器做逃逸分析——参数出现在哪里决定是否分配字段：</p>
+
+<table>
+  <tr><th>参数被引用的位置</th><th>示例</th><th>分配字段？</th></tr>
+  <tr><td>仅 <code>base(...)</code> / <code>this(...)</code></td><td><code>: base(name)</code></td><td><span class="badge badge--bad">❌ 否</span></td></tr>
+  <tr><td>仅属性/字段<strong>初始化器</strong></td><td><code>public string X { get; } = x;</code></td><td><span class="badge badge--bad">❌ 否</span></td></tr>
+  <tr><td>表达式体属性 getter</td><td><code>public int X => x;</code></td><td><span class="badge badge--ok">✅ 是</span></td></tr>
+  <tr><td>方法体、实例成员</td><td><code>ToString() => name;</code></td><td><span class="badge badge--ok">✅ 是</span></td></tr>
+  <tr><td>未被任何成员引用</td><td>—</td><td><span class="badge badge--bad">❌ 否 + 警告</span></td></tr>
+</table>
+
+<div class="callout callout--warn">
+<strong>关键区分：</strong><code>public string X => x;</code>（表达式体，捕获） vs <code>public string X { get; } = x;</code>（初始化器，不捕获）。前者每次访问都读参数，后者只在构造时读一次存入属性的 BackingField。
+</div>
+
+<p>捕获的字段 IL 名为 <code>&lt;param&gt;P</code>，不可在 C# 中直接引用。字段是 <strong>private</strong> 的——即使在继承层次中派生类也访问不到。</p>
+
+<!-- ====== DI Pattern ====== -->
+<h2>依赖注入——最佳场景</h2>
+
+<pre><code><span class="cmt">// C# 11</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">OrderService</span> : <span class="type">BaseService</span>
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="type">ILogger</span> _logger;
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="type">IOrderRepo</span> _repo;
+    <span class="kw">public</span> OrderService(<span class="type">ILogger</span> l, <span class="type">IOrderRepo</span> r) { _logger = l; _repo = r; }
+}
+
+<span class="cmt">// C# 12</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">OrderService</span>(<span class="type">ILogger</span> _logger, <span class="type">IOrderRepo</span> _repo) : <span class="type">BaseService</span>
+{
+    <span class="cmt">// _logger, _repo 直接使用——下划线前缀参数名即字段名</span>
+}</code></pre>
+
+<div class="callout callout--good">
+✅ DI 容器不关心构造函数语法——它只看到参数列表，解析依赖。
+</div>
+
+<!-- ====== Constructor Chaining ====== -->
+<h2>构造函数链规则</h2>
+
+<table>
+  <tr><th>场景</th><th>规则</th></tr>
+  <tr><td>同类的显式构造</td><td>必须 <code>: this(...)</code> 调用主构造</td></tr>
+  <tr><td>派生类</td><td>必须 <code>: base(...)</code> 把参数传给基类</td></tr>
+  <tr><td>class + 主构造</td><td><span class="badge badge--bad">不生成</span>隐式无参构造</td></tr>
+  <tr><td>struct + 主构造</td><td><span class="badge badge--ok">始终有</span>无参构造（CLR 强制）</td></tr>
+</table>
+
+<pre><code><span class="cmt">// 派生类示例——每个类独立捕获</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Animal</span>(<span class="kw">string</span> species)               <span class="cmt">// Animal 捕获 species</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> Species => species;
+}
+
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Bird</span>(<span class="kw">string</span> species, <span class="kw">string</span> name) : <span class="type">Animal</span>(species)
+{
+    <span class="cmt">// species 出现在 base(species) 中 → 传给基类
+    // species 又出现在 SpeciesName 中 → Bird 自己也要捕获！</span>
+    <span class="kw">public</span> <span class="kw">string</span> SpeciesName => species;
+    <span class="kw">public</span> <span class="kw">string</span> Name => name;
+}
+<span class="cmt">// 两个独立的 &lt;species&gt;P 字段——Animal 一个，Bird 一个</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>陷阱：</strong>参数重名时（基类 <code>name</code> + 派生类 <code>name</code>），编译器不报错，但读者要分辨哪个是哪个。建议用不同名字区分。
+</div>
+
+<!-- ====== Mutation ====== -->
+<h2>参数可变性</h2>
+
+<p>主构造参数<strong>不是 readonly</strong>——C# 12/13 都不支持 <code>readonly</code> 修饰。</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Service</span>(<span class="type">ILogger</span> _logger)
+{
+    <span class="kw">void</span> Bad() { _logger = <span class="kw">null</span>; }  <span class="cmt">// 编译通过！</span>
+}
+<span class="cmt">// 传统 DI：readonly 字段 → 编译器保证不可变
+// 主构造：全靠纪律——你要 readonly 保证？退回传统写法。</span></code></pre>
+
+<!-- ====== Attribute Target ====== -->
+<h2>Attribute 目标</h2>
+
+<pre><code><span class="cmt">// [Obsolete] 放 class 上 → 标记类本身</span>
+[<span class="type">Obsolete</span>(<span class="str">"Use V2"</span>)]
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">OldService</span>(<span class="type">IDb</span> db) { }
+
+<span class="cmt">// method: 目标 → 标记构造函数本身</span>
+[<span class="kw">method</span>: <span class="type">Obsolete</span>(<span class="str">"Use V2 ctor"</span>)]
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">OldService</span>(<span class="type">IDb</span> db) { }</code></pre>
+
+<!-- ====== When NOT to Use ====== -->
+<h2>什么时候不该用</h2>
+
+<ul>
+  <li>构造函数体有复杂逻辑（校验、多步初始化、异常）</li>
+  <li>参数 ≥ 4 个——声明行过长，可读性反而下降</li>
+  <li>必须编译器级 <code>readonly</code> 保证</li>
+  <li>多层继承 + 多参数——参数归属模糊、private 捕获字段派生类不可见</li>
+</ul>
+
+<!-- ====== Quick Decision ====== -->
+<h2>快速决策</h2>
+
+<table>
+  <tr><th>你的场景</th><th>用 Primary Constructor？</th></tr>
+  <tr><td>DI：Service / Controller 注入 2-3 个依赖，透传给基类</td><td><span class="badge badge--ok">✅ 最佳</span></td></tr>
+  <tr><td>DTO / Model：需要外部可读的属性</td><td><span class="badge badge--bad">❌ 用 record</span></td></tr>
+  <tr><td>构造函数有校验逻辑</td><td><span class="badge badge--bad">❌ 传统构造</span></td></tr>
+  <tr><td>struct 数据载体，只需少量暴露</td><td><span class="badge badge--ok">✅ 可用</span></td></tr>
+</table>
+
+</body>
+</html>

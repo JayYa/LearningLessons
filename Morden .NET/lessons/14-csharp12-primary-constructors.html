@@ -227,14 +227,14 @@
 <table>
   <tr><th>参数在哪里被引用</th><th>编译器行为</th><th>有字段分配？</th></tr>
   <tr><td>仅 <code>base(...)</code> 或 <code>this(...)</code></td><td>直接在调用链中传递，不存字段</td><td>❌ 不分配</td></tr>
-  <tr><td>仅属性/字段初始化器<br><span class="mild">如 <code>public string X => x;</code></span></td><td>不存字段——初始化器在构造时执行，之后不需要 x</td><td>❌ 不分配</td></tr>
+  <tr><td>仅属性/字段初始化器<br><span class="mild">如 <code>public string X { get; } = x;</code></span></td><td>不存字段——初始化器在构造时执行，之后不需要 x</td><td>❌ 不分配</td></tr>
   <tr><td>方法体、属性 getter、实例成员</td><td>捕获为私有字段，IL 名如 <code>&lt;param&gt;P</code></td><td>✅ 分配</td></tr>
   <tr><td>未被任何成员引用</td><td><strong>编译警告</strong>——参数未被使用</td><td>❌ 不分配</td></tr>
 </table>
 
 <div class="callout callout--info">
-<strong>为什么初始化器不捕获？</strong> <code>public string Name => name;</code> 只在构造函数执行时读一次 name，赋给自动生成的 <code>&lt;Name&gt;k__BackingField</code>。之后再也不需要 name 了——所以编译器不单独存它。<br><br>
-<strong>什么时候捕获？</strong> 比如你在 <code>ToString()</code> 方法体里写了 <code>name</code>——那编译器必须在对象整个生命周期中都能访问 name，所以必须捕获为字段。
+<strong>为什么初始化器不捕获？</strong> <code>public string Name { get; } = name;</code>（注意是 <code>{ get; } =</code>，不是 <code>=&gt;</code>）只在构造函数执行时读一次 name，赋给属性自己的 <code>&lt;Name&gt;k__BackingField</code>。之后再也不需要 name 了——所以编译器不单独存它。<br><br>
+<strong>什么时候捕获？</strong> 如果你写成 <code>public string Name =&gt; name;</code>（表达式体属性），那 name 出现在 getter 方法体中，每次访问属性都会读 name——编译器必须把 name 捕获为字段。同理，在 <code>ToString()</code> 方法体里写 <code>name</code> 也一样捕获。
 </div>
 
 <h3>动手验证</h3>
@@ -315,7 +315,7 @@
 
 <div class="callout callout--warn">
 <strong>当前限制：</strong>C# 12 不支持 <code>readonly</code> 修饰主构造函数参数。你不能写 <code>class Foo(readonly int x)</code>。语言团队在 C# 13 中也没有加这个——还在讨论。<br>
-<strong>实践建议：</strong>把主构造函数参数当作 <strong>"构造后不可变"</strong> 来用——这是约定，编译器不强制。DI 场景中你的依赖字段本来就是 readonly 的——只是现在这个 readonly 是隐式的（你在类体里不写 = 就行了）。
+<strong>实践建议：</strong>把主构造函数参数当作 <strong>"构造后不可变"</strong> 来用——但这全靠纪律，编译器不兜底。传统 DI 写法中 <code>readonly</code> 关键词给了你编译器保证：一旦在构造函数中赋值，任何重新赋值都会报编译错误。Primary Constructor 丢掉了这个保证——你写了 <code>_logger = null;</code> 编译器也不会吭声。如果你必须要有 <code>readonly</code> 的编译器强制，目前只能退回传统构造函数写法。
 </div>
 
 <!-- ============================== 6. EXPLICIT CTOR ============================== -->
@@ -345,9 +345,38 @@
 <strong>重要：</strong>class 有主构造函数后，编译器<strong>不再生成隐式无参构造函数</strong>。你需要 <code>new BankAccount()</code>？必须像上面那样显式写一个带 <code>this(...)</code> 的无参构造。
 </div>
 
-<h3>struct 的例外</h3>
+<h3>struct 的例外——为什么 struct 永远有无参构造？</h3>
 
-<p>struct <strong>永远有无参构造函数</strong>（CLR 类型系统要求），不管你有没有主构造函数：</p>
+<p>这不是 C# 编译器的特殊待遇，根源在 <strong>CLR 类型系统</strong>。</p>
+
+<h4>struct 是值类型 → 可以不经构造函数诞生</h4>
+
+<pre><code><span class="kw">var</span> p = <span class="kw">default</span>(Point);        <span class="cmt">// 所有字段零初始化，不调用任何构造函数</span>
+Point[] arr = <span class="kw">new</span> Point[<span class="num">100</span>];  <span class="cmt">// 100 个 Point，全是 default，没调过构造函数</span></code></pre>
+
+<p>CLR 的 <code>initobj</code> 指令直接把内存块清零，根本不过构造函数。struct 必须在这个前提下存活，所以<strong>运行时强制要求无参构造函数存在</strong>——不管 C# 语法层面你写不写。C# 10 之前甚至不允许你自己写 struct 的无参构造（因为写了也可能被绕过），C# 10 才放开，但语义未变：<code>default</code> 和数组初始化依然不会调用它。</p>
+
+<h4>class 是引用类型 → 没有不经 <code>new</code> 的诞生路径</h4>
+
+<pre><code><span class="kw">var</span> s = <span class="kw">default</span>(OrderService);  <span class="cmt">// null——根本没有对象诞生</span></code></pre>
+
+<p>class 对象的诞生只有一条路：<code>new</code>。编译器的逻辑是：</p>
+<ul>
+  <li><strong>没写任何构造函数</strong> → 送你一个无参的（因为可能有人需要 <code>new T()</code>）</li>
+  <li><strong>写了构造函数（包括主构造函数）</strong> → 假设你刻意控制了构造方式，不擅自加无参的</li>
+</ul>
+<p>这是 C# 1.0 就有的规则。主构造函数不过是"另一种写法"的构造函数——编译器看到它的反应跟你写了一个带参构造函数完全一样。</p>
+
+<h4>一句话</h4>
+
+<table>
+  <tr><th></th><th>struct</th><th>class</th></tr>
+  <tr><td><code>default(T)</code></td><td>零初始化的值</td><td><code>null</code></td></tr>
+  <tr><td>无参构造</td><td>CLR 类型系统强制存在</td><td>编译器看你有没有写构造</td></tr>
+  <tr><td>主构造函数影响？</td><td>不影响——CLR 兜底</td><td>是的——编译器认为你写了构造</td></tr>
+</table>
+
+<p><strong>struct 的无参构造是运行时的承诺，class 的无参构造是编译器的便利。</strong></p>
 
 <pre><code><span class="kw">public</span> <span class="kw">struct</span> <span class="type">Point</span>(<span class="kw">double</span> x, <span class="kw">double</span> y)
 {
@@ -359,9 +388,104 @@
 <span class="kw">var</span> p2 = <span class="kw">new</span> Point();          <span class="cmt">// x=0, y=0——struct 始终有无参构造，初始化为 default</span>
 <span class="cmt">// 注意：p2 中主构造参数被初始化为 default(double) = 0，不是主构造里传的值</span></code></pre>
 
-<!-- ============================== 7. ATTRIBUTE TARGET ============================== -->
+<!-- ============================== 7. INHERITANCE ============================== -->
 
-<h2>七、给主构造函数加 Attribute</h2>
+<h2 id="inheritance">七、继承层次中的主构造函数</h2>
+
+<p>第六节讲了 <code>this(...)</code>——同一个类内部的构造函数链。<code>base(...)</code> 是跨类的链。规则只有一条：</p>
+
+<div class="callout callout--info">
+<strong>硬性规则：</strong>派生类必须通过 <code>base(...)</code> 把基类主构造函数所需的参数传上去。编译器不允许你跳过。
+</div>
+
+<h3>基础用法——透传与硬编码</h3>
+
+<pre><code><span class="cmt">// 基类有主构造函数——species 可能被基类捕获为字段</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Animal</span>(<span class="kw">string</span> species)
+{
+    <span class="kw">public</span> <span class="kw">string</span> Species => species;
+}
+
+<span class="cmt">// 派生类——必须 base(...) 传参</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Dog</span>(<span class="kw">string</span> name) : <span class="type">Animal</span>(<span class="str">"Canine"</span>)   <span class="cmt">// 硬编码</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> Name => name;
+}
+
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Cat</span>(<span class="kw">string</span> species, <span class="kw">string</span> name) : <span class="type">Animal</span>(species)  <span class="cmt">// 透传</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> Name => name;
+}</code></pre>
+
+<h3>关键细节——每个类的捕获分析是独立的</h3>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Bird</span>(<span class="kw">string</span> species, <span class="kw">string</span> name) : <span class="type">Animal</span>(species)
+{
+    <span class="kw">public</span> <span class="kw">string</span> SpeciesName => species;  <span class="cmt">// species 在这里被引用 → Bird 捕获</span>
+    <span class="kw">public</span> <span class="kw">string</span> Name => name;            <span class="cmt">// name 被引用 → Bird 捕获</span>
+}</code></pre>
+
+<p><code>species</code> 出现了两次：一次在 <code>base(species)</code> 中——传给基类构造函数；一次在 <code>SpeciesName</code> 的 getter 中——被 <code>Bird</code> 自己的成员引用。编译器为 <strong>Bird 生成一个 <code>&lt;species&gt;P</code> 字段</strong>来捕获它。至于基类 <code>Animal</code>——它收到的 <code>species</code> 值来自 <code>base(species)</code> 调用，<code>Animal</code> 内部是否捕获、是否生成字段，是 <code>Animal</code> <strong>自己的事</strong>，跟 <code>Bird</code> 无关。</p>
+
+<div class="callout callout--info">
+<strong>一句话：</strong>每个类的编译器只分析自己的成员体里引用了哪些主构造参数，只为自己分配字段。基类和派生类的捕获是两本独立的账。
+</div>
+
+<h3>最危险的场景——参数重名</h3>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">Animal</span>(<span class="kw">string</span> name)          <span class="cmt">// ← 基类的 name</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> Name => name;
+}
+
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">Dog</span>(<span class="kw">string</span> name) : <span class="type">Animal</span>(name)  <span class="cmt">// ← 派生类的 name——同名！</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> DisplayName => name;    <span class="cmt">// 这是 Dog 的 name</span>
+}</code></pre>
+
+<p>两个 <code>name</code> 各是各的。<code>base(name)</code> 把 <code>Dog</code> 的 <code>name</code> 传给 <code>Animal</code> 的构造函数。编译器为 <code>Animal</code> 生成一个 <code>&lt;name&gt;P</code> 字段，为 <code>Dog</code> 生成另一个 <code>&lt;name&gt;P</code> 字段——两个字段，两个存储位置。代码能跑，<strong>但读者要花额外心智去分辨哪个 name 是哪个</strong>。</p>
+
+<div class="callout callout--warn">
+<strong>建议：</strong>如果派生类和基类的参数同名，用不同的参数名来区分——比如基类用 <code>name</code>，派生类用 <code>displayName</code>。省下的几个字符不值得后续的阅读成本。
+</div>
+
+<h3>什么时候适合在继承中用，什么时候不适合</h3>
+
+<p><strong>适合——派生类只透传依赖，自己不添加新参数：</strong></p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="type">AnimalService</span>(<span class="type">ILogger</span>&lt;AnimalService&gt; logger) : <span class="type">BaseService</span>(logger)
+{
+    <span class="cmt">// logger 只透传给基类，AnimalService 自己的成员没有引用 → 不捕获</span>
+    <span class="kw">public</span> <span class="kw">void</span> DoWork() { <span class="cmt">/* ... */</span> }
+}</code></pre>
+
+<p><strong>不适合——基类和派生类各有多个参数，继承链 ≥ 2 层：</strong></p>
+
+<pre><code><span class="cmt">// 😣 可读性灾难——哪些参数属于哪一层？</span>
+<span class="kw">public</span> <span class="kw">class</span> <span class="type">PremiumCustomerService</span>(
+    <span class="type">ILogger</span>&lt;PremiumCustomerService&gt; _logger,
+    <span class="type">ICustomerRepo</span> _repo,
+    <span class="type">IPremiumCalculator</span> _calc,
+    <span class="type">IEmailService</span> _email
+) : <span class="type">BaseCustomerService</span>(_logger, _repo)
+{
+    <span class="cmt">// _logger 和 _repo 去了基类，"剩下的"是这层的——但读代码的人能立刻分清吗？</span>
+    <span class="kw">public</span> <span class="kw">void</span> Process(Customer c)
+    {
+        _calc.Calculate(c);   <span class="cmt">// _calc 是这层自己的</span>
+        _email.SendAsync(c);  <span class="cmt">// _email 也是这层的</span>
+        <span class="cmt">// _logger 和 _repo 已被基类捕获——这层还能访问它们吗？</span>
+        <span class="cmt">// 能——如果基类把它们暴露为 protected 属性的话。但主构造函数参数默认是 private！</span>
+    }
+}</code></pre>
+
+<div class="callout callout--warn">
+<strong>重要陷阱：</strong>基类的主构造函数参数被捕获后，生成的是 <strong>private 字段</strong>。派生类<strong>无法直接访问</strong>基类捕获的字段。如果你需要派生类能用到基类的依赖，必须在基类中手动暴露为 <code>protected</code> 属性或字段。这一点跟传统构造函数完全一样——但用主构造函数时更容易忽略，因为你看不到字段声明。
+</div>
+
+<!-- ============================== 8. ATTRIBUTE TARGET ============================== -->
+
+<h2>八、给主构造函数加 Attribute</h2>
 
 <p>主构造函数本质上是一个<strong>方法</strong>——你可以用 <code>method:</code> 目标给它加 Attribute：</p>
 
@@ -377,15 +501,15 @@
 [<span class="kw">method</span>: <span class="type">JetBrains.Annotations.Pure</span>]
 <span class="kw">public</span> <span class="kw">class</span> <span class="type">MyService</span>(<span class="type">IDb</span> db) { }</code></pre>
 
-<!-- ============================== 8. WHEN NOT TO USE ============================== -->
+<!-- ============================== 9. WHEN NOT TO USE ============================== -->
 
-<h2>八、什么时候<strong>不应该</strong>用主构造函数？</h2>
+<h2>九、什么时候<strong>不应该</strong>用主构造函数？</h2>
 
 <ol>
   <li><strong>构造函数体有复杂逻辑</strong>——主构造函数没有"函数体"，初始化逻辑只能写在字段初始化器中。如果需要参数校验、抛出具体异常、或者多步骤初始化——用传统构造函数。</li>
   <li><strong>参数过多（4+）</strong>——class 声明行变得很长，反而降低可读性。传统构造函数有明确的函数体，可以格式化、加注释。</li>
   <li><strong>需要 readonly 保证</strong>——如果你必须确保某个依赖字段不被修改，目前只能靠传统构造函数 + <code>readonly</code> 字段。</li>
-  <li><strong>继承层次中参数混乱</strong>——基类和派生类都有主构造函数时，参数到底是谁的？可读性可能不升反降。</li>
+  <li><strong>继承层次中参数混乱</strong>——基类和派生类都有主构造函数时，参数到底是谁的？详情见<a href="#inheritance">第七节</a>：每个类独立捕获、参数重名、派生类无法访问基类的 private 捕获字段。</li>
 </ol>
 
 <pre><code><span class="cmt">// ⚠ 反面例子：参数太多，还不如传统写法清晰</span>
@@ -398,9 +522,9 @@
     <span class="cmt">// 但这种依赖数可能提示另一个问题——这个类是否违反了 SRP？</span>
 }</code></pre>
 
-<!-- ============================== 9. QUIZ ============================== -->
+<!-- ============================== 10. QUIZ ============================== -->
 
-<h2>九、小测验</h2>
+<h2>十、小测验</h2>
 
 <div class="quiz" id="q1">
 <div class="question">1/3 · C# 12 中，class 的主构造函数参数和 record 的主构造函数参数最大的区别是？</div>
@@ -414,7 +538,7 @@
 <div class="quiz" id="q2">
 <div class="question">2/3 · 关于捕获语义——以下哪个参数需要编译器分配私有字段？</div>
 <label><input type="radio" name="q2" value="0">A. 只出现在 <code>base(name)</code> 中的 <code>name</code></label>
-<label><input type="radio" name="q2" value="1">B. 只出现在 <code>public string X => x;</code> 初始化器中的 <code>x</code></label>
+<label><input type="radio" name="q2" value="1">B. 只出现在 <code>public string X { get; } = x;</code> 初始化器中的 <code>x</code></label>
 <label><input type="radio" name="q2" value="2">C. 出现在方法体 <code>ToString() => name;</code> 中的 <code>name</code></label>
 <label><input type="radio" name="q2" value="3">D. 出现在 <code>this(id, "default")</code> 中的 <code>id</code></label>
 <div class="feedback" id="fb2"></div>
@@ -475,9 +599,9 @@ function checkAll() {
 }
 </script>
 
-<!-- ============================== 10. NEXT ============================== -->
+<!-- ============================== 11. NEXT ============================== -->
 
-<h2>十、下一步</h2>
+<h2>十一、下一步</h2>
 
 <ul>
   <li><strong>动手：</strong>打开你手头的 ASP.NET Core 项目，找出所有"构造函数三行赋值"的 Service/Controller，改用 Primary Constructor。数一数少了多少行。</li>

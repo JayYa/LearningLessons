@@ -189,6 +189,68 @@ Write([<span class="num">0x1B</span>, <span class="num">0x5B</span>, <span class
 <strong>展开 vs Concat/LINQ：</strong><code>[..a, ..b]</code> 是<strong>编译时操作</strong>——编译器知道目标类型，可以直接分配精确大小的数组，然后依次拷贝元素。而 <code>a.Concat(b).ToArray()</code> 走迭代器 + 动态扩容。<strong>前者更快、分配更少。</strong>
 </div>
 
+<!-- ============ 3b. DESIGN PHILOSOPHY ============ -->
+
+<h2>三-B、设计哲学：为什么是 <code>..</code> 而不是 <code>...</code>？</h2>
+
+<p>写过 JavaScript/TypeScript 的人自然会问：为什么 C# 用两个点，而不是 JS 的三点 <code>...</code>？</p>
+
+<pre><code><span class="cmt">// JavaScript / TypeScript</span>
+<span class="kw">const</span> combined = [<span class="pnk">...</span>arr, <span class="num">4</span>, <span class="num">5</span>];  <span class="cmt">// 三个点</span>
+
+<span class="cmt">// C#</span>
+<span class="kw">int</span>[] combined = [<span class="pnk">..</span>arr, <span class="num">4</span>, <span class="num">5</span>];  <span class="cmt">// 两个点</span></code></pre>
+
+<p>答案藏在一条 C# 语言设计的核心原则里：<strong>构造应当镜像解构</strong>。在集合表达式出现之前，<code>..</code> 已经在 C# 中存在了——它用于切片模式（C# 11），从集合中"切出"一个子集：</p>
+
+<pre><code><span class="cmt">// C# 11 — 切片模式（Slice Pattern）："切出 middle"</span>
+<span class="kw">if</span> (numbers <span class="kw">is</span> [<span class="num">1</span>, <span class="pnk">..</span> <span class="kw">var</span> middle, <span class="num">9</span>])
+    <span class="cmt">// middle = [2,3,4,5,6,7,8]</span></code></pre>
+
+<p>LDM 认为，<strong>展开（spread）是切片（slice）的逆操作</strong>——切片从集合中"取出"一段，展开把一段"放入"集合。如果切片用 <code>..</code> 而展开用 <code>...</code>，两个互逆操作就有了不同语法——这是设计上的不和谐。</p>
+
+<table>
+  <tr><th></th><th>C# 11 切片 <span class="en">Slice</span></th><th>C# 12 展开 <span class="en">Spread</span></th></tr>
+  <tr>
+    <td><strong>方向</strong></td>
+    <td>取出 ← 拆解集合</td>
+    <td>放入 → 构造集合</td>
+  </tr>
+  <tr>
+    <td><strong>上下文</strong></td>
+    <td><code>is</code> 或 <code>switch</code> 模式匹配</td>
+    <td><code>=</code> 右侧的集合表达式</td>
+  </tr>
+  <tr>
+    <td><strong>完整示例</strong></td>
+    <td><code>nums <strong>is</strong> [1, <strong>..</strong> var mid, 9]</code></td>
+    <td><code>int[] arr <strong>=</strong> [1, <strong>..</strong> mid, 9]</code></td>
+  </tr>
+  <tr>
+    <td><strong><code>..</code> 的语义</strong></td>
+    <td>"切出中间这段，存到 <code>mid</code>"</td>
+    <td>"把 <code>mid</code> 的元素展开放在这里"</td>
+  </tr>
+</table>
+
+<p>而且 <code>..</code> 在 C# 中有一条贯穿三代语言的语义演进链：</p>
+
+<table>
+  <tr><th>版本</th><th>功能</th><th>示例</th><th>语义</th></tr>
+  <tr><td>C# 8</td><td>范围运算符</td><td><code>0..5</code></td><td>"从 A 到 B 的范围"</td></tr>
+  <tr><td>C# 11</td><td>切片模式</td><td><code>[.. var mid]</code></td><td>"切出范围内的元素"</td></tr>
+  <tr><td>C# 12</td><td>展开运算符</td><td><code>[.. arr]</code></td><td>"放入范围内的元素"（镜像）</td></tr>
+</table>
+
+<p>同一个 token <code>..</code>，三个场景，一条贯穿的语义线索——关于"范围中的元素"。</p>
+
+<blockquote style="border-left:3px solid var(--accent-light); padding:0.75rem 1rem; margin:1rem 0; background:var(--card-bg); font-style:italic; color:#555; border-radius:0 var(--radius) var(--radius) 0;">
+"We view 'spread' as the inverse of slicing. You slice to pull out a subcollection, and you spread to put a subcollection into a larger one. <strong>All other things being equal we might have landed on <code>...</code>. But strong parity in our own language definitely takes precedent.</strong>"
+  <br><span style="display:block; margin-top:0.5rem; font-size:0.85rem; font-style:normal; color:var(--text-muted);">— C# Language Design Team，<a href="https://github.com/dotnet/csharplang/discussions/7686">GitHub Discussion #7686</a></span>
+</blockquote>
+
+<p class="mild"><strong>核心结论：</strong>不是 C# 故意要和 JavaScript 不一样。而是 C# 已经有一条自己的语义线索（Range → Slice → Spread），顺着这条线索走到底，<code>..</code> 是唯一自洽的答案。多语言开发者多学 5 分钟，换来 C# 概念模型的长期干净统一。</p>
+
 <!-- ============ 4. COMPILER ============ -->
 
 <h2>四、编译器生成了什么？</h2>
