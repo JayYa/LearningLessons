@@ -103,43 +103,165 @@
 
 <h2>一、Lambda 默认参数 <span class="en">Default Lambda Parameters</span> <span class="badge badge--daily">每日用</span></h2>
 
-<h3>1.1 Lambda 和普通方法终于平权</h3>
+<h3>1.1 痛点：当你想把 Lambda 当"带可选配置的小函数"时</h3>
+
+<p>C# 11 的 Lambda 不支持默认参数。碰到需要"有可选配置的回调"时，你只有三条路——每条都痛：</p>
+
+<table>
+  <tr><th>路</th><th>做法</th><th>痛在哪儿</th></tr>
+  <tr>
+    <td>① 每次全传</td>
+    <td><code>retry(() => CallApi(), 3, 1000)</code></td>
+    <td>大部分调用用默认值，重复传参数是噪音</td>
+  </tr>
+  <tr>
+    <td>② 写方法组</td>
+    <td><code>async Task Retry3(...){ … }</code></td>
+    <td>不能捕获上下文变量；为一个简单逻辑写完整方法——太重</td>
+  </tr>
+  <tr>
+    <td>③ 多写重载 Lambda</td>
+    <td><code>var retry3 = (act) => retry(act, 3, 1000);</code></td>
+    <td>参数组合爆炸——N 个可选参数需要 2^N 个重载</td>
+  </tr>
+</table>
+
+<div class="callout callout--info">
+<strong>本质问题：</strong>Lambda 本来适合"随手写的小逻辑"——但一旦这个逻辑有合理的默认配置，它就变成了"需要方法重载的笨重大逻辑"。C# 12 修复了这一点。
+</div>
+
+<h3>1.2 实战场景一：异步重试包装器 <span class="en">Retry Wrapper</span></h3>
+
+<p>这是微服务/HTTP 调用中最常见的模式——封装重试逻辑，默认重试 3 次、间隔 1 秒，但允许调用方覆盖：</p>
 
 <div class="comparison">
-  <div class="old"><h4>😣 C# 11</h4>
-<pre><code><span class="cmt">// Lambda 不支持默认参数</span>
-<span class="cmt">// 只能：</span>
-<span class="cmt">// ① 每次调用都传全部参数</span>
-<span class="cmt">// ② 或者写 delegate 代替 lambda</span>
-Func&lt;<span class="kw">int</span>, <span class="kw">int</span>, <span class="kw">int</span>&gt; add = (a, b) => a + b;
-add(<span class="num">5</span>, <span class="num">1</span>);  <span class="cmt">// 必须两个都传</span>
-</code></pre>
+  <div class="old"><h4>😣 C# 11 —— 必须写完整方法</h4>
+<pre><code><span class="cmt">// 你只能把重试逻辑写成普通方法：</span>
+<span class="kw">async</span> Task&lt;T&gt; RetryAsync&lt;T&gt;(
+    Func&lt;Task&lt;T&gt;&gt; action,
+    <span class="kw">int</span> maxRetries = <span class="num">3</span>,
+    <span class="kw">int</span> delayMs = <span class="num">1000</span>)
+{
+    <span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">0</span>; i &lt;= maxRetries; i++)
+    {
+        <span class="kw">try</span> { <span class="kw">return</span> <span class="kw">await</span> action(); }
+        <span class="kw">catch</span> <span class="kw">when</span> (i &lt; maxRetries)
+        { <span class="kw">await</span> Task.Delay(delayMs); }
+    }
+    <span class="kw">throw</span> <span class="kw">new</span> InvalidOperationException();
+}
+<span class="cmt">// 问题：要单独定义方法，不能捕获局部变量</span>
+<span class="cmt">// 也不能内联到调用链中</span></code></pre>
   </div>
-  <div class="new"><h4>😎 C# 12</h4>
-<pre><code><span class="kw">var</span> add = (<span class="kw">int</span> a, <span class="kw">int</span> b = <span class="num">1</span>) => a + b;
-add(<span class="num">5</span>);    <span class="cmt">// 6  —— b 用默认值</span>
-add(<span class="num">5</span>, <span class="num">2</span>); <span class="cmt">// 7  —— b 覆盖</span>
+  <div class="new"><h4>😎 C# 12 —— Lambda 内联，参数可选</h4>
+<pre><code><span class="cmt">// 就地在调用链中定义，捕获上下文：</span>
+<span class="kw">var</span> retry = <span class="kw">async</span> (
+    Func&lt;Task&gt; action,
+    <span class="kw">int</span> maxRetries = <span class="num">3</span>,        <span class="cmt">// 温和重试</span>
+    <span class="kw">int</span> delayMs = <span class="num">1000</span>,          <span class="cmt">// 1 秒间隔</span>
+    <span class="kw">bool</span> throwOnFail = <span class="kw">true</span>) =>   <span class="cmt">// 默认抛异常</span>
+{
+    <span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">0</span>; i &lt;= maxRetries; i++)
+    {
+        <span class="kw">try</span> { <span class="kw">await</span> action(); <span class="kw">return</span>; }
+        <span class="kw">catch</span> <span class="kw">when</span> (i &lt; maxRetries)
+        { <span class="kw">await</span> Task.Delay(delayMs); }
+    }
+    <span class="kw">if</span> (throwOnFail) <span class="kw">throw</span>; <span class="cmt">// 否则静默</span>
+};
+
+<span class="cmt">// 90% 的调用：用默认值，干干净净</span>
+<span class="kw">await</span> retry(() => httpClient.GetAsync(url));
+
+<span class="cmt">// 特殊情况：覆盖重试次数和间隔</span>
+<span class="kw">await</span> retry(() => CallPaymentApi(), maxRetries: <span class="num">0</span>);
+<span class="kw">await</span> retry(() => CallSlowSvc(), delayMs: <span class="num">5000</span>, maxRetries: <span class="num">5</span>);
 </code></pre>
   </div>
 </div>
 
-<pre><code><span class="cmt">// 实际场景：LINQ 中更灵活</span>
-<span class="kw">var</span> byStep = (<span class="kw">int</span> x, <span class="kw">int</span> step = <span class="num">2</span>) => x + step;
-items.Select(x => byStep(x));       <span class="cmt">// step=2（默认）</span>
-items.Select(x => byStep(x, <span class="num">10</span>));    <span class="cmt">// step=10（覆盖）</span>
+<h3>1.3 实战场景二：日志/通知辅助函数</h3>
 
-<span class="cmt">// 规则——和普通方法完全一致：</span>
-<span class="cmt">// ✅ 有默认值的参数必须在无默认值参数的后面</span>
-<span class="kw">var</span> f1 = (<span class="kw">int</span> a, <span class="kw">int</span> b = <span class="num">1</span>) => a + b;      <span class="cmt">// ✅</span>
-<span class="kw">var</span> f2 = (<span class="kw">int</span> a = <span class="num">1</span>, <span class="kw">int</span> b) => a + b;      <span class="cmt">// ❌</span>
+<p>每个项目都会写一个"带默认日志级别"的 log helper——C# 12 之后一行搞定：</p>
 
-<span class="cmt">// ⚠ 默认值在调用时求值——不是定义时</span>
+<pre><code><span class="cmt">// 定义：msg 必传，level 和 ts 可选</span>
+<span class="kw">var</span> log = (
+    <span class="kw">string</span> msg,                     <span class="cmt">// 必传</span>
+    <span class="kw">string</span> level = <span class="str">"INFO"</span>,          <span class="cmt">// 默认 INFO</span>
+    DateTime? ts = <span class="kw">null</span>) =>          <span class="cmt">// 默认当前时间</span>
+{
+    <span class="kw">var</span> time = ts ?? DateTime.Now;
+    Console.WriteLine(
+        $<span class="str">"[{time:HH:mm:ss}] [{level}] {msg}"</span>);
+};
+
+<span class="cmt">// 日常使用：只传消息，level 和时间自动填充</span>
+log(<span class="str">"订单处理完成"</span>);
+<span class="cmt">// → [14:32:05] [INFO] 订单处理完成</span>
+
+<span class="cmt">// 出错时：覆盖日志级别</span>
+log(<span class="str">"支付接口超时"</span>, level: <span class="str">"ERROR"</span>);
+<span class="cmt">// → [14:32:10] [ERROR] 支付接口超时</span>
+
+<span class="cmt">// 补日志时：手动指定时间戳</span>
+log(<span class="str">"历史记录"</span>, ts: <span class="kw">new</span> DateTime(<span class="num">2026</span>, <span class="num">6</span>, <span class="num">10</span>));
+</code></pre>
+
+<div class="callout callout--good">
+<strong>为什么不用方法？</strong>这个 log lambda 能<strong>捕获外部变量</strong>——比如捕获 <code>httpContext</code> 自动附加请求 ID，或捕获 <code>ILogger</code> 实例写入结构化日志。普通 static 方法做不到；实例方法又太重。
+</div>
+
+<h3>1.4 实战场景三：配置构建器——工厂 + 默认值组合</h3>
+
+<pre><code><span class="cmt">// 典型场景：创建 API 客户端时大部分配置用默认值</span>
+<span class="kw">var</span> createClient = (
+    <span class="kw">string</span> baseUrl,
+    <span class="kw">int</span> timeoutSec = <span class="num">30</span>,
+    <span class="kw">bool</span> useAuth = <span class="kw">true</span>,
+    <span class="kw">string</span> apiVersion = <span class="str">"v1"</span>) =>
+{
+    <span class="kw">var</span> client = <span class="kw">new</span> HttpClient { BaseAddress = <span class="kw">new</span> Uri(baseUrl) };
+    client.Timeout = TimeSpan.FromSeconds(timeoutSec);
+    <span class="kw">if</span> (useAuth) client.DefaultRequestHeaders.Add(<span class="str">"Authorization"</span>, GetToken());
+    client.DefaultRequestHeaders.Add(<span class="str">"Api-Version"</span>, apiVersion);
+    <span class="kw">return</span> client;
+};
+
+<span class="cmt">// 日常：一行搞定</span>
+<span class="kw">var</span> api = createClient(<span class="str">"https://api.mysvc.com"</span>);
+
+<span class="cmt">// 调用旧版 API：覆盖版本号</span>
+<span class="kw">var</span> legacyApi = createClient(<span class="str">"https://api.mysvc.com"</span>, apiVersion: <span class="str">"v0"</span>);
+
+<span class="cmt">// 长时间批量任务：拉长超时</span>
+<span class="kw">var</span> batchApi = createClient(<span class="str">"https://api.mysvc.com"</span>, timeoutSec: <span class="num">300</span>);
+</code></pre>
+
+<h3>1.5 规则速查</h3>
+
+<table>
+  <tr><th>规则</th><th>说明</th></tr>
+  <tr><td>默认参数放最后</td><td>和普通方法一样：有默认值的参数必须在无默认值参数<strong>之后</strong></td></tr>
+  <tr><td>默认值在调用时求值</td><td>不是定义时。如果默认表达式引用变量，取<strong>调用时刻</strong>的值（见下例）</td></tr>
+  <tr><td>支持 params</td><td>C# 13 进一步允许 <code>params</code> 修饰符在 Lambda 中（下节课）</td></tr>
+</table>
+
+<pre><code><span class="cmt">// ⚠ 默认值在调用时求值——不是定义时</span>
 <span class="kw">int</span> x = <span class="num">10</span>;
 <span class="kw">var</span> get = (<span class="kw">int</span> offset = <span class="num">1</span>) => x + offset;
 <span class="kw">int</span> r1 = get();       <span class="cmt">// 11 —— x=10 + offset=1</span>
 x = <span class="num">20</span>;
-<span class="kw">int</span> r2 = get();       <span class="cmt">// 21 —— x=20 + offset=1</span>
-<span class="cmt">// 如果默认值在定义时求值，r1 和 r2 应该一样——但结果不同</span></code></pre>
+<span class="kw">int</span> r2 = get();       <span class="cmt">// 21 —— x=20 + offset=1（取调用时的 x）</span>
+<span class="cmt">// 这与方法的可选参数行为一致：</span>
+<span class="cmt">// 默认值是语法糖——调用时编译器补上省略的参数</span>
+
+<span class="cmt">// ✅ 默认参数必须在最后</span>
+<span class="kw">var</span> f1 = (<span class="kw">int</span> a, <span class="kw">int</span> b = <span class="num">1</span>) => a + b;      <span class="cmt">// ✅</span>
+<span class="kw">var</span> f2 = (<span class="kw">int</span> a = <span class="num">1</span>, <span class="kw">int</span> b) => a + b;      <span class="cmt">// ❌ CS1737</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>何时不该用 Lambda 默认参数：</strong>如果逻辑复杂到超过 ~10 行，或者需要 XML 文档注释、单元测试覆盖——还是写普通方法。Lambda 默认参数适合<strong>轻量、内联、需要捕获上下文</strong>的场景，不是方法替代品。
+</div>
 
 <!-- ========================== 2. ALIAS ANY TYPE ========================== -->
 
@@ -180,6 +302,14 @@ x = <span class="num">20</span>;
 <span class="kw">global</span> <span class="kw">using</span> Coordinate = (<span class="kw">double</span> Lat, <span class="kw">double</span> Lng);
 <span class="kw">global</span> <span class="kw">using</span> UserId = System.Guid;</code></pre>
 
+<h3>2.4 设计趣谈：C# 在"抄"TypeScript 吗？</h3>
+
+<div class="callout callout--info">
+<strong>看起来像——但不是单向学习。</strong>任意类型别名、集合展开、原始字符串……这些 C# 新语法确实有 TypeScript/JavaScript 的影子。但真相更有趣：<strong>C# 之父 Anders Hejlsberg 同时也是 TypeScript 首席架构师</strong>，C# 现任首席 Mads Torgersen 也深度参与 TS 设计。同一批人在同一栋楼里面对同一批开发者的痛点，把同一个好想法在两个语言里各自落地。时间线上有来有回：<code>?.</code> 可选链 C# 先出（2015→2016），元组类型 TS 先出（2014→2017），模式匹配各自演化。真正的功能孵化器是 <strong>F#</strong>——记录、模式匹配、可区分联合（提案中）在 F# 里已有十年历史。<br>
+<strong>根本差异不会消失：</strong>TypeScript 是结构类型（形状相同就是同类型），C# 是名义类型（名字不同就是不同类型）。<code>using</code> 别名只是语法糖——底层类型系统纹丝不动。<br>
+📖 详细时间线见学习记录 <a href="../learning-records/0016-csharp-typescript-coevolution.md">0016-csharp-typescript-coevolution</a>。
+</div>
+
 <!-- ========================== 3. EXPERIMENTAL ========================== -->
 
 <h2>三、Experimental 属性 <span class="en">ExperimentalAttribute</span></h2>
@@ -211,37 +341,58 @@ x = <span class="num">20</span>;
 
 <!-- ========================== 4. INTERCEPTORS ========================== -->
 
-<h2>四、拦截器 <span class="en">Interceptors</span> <span class="badge badge--preview">Preview</span></h2>
+<h2>四、拦截器 <span class="en">Interceptors</span> <span class="badge badge--daily">C# 14 转正</span></h2>
 
 <p>拦截器允许在<strong>编译时</strong>把某个方法调用替换为另一个方法调用——是源生成器<span class="en">Source Generator</span>的高级玩法。</p>
 
-<div class="callout callout--warn">
-<strong>⚠ 这是实验性预览特性。</strong>可能在 C# 13 或 14 中大幅改动甚至删除。目前<strong>不推荐在生产中使用</strong>。了解即可。
+<div class="callout callout--info">
+<strong>版本演进：</strong>C# 12 引入时是实验性预览（需 <code>&lt;InterceptorsPreviewNamespaces&gt;</code> + <code>Features=InterceptorsPreview</code>）；C# 13 保持预览；<strong>C# 14 / .NET 10 转正</strong>——去掉 <code>[Experimental]</code> 标记，配置项改名为 <code>&lt;InterceptorsNamespaces&gt;</code>，API 稳定。<br>
+<strong>来源：</strong><a href="https://anthonygiretti.com/2025/11/15/c-14-introducing-interceptors/">C# 14: Introducing Interceptors — Anthony Giretti</a>
 </div>
 
-<pre><code><span class="cmt">// 使用拦截器的前提——csproj 中声明允许的命名空间：</span>
+<pre><code><span class="cmt">// C# 12 / 13（预览）：csproj 配置</span>
+<span class="cmt">// &lt;Features&gt;InterceptorsPreview&lt;/Features&gt;</span>
 <span class="cmt">// &lt;InterceptorsPreviewNamespaces&gt;</span>
-<span class="cmt">//   $(InterceptorsPreviewNamespaces);MyGen;MyLib.Generated</span>
+<span class="cmt">//   $(InterceptorsPreviewNamespaces);MyGen</span>
 <span class="cmt">// &lt;/InterceptorsPreviewNamespaces&gt;</span>
 
-<span class="cmt">// 原理（伪代码）：
-// 1. 源生成器扫描代码，找到特定的方法调用位置
-// 2. 生成一个拦截器方法，声明它要"替换"该位置的调用
-// 3. 编译时，Roslyn 在目标位置插入对拦截器方法的调用
-// 而不是原始方法</span></code></pre>
+<span class="cmt">// C# 14 / .NET 10（稳定）：简化为</span>
+<span class="cmt">// &lt;InterceptorsNamespaces&gt;</span>
+<span class="cmt">//   $(InterceptorsNamespaces);MyGen</span>
+<span class="cmt">// &lt;/InterceptorsNamespaces&gt;</span>
 
-<p class="mild">拦截器的主要应用场景是<strong>编译时 AOT 优化</strong>——比如 ASP.NET Core 的请求管道可以用拦截器把反射调用替换为编译时生成的代码。普通应用开发者不需要直接使用。</p>
+<span class="cmt">// 原理：
+// 1. 源生成器扫描代码，找到特定的方法调用位置
+// 2. 生成拦截器方法，声明要"替换"该位置的调用
+// 3. 编译时（IL 生成前），Roslyn 将调用重定向到拦截器
+// → 零运行时开销，零反射，Native AOT 完全兼容</span></code></pre>
+
+<h3>4.1 C# 14 转正后的实战场景</h3>
+
+<p>拦截器的目标是<strong>库作者和框架作者</strong>，不是日常应用代码。转正后的几个典型用途：</p>
+
+<table>
+  <tr><th>场景</th><th>说明</th></tr>
+  <tr><td><strong>零分配日志</strong></td><td>把 <code>ILogger.LogInformation(msg, args)</code> 编译时替换为 <code>LoggerMessage.Define</code> 委托——消除装箱和字符串拼接</td></tr>
+  <tr><td><strong>透明链路追踪</strong></td><td>拦截每个 <code>HttpClient.SendAsync</code> 调用，自动注入 correlation header——调用方代码零修改</td></tr>
+  <tr><td><strong>AOT 反射消除</strong></td><td>将依赖反射的调用在编译时替换为直接代码——Native AOT 的关键技术</td></tr>
+  <tr><td><strong>编译时配置校验</strong></td><td>拦截 <code>builder.Configuration["key"]</code>，编译时检查 key 是否存在于 appsettings.json</td></tr>
+</table>
+
+<div class="callout callout--warn">
+<strong>⚠ 仍然不是日常开发工具。</strong>拦截器必须由<strong>源生成器</strong>自动生成（<code>[InterceptsLocation]</code> 包含文件路径、行号、列号和内容哈希，源码一改全变，无法手写）。使用者需在 csproj 中<strong>显式声明</strong>允许的命名空间——第三方包不能静默拦截调用。面向对象：NuGet 包作者 / 框架作者 / AOT 优化场景。
+</div>
 
 <!-- ========================== 5. QUIZ ========================== -->
 
 <h2>五、小测验</h2>
 
 <div class="quiz" id="q1">
-<div class="question">1/3 · Lambda 默认参数——调用 <code>var f = (int a, int b = 10) => a + b; f(5)</code> 返回什么？</div>
-<label><input type="radio" name="q1" value="0">A. 5</label>
-<label><input type="radio" name="q1" value="1">B. 10</label>
-<label><input type="radio" name="q1" value="2">C. 15</label>
-<label><input type="radio" name="q1" value="3">D. 编译错误——Lambda 不支持默认参数</label>
+<div class="question">1/3 · Lambda 默认参数求值时机——阅读代码：<br><code>int threshold = 5;<br>var check = (int value, int min = threshold) => value &gt;= min;<br>threshold = 10;<br>bool result = check(7);</code><br><code>result</code> 是 <code>true</code> 还是 <code>false</code>？为什么？</div>
+<label><input type="radio" name="q1" value="0">A. true —— 默认值在定义时求值（min = 5，7 ≥ 5）</label>
+<label><input type="radio" name="q1" value="1">B. false —— 默认值在调用时求值（min = 10，7 &lt; 10）</label>
+<label><input type="radio" name="q1" value="2">C. true —— Lambda 默认参数只支持常量，threshold 不是常量所以编译错误</label>
+<label><input type="radio" name="q1" value="3">D. false —— Lambda 默认参数只能用字面量，threshold 被忽略，min = 0</label>
 <div class="feedback" id="fb1"></div>
 </div>
 
@@ -267,9 +418,9 @@ x = <span class="num">20</span>;
 </div>
 
 <script>
-const answers = { q1: 2, q2: 1, q3: 1 };
+const answers = { q1: 1, q2: 1, q3: 1 };
 const explanations = {
-  q1: { correct: "✅ 正确！a=5, b 用默认值 10 → 5 + 10 = 15。C# 12 后 Lambda 和普通方法的默认参数行为完全一致。", wrong: "❌ 不是。a=5, b 用默认值 10 → 15。C# 12 支持 Lambda 默认参数，和普通方法行为一致。正确答案是 C。" },
+  q1: { correct: "✅ 正确！默认值在<strong>调用时</strong>求值——check(7) 执行时 threshold 已经是 10，所以 min=10，7≥10 为 false。这与普通方法的可选参数行为一致：默认值是语法糖，编译器在调用点补上省略的实参。如果默认值在定义时求值，check(7) 会拿 min=5 得到 true——但实际不是。", wrong: "❌ 不是。默认值在<strong>调用时</strong>求值，不是定义时。check(7) 执行时 threshold 已经是 10，所以 min=10，7≥10 为 false。这跟普通方法可选参数行为一致——默认表达式取的是调用时刻的变量值。正确答案是 B。" },
   q2: { correct: "✅ 正确！C# 11 的 using 别名只能用于命名类型——元组类型不行。C# 12 扩展了别名支持范围。", wrong: "❌ 不是。C# 11 不支持元组、数组、指针等非命名类型的别名。这是 C# 12 新增的能力。正确答案是 B。" },
   q3: { correct: "✅ 正确！Experimental 是编译时警告（不是错误），可以用 pragma 或 NoWarn 抑制。它可标记在方法、类型、程序集上。", wrong: "❌ 不是。Experimental 产生编译时警告（不是错误，不是运行时异常），可标记方法/类型/程序集。正确答案是 B。" },
 };

@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0004 — 克努特大帝与北海帝国</title>
+<style>
+  :root {
+    --bg: #fdfaf5;
+    --text: #2c2416;
+    --accent: #1a5276;
+    --muted: #6b5e4a;
+    --card-bg: #fffdf8;
+    --border: #b0c4de;
+    --highlight: #eaf0f7;
+    --sea: #d4e6f1;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, "Times New Roman", serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.85;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 5rem;
+  }
+  h1 { font-size: 2rem; text-align: center; color: var(--accent); letter-spacing: 0.04em; margin-bottom: 0.3rem; }
+  .subtitle { text-align: center; color: var(--muted); font-size: 0.95rem; margin-bottom: 2.5rem; }
+  h2 { font-size: 1.35rem; color: var(--accent); margin: 2.5rem 0 1rem; padding-bottom: 0.35rem; border-bottom: 2px solid var(--border); }
+  h3 { font-size: 1.1rem; color: #1a3a4a; margin: 1.5rem 0 0.6rem; }
+  p { margin-bottom: 1rem; }
+  .lead {
+    font-size: 1.05rem;
+    background: var(--highlight);
+    padding: 1.2rem 1.5rem;
+    border-radius: 6px;
+    border-left: 4px solid var(--accent);
+    margin: 1rem 0 2rem;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.3rem 1.5rem;
+    margin: 1.2rem 0;
+  }
+  .card h3 { margin-top: 0; }
+
+  /* Compare columns */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+    margin: 0.8rem 0;
+  }
+  @media (max-width: 600px) { .compare { grid-template-columns: 1fr; } }
+  .compare-col {
+    background: var(--highlight);
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+    font-size: 0.9rem;
+  }
+  .compare-col.real { background: #e8f0f8; }
+  .compare-col.real h4 { color: #1a5276; font-size: 0.85rem; margin: 0 0 0.4rem; font-family: system-ui, sans-serif; }
+  .compare-col.manga { background: #fff3e0; }
+  .compare-col.manga h4 { color: #e65100; font-size: 0.85rem; margin: 0 0 0.4rem; font-family: system-ui, sans-serif; }
+
+  /* Tags */
+  .tag {
+    display: inline-block;
+    padding: 0.08rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-family: system-ui, sans-serif;
+    color: #fff;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+  }
+  .tag-manga { background: #2e7d32; }
+  .tag-history { background: #6d4c41; }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.7rem;
+    text-align: left;
+  }
+  th { background: var(--highlight); color: var(--accent); font-weight: 600; }
+
+  /* Annotations */
+  .sidenote {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin: 0.3rem 0 0.8rem;
+    padding-left: 1rem;
+    border-left: 2px solid var(--border);
+  }
+
+  /* Empire diagram */
+  .empire-map {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+    margin: 1rem 0;
+    text-align: center;
+  }
+  @media (max-width: 500px) { .empire-map { grid-template-columns: 1fr; } }
+  .empire-kingdom {
+    background: var(--sea);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 0.6rem;
+  }
+  .empire-kingdom .year {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 0.3rem;
+  }
+  .empire-kingdom .name {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--accent);
+    margin-bottom: 0.2rem;
+  }
+  .empire-kingdom .how {
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+
+  /* Timeline */
+  .timeline {
+    position: relative;
+    padding-left: 2.2rem;
+    margin: 1.5rem 0 1rem 0.5rem;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0.4rem; bottom: 0.4rem;
+    width: 2px;
+    background: #98b4c8;
+  }
+  .tl-item {
+    position: relative;
+    margin-bottom: 1.3rem;
+  }
+  .tl-item::before {
+    content: '';
+    position: absolute;
+    left: -2.55rem; top: 0.45rem;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+  }
+  .tl-item.key::before {
+    background: #c62828;
+    width: 14px; height: 14px;
+    left: -2.67rem; top: 0.35rem;
+  }
+  .tl-year {
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 0.9rem;
+  }
+  .tl-item.key .tl-year { color: #c62828; }
+  .tl-text { font-size: 0.95rem; }
+
+  /* Quote */
+  .quote {
+    font-style: italic;
+    color: var(--muted);
+    border-left: 3px solid var(--border);
+    padding-left: 1rem;
+    margin: 1rem 0;
+  }
+
+  /* Quiz */
+  .quiz {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+  }
+  .quiz .q { font-weight: 600; margin-bottom: 0.7rem; }
+  .quiz label { display: block; padding: 0.4rem 0; cursor: pointer; }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem;
+    padding: 0.5rem 1.8rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.8rem;
+    padding: 0.7rem 1rem;
+    border-radius: 4px;
+    display: none;
+  }
+  .feedback.correct { background: #e8f5e9; color: #2e7d32; display: block; }
+  .feedback.incorrect { background: #fbe9e7; color: #c62828; display: block; }
+
+  .reminder {
+    background: #fff8e1;
+    border: 1px solid #ffcc02;
+    border-radius: 6px;
+    padding: 1rem 1.3rem;
+    margin: 2rem 0 1rem;
+    font-size: 0.92rem;
+  }
+  .reminder strong { color: #c79100; }
+  .cite { font-size: 0.78rem; color: var(--muted); }
+  .cite a { color: var(--muted); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+  /* Big number */
+  .big-num {
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+    font-family: Georgia, serif;
+  }
+
+  @media print {
+    body { font-size: 11pt; padding: 1rem; }
+    .quiz button { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<h1>👑 克努特大帝与北海帝国</h1>
+<p class="subtitle">Lesson 0004 — 一个由个人能力暂时缝合的帝国（公元1016–1035年）</p>
+
+<p class="lead">
+  《冰海战纪》战争篇的终点是克努特成为英格兰王。但他的故事远不止于此——在接下来的十九年里，他将英格兰、丹麦、挪威整合成维京时代唯一的<strong>北海帝国</strong>（North Sea Empire）。这个帝国没有常备军、没有官僚系统、没有固定首都——全靠一个人的手腕运转。本课追踪这个帝国的崛起、运作与宿命性的崩溃。
+</p>
+
+<!-- ====== SECTION 1: THREE CROWNS ====== -->
+<h2>一、北海帝国的三大版图</h2>
+
+<p>
+  北海帝国不是一次征服的产物——是三次，每次发生在不同的时机，以不同的方式。
+</p>
+
+<div class="empire-map">
+  <div class="empire-kingdom">
+    <div class="year">🏴󠁧󠁢󠁥󠁮󠁧󠁿 1016年</div>
+    <div class="name">英格兰</div>
+    <div class="how">通过征服<br>阿桑顿战役 + 埃德蒙之死</div>
+  </div>
+  <div class="empire-kingdom">
+    <div class="year">🇩🇰 1018年</div>
+    <div class="name">丹麦</div>
+    <div class="how">通过继承<br>兄长哈拉尔去世，和平继位</div>
+  </div>
+  <div class="empire-kingdom">
+    <div class="year">🇳🇴 1028年</div>
+    <div class="name">挪威</div>
+    <div class="how">通过驱逐<br>圣河之战后放逐国王奥拉夫</div>
+  </div>
+</div>
+
+<div class="card">
+  <h3>🌊 为什么叫"北海帝国"？</h3>
+  <p style="margin-bottom:0;">这个名称来自现代史学家——克努特本人从未用过。他自称<strong>"全英格兰、丹麦、挪威及部分瑞典人的国王"</strong>（Rex totius Angliae et Denemarchiae et Norreganorum et partis Suavorum）。但事实是：在1028–1035年间，环绕北海的所有主要陆地——英格兰、丹麦、挪威、瑞典南部——都在一个人的控制之下。这在维京时代是空前绝后的。</p>
+</div>
+
+<p class="sidenote">
+  💡 北欧的"帝国"与罗马或唐代帝国的含义不同——没有中央官僚、没有统一法律、没有常备军。它本质上是<strong>个人联合</strong>（personal union）：一个国王戴三顶王冠，但三个王国各自按自己的习惯法运转。理解这点，才能理解它为什么崩溃得那么快。
+</p>
+
+<!-- ====== SECTION 2: GOVERNANCE ====== -->
+<h2>二、一个人怎么统治三个国家？</h2>
+
+<p>
+  克努特大部分时间<strong>住在英格兰</strong>（约1016–1028年定居于此，只在远征和外交时离开）。对于一个维京血统的国王来说，这本身就是一个信号：英格兰是他的帝国中心，不再是殖民地。
+</p>
+
+<div class="card">
+  <h3>🛠 代理统治：用郡长（Earl）管理远方</h3>
+  <p style="margin-bottom:0.5rem;">克努特发明了一种<strong>"远程遥控"</strong>的统治模式：</p>
+  <ul style="padding-left:1.3rem; margin:0; font-size:0.92rem;">
+    <li><strong>丹麦</strong> — 由妹夫乌尔夫（Ulf Jarl）摄政，直到两人产生矛盾（1026年前后乌尔夫被处决）。之后克努特的儿子哈萨卡努特驻守。</li>
+    <li><strong>挪威</strong> — 由克努特的英格兰籍亲信埃塞尔斯坦（Ælfgifu of Northampton）及其子斯韦恩·克努特松摄政。这是灾难性的组合——两人的苛税激起了挪威人的憎恨。</li>
+    <li><strong>英格兰</strong> — 克努特本人坐镇温彻斯特。他将英格兰划分为四大伯爵领（威塞克斯、麦西亚、东盎格利亚、诺森布里亚），由亲信掌管，但<strong>定期轮换</strong>——防止任何人在一地扎根过深。</li>
+  </ul>
+</div>
+
+<div class="compare" style="margin:1.2rem 0;">
+  <div class="compare-col real">
+    <h4>📜 历史：教会是最佳盟友</h4>
+    <p>克努特大量赞助教堂和修道院（阿桑顿战役遗址上建了一座教堂；埃德蒙被杀（或战死）的地方也建了一座）。他颁布了严格的基督教法律，要求全民守安息日、缴纳什一税。这不是个人的虔诚——而是<strong>借教会的组织网络来巩固统治</strong>。主教识字、有档案、有跨国网络——他们是完美的行政人员。</p>
+  </div>
+  <div class="compare-col manga">
+    <h4>🎨 漫画：缺席的"帝国经营"</h4>
+    <p>漫画中克努特在战争篇之后主要在东方远征篇中以"幕后统治者"身份出场——他的帝国经营（教会政策、郡长制度、法律改革）基本不在漫画叙事范围内。漫画保持了克努特"试图用爱统治"的哲学形象，而历史中他同时使用教堂、法律和处决来维持秩序。</p>
+  </div>
+</div>
+
+<!-- ====== SECTION 3: ROME ====== -->
+<h2>三、巅峰时刻：罗马之旅（1027年）</h2>
+
+<div class="card">
+  <p>
+    1027年复活节，克努特前往罗马参加神圣罗马皇帝康拉德二世（Conrad II）的加冕礼。这是自罗马帝国灭亡以来，<strong>第一个被欧洲主流君主正式接纳的斯堪的纳维亚国王</strong>。
+  </p>
+  <p style="margin-top:0.5rem;">克努特在罗马致信英格兰臣民——这是他唯一留存至今的亲笔信。信中他自称"丹麦、英格兰、挪威及部分瑞典人的国王"，并报告了三项成就：</p>
+  <ol style="padding-left:1.3rem; margin:0.5rem 0 0; font-size:0.92rem;">
+    <li><strong>免税通行</strong>——教皇同意减免英格兰朝圣者和商人途经阿尔卑斯山口的过路费。</li>
+    <li><strong>公平裁判</strong>——神圣罗马皇帝承诺英格兰商人在帝国境内享有公正的司法待遇。</li>
+    <li><strong>免除贿赂</strong>——教皇同意今后英格兰大主教不必再向罗马缴纳巨额"披肩费"（pallium fee）。</li>
+  </ol>
+</div>
+
+<p class="sidenote">
+  💡 克努特去罗马不是去打仗——是去谈判的。他是维京国王中最不像"维京人"的一个。长船送他登基，此后他换了一套工具：外交、婚姻和教堂。
+</p>
+
+<!-- ====== SECTION 4: NORWAY ====== -->
+<h2>四、征服挪威：帝国最后一块拼图（1028年）</h2>
+
+<div class="timeline">
+  <div class="tl-item">
+    <div class="tl-year">1024年</div>
+    <div class="tl-text">克努特致信挪威国王奥拉夫·哈拉尔松（Olaf Haraldsson，"肥仔奥拉夫"），声称挪威自古以来属于丹麦国王。奥拉夫拒绝。克努特开始筹划入侵。</div>
+  </div>
+  <div class="tl-item key">
+    <div class="tl-year">1026年 · 圣河之战</div>
+    <div class="tl-text">
+      <strong>圣河之战（Battle of the Holy River / Helgeå）</strong>——奥拉夫联合瑞典国王阿农德·雅各布（Anund Jacob）进攻丹麦。克努特率英格兰-丹麦联合舰队在瑞典南部的赫尔格河（今斯科讷境内）击败联军。北欧霸权之战，克努特获胜。<br>
+      <span style="font-size:0.85rem;color:var(--muted);">*战役确切地点仍有争议：传统说法在斯科讷（今瑞典南部），但也有学者认为在乌普兰（今瑞典中部）。</span>
+    </div>
+  </div>
+  <div class="tl-item key">
+    <div class="tl-year">1028年</div>
+    <div class="tl-text">
+      <strong>克努特征服挪威</strong>。他的策略不是大规模入侵，而是<strong>贿赂挪威贵族</strong>——在圣河之战前后，克努特用英格兰的财富大量收买挪威地主和酋长。奥拉夫众叛亲离，逃亡基辅罗斯。克努特在尼达罗斯（Nidaros，今特隆赫姆）被认可为挪威国王。<br>
+      <span style="font-size:0.85rem;color:var(--muted);">英格兰的税收养活了整个北海帝国——这种"英格兰出钱、丹麦出人、挪威归顺"的模式，是克努特帝国运作的核心逻辑。</span>
+    </div>
+  </div>
+  <div class="tl-item">
+    <div class="tl-year">1030年 · 斯蒂克莱斯塔战役</div>
+    <div class="tl-text">流亡两年后，奥拉夫返回挪威试图夺回王位。在斯蒂克莱斯塔（Stiklestad）战役中战死。他的死反而使他成为了<strong>圣奥拉夫</strong>（Saint Olaf）——挪威的主保圣人。克努特的统治保住了，但他的敌人获得了殉道者的光环。</div>
+  </div>
+</div>
+
+<!-- ====== SECTION 5: WAVES ====== -->
+<h2>五、克努特与潮水——最被误读的故事</h2>
+
+<div class="card">
+  <p><strong>12世纪史家亨廷顿的亨利（Henry of Huntingdon）记载了维京时代最著名的轶事：</strong></p>
+
+  <div class="quote">
+    <p>克努特命人将王座搬到海岸边，正对涨潮。他命令潮水："不要涨到我的土地上，不要弄湿你主人的衣裳。"潮水当然继续上涨，淹到了他的脚边。克努特跳起来大喊：</p>
+    <p><strong>"让全世界都知道——国王的权力是空虚而微不足道的。除了那位天与地、海与浪都服从的神，没有任何国王配得上这个名号。"</strong></p>
+    <p>此后，克努特再也没有戴过王冠——据说他把王冠挂在了温彻斯特大教堂的十字架上。</p>
+  </div>
+</div>
+
+<div class="compare" style="margin:1.2rem 0;">
+  <div class="compare-col real">
+    <h4>📜 这不是傲慢——是谦卑</h4>
+    <p>现代流行文化常常把这个故事曲解为"狂妄的国王以为他能控制潮水"。亨廷顿的原文恰好相反：克努特是<strong>故意表演给谄媚的朝臣看的</strong>——用一出精心设计的戏剧告诉他们，即使是最伟大的国王，在自然和上帝面前也只是凡人。如果他真的狂妄，不会说那些话。</p>
+  </div>
+  <div class="compare-col manga">
+    <h4>🎨 漫画中的回响</h4>
+    <p>漫画中克努特"建立地上乐园"的哲学思考，与这个历史轶事有某种精神上的共鸣——两者都描绘了一个意识到<strong>权力有边界</strong>的统治者。但历史克努特将"上帝的意志"作为权力话语（配合教会政策使用），漫画克努特则将其转化为一种世俗的、人道主义的政治理想。这是一个微妙的差异：前者用上帝来<strong>巩固</strong>权力，后者用爱来<strong>超越</strong>权力。</p>
+  </div>
+</div>
+
+<!-- ====== SECTION 6: COLLAPSE ====== -->
+<h2>六、一人帝国，一人而终（1035年）</h2>
+
+<p>
+  1035年11月12日，克努特在沙夫茨伯里（Shaftesbury）去世，享年约40余岁。死因未见详载。
+</p>
+
+<div class="card">
+  <h3>💀 崩溃不是"如果"——是"什么时候"</h3>
+  <p style="margin-bottom:0.5rem;">北海帝国没有任何制度化结构——没有继承法、没有联合政府、没有共同议会。克努特死后，帝国立刻裂成三块：</p>
+  <table style="margin:0.6rem 0;">
+    <tr><th>领土</th><th>继承人</th><th>结局</th></tr>
+    <tr><td>英格兰</td><td>"兔足"哈罗德（Harold Harefoot，克努特与艾尔芙吉芙之子）→ 哈萨卡努特（Harthacnut）</td><td>1042年哈萨卡努特死，丹麦系断绝，<strong>忏悔者爱德华</strong>复辟威塞克斯王朝</td></tr>
+    <tr><td>丹麦</td><td>哈萨卡努特 → 挪威的马格努斯（Magnus the Good）</td><td>丹麦王位转入挪威王系</td></tr>
+    <tr><td>挪威</td><td>马格努斯（奥拉夫之子）——克努特的儿子斯韦恩被挪威人驱逐</td><td>挪威重获独立，克努特派彻底失败</td></tr>
+  </table>
+  <p style="margin-top:0.5rem;font-size:0.9rem;"><strong>1042年——克努特去世仅七年后——丹麦王朝在英格兰的统治彻底结束。</strong>英格兰人选择了一位旧王系的继承人，而不是克努特的儿子。二十六年征服，七年蒸发。</p>
+</div>
+
+<!-- ====== SECTION 7: THREE INSIGHTS ====== -->
+<h2>七、三个关键认知</h2>
+
+<div class="card">
+  <h3>1️⃣ 北海帝国是"个人能力"的极限展示</h3>
+  <p style="margin-bottom:0;">没有任何制度确保帝国的延续——没有联合议会、没有共同货币、没有皇家邮政。三个王国的统一全靠克努特本人的精力、判断力和英格兰的税收。他是维京时代唯一一个同时做到了<strong>征服英格兰、继承丹麦、驱逐挪威国王</strong>的人——因为只有他同时拥有三种不同的权力来源：军事实力、血缘继承和财富收买。</p>
+</div>
+
+<div class="card">
+  <h3>2️⃣ 克努特是"后维京"统治者——维京人中最不像维京人的一个</h3>
+  <p style="margin-bottom:0;">他的父亲斯韦恩用长船征服；他用教堂、法律和硬币统治。他发布了严格的法律（<em>Cnut's Letters</em>），赞助了数十座修道院，他的硬币纯度远超同时代大多数欧洲君主。这不是因为他是好人——而是因为他理解的权力比"杀和抢"更复杂。北海帝国没有首都、没有官僚——但它有整个欧洲最稳定的货币体系之一。</p>
+</div>
+
+<div class="card">
+  <h3>3️⃣ 漫画克努特是"如果"——历史克努特是"是什么"</h3>
+  <p style="margin-bottom:0;">幸村诚的克努特问的是："如果一个拥有绝对权力的人试图用爱而非恐惧来统治，会发生什么？"这个问题的前提——绝对权力——在历史上是真实的。但历史上克努特的回答是实用主义的：一边建教堂，一边杀叛徒；一边朝圣罗马，一边贿赂挪威贵族；一边颁布公正的法律，一边维持着欧洲最有效率的镇压机器（housecarls）。漫画和历史的张力不在于"哪个对"——在于它们问了同一个前提下的两个不同问题。</p>
+</div>
+
+<!-- ====== SECTION 8: MANGA CORRELATION ====== -->
+<h2>八、漫画对照速查</h2>
+
+<table>
+  <tr><th style="width:26%;">漫画内容</th><th style="width:18%;">时间</th><th>历史对应</th><th style="width:10%;">吻合度</th></tr>
+  <tr>
+    <td>克努特成为英格兰王</td>
+    <td>1016年末</td>
+    <td>史实。阿桑顿战役 + 埃德蒙之死 = 成为唯一国王</td>
+    <td><span style="color:#2e7d32;">● 高</span></td>
+  </tr>
+  <tr>
+    <td>克努特"建立地上乐园"的理想</td>
+    <td>贯穿全作</td>
+    <td>完全原创。无史料支持克努特持有此哲学。是幸村诚赋予角色的现代命题</td>
+    <td><span style="color:#c62828;">● 虚构</span></td>
+  </tr>
+  <tr>
+    <td>克努特的帝国经营（教会、法律、外交）</td>
+    <td>1017–1035</td>
+    <td>漫画中这些内容基本缺席——克努特在战争篇后主要以"理念"而非"政策"的方式呈现。历史上这是他的核心活动</td>
+    <td><span style="color:#e65100;">● 缺位</span></td>
+  </tr>
+  <tr>
+    <td>克努特远征挪威 / 北海帝国扩张</td>
+    <td>1028</td>
+    <td>漫画未直接描绘，但历史确凿。圣河之战和挪威征服是克努特统治后半期最重要军事行动</td>
+    <td><span style="color:#e65100;">● 未呈现</span></td>
+  </tr>
+  <tr>
+    <td>克努特之死与帝国崩溃</td>
+    <td>1035–1042</td>
+    <td>漫画叙事在更早的时间点结束（文兰线为主），帝国崩溃不在漫画范围内</td>
+    <td><span style="color:#e65100;">● 未呈现</span></td>
+  </tr>
+</table>
+
+<!-- ====== QUIZ ====== -->
+<h2>🎯 自我检测</h2>
+
+<div class="quiz" id="q1">
+  <p class="q">1. 克努特的北海帝国由哪三个王国组成？</p>
+  <label><input type="radio" name="q1" value="a">A. 英格兰、冰岛、挪威</label>
+  <label><input type="radio" name="q1" value="b">B. 英格兰、丹麦、挪威</label>
+  <label><input type="radio" name="q1" value="c">C. 丹麦、瑞典、挪威</label>
+  <button onclick="checkQ1()">确认答案</button>
+  <div class="feedback" id="f1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <p class="q">2. 克努特命令潮水停止的故事，实际表达的是：</p>
+  <label><input type="radio" name="q2" value="a">A. 国王的狂妄——他认为自己可以控制自然</label>
+  <label><input type="radio" name="q2" value="b">B. 国王的谦卑——他表演给朝臣看，证明即使是国王在上帝面前也是凡人</label>
+  <label><input type="radio" name="q2" value="c">C. 维京人对海洋的崇拜仪式</label>
+  <button onclick="checkQ2()">确认答案</button>
+  <div class="feedback" id="f2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <p class="q">3. 北海帝国在克努特死后迅速崩溃的根本原因是：</p>
+  <label><input type="radio" name="q3" value="a">A. 被英格兰军队反攻夺回</label>
+  <label><input type="radio" name="q3" value="b">B. 基督教会拒绝支持克努特的继承人</label>
+  <label><input type="radio" name="q3" value="c">C. 帝国完全依赖克努特个人能力，没有制度化结构</label>
+  <button onclick="checkQ3()">确认答案</button>
+  <div class="feedback" id="f3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <p class="q">4. 克努特征服挪威的关键手段是什么？</p>
+  <label><input type="radio" name="q4" value="a">A. 用英格兰的财富贿赂挪威贵族，而非大规模军事入侵</label>
+  <label><input type="radio" name="q4" value="b">B. 派遣舰队封锁挪威所有港口</label>
+  <label><input type="radio" name="q4" value="c">C. 通过政治婚姻获得挪威王位继承权</label>
+  <button onclick="checkQ4()">确认答案</button>
+  <div class="feedback" id="f4"></div>
+</div>
+
+<div class="reminder">
+  <strong>💡 学完这课，当你读到或回想漫画中克努特的场景时：</strong><br>
+  <ul style="padding-left:1.2rem; margin-top:0.3rem;">
+    <li>克努特的"地上乐园"理想在历史上<strong>没有任何文本支持</strong>——但北海帝国这个"绝对权力"的舞台是真实的。幸村诚问了一个历史克努特从未问过的问题。</li>
+    <li>漫画中克努特的帝国<strong>治理细节基本缺席</strong>——教会的角色、郡长体系、货币改革、法律颁布。了解这些可以填补漫画留下的空白。</li>
+    <li>北海帝国是<strong>维京时代最后一个政治创造</strong>——它的崩溃标志着"维京人作为独立政治力量"的时代接近尾声（1066年正式终结）。</li>
+    <li>克努特在罗马的谈判、与教会的关系、对挪威贵族的贿赂——这些都不是"维京式"的行为。他是维京时代的最终产品：一个学会了所有欧洲政治规则的斯堪的纳维亚国王。</li>
+  </ul>
+</div>
+
+<div class="reminder" style="background:#e3f0ff;border-color:#90c4f9;">
+  <strong>🤖 有疑问？</strong> 随时向你的AI老师提问！例如：<br>
+  <span style="font-size:0.88rem;">"如果克努特活得更久，北海帝国能变成永久帝国吗？"<br>"克努特的货币改革具体做了什么？"<br>"为什么挪威人如此憎恨克努特派去的摄政者？"<br>"漫画中克努特的哲学思考受到了哪些现代思想的影响？"<br>"圣奥拉夫的殉道对挪威基督教化有什么影响？"</span>
+</div>
+
+<hr>
+
+<p style="text-align:center;font-size:0.85rem;">
+  📄 关联课程：
+  <a href="../lessons/0001-viking-age-overview.html">Lesson 0001 — 维京时代概览</a> ·
+  <a href="../lessons/0002-character-prototypes.html">Lesson 0002 — 角色原型对照</a> ·
+  <a href="../lessons/0003-danish-conquest-of-england.html">Lesson 0003 — 丹麦征服英格兰</a>
+</p>
+
+<p class="cite">
+  <strong>参考来源：</strong><br>
+  · Bolton, T. (2017). <em>Cnut the Great</em>. Yale University Press.<br>
+  · Lawson, M. K. (2011). <em>Cnut: England's Viking King</em>. The History Press.<br>
+  · <em>The Anglo-Saxon Chronicle</em> (entries for 1017–1042).<br>
+  · Henry of Huntingdon. (12th c.). <em>Historia Anglorum</em> — contains the "Cnut and the waves" anecdote.<br>
+  · Campbell, A. (ed.) (1949). <em>Encomium Emmae Reginae</em>. Camden Society.<br>
+  · Winroth, A. (2014). <em>The Age of the Vikings</em>. Princeton University Press.<br>
+  · <em>The Letters of Cnut</em> (1020 and 1027) — Cnut's only surviving writings.<br>
+  · World History Encyclopedia: <a href="https://www.worldhistory.org/Cnut_the_Great/">Cnut the Great</a>.
+</p>
+
+<script>
+function checkQ1() {
+  var f = document.getElementById('f1');
+  var sel = document.querySelector('input[name="q1"]:checked');
+  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
+  if (sel.value === 'b') {
+    f.className='feedback correct';
+    f.textContent='✅ 正确！北海帝国由英格兰（1016年征服）、丹麦（1018年继承）和挪威（1028年驱逐国王后控制）组成。';
+  } else {
+    f.className='feedback incorrect';
+    f.textContent='❌ 不对。正确答案是B：英格兰、丹麦、挪威。冰岛从未被克努特直接统治，瑞典仅南部部分地区受其影响。';
+  }
+}
+function checkQ2() {
+  var f = document.getElementById('f2');
+  var sel = document.querySelector('input[name="q2"]:checked');
+  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
+  if (sel.value === 'b') {
+    f.className='feedback correct';
+    f.textContent='✅ 正确！亨廷顿记载的故事是克努特故意表演给朝臣看的一场"谦卑秀"——证明即使是伟大的国王，在自然和上帝面前也毫无力量。现代流行文化常常把这个故事曲解为傲慢。';
+  } else {
+    f.className='feedback incorrect';
+    f.textContent='❌ 不对。正确答案是B：这是一出精心设计的表演，目的是向谄媚的朝臣展示国王的谦卑和上帝的至高。克努特后来据说再也没有戴过王冠。';
+  }
+}
+function checkQ3() {
+  var f = document.getElementById('f3');
+  var sel = document.querySelector('input[name="q3"]:checked');
+  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
+  if (sel.value === 'c') {
+    f.className='feedback correct';
+    f.textContent='✅ 正确！北海帝国没有官僚系统、没有共同议会、没有继承法——全靠克努特一个人的精力、判断力和英格兰税收运转。1035年他一死，七个继承人在七年内把帝国拆回了三国。';
+  } else {
+    f.className='feedback incorrect';
+    f.textContent='❌ 不对。正确答案是C：帝国是"个人联合"，没有制度化——没有联合政府、没有统一法律、没有继承机制。克努特一死就裂了。';
+  }
+}
+function checkQ4() {
+  var f = document.getElementById('f4');
+  var sel = document.querySelector('input[name="q4"]:checked');
+  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
+  if (sel.value === 'a') {
+    f.className='feedback correct';
+    f.textContent='✅ 正确！克努特的核心策略是经济战：用英格兰的财富大量收买挪威贵族，让奥拉夫·哈拉尔松众叛亲离，几乎不战而胜。英格兰的税收是北海帝国的引擎。';
+  } else {
+    f.className='feedback incorrect';
+    f.textContent='❌ 不对。正确答案是A：克努特用英格兰的巨额财富贿赂挪威贵族，使奥拉夫失去支持后逃亡。圣河之战（1026）只是削弱了奥拉夫的外部盟友，真正拿下挪威靠的是钱，不是军队。';
+  }
+}
+</script>
+
+</body>
+</html>

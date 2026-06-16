@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 18: C# 13 — params 集合 + 新 Lock 对象</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+  .callout { padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem; }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+  .badge { display: inline-block; padding: 0.15em 0.55em; border-radius: 100px; font-size: 0.78rem; font-weight: 600; }
+  .badge--preview { background: #fff8c5; color: #9a6700; }
+  .badge--daily { background: #dafbe1; color: #1a7f37; }
+  .badge--perf { background: #eef1ff; color: #512bd4; }
+</style>
+</head>
+<body>
+
+<h1>Lesson 18: C# 13 — params 集合 + 新 Lock 对象</h1>
+<p class="subtitle">.NET 9（2024.11）· 两个每天都会用到的改进</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 C# 12 全部四课（<a href="14-csharp12-primary-constructors.html">14</a>–<a href="17-csharp12-small-features.html">17</a>）。本课进入 C# 13 的两个核心特性——params 集合和新 Lock 对象。<br>
+<strong>阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/whats-new/csharp-13">Microsoft Learn: C# 13 新增功能</a> ·
+<a href="https://blog.ndepend.com/c-13-params-collections/">NDepend: C# 13 params collections</a>
+</div>
+
+<!-- ========================== 1. PARAMS COLLECTIONS ========================== -->
+
+<h2>一、params 集合 <span class="en">params Collections</span> <span class="badge badge--daily">每日用</span> <span class="badge badge--perf">性能</span></h2>
+
+<h3>1.1 痛点：你每天都在无意中分配数组</h3>
+
+<p>C# 1.0 起，<code>params</code> 只能用于数组。每次调用——编译器在后台<strong>分配一个堆数组</strong>：</p>
+
+<pre><code><span class="cmt">// 看起来人畜无害：</span>
+<span class="kw">void</span> Log(<span class="kw">string</span> format, <span class="kw">params</span> <span class="kw">string</span>[] args)
+    => Console.WriteLine(format, args);
+
+Log(<span class="str">"用户 {0} 登录"</span>, userId, ip);  <span class="cmt">// 编译器生成: new string[] { userId, ip }</span>
+Log(<span class="str">"订单 {0} 金额 {1}"</span>, orderId, amount);
+Log(<span class="str">"心跳"</span>);                       <span class="cmt">// 即使只传 0 个参数也分配: Array.Empty&lt;string&gt;()</span></pre>
+
+<p>如果 <code>Log</code> 在热路径上被调用每秒数千次——这些数组分配会触发频繁 GC。.</p>
+
+<div class="callout callout--warn">
+<strong>问题不在于"分配一次"——而在于</strong>每次调用都分配。一个循环里调 1000 次 = 1000 个堆数组。params 是最隐蔽的 GC 压力源之一。
+</div>
+
+<h3>1.2 解决方案：params 现在可以基于 Span</h3>
+
+<p>C# 13 的核心创新：<strong><code>params</code> 参数可以是 <code>ReadOnlySpan&lt;T&gt;</code></strong>——编译器在栈上构造 Span，零堆分配。</p>
+
+<div class="comparison">
+  <div class="old"><h4>😣 C# 12 — 每次都分配数组</h4>
+<pre><code><span class="cmt">// 只能：params T[]</span>
+<span class="kw">void</span> Print(<span class="kw">params</span> <span class="kw">int</span>[] numbers) {
+    <span class="kw">foreach</span> (<span class="kw">var</span> n <span class="kw">in</span> numbers)
+        Console.Write(n + <span class="str">" "</span>);
+}
+
+Print(<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>);
+<span class="cmt">// IL: newarr    0x3</span>
+<span class="cmt">//     stloc.0  (T[])</span>
+<span class="cmt">// → 堆分配 int[3]</span></code></pre>
+  </div>
+  <div class="new"><h4>😎 C# 13 — 栈上 Span，零分配</h4>
+<pre><code><span class="cmt">// 现在可以：params ReadOnlySpan&lt;T&gt;</span>
+<span class="kw">void</span> Print(<span class="kw">params</span> ReadOnlySpan&lt;<span class="kw">int</span>&gt; numbers) {
+    <span class="kw">foreach</span> (<span class="kw">var</span> n <span class="kw">in</span> numbers)
+        Console.Write(n + <span class="str">" "</span>);
+}
+
+Print(<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>);
+<span class="cmt">// IL: ldloca    _tmp (栈上 struct)</span>
+<span class="cmt">//     call  MemoryMarshal.CreateReadOnlySpan</span>
+<span class="cmt">// → 零堆分配</span></code></pre>
+  </div>
+</div>
+
+<h3>1.3 编译器到底生成了什么？<span class="en">How the Compiler Lowers This</span></h3>
+
+<p>这是用户最关心的部分——编译器做了三件事：</p>
+
+<pre><code><span class="cmt">// 你写的代码：</span>
+Print(<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>);
+
+<span class="cmt">// 编译器生成（概念等效）：</span>
+<span class="cmt">// ① 生成一个内联固定大小缓冲区 struct</span>
+<span class="kw">ref</span> <span class="kw">struct</span> __ValueArray3&lt;<span class="kw">int</span>&gt; {
+    <span class="kw">public</span> <span class="kw">int</span> Item0, Item1, Item2;
+}
+
+<span class="cmt">// ② 在栈上分配该 struct，逐项赋值</span>
+<span class="kw">var</span> _tmp = <span class="kw">new</span> __ValueArray3&lt;<span class="kw">int</span>&gt;();
+_tmp.Item0 = <span class="num">1</span>; _tmp.Item1 = <span class="num">2</span>; _tmp.Item2 = <span class="num">3</span>;
+
+<span class="cmt">// ③ 用 MemoryMarshal 创建指向该缓冲区的 Span</span>
+<span class="kw">var</span> span = MemoryMarshal.CreateReadOnlySpan(
+    <span class="kw">ref</span> _tmp.Item0, <span class="num">3</span>);
+Print(span);
+
+<span class="cmt">// 优化：同一方法内多次调用复用同一个缓冲区</span>
+<span class="cmt">// （取所有调用中参数数量最大的那一次作为缓冲区大小）</span></code></pre>
+
+<div class="callout callout--good">
+<strong>关键事实：</strong>缓冲区在<strong>栈上</strong>（ref struct 不能逃逸到堆），Span 指向栈内存。方法返回后缓冲区自动消失——零 GC。编译器还在同一方法内<strong>复用缓冲区</strong>，多次调用只需一块栈空间。
+</div>
+
+<h3>1.4 支持的类型完整列表</h3>
+
+<table>
+  <tr><th>params 类型</th><th>分配位置</th><th>典型场景</th></tr>
+  <tr><td><code>ReadOnlySpan&lt;T&gt;</code></td><td>栈（零分配）⭐</td><td>只读遍历——最常见的 params 场景</td></tr>
+  <tr><td><code>Span&lt;T&gt;</code></td><td>栈（零分配）</td><td>需要对元素做 in-place 修改</td></tr>
+  <tr><td><code>T[]</code></td><td>堆（传统行为）</td><td>兼容旧代码，仍然是合法选择</td></tr>
+  <tr><td><code>IEnumerable&lt;T&gt;</code></td><td>堆（编译器合成数组）</td><td>接受 LINQ 查询结果直接传入</td></tr>
+  <tr><td><code>IReadOnlyList&lt;T&gt;</code></td><td>堆（编译器合成数组）</td><td>随机访问 + 只读语义</td></tr>
+  <tr><td><code>IReadOnlyCollection&lt;T&gt;</code></td><td>堆</td><td>只要 Count，不关心索引</td></tr>
+  <tr><td><code>ICollection&lt;T&gt;</code></td><td>堆</td><td>需要 Add 方法的集合</td></tr>
+  <tr><td><code>IList&lt;T&gt;</code></td><td>堆</td><td>随机访问 + 可变语义</td></tr>
+  <tr><td>任何有 <code>Add</code> 的集合类型</td><td>堆</td><td>自定义集合（如 <code>ConcurrentBag&lt;T&gt;</code>）</td></tr>
+</table>
+
+<div class="callout callout--info">
+<strong>日常使用只记两条：</strong>需要零分配 → <code>params ReadOnlySpan&lt;T&gt;</code>；接受 LINQ 结果 → <code>params IEnumerable&lt;T&gt;</code>。其余情况几乎不用。
+</div>
+
+<h3>1.5 实战场景一：零分配日志/格式化</h3>
+
+<pre><code><span class="cmt">// 你的日志包装器——热路径上每秒数千次调用</span>
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">void</span> Log(
+    LogLevel level,
+    [<span class="type">InterpolatedStringHandlerArgument</span>(<span class="str">""</span>)] <span class="kw">ref</span> MyInterpolatedStringHandler msg)
+{ ... }
+
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">void</span> Log(
+    LogLevel level,
+    <span class="kw">params</span> ReadOnlySpan&lt;<span class="kw">object</span>&gt; args)  <span class="cmt">// ← 零分配！</span>
+{
+    <span class="cmt">// 遍历 args 构建日志消息——不分配堆数组</span>
+    <span class="kw">foreach</span> (<span class="kw">var</span> arg <span class="kw">in</span> args)
+        WriteArg(arg);
+}
+
+<span class="cmt">// 调用——和以前完全一样简洁</span>
+Log(LogLevel.Info, userId, operation, elapsed);
+Log(LogLevel.Error, requestId, ex.Message);
+Log(LogLevel.Debug);  <span class="cmt">// 空参也不分配</span></code></pre>
+
+<h3>1.6 实战场景二：用 IEnumerable&lt;T&gt; 直接传 LINQ 结果</h3>
+
+<pre><code><span class="cmt">// 场景：要把 LINQ 筛选的结果传给 params 方法</span>
+<span class="kw">void</span> Display(<span class="kw">params</span> IEnumerable&lt;<span class="kw">string</span>&gt; items)
+    => Console.WriteLine(<span class="kw">string</span>.Join(<span class="str">", "</span>, items));
+
+<span class="kw">var</span> users = GetUsers();
+
+<span class="cmt">// C# 12：必须 .ToArray() — 多一次拷贝</span>
+<span class="cmt">// Display(users.Where(u => u.Active).Select(u => u.Name).ToArray());</span>
+
+<span class="cmt">// C# 13：直接传 LINQ 结果</span>
+Display(users.Where(u => u.Active).Select(u => u.Name));
+<span class="cmt">// 省掉 .ToArray()——编译器帮你合成存储</span></code></pre>
+
+<h3>1.7 ⚠️ 重大变更：重载决议优先 Span，表达式树可能报错</h3>
+
+<p>C# 13 的编译器<strong>优先绑定到 <code>params ReadOnlySpan&lt;T&gt;</code> 版本</strong>（而非旧的 <code>params T[]</code>）。这导致一个具体问题：</p>
+
+<pre><code><span class="cmt">// .NET 8：绑定到 string.Join(string, params string[])</span>
+<span class="cmt">// .NET 9：绑定到 string.Join(string, params ReadOnlySpan&lt;string&gt;)</span>
+
+<span class="cmt">// 表达式树中 ref struct 非法 → 编译错误！</span>
+Expression&lt;Func&lt;<span class="kw">string</span>, <span class="kw">string</span>, <span class="kw">string</span>&gt;&gt; join =
+    (x, y) => <span class="kw">string</span>.Join(<span class="str">""</span>, x, y);
+<span class="cmt">// CS8640: 表达式树不能包含 ref struct</span>
+
+<span class="cmt">// 修复：显式传数组，强制绑定到旧版本</span>
+Expression&lt;Func&lt;<span class="kw">string</span>, <span class="kw">string</span>, <span class="kw">string</span>&gt;&gt; join =
+    (x, y) => <span class="kw">string</span>.Join(<span class="str">""</span>, <span class="kw">new</span>[] { x, y });</code></pre>
+
+<div class="callout callout--warn">
+<strong>如果你用表达式树（EF Core、AutoMapper、动态查询等场景）：</strong>重新编译 .NET 9 后可能突然报 CS8640 / CS9226。修复很简单——显式构造数组即可。但需要<strong>知道为什么</strong>才能定位到问题。<br>
+<strong>来源：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/core/compatibility/core-libraries/9.0/params-overloads">Microsoft: params 重载决议重大变更</a>
+</div>
+
+<h3>1.8 限制速查</h3>
+
+<table>
+  <tr><th>场景</th><th><code>params ReadOnlySpan&lt;T&gt;</code></th><th>原因</th></tr>
+  <tr><td>普通同步方法</td><td>✅ 零分配</td><td>Span 在栈上，不逃逸</td></tr>
+  <tr><td><code>async</code> 方法</td><td>❌ CS4007</td><td>Span 不能跨越 await 边界</td></tr>
+  <tr><td>迭代器（<code>yield return</code>）</td><td>❌ CS4007</td><td>Span 不能跨越 yield 边界</td></tr>
+  <tr><td>表达式树</td><td>❌ CS8640</td><td>表达式树不能包含 ref struct</td></tr>
+  <tr><td>传递给 <code>IEnumerable&lt;T&gt;</code> 参数</td><td>✅（需显式转换）</td><td>Span 实现了 IEnumerable，但需 using</td></tr>
+</table>
+
+<p class="mild">对于 async/迭代器场景，退回到 <code>params T[]</code> 或 <code>params IEnumerable&lt;T&gt;</code>——性能差异在 I/O 场景下可忽略。</p>
+
+<!-- ========================== 2. NEW LOCK ========================== -->
+
+<h2>二、新 Lock 对象 <span class="en">System.Threading.Lock</span> <span class="badge badge--daily">每日用</span></h2>
+
+<h3>2.1 痛点：lock(object) 的六宗罪</h3>
+
+<p>从 C# 1.0 起，<code>lock</code> 语句编译为 <code>Monitor.Enter</code> / <code>Monitor.Exit</code>。这个 20 年前的 API 有固有的设计缺陷：</p>
+
+<pre><code><span class="cmt">// .NET 8 及以前——看起来正常：</span>
+<span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">object</span> _sync = <span class="kw">new</span>();
+<span class="kw">lock</span> (_sync) { <span class="cmt">/* 关键区 */</span> }
+
+<span class="cmt">// 编译器生成（简化）：</span>
+<span class="kw">bool</span> lockTaken = <span class="kw">false</span>;
+<span class="kw">try</span> {
+    Monitor.Enter(_sync, <span class="kw">ref</span> lockTaken);
+    <span class="cmt">/* 关键区 */</span>
+} <span class="kw">finally</span> {
+    <span class="kw">if</span> (lockTaken) Monitor.Exit(_sync);
+}</code></pre>
+
+<table>
+  <tr><th>问题</th><th>说明</th></tr>
+  <tr><td>① 类型不安全</td><td><code>lock(this)</code> / <code>lock(typeof(Foo))</code> 仍然合法，但公认是坏实践</td></tr>
+  <tr><td>② Monitor 是遗留 API</td><td>Monitor.Enter 用 <code>ref bool</code> 模式——不是现代 .NET 风格</td></tr>
+  <tr><td>③ 装箱</td><td>lock 关键字要求引用类型，锁值类型时会装箱</td></tr>
+  <tr><td>④ 退化可能</td><td>把 <code>Lock</code> 隐式转换为 <code>object</code> 后 lock——失去优化，回退到 Monitor</td></tr>
+  <tr><td>⑤ 无法区分用途</td><td>一个 <code>object</code> 到底是锁、缓存键、还是普通状态？阅读代码时无法判断</td></tr>
+  <tr><td>⑥ 平台未特化</td><td>Monitor 是托管实现——无法利用 OS 原生锁特性</td></tr>
+</table>
+
+<h3>2.2 解决方案：System.Threading.Lock</h3>
+
+<div class="comparison">
+  <div class="old"><h4>😣 .NET 8 — object + Monitor</h4>
+<pre><code><span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">object</span> _sync = <span class="kw">new</span>();
+
+<span class="kw">lock</span> (_sync)
+{
+    <span class="cmt">// 关键区</span>
+    _counter++;
+}
+
+<span class="cmt">// IL 生成 Monitor.Enter/Exit</span>
+<span class="cmt">// 每次 Enter ~20ns</span></code></pre>
+  </div>
+  <div class="new"><h4>😎 .NET 9 — Lock + C# 13</h4>
+<pre><code><span class="kw">private</span> <span class="kw">readonly</span> Lock _sync = <span class="kw">new</span>();
+
+<span class="kw">lock</span> (_sync)
+{
+    <span class="cmt">// 关键区——语法完全相同</span>
+    _counter++;
+}
+
+<span class="cmt">// IL 生成 using (EnterScope())</span>
+<span class="cmt">// 每次 Enter ~15ns（≈25% 更快）</span></code></pre>
+  </div>
+</div>
+
+<h3>2.3 编译器生成对比——这是精华</h3>
+
+<pre><code><span class="cmt">// ==================== lock (object) ====================</span>
+<span class="cmt">// 编译器生成：</span>
+<span class="kw">object</span> _sync = ...;
+<span class="kw">bool</span> lockTaken = <span class="kw">false</span>;
+<span class="kw">try</span>
+{
+    Monitor.Enter(_sync, <span class="kw">ref</span> lockTaken);
+    <span class="cmt">/* 你的代码 */</span>
+}
+<span class="kw">finally</span>
+{
+    <span class="kw">if</span> (lockTaken) Monitor.Exit(_sync);
+}
+
+<span class="cmt">// ==================== lock (Lock) ====================</span>
+<span class="cmt">// 编译器生成：</span>
+Lock _sync = ...;
+<span class="kw">using</span> (Lock.Scope __scope = _sync.EnterScope())
+{
+    <span class="cmt">/* 你的代码 */</span>
+}
+<span class="cmt">// Dispose() 自动释放锁——没有 try/finally 样板
+// Lock.Scope 是 ref struct——零堆分配</span></code></pre>
+
+<div class="callout callout--good">
+<strong>关键差异：</strong>新 Lock 用 <code>using</code> 模式替代了 <code>Monitor.Enter/Exit</code>。编译器<strong>识别 <code>Lock</code> 类型</strong>并特殊处理——不只是换了 API，而是换了编译策略。Lock.Scope 是 ref struct，不会装箱，不会逃逸到堆。
+</div>
+
+<h3>2.4 迁移：一行改动</h3>
+
+<pre><code><span class="cmt">// Step 1：改字段类型</span>
+<span class="cmt">// Before:  private readonly object _sync = new();</span>
+<span class="kw">private</span> <span class="kw">readonly</span> Lock _sync = <span class="kw">new</span>();
+
+<span class="cmt">// Step 2：lock 语句完全不变</span>
+<span class="kw">lock</span> (_sync) { <span class="cmt">/* 不变 */</span> }
+
+<span class="cmt">// 就这么简单。IDE0330 代码风格规则会自动提示你改。</span></code></pre>
+
+<h3>2.5 ⚠️ 三个陷阱</h3>
+
+<table>
+  <tr><th>陷阱</th><th>错误示例</th><th>正确做法</th></tr>
+  <tr>
+    <td><strong>① 不要转为 object</strong></td>
+    <td><code>lock ((object)_sync)</code></td>
+    <td><code>lock (_sync)</code>——编译器会对 Lock→object 转换产生警告</td>
+  </tr>
+  <tr>
+    <td><strong>② 不支持 async</strong></td>
+    <td><code>lock (_sync) { await … }</code></td>
+    <td>异步锁用 <code>SemaphoreSlim</code>（Lock 是线程亲和锁）</td>
+  </tr>
+  <tr>
+    <td><strong>③ 不要混用</strong></td>
+    <td>同一受保护资源用 Lock 又用 Monitor</td>
+    <td>统一用 Lock——旧代码里有 Monitor.Wait/Pulse 的除外</td>
+  </tr>
+</table>
+
+<div class="callout callout--warn">
+<strong>Monitor.Wait / Pulse / PulseAll：</strong>这是 Lock 唯一没覆盖的功能。如果你在用这些方法做线程信号——<strong>暂时保留旧的 lock(object)</strong>。Lock 目前只替代 Monitor.Enter/Exit，不替代信号机制。新代码优先用 <code>ManualResetEventSlim</code> 或 <code>Channel&lt;T&gt;</code> 替代 Wait/Pulse 模式。
+</div>
+
+<!-- ========================== 3. QUIZ ========================== -->
+
+<h2>三、小测验</h2>
+
+<div class="quiz" id="q1">
+<div class="question">1/4 · params ReadOnlySpan&lt;T&gt; ——以下哪个方法<strong>不能</strong>使用 <code>params ReadOnlySpan&lt;int&gt;</code> 作为参数？</div>
+<label><input type="radio" name="q1" value="0">A. 普通实例方法 <code>void M(params ReadOnlySpan&lt;int&gt; xs)</code></label>
+<label><input type="radio" name="q1" value="1">B. async 方法 <code>async Task M(params ReadOnlySpan&lt;int&gt; xs)</code></label>
+<label><input type="radio" name="q1" value="2">C. static 方法 <code>static void M(params ReadOnlySpan&lt;int&gt; xs)</code></label>
+<label><input type="radio" name="q1" value="3">D. Lambda <code>var f = (params ReadOnlySpan&lt;int&gt; xs) => ...</code></label>
+<div class="feedback" id="fb1"></div>
+</div>
+
+<div class="quiz" id="q2">
+<div class="question">2/4 · params 重载决议——.NET 9 上重新编译旧代码，以下哪个代码<strong>会报错</strong>？</div>
+<label><input type="radio" name="q2" value="0">A. <code>string.Join(",", new[] { "a", "b" })</code></label>
+<label><input type="radio" name="q2" value="1">B. <code>Expression&lt;Func&lt;string&gt;&gt; e = () => string.Join(",", "a", "b");</code></label>
+<label><input type="radio" name="q2" value="2">C. <code>Console.WriteLine("{0} {1}", "a", "b");</code></label>
+<label><input type="radio" name="q2" value="3">D. <code>StringBuilder.AppendJoin(",", "a", "b");</code></label>
+<div class="feedback" id="fb2"></div>
+</div>
+
+<div class="quiz" id="q3">
+<div class="question">3/4 · System.Threading.Lock ——编译器见到 <code>lock (lockObj)</code> 且 lockObj 是 <code>Lock</code> 类型时，生成什么代码？</div>
+<label><input type="radio" name="q3" value="0">A. 和 lock(object) 完全一样——Monitor.Enter + Monitor.Exit</label>
+<label><input type="radio" name="q3" value="1">B. <code>using (lockObj.EnterScope()) { ... }</code>——Dispose 自动释放</label>
+<label><input type="radio" name="q3" value="2">C. <code>lockObj.Acquire(); try { ... } finally { lockObj.Release(); }</code></label>
+<label><input type="radio" name="q3" value="3">D. 编译错误——Lock 类型不能用于 lock 语句</label>
+<div class="feedback" id="fb3"></div>
+</div>
+
+<div class="quiz" id="q4">
+<div class="question">4/4 · Lock 迁移——以下哪项<strong>不是</strong>从 <code>lock(object)</code> 迁移到 <code>Lock</code> 的理由？</div>
+<label><input type="radio" name="q4" value="0">A. Lock 性能更好（~25% 更快）且零额外分配</label>
+<label><input type="radio" name="q4" value="1">B. Lock 类型语义清晰——看到 Lock 字段就知道它是锁</label>
+<label><input type="radio" name="q4" value="2">C. Lock 支持在关键区内使用 await</label>
+<label><input type="radio" name="q4" value="3">D. Lock 消除 Monitor.Enter 的 ref bool lockTaken 样板</label>
+<div class="feedback" id="fb4"></div>
+
+<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
+<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+</div>
+
+<script>
+const answers = { q1: 1, q2: 1, q3: 1, q4: 2 };
+const explanations = {
+  q1: { correct: "✅ 正确！async 方法不能使用 ReadOnlySpan&lt;T&gt; 参数（无论是否 params），因为 ref struct 不能跨越 await 边界。编译器报 CS4007。", wrong: "❌ 不是。async 方法不能使用 ReadOnlySpan&lt;T&gt; 参数——ref struct 不能跨越 await 边界（CS4007）。普通方法、static 方法、Lambda 都可以（前提是 Lambda 不在 async 上下文中）。正确答案是 B。" },
+  q2: { correct: "✅ 正确！表达式树不能包含 ref struct。.NET 9 的重载决议优先绑定到 params ReadOnlySpan&lt;string&gt; 版本，而表达式树不支持 ref struct → CS8640 / CS9226。", wrong: "❌ 不是。A 传的就是数组，不会报错。B 会报错——表达式树不支持 ref struct，而 .NET 9 优先绑定到 Span 重载。C/D 正常调用不报错。正确答案是 B。" },
+  q3: { correct: "✅ 正确！C# 13 编译器识别 Lock 类型，生成 <code>using (EnterScope())</code> 而非 Monitor.Enter/Exit。Lock.Scope 是 ref struct——Dispose 自动释放锁。", wrong: "❌ 不是。编译器识别 Lock 类型后生成 using (EnterScope())——不是 Monitor.Enter/Exit（那是 lock(object)），也不是 Acquire/Release。Lock 完全合法用于 lock 语句。正确答案是 B。" },
+  q4: { correct: "✅ 正确！Lock 不支持 async/await——它和 lock(object) 一样是线程亲和锁。异步场景仍需 SemaphoreSlim。A、B、D 都是真迁移理由。", wrong: "❌ 不是。A/B/D 都是正确的迁移理由。C 是错的——Lock 不支持在关键区内 await（线程亲和锁），异步场景仍需 SemaphoreSlim。正确答案是 C。" },
+};
+function checkAll() {
+  let correct = 0;
+  for (let qid of ['q1','q2','q3','q4']) {
+    const selected = document.querySelector(`input[name="${qid}"]:checked`);
+    const fb = document.getElementById('fb' + qid.slice(1));
+    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
+    if (parseInt(selected.value) === answers[qid]) {
+      fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++;
+    } else {
+      fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show';
+    }
+  }
+  const scoreEl = document.getElementById('score');
+  scoreEl.style.display = 'block';
+  scoreEl.textContent = `得分：${correct} / 4`;
+  scoreEl.style.color = correct === 4 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
+}
+</script>
+
+<!-- ========================== 4. SUMMARY ========================== -->
+
+<h2>四、C# 13 本课小结</h2>
+
+<table>
+  <tr><th>特性</th><th>一句话</th><th>日常频率</th></tr>
+  <tr><td>params 集合</td><td>params 参数改用 ReadOnlySpan → 零堆分配；LINQ 结果直传 IEnumerable → 省掉 .ToArray()</td><td>⭐⭐⭐⭐⭐</td></tr>
+  <tr><td>新 Lock 对象</td><td>把 <code>object _sync</code> 改成 <code>Lock _sync</code>——lock 语法不变，编译器自动切到更快的实现</td><td>⭐⭐⭐⭐</td></tr>
+</table>
+
+<h2>五、下一步</h2>
+
+<ul>
+  <li><strong>Lesson 19：</strong>C# 13 剩余特性——ref struct 实现接口、<code>\e</code> 转义、方法组自然类型改进、partial 属性、OverloadResolutionPriority。</li>
+  <li><strong>实践建议：</strong>打开现有项目，搜索 <code>params T[]</code> 和 <code>object _sync</code>——评估哪些可以升级到 C# 13 写法。</li>
+</ul>
+
+<div class="callout callout--info" style="margin-top:2rem;">
+<strong>💬 有问题？</strong>params Span 和 async 的交互规则？Lock 和 SemaphoreSlim 的选型决策？编译器生成的细节？随时问。
+</div>
+
+</body>
+</html>

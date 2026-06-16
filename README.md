@@ -1,6 +1,6 @@
 # Learning Lessons
 
-这套课程围绕两条主线展开：其一是现代 .NET 开发的技术纵深——以 C# 8 为起点，从可空引用类型与模式匹配的语法演进，到 yield return 迭代器与 IAsyncEnumerable 异步流的编译器内部机制，再深入 SynchronizationContext 的 await 续延调度核心，随后贯穿 C# 9 的 records 不可变类型、C# 10 的记录结构体与文件范围命名空间、C# 11 的原始字符串字面量与列表模式，最终抵达 C# 12 的主构造函数、集合表达式与 ref readonly 参数等前沿特性，形成一条从 Framework 4.8 到现代 .NET 的完整迁移路径。其二是维京时代的历史叙事——从《冰海战纪》的维京时代概览出发，对照漫画角色与真实历史人物原型，再深入丹麦征服英格兰的北海霸权历程，为漫画叙事提供扎实的历史锚点。三条技术线索交织贯穿第一部分：**C# 语言演进**（类型系统、模式匹配、不可变数据——从 C# 8 到 C# 12 的持续进化）、**异步内部机制**（迭代器、异步流、调度上下文）、**平台迁移**（Framework 4.8 → 现代 .NET）。
+这套课程沿三条并行轨道展开：核心轨道是现代 .NET 技术纵深，从 C# 8 可空引用类型与模式匹配起步，历经 yield return 迭代器与 IAsyncEnumerable 异步流的编译器状态机拆解，深入 SynchronizationContext 的 await 续延调度核心，随后贯穿 C# 9 records 不可变类型、C# 10 记录结构体、C# 11 原始字符串字面量与列表模式，最终抵达 C# 12 主构造函数与集合表达式、C# 13 的 params 集合增强与新型 Lock 对象，构成从 Framework 4.8 到最新 .NET 的完整演进路线。工具轨道聚焦开发环境底层——通过 VS Code 扩展解剖，揭示扩展宿主架构、激活事件与 API 体系的运作原理。历史轨道以《冰海战纪》为锚点，从维京时代概览到克努特大帝的北海帝国，为漫画叙事提供可验证的史实参照。三条线索共同织成一张从语法表层下沉到编译器内部、从工具底层上升到历史语境的知识网络。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
@@ -25,10 +25,12 @@
 | 15 | [Lesson 15: C# 12 — Collection Expressions（集合表达式）](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/15-csharp12-collection-expressions.html) | 解析集合表达式语法，统一数组、列表与 span 的初始化方式 |
 | 16 | [Lesson 16: C# 12 — ref readonly 参数 + 内联数组](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/16-csharp12-ref-readonly-inline-arrays.html) | 讲解 ref readonly 参数传递语义与内联数组的高性能栈分配技巧 |
 | 17 | [Lesson 17: C# 12 — Lambda 默认参数 · 任意类型别名 · Experimental · Interceptors](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/17-csharp12-small-features.html) | 收尾 C# 12 小特性集：Lambda 默认参数、任意类型别名、Experimental 特性与 Interceptors 拦截器预览 |
+| 18 | [Lesson 18: C# 13 — params 集合 + 新 Lock 对象](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/18-csharp13-params-lock.html) | 讲解 C# 13 的 params 集合增强与新型 Lock 对象，拥抱最新语言特性 |
 
 **参考资料：**
 - [异步流速查 · Async Streams · C# 8](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/async-streams-cheatsheet.html) — IAsyncEnumerable 消费、取消与配置速查
 - [C# 9 小特性速查](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/csharp9-small-features-cheatsheet.html) — Top-level Statements · Pattern Matching · Target-typed new · Covariant Returns
+- [in 参数 · 防御性拷贝深度解析](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/in-parameter-defensive-copy-cheatsheet.html) — C# 7.2+ in 参数传递语义与防御性拷贝机制速查
 - [索引与范围速查 · Indices & Ranges · C# 8](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/indices-ranges-cheatsheet.html) — ^ 与 .. 运算符完整参考
 - [NRT 速查 · Nullable Reference Types · C# 8+](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/nrt-cheatsheet.html) — 可空引用类型注解与警告速查
 - [模式匹配速查 · Pattern Matching · C# 7~12](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/pattern-matching-cheatsheet.html) — switch 表达式与模式组合速查
@@ -44,10 +46,20 @@
 |---|------|------|
 | 1 | [Lesson 0001 — 维京时代概览：冰海战纪的历史舞台](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0001-viking-age-overview.html) | 概览维京时代的历史背景与社会结构，为《冰海战纪》的叙事世界提供真实历史锚点 |
 | 2 | [Lesson 0002 — 漫画 vs 史实：《冰海战纪》角色原型对照](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0002-character-prototypes.html) | 对比漫画角色与真实维京历史人物，揭示幸村诚笔下的史实基础与创作改编 |
-| 3 | [Lesson 0003 — 丹麦征服英格兰：维京人的北海霸权](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0003-danish-conquest-of-england.html) | 讲述克努特大帝与丹麦王朝对英格兰的征服历程，梳理维京人在北海的霸权兴衰 |
+| 3 | [Lesson 0003 — 丹麦征服英格兰：维京人的北海霸权](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0003-danish-conquest-of-england.html) | 讲述丹麦王朝对英格兰的征服历程，梳理维京人在北海的霸权兴衰 |
+| 4 | [Lesson 0004 — 克努特大帝与北海帝国](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0004-cnut-north-sea-empire.html) | 剖析克努特大帝如何整合英格兰、丹麦与挪威，建立横跨北海的维京帝国 |
 
 **参考资料：**
 - [维京时代大事年表](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-age-timeline.html) — Vinland Saga 历史时间线参考
 - [角色-史实对照表](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/vinland-saga-character-reference.html) — Vinland Saga 漫画角色与历史原型速查
+
+## Claude Context Bar
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [Lesson 0001 — VS Code 扩展的解剖结构](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0001-extension-anatomy.html) | 拆解 VS Code 扩展的 manifest、激活事件与代码骨架，理解扩展生命周期 |
+
+**参考资料：**
+- [VS Code 扩展 API 基础](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/vscode-extension-api-basics.html) — 扩展清单、贡献点与核心 API 速查
 
 *自动生成*
