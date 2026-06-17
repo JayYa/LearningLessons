@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 20: C# 13 — 小特性合集</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+  .callout { padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem; }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+  .badge { display: inline-block; padding: 0.15em 0.55em; border-radius: 100px; font-size: 0.78rem; font-weight: 600; }
+  .badge--daily { background: #dafbe1; color: #1a7f37; }
+  .badge--rare  { background: #fff8c5; color: #9a6700; }
+  .badge--preview { background: #fff8c5; color: #9a6700; }
+</style>
+</head>
+<body>
+
+<h1>Lesson 20: C# 13 — 小特性合集</h1>
+<p class="subtitle">.NET 9（2024.11）· \e 转义 · 方法组 · partial 属性 · 重载优先级 · 更多</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="19-csharp13-ref-struct-trilogy.html">Lesson 19（ref struct 三部曲）</a> 和 <a href="18-csharp13-params-lock.html">Lesson 18（params + Lock）</a>。本课是 C# 13 最后一课——小特性合集，风格延续 <a href="08-csharp9-small-features.html">L08</a>、<a href="17-csharp12-small-features.html">L17</a>。<br>
+<strong>阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/whats-new/csharp-13">Microsoft Learn: C# 13 新增功能</a>
+</div>
+
+<!-- ========================== 1. \e ========================== -->
+
+<h2>一、\e 转义序列 <span class="en">ESC Character</span> <span class="badge badge--daily">日常</span></h2>
+
+<h3>问题：写 ANSI 终端控制码太啰嗦</h3>
+
+<p>ESC 字符（Unicode U+001B）是 VT100/ANSI 终端控制序列的起始字节。C# 12 只有两种方式：</p>
+
+<pre><code><span class="cmt">// 写法 1：Unicode——安全但冗长</span>
+<span class="kw">string</span> red1 = <span class="str">"[31m红色[0m"</span>;
+
+<span class="cmt">// 写法 2：十六进制——有歧义风险！</span>
+<span class="kw">string</span> red2 = <span class="str">"\x1b[31m红色\x1b[0m"</span>;  <span class="cmt">// \x 会贪婪匹配后续十六进制数字</span>
+<span class="cmt">// "\x1b2F" → 被解析成单个字符，而非 ESC + '2' + 'F'</span></code></pre>
+
+<h3>C# 13：\e</h3>
+
+<pre><code><span class="cmt">// C# 13：简洁、安全、无歧义</span>
+<span class="kw">char</span> esc = <span class="str">'\e'</span>;                    <span class="cmt">// 等价于 (char)0x1B</span>
+<span class="kw">string</span> red = <span class="str">"\e[31m红色\e[0m"</span>;      <span class="cmt">// ANSI 红色文字</span>
+
+<span class="cmt">// 终端效果展示：</span>
+Console.WriteLine(<span class="str">"\e[1m粗体\e[0m \e[4m下划线\e[0m"</span>);
+Console.WriteLine(<span class="str">"\e[2J"</span>);  <span class="cmt">// 清屏</span></code></pre>
+
+<p class="mild">如果你不写终端应用，可能用不到。但写 CLI 工具、进度条、Spectre.Console 风格终端 UI 时——每天都会用上。</p>
+
+<!-- ========================== 2. METHOD GROUP ========================== -->
+
+<h2>二、方法组自然类型改进 <span class="en">Method Group Natural Type</span> <span class="badge badge--rare">进阶</span></h2>
+
+<h3>问题：var 推断被无关扩展方法"污染"</h3>
+
+<p>C# 10 起 <code>var f = obj.Method;</code> 可推断委托类型。但算法有 Bug——它会收集<strong>所有作用域</strong>的候选方法（包括无关扩展方法），只要有一个不匹配，全部推断失败：</p>
+
+<pre><code><span class="cmt">// 你的类：只有一个无参 M 方法</span>
+<span class="kw">public</span> <span class="kw">class</span> C {
+    <span class="kw">public</span> <span class="kw">void</span> M() { }
+}
+
+<span class="cmt">// 远处某个 using 引入的扩展方法（你根本不知道它存在）</span>
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> SomeExtensions {
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">void</span> M(<span class="kw">this</span> C c, <span class="kw">object</span> o) { }  <span class="cmt">// 参数个数不同</span>
+}
+
+<span class="cmt">// C# 12：编译错误 CS8917——扩展方法污染了候选集！</span>
+<span class="cmt">// var z = new C().M;</span>
+
+<span class="cmt">// C# 13：成功推断为 Action ✅</span>
+<span class="kw">var</span> z = <span class="kw">new</span> C().M;  <span class="cmt">// 编译器先看实例方法，匹配了就停止</span></code></pre>
+
+<h3>改进算法：逐作用域剪枝</h3>
+
+<ol>
+  <li><strong>先看实例方法</strong>——匹配了就停止，不看扩展方法</li>
+  <li><strong>再看扩展方法</strong>——按作用域从近到远，每个作用域内立即剪枝（去掉泛型参数个数不对的、约束不满足的候选）</li>
+</ol>
+
+<div class="callout callout--good">
+<strong>一句话：</strong>修复了"远处无关扩展方法干扰 var 推断"的 Bug。大多数开发者不会感知到这个改进——但过去被 CS8917 困扰过的人不会再遇到了。
+</div>
+
+<!-- ========================== 3. PARTIAL PROPERTIES ========================== -->
+
+<h2>三、partial 属性与索引器 <span class="en">Partial Properties & Indexers</span> <span class="badge badge--daily">源生成器</span></h2>
+
+<h3>问题：源生成器需要生成属性，但没有 partial 属性</h3>
+
+<p>C# 2.0 只有 <code>partial class</code> 和 <code>partial method</code>。C# 9 增强了 partial method。但<strong>属性</strong>一直是盲区。</p>
+
+<pre><code><span class="cmt">// C# 13：属性也能 partial 了</span>
+<span class="cmt">// 手写部分（声明）：</span>
+<span class="kw">public</span> <span class="kw">partial</span> <span class="kw">class</span> ViewModel {
+    <span class="kw">public</span> <span class="kw">partial</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">set</span>; }
+}
+
+<span class="cmt">// 源生成器自动产出（实现——另一个 partial 文件）：</span>
+<span class="cmt">// public partial class ViewModel {
+<span class="cmt">//     private string _name;
+<span class="cmt">//     public partial string Name {
+<span class="cmt">//         get => _name;
+<span class="cmt">//         set { _name = value; OnPropertyChanged(); }
+<span class="cmt">//     }
+<span class="cmt">// }</span>
+
+<span class="cmt">// 索引器同样支持</span>
+<span class="kw">public</span> <span class="kw">partial</span> <span class="kw">int</span> <span class="kw">this</span>[<span class="kw">int</span> index] { <span class="kw">get</span>; <span class="kw">set</span>; }</code></pre>
+
+<div class="callout callout--info">
+<strong>日常你不会手写 partial 属性——但每个 MVVM 框架、JSON 序列化源生成器、AOT 友好的 ORM</strong>都在后台生成 partial 属性的实现。这是<strong>为工具链服务的特性</strong>，间接让所有人受益。
+</div>
+
+<!-- ========================== 4. OVERLOAD RESOLUTION PRIORITY ========================== -->
+
+<h2>四、重载解析优先级 <span class="en">OverloadResolutionPriority</span> <span class="badge badge--rare">库作者</span></h2>
+
+<h3>场景：API 演进时控制重载选择</h3>
+
+<p>你是库作者。有旧 API，现在想加新版本。两个重载都匹配时——编译器挑哪个？</p>
+
+<pre><code><span class="cmt">// 旧 API（保留是为了兼容）</span>
+<span class="kw">public</span> <span class="kw">void</span> Log(<span class="kw">params</span> <span class="kw">object</span>[] args) { }
+
+<span class="cmt">// 新 API（希望编译器默认选这个）</span>
+[<span class="type">OverloadResolutionPriority</span>(<span class="num">1</span>)]  <span class="cmt">// ← 数值越大优先级越高</span>
+<span class="kw">public</span> <span class="kw">void</span> Log(<span class="kw">params</span> ReadOnlySpan&lt;<span class="kw">object</span>&gt; args) { }
+
+<span class="cmt">// 调用处：两个重载都匹配 → 编译器选优先级高的</span>
+Log(userId, operation, elapsed);  <span class="cmt">// 自动选 Span 版本 ✅</span></code></pre>
+
+<h3>规则</h3>
+
+<table>
+  <tr><th>优先级值</th><th>效果</th><th>典型场景</th></tr>
+  <tr><td>正数（如 <code>1</code>）</td><td>优先选择</td><td>新 API——性能更好、更现代</td></tr>
+  <tr><td><code>0</code> 或不加</td><td>默认</td><td>普通 API</td></tr>
+  <tr><td>负数（如 <code>-1</code>）</td><td>降低优先级</td><td>旧 API——废弃但不删除</td></tr>
+</table>
+
+<div class="callout callout--warn">
+<strong>只在编译器无法区分时生效。</strong>如果一个重载是"完全匹配"另一个需要隐式转换，正常的类型匹配规则仍然优先——这个属性只在<strong>两个重载同等适用</strong>时打破平局。
+</div>
+
+<!-- ========================== 5. IMPLICIT INDEX ACCESS ========================== -->
+
+<h2>五、^ 运算符进对象初始器 <span class="en">Implicit Index Access</span> <span class="badge badge--rare">小改进</span></h2>
+
+<p>C# 8 引入的 <code>^</code> 运算符（从末尾索引）现在可以在<strong>对象初始器</strong>中使用了：</p>
+
+<pre><code><span class="cmt">// C# 12：对象初始器中不能写 ^ → 必须手动算 Length - N</span>
+<span class="kw">var</span> arr = <span class="kw">new</span> BufferHolder {
+    buffer = { [<span class="num">7</span>] = <span class="num">1</span>, [<span class="num">8</span>] = <span class="num">2</span>, [<span class="num">9</span>] = <span class="num">3</span> }  <span class="cmt">// 先得知道 Length = 10</span>
+};
+
+<span class="cmt">// C# 13：直接用 ^ 表述"从末尾"——意图一目了然</span>
+<span class="kw">var</span> arr = <span class="kw">new</span> BufferHolder {
+    buffer = { [^<span class="num">1</span>] = <span class="num">3</span>, [^<span class="num">2</span>] = <span class="num">2</span>, [^<span class="num">3</span>] = <span class="num">1</span> }
+};</code></pre>
+
+<!-- ========================== 6. FIELD KEYWORD ========================== -->
+
+<h2>六、field 关键字 <span class="en">Preview</span> <span class="badge badge--preview">预览</span></h2>
+
+<p>C# 13 以<strong>预览特性</strong>引入 <code>field</code> 关键字——在自动属性中直接引用编译器生成的后备字段，无需手动声明：</p>
+
+<div class="comparison">
+  <div class="old"><h4>😣 以前——手动声明后备字段</h4>
+<pre><code><span class="kw">private</span> <span class="kw">string</span> _name;
+<span class="kw">public</span> <span class="kw">string</span> Name {
+    <span class="kw">get</span> => _name;
+    <span class="kw">set</span> => _name = <span class="kw">value</span>?.Trim()
+        ?? <span class="kw">throw</span> <span class="kw">new</span> ArgumentNullException();
+}</code></pre>
+  </div>
+  <div class="new"><h4>😎 field 关键字——告别样板</h4>
+<pre><code><span class="kw">public</span> <span class="kw">string</span> Name {
+    <span class="kw">get</span> => <span class="kw">field</span>;
+    <span class="kw">set</span> => <span class="kw">field</span> = <span class="kw">value</span>?.Trim()
+        ?? <span class="kw">throw</span> <span class="kw">new</span> ArgumentNullException();
+}</code></pre>
+  </div>
+</div>
+
+<div class="callout callout--warn">
+<strong>⚠️ 预览特性：</strong>需要在 .csproj 中设置 <code>&lt;LangVersion&gt;preview&lt;/LangVersion&gt;</code> 并添加 <code>&lt;Features&gt;field&lt;/Features&gt;</code>。API 和语法在最终发布前可能变动。预计在 C# 14（.NET 10）中正式发布。
+</div>
+
+<!-- ========================== QUIZ ========================== -->
+
+<h2>七、小测验</h2>
+
+<div class="quiz" id="q1">
+<div class="question">1/4 · \e 转义——C# 13 引入它的主要原因是什么？</div>
+<label><input type="radio" name="q1" value="0">A.  太短了，需要更长的写法</label>
+<label><input type="radio" name="q1" value="1">B. \x1b 可能贪婪匹配后续十六进制数字，产生歧义</label>
+<label><input type="radio" name="q1" value="2">C. ESC 字符之前完全无法在 C# 中表示</label>
+<label><input type="radio" name="q1" value="3">D. 为了和其他语言（如 Rust）保持一致</label>
+<div class="feedback" id="fb1"></div>
+</div>
+
+<div class="quiz" id="q2">
+<div class="question">2/4 · 方法组自然类型——C# 13 的改进核心是什么？</div>
+<label><input type="radio" name="q2" value="0">A. 方法组现在可以赋值给 object 类型</label>
+<label><input type="radio" name="q2" value="1">B. 逐作用域剪枝——先看实例方法，匹配了就停止搜索</label>
+<label><input type="radio" name="q2" value="2">C. 任何方法组都能自动推断为通用的 Func 委托</label>
+<label><input type="radio" name="q2" value="3">D. 扩展方法优先级永远高于实例方法</label>
+<div class="feedback" id="fb2"></div>
+</div>
+
+<div class="quiz" id="q3">
+<div class="question">3/4 · partial 属性——它主要为谁服务？</div>
+<label><input type="radio" name="q3" value="0">A. Web 前端开发者</label>
+<label><input type="radio" name="q3" value="1">B. 源生成器和框架作者</label>
+<label><input type="radio" name="q3" value="2">C. 数据库管理员</label>
+<label><input type="radio" name="q3" value="3">D. UI 设计师</label>
+<div class="feedback" id="fb3"></div>
+</div>
+
+<div class="quiz" id="q4">
+<div class="question">4/4 · OverloadResolutionPriority——以下哪项描述<strong>错误</strong>？</div>
+<label><input type="radio" name="q4" value="0">A. 正数 → 优先选择；负数 → 降低优先级</label>
+<label><input type="radio" name="q4" value="1">B. 只在编译器无法通过类型匹配区分重载时才生效</label>
+<label><input type="radio" name="q4" value="2">C. 可以用于废弃旧 API——给 -1 让它靠后</label>
+<label><input type="radio" name="q4" value="3">D. 数值越高总是优先，即使另一重载是类型完美匹配</label>
+<div class="feedback" id="fb4"></div>
+
+<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
+<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+</div>
+
+<script>
+const answers = { q1: 1, q2: 1, q3: 1, q4: 3 };
+const explanations = {
+  q1: { correct: "✅ 正确！\\x 十六进制转义会贪婪匹配尽可能多的十六进制数字——\\x1b2F 被解析成单个字符而非 ESC+'2'+'F'。\\e 完全避免了这个问题。", wrong: "❌ 不是。B 是正确答案——\\x1b 有歧义风险（贪婪匹配后续十六进制数字）。\\e 既简洁又安全。" },
+  q2: { correct: "✅ 正确！C# 13 的核心改进是逐作用域剪枝——先看实例方法，匹配了就停止，不再被远处无关扩展方法干扰。", wrong: "❌ 不是。B 是正确答案。A 不对（方法组不能赋值给 object），C 扩大范围了，D 完全反了。" },
+  q3: { correct: "✅ 正确！partial 属性主要为源生成器和框架作者服务——MVVM 框架、JSON 序列化、ORM 等在后台生成属性实现。", wrong: "❌ 不是。B 是正确答案——partial 属性是工具链向特性，为源生成器和框架服务，间接让所有开发者受益。" },
+  q4: { correct: "✅ 正确！D 是错的。即使有 OverloadResolutionPriority，正常的类型匹配规则仍然优先。这个属性只在两个重载同等适用时才打破平局——不会覆盖类型完美匹配。", wrong: "❌ 不是。D 是错误描述——OverloadResolutionPriority 不会覆盖正常的类型匹配规则。它只在编译器无法通过类型匹配区分时才生效。A/B/C 都是正确的。" },
+};
+function checkAll() {
+  let correct = 0;
+  for (let qid of ['q1','q2','q3','q4']) {
+    const selected = document.querySelector(`input[name="${qid}"]:checked`);
+    const fb = document.getElementById('fb' + qid.slice(1));
+    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
+    if (parseInt(selected.value) === answers[qid]) {
+      fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++;
+    } else {
+      fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show';
+    }
+  }
+  const scoreEl = document.getElementById('score');
+  scoreEl.style.display = 'block';
+  scoreEl.textContent = `得分：${correct} / 4`;
+  scoreEl.style.color = correct === 4 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
+}
+</script>
+
+<!-- ========================== C# 13 全部特性总结 ========================== -->
+
+<h2>八、C# 13 全部特性总结</h2>
+
+<table>
+  <tr><th>特性</th><th>一句话</th><th>影响面</th><th>课程</th></tr>
+  <tr><td>params 集合</td><td>params 支持 ReadOnlySpan → 零分配</td><td>⭐⭐⭐⭐⭐</td><td><a href="18-csharp13-params-lock.html">L18</a></td></tr>
+  <tr><td>新 Lock 对象</td><td>object → Lock，更快更安全</td><td>⭐⭐⭐⭐</td><td><a href="18-csharp13-params-lock.html">L18</a></td></tr>
+  <tr><td>ref struct 实现接口</td><td>Span 可参与泛型抽象</td><td>⭐⭐⭐⭐</td><td><a href="19-csharp13-ref-struct-trilogy.html">L19</a></td></tr>
+  <tr><td>allows ref struct</td><td>泛型反约束——放行 ref struct</td><td>⭐⭐⭐</td><td><a href="19-csharp13-ref-struct-trilogy.html">L19</a></td></tr>
+  <tr><td>ref/unsafe 进 async</td><td>Span 可在 await 前使用</td><td>⭐⭐⭐</td><td><a href="19-csharp13-ref-struct-trilogy.html">L19</a></td></tr>
+  <tr><td>\e 转义</td><td>ESC 字符的简洁安全写法</td><td>⭐⭐</td><td>本课</td></tr>
+  <tr><td>方法组自然类型改进</td><td>var 推断不再被扩展方法污染</td><td>⭐⭐</td><td>本课</td></tr>
+  <tr><td>partial 属性</td><td>源生成器能生成属性了</td><td>⭐⭐⭐</td><td>本课</td></tr>
+  <tr><td>重载解析优先级</td><td>库作者控制重载选择</td><td>⭐</td><td>本课</td></tr>
+  <tr><td>^ 入对象初始器</td><td>[^1] 初始化末尾元素</td><td>⭐</td><td>本课</td></tr>
+  <tr><td>field 关键字</td><td>直接访问自动属性的后备字段</td><td>预览</td><td>本课</td></tr>
+</table>
+
+<h2>九、下一步</h2>
+
+<ul>
+  <li><strong>C# 8~13 全部覆盖完毕 🎉</strong>——从 Lesson 1 到这里共 20 课，覆盖了 C# 8 到 C# 13 的全部特性。</li>
+  <li><strong>下一阶段：</strong>C# 14（.NET 10，2025.11）——<code>field</code> 正式版、<code>nameof</code> 支持泛型、<code>params</code> 更多类型等。</li>
+  <li><strong>实践建议：</strong>建议做一次 C# 8~13 的综合性复习——可以是一个小项目、也可以是一次代码审查（打开旧项目，看哪些地方能现代化）。</li>
+</ul>
+
+<div class="callout callout--info" style="margin-top:2rem;">
+<strong>💬 有问题？</strong>\e 在非终端场景的替代方案？partial 属性和源生成器的实际开发流程？随时问。
+</div>
+
+</body>
+</html>

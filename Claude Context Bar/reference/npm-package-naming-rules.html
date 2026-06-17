@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参考：npm 包命名规则</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.7; color: #1a1a2e; background: #fafaf8; max-width: 780px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+  h1 { font-size: 1.6rem; font-weight: 600; margin-bottom: .5rem; }
+  h2 { font-size: 1.15rem; font-weight: 600; margin: 2rem 0 .5rem; padding-top: 1.2rem; border-top: 1px solid #e0e0d8; }
+  h3 { font-size: 1rem; font-weight: 600; margin: 1.2rem 0 .4rem; }
+  code { font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: .88em; background: #f0f0ea; padding: .1em .35em; border-radius: 3px; }
+  pre { font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: .82rem; background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.2rem; border-radius: 8px; overflow-x: auto; margin: .8rem 0 1.2rem; line-height: 1.55; }
+  pre .kw { color: #cba6f7; }
+  pre .str { color: #a6e3a1; }
+  pre .cmt { color: #6c7086; font-style: italic; }
+  table { width: 100%; border-collapse: collapse; margin: .8rem 0 1.2rem; font-size: .88rem; }
+  th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #e0e0d8; }
+  th { font-weight: 600; color: #555; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
+  td:first-child { font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: .82rem; }
+  a { color: #2563eb; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .nav { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid #e0e0d8; font-size: .85rem; color: #888; }
+  .verdict { display: inline-block; padding: .1em .5em; border-radius: 3px; font-size: .78rem; font-weight: 600; }
+  .v-good { background: #d1fae5; color: #065f46; }
+  .v-bad { background: #fee2e2; color: #991b1b; }
+  .v-conv { background: #dbeafe; color: #1e40af; }
+  blockquote { border-left: 3px solid #2563eb; padding: .5rem 0 .5rem 1.2rem; margin: 1rem 0; color: #555; font-size: .92rem; }
+</style>
+</head>
+<body>
+
+<h1>npm 包命名规则 — 速查手册</h1>
+
+<p style="color:#888; font-size:.9rem;">本参考补充 <a href="../lessons/0001-extension-anatomy.html">Lesson 0001</a> 中关于 npm 包名的简要提及。VS Code 扩展也是 npm 包——发布扩展前必须遵守这些规则。</p>
+
+<h2>核心结论</h2>
+
+<blockquote>
+  <strong>"全小写"是强制规则</strong>——npm registry 拒绝含大写字母的新包。<br>
+  <strong>"短横线分隔"是社区约定</strong>——下划线 <code>_</code> 和点 <code>.</code> 在包名内部也合法。
+</blockquote>
+
+<h2>强制规则（npm registry 硬约束）</h2>
+
+<table>
+  <tr><th>规则</th><th>详情</th></tr>
+  <tr><td>全部小写</td><td>不允许任何大写字母（<code>A-Z</code>）</td></tr>
+  <tr><td>最大 214 字符</td><td>含 scope 前缀（<code>@scope/</code> 计入长度）</td></tr>
+  <tr><td>不能以 <code>.</code> 或 <code>_</code> 开头</td><td>例外：scoped 包允许（<code>@scope/_name</code>）</td></tr>
+  <tr><td>不能有空格</td><td>任何位置都不允许</td></tr>
+  <tr><td>只能用 URL 安全字符</td><td><code>~'!*()</code> 等特殊字符被禁止</td></tr>
+  <tr><td>不能用 Node.js 核心模块名</td><td><code>http</code>、<code>stream</code>、<code>fs</code> 等保留名称</td></tr>
+</table>
+
+<h2>合法性与示例</h2>
+
+<table>
+  <tr><th>包名</th><th>新包可用？</th><th>旧包可用？</th><th>原因</th></tr>
+  <tr><td><code>claude-context-bar</code></td><td>✅</td><td>✅</td><td>完全合规</td></tr>
+  <tr><td><code>under_score</code></td><td>✅</td><td>✅</td><td>下划线不在开头，合法</td></tr>
+  <tr><td><code>example.com</code></td><td>✅</td><td>✅</td><td>点不在开头，合法</td></tr>
+  <tr><td><code>@scope/_hidden</code></td><td>✅</td><td>✅</td><td>Scoped 包可 _ 开头</td></tr>
+  <tr><td><code>MyPackage</code></td><td>❌</td><td>✅</td><td>大写字母——新包禁止</td></tr>
+  <tr><td><code>_private_lib</code></td><td>❌</td><td>✅</td><td>非 scoped 包不能 _ 开头</td></tr>
+  <tr><td><code>.hidden-pkg</code></td><td>❌</td><td>✅</td><td>非 scoped 包不能 . 开头</td></tr>
+  <tr><td><code>my package</code></td><td>❌</td><td>❌</td><td>空格在任何情况下非法</td></tr>
+</table>
+
+<h2>为什么社区压倒性选择短横线？</h2>
+
+<p><strong>短横线 <code>-</code> 不能出现在 JavaScript 标识符中</strong>（它是减号运算符）。因此 npm 包名 <code>my-package</code> 和 JS 变量名 <code>myPackage</code> 永不冲突——天然命名空间分离。</p>
+
+<p>如果包名叫 <code>under_score</code>，用户会困惑于 JS 中是写 <code>under_score</code> 还是 <code>underScore</code>。短横线消除了这种歧义。</p>
+
+<h2>VS Code 扩展的特殊性</h2>
+
+<p>VS Code 扩展发布时，<strong>publisher + name</strong> 共同构成唯一标识：</p>
+
+<pre><span class="str">"publisher"</span>: <span class="str">"ezoosk"</span>
+<span class="str">"name"</span>: <span class="str">"claude-context-bar"</span>
+
+<span class="cmt">// Marketplace 上的唯一 ID：ezoosk.claude-context-bar</span></pre>
+
+<p>包名会同时出现在 npm registry 和 VS Code Marketplace 两条路径中。短横线命名在两个生态中都无摩擦。</p>
+
+<h2>校验工具</h2>
+
+<p>npm 使用 <a href="https://www.npmjs.com/package/validate-npm-package-name"><code>validate-npm-package-name</code></a> 校验所有包名。返回两个关键字段：</p>
+
+<table>
+  <tr><th>字段</th><th>含义</th></tr>
+  <tr><td><code>validForNewPackages</code></td><td>你今天能发布这个名称吗？</td></tr>
+  <tr><td><code>validForOldPackages</code></td><td>历史上是否曾经被允许？（遗留包可能还在用）</td></tr>
+</table>
+
+<div class="nav">
+  <a href="../lessons/0001-extension-anatomy.html">← 返回 Lesson 0001</a>
+  <span style="margin:0 .5rem;">|</span>
+  <a href="vscode-extension-api-basics.html">VS Code 扩展 API 基础</a>
+</div>
+
+</body>
+</html>

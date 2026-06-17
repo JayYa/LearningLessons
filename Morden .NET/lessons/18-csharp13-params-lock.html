@@ -184,6 +184,25 @@ Print(span);
 <strong>关键事实：</strong>缓冲区在<strong>栈上</strong>（ref struct 不能逃逸到堆），Span 指向栈内存。方法返回后缓冲区自动消失——零 GC。编译器还在同一方法内<strong>复用缓冲区</strong>，多次调用只需一块栈空间。
 </div>
 
+<h4>🔍 深入：编译器怎么知道"参数数量最大值"？</h4>
+
+<p>答案是<strong>编译时静态分析</strong>——编译器扫描<strong>调用方方法</strong>内所有的 <code>Print(...)</code> 调用点，逐个数字面量参数个数，取最大值。纯编译时行为，零运行时开销。</p>
+
+<pre><code><span class="cmt">// 编译器看到 MyMethod 里有 3 个 Print 调用点：</span>
+<span class="kw">void</span> MyMethod()
+{
+    Print(<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>);          <span class="cmt">// ← 3 个参数</span>
+    Print(<span class="num">4</span>, <span class="num">5</span>, <span class="num">6</span>, <span class="num">7</span>, <span class="num">8</span>);    <span class="cmt">// ← 5 个参数 → max = 5</span>
+    Print(<span class="num">9</span>);                <span class="cmt">// ← 1 个参数</span>
+}
+<span class="cmt">// 编译器：max = 5 → 在 MyMethod 栈帧上分配大小为 5 的缓冲区
+// 三次调用复用同一块栈空间，不是每次调用都分配新的</span></code></pre>
+
+<div class="callout callout--info">
+<strong>关键限制：</strong>这个优化是<strong>调用方方法级别</strong>的，不是跨方法的。每个调用方各自扫描自己的调用点，各自在各自的栈帧里分配，互不影响、也不共享。<br><br>
+<strong>为什么不用最大可能值？</strong>编译器不需要——所有调用点在编译时都已知。如果某次调用需要更多参数，那个调用点本身就可见，max 自然变大。不存在"运行时突然冒出一个新调用点"的情况。
+</div>
+
 <h3>1.4 支持的类型完整列表</h3>
 
 <table>
@@ -398,6 +417,44 @@ Lock _sync = ...;
 
 <div class="callout callout--warn">
 <strong>Monitor.Wait / Pulse / PulseAll：</strong>这是 Lock 唯一没覆盖的功能。如果你在用这些方法做线程信号——<strong>暂时保留旧的 lock(object)</strong>。Lock 目前只替代 Monitor.Enter/Exit，不替代信号机制。新代码优先用 <code>ManualResetEventSlim</code> 或 <code>Channel&lt;T&gt;</code> 替代 Wait/Pulse 模式。
+</div>
+
+<h4>🔍 补充：SemaphoreSlim 是什么？</h4>
+
+<p><code>SemaphoreSlim</code> 是 .NET 中的<strong>轻量级异步信号量</strong>——一个计数器，允许多个线程/任务同时进入关键区。和 Lock 的关键区别：<strong>支持 <code>await</code></strong>。</p>
+
+<div class="comparison">
+  <div class="old"><h4>🔒 Lock（线程亲和）</h4>
+<pre><code><span class="kw">private</span> <span class="kw">readonly</span> Lock _sync = <span class="kw">new</span>();
+
+<span class="cmt">// ❌ 不能 await——编译错误</span>
+<span class="kw">lock</span> (_sync) {
+    <span class="kw">await</span> db.SaveAsync(); <span class="cmt">// 不允许</span>
+}</code></pre>
+  </div>
+  <div class="new"><h4>🚦 SemaphoreSlim（异步安全）</h4>
+<pre><code><span class="kw">private</span> <span class="kw">readonly</span> SemaphoreSlim _sem = <span class="kw">new</span>(<span class="num">1</span>, <span class="num">1</span>); <span class="cmt">// 初始1, 最大1 = 互斥</span>
+
+<span class="cmt">// ✅ 可以 await</span>
+<span class="kw">await</span> _sem.WaitAsync();
+<span class="kw">try</span> {
+    <span class="kw">await</span> db.SaveAsync();
+} <span class="kw">finally</span> {
+    _sem.Release();  <span class="cmt">// ⚠️ 必须手动释放！</span>
+}</code></pre>
+  </div>
+</div>
+
+<table>
+  <tr><th></th><th><code>Lock</code> / <code>lock</code></th><th><code>SemaphoreSlim</code></th></tr>
+  <tr><td>同时进入数</td><td>1（互斥）</td><td>可配 1 ~ N</td></tr>
+  <tr><td>支持 async</td><td>❌</td><td>✅ <code>WaitAsync()</code></td></tr>
+  <tr><td>释放方式</td><td>离开 lock 块自动释放</td><td>必须手动 <code>Release()</code></td></tr>
+  <tr><td>典型场景</td><td>同步互斥（热路径首选）</td><td>异步互斥 · 限制并发数</td></tr>
+</table>
+
+<div class="callout callout--info">
+<strong>用法速记：</strong>异步互斥 → <code>new SemaphoreSlim(1, 1)</code> + <code>WaitAsync()</code> + <code>try/finally Release()</code>；限制并发 → <code>new SemaphoreSlim(5)</code>（最多 5 个同时发 HTTP 请求等）。<code>Release()</code> <strong>不会自动调用</strong>——出了作用域不释放，不像 <code>lock</code> 用 <code>using</code> 就能自动清理，所以 <code>try/finally</code> 是标配。
 </div>
 
 <!-- ========================== 3. QUIZ ========================== -->

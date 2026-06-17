@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 19: C# 13 — ref struct 三部曲</title>
+<style>
+  :root {
+    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
+    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
+    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
+  p { margin: 0.75rem 0; color: #333; }
+  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
+  .en::before { content: ' ('; } .en::after { content: ')'; }
+  .callout { padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem; }
+  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
+  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
+  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
+  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
+  .comparison {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
+  .comparison > div {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.25rem;
+  }
+  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+  .comparison > div.old h4 { color: var(--bad); }
+  .comparison > div.new h4 { color: var(--good); }
+  table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border);
+  }
+  th { background: var(--code-bg); font-weight: 600; }
+  pre {
+    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
+    border-radius: var(--radius); overflow-x: auto;
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
+  }
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.88em; background: var(--code-bg);
+    padding: 0.15em 0.35em; border-radius: 4px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
+  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
+  .quiz {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+  }
+  .quiz h3 { margin-top: 0; }
+  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
+  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
+  .quiz label:hover { background: var(--code-bg); }
+  .quiz input[type="radio"] { margin-right: 0.5rem; }
+  .quiz button {
+    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
+    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
+  }
+  .quiz button:hover { opacity: 0.9; }
+  .feedback {
+    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--good-bg); color: var(--good); }
+  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
+  li { margin: 0.3rem 0; }
+  .mild { font-size: 0.9rem; color: var(--text-muted); }
+  .badge { display: inline-block; padding: 0.15em 0.55em; border-radius: 100px; font-size: 0.78rem; font-weight: 600; }
+  .badge--core { background: #ede4ff; color: #512bd4; }
+  .badge--daily { background: #dafbe1; color: #1a7f37; }
+  .badge--perf  { background: #eef1ff; color: #512bd4; }
+</style>
+</head>
+<body>
+
+<h1>Lesson 19: C# 13 — ref struct 三部曲</h1>
+<p class="subtitle">.NET 9（2024.11）· 实现接口 · allows ref struct · 进入 async 方法</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="18-csharp13-params-lock.html">Lesson 18（params + Lock）</a> 和 <a href="16-csharp12-ref-readonly-inline-arrays.html">Lesson 16（ref struct）</a>。本课三个特性围绕同一个主题：<strong>ref struct 的可用性大幅提升</strong>。<br>
+<strong>阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/whats-new/csharp-13">Microsoft Learn: C# 13 新增功能</a> ·
+<a href="https://blog.ndepend.com/c-13-ref-struct-interfaces-and-the-allows-ref-struct-generic-anti-constraint/">NDepend: ref struct interfaces</a> ·
+<a href="https://dev.to/cristiansifuentes/ref-and-unsafe-in-async-and-iterator-methods-unlocking-span-in-c-13-5eoc">dev.to: ref in async</a>
+</div>
+
+<h2>背景：ref struct 的三个历史限制</h2>
+
+<p>C# 7.2 引入 <code>ref struct</code> 以来（<a href="16-csharp12-ref-readonly-inline-arrays.html">回顾 L16</a>），三个困扰开发者的问题始终存在：</p>
+
+<ol>
+  <li><strong>不能实现接口</strong>——<code>Span&lt;T&gt;</code> 无法参与 <code>IEnumerable&lt;T&gt;</code>、<code>IDisposable</code> 等泛型抽象</li>
+  <li><strong>不能作为泛型参数</strong>——泛型天然拒绝 ref struct</li>
+  <li><strong>不能出现在 async / 迭代器方法中</strong>——哪怕不跨越 await/yield 边界也不行</li>
+</ol>
+
+<p>C# 13 一次性解决了这三个问题。三个特性共享同一个设计动机：<strong>让 ref struct 不再是一等公民之外的二等类型</strong>。</p>
+
+<!-- ========================== 1. REF STRUCT IMPLEMENTS INTERFACES ========================== -->
+
+<h2>一、ref struct 实现接口 <span class="en">ref struct Interfaces</span> <span class="badge badge--core">核心</span></h2>
+
+<h3>1.1 痛点：Span&lt;T&gt; 进不了泛型方法</h3>
+
+<pre><code><span class="cmt">// C# 12：同样的逻辑要写三份重载——只因为 Span 不实现接口</span>
+<span class="kw">void</span> Process(<span class="kw">int</span>[] data)      => ProcessCore(data);
+<span class="kw">void</span> Process(List&lt;<span class="kw">int</span>&gt; data)  => ProcessCore(data);
+<span class="kw">void</span> Process(Span&lt;<span class="kw">int</span>&gt; data)  => ProcessCore(data);  <span class="cmt">// 重载 × 3</span>
+
+<span class="cmt">// 理想：对实现了 IEnumerable&lt;int&gt; 的类型只写一份
+// 现实：Span&lt;int&gt; 不实现任何接口 → 做不到</span></code></pre>
+
+<h3>1.2 C# 13：ref struct 可以声明接口继承</h3>
+
+<pre><code><span class="cmt">// 自定义 ref struct 实现 IDisposable</span>
+<span class="kw">ref</span> <span class="kw">struct</span> Buffer : <span class="type">IDisposable</span> {
+    <span class="kw">public</span> Span&lt;<span class="kw">byte</span>&gt; Data;
+    <span class="kw">public</span> <span class="kw">void</span> Dispose() => Data.Clear();
+}
+
+<span class="cmt">// 可以用 using 语句了！</span>
+<span class="kw">using</span> (<span class="kw">var</span> buf = <span class="kw">new</span> Buffer { Data = stackalloc <span class="kw">byte</span>[<span class="num">32</span>] }) {
+    <span class="cmt">// ... 使用 buf ...  </span>
+}  <span class="cmt">// 自动调用 Dispose()——零分配</span>
+
+<span class="cmt">// .NET 9 BCL：Span&lt;T&gt; / ReadOnlySpan&lt;T&gt; 已实现 IEnumerable&lt;T&gt; 等接口</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>两个硬限制：</strong><br>
+① <strong>不能装箱</strong>——<code>IDisposable d = myRefStruct;</code> 编译错误（装箱会让 ref struct 逃逸到堆）<br>
+② <strong>必须实现所有接口成员</strong>——不能依赖默认接口方法（DIM 的 <code>this</code> 调用会触发装箱）
+</div>
+
+<h3>1.3 真正用法：配合泛型约束</h3>
+
+<pre><code><span class="cmt">// 泛型方法——通过约束来消费接口</span>
+<span class="kw">void</span> UseBuffer&lt;T&gt;(T buffer) <span class="kw">where</span> T : <span class="kw">IDisposable</span> {
+    <span class="kw">using</span> (buffer) { <span class="cmt">/* ... */</span> }
+}
+
+Buffer buf = <span class="kw">new</span>();   <span class="cmt">// ref struct</span>
+UseBuffer(buf);        <span class="cmt">// ✅ C# 13——泛型在调用点被特化，不装箱</span></code></pre>
+
+<p class="mild">你很少需要自己写 ref struct 实现接口。但整个 BCL 已经为 Span 做了这件事——你直接受益。</p>
+
+<!-- ========================== 2. ALLOWS REF STRUCT ========================== -->
+
+<h2>二、allows ref struct 反约束 <span class="en">Generic Anti-Constraint</span> <span class="badge badge--core">核心</span></h2>
+
+<h3>2.1 问题：泛型默认拒绝 ref struct</h3>
+
+<p>即使 ref struct 实现了接口，泛型参数仍然不接受它——因为编译器要确保 T 可以装箱/堆分配：</p>
+
+<pre><code><span class="cmt">// C# 12：即使 Span 实现了 IEnumerable&lt;int&gt;，这里还是传不进去</span>
+<span class="kw">void</span> ForEach&lt;T&gt;(T collection) <span class="kw">where</span> T : IEnumerable&lt;<span class="kw">int</span>&gt; { ... }
+
+ForEach(<span class="kw">new</span>[] { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span> });    <span class="cmt">// ✅ int[]</span>
+ForEach(<span class="kw">new</span> List&lt;<span class="kw">int</span>&gt; { <span class="num">1</span>, <span class="num">2</span> }); <span class="cmt">// ✅ List&lt;int&gt;</span>
+<span class="cmt">// ForEach((ReadOnlySpan&lt;int&gt;)(...)); // ❌ Span 不能作为 T</span></code></pre>
+
+<h3>2.2 C# 首个"反约束"</h3>
+
+<p><code>allows ref struct</code> 不是限制 T <strong>必须是</strong>什么，而是<strong>额外允许</strong> T 是 ref struct——这是 C# 历史上第一个"反约束"：</p>
+
+<pre><code><span class="cmt">// 加一行 allows ref struct</span>
+<span class="kw">void</span> ForEach&lt;T&gt;(T collection)
+    <span class="kw">where</span> T : IEnumerable&lt;<span class="kw">int</span>&gt;
+    <span class="kw">where</span> T : <span class="kw">allows</span> <span class="kw">ref</span> <span class="kw">struct</span>      <span class="cmt">// ← 反约束：扩张——放行 ref struct</span>
+{
+    <span class="kw">foreach</span> (<span class="kw">var</span> item <span class="kw">in</span> collection)
+        Console.WriteLine(item);
+}
+
+<span class="cmt">// 全都可以传！</span>
+ForEach(<span class="kw">new</span>[] { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span> });
+ForEach(<span class="kw">new</span> List&lt;<span class="kw">int</span>&gt; { <span class="num">1</span>, <span class="num">2</span> });
+ForEach((ReadOnlySpan&lt;<span class="kw">int</span>&gt;)stackalloc <span class="kw">int</span>[] { <span class="num">1</span>, <span class="num">2</span> });  <span class="cmt">// ✅ C# 13</span></code></pre>
+
+<div class="callout callout--good">
+<strong>理解"反约束"：</strong>普通约束（<code>where T : class</code>）是收缩——只允许某类类型。反约束（<code>allows ref struct</code>）是<strong>扩张</strong>——在原有约束基础上多放行一种类型。两者可以叠加：<code>where T : IEnumerable&lt;int&gt;, allows ref struct</code>。
+</div>
+
+<h3>2.3 编译器行为</h3>
+
+<p>标记了 <code>allows ref struct</code> 的泛型方法，编译器在调用点对 ref struct 做<strong>特化</strong>（specialization）——不装箱、不逃逸。和其他类型走同一套泛型代码路径，但 IL 层面有专门处理。</p>
+
+<pre><code><span class="cmt">// 反约束与普通约束可以组合</span>
+<span class="kw">void</span> Work&lt;T&gt;(T item)
+    <span class="kw">where</span> T : <span class="kw">struct</span>               <span class="cmt">// 必须是值类型</span>
+    <span class="kw">where</span> T : <span class="kw">allows</span> <span class="kw">ref</span> <span class="kw">struct</span>      <span class="cmt">// 额外放行 ref struct</span>
+{ }
+
+<span class="cmt">// 常见组合：</span>
+<span class="cmt">// where T : IDisposable, allows ref struct</span>
+<span class="cmt">// where T : IEnumerable&lt;TElement&gt;, allows ref struct</span></code></pre>
+
+<!-- ========================== 3. REF/UNSAFE IN ASYNC ========================== -->
+
+<h2>三、ref / unsafe 进 async 和迭代器 <span class="en">ref in async & iterators</span> <span class="badge badge--perf">性能</span></h2>
+
+<h3>3.1 过去的限制：全有或全无</h3>
+
+<p>C# 12：async 方法和迭代器（<code>yield return</code>）中<strong>完全禁止</strong>使用 ref 局部变量和 unsafe 块。哪怕你在 await 之前用完就扔了也不行。</p>
+
+<pre><code><span class="cmt">// C# 12：编译错误 CS8344</span>
+<span class="kw">async</span> Task&lt;<span class="kw">int</span>&gt; ReadHeaderAsync(Stream stream) {
+    Span&lt;<span class="kw">byte</span>&gt; buffer = stackalloc <span class="kw">byte</span>[<span class="num">16</span>];  <span class="cmt">// ❌ async 方法不能有 ref struct</span>
+    <span class="kw">await</span> stream.ReadAsync(buffer);
+    <span class="kw">return</span> BitConverter.ToInt32(buffer);
+}</code></pre>
+
+<p>这是最令人沮丧的限制之一：你<strong>知道</strong> buffer 不跨越 await——你只是想在读 I/O 之前临时用一下栈上的 buffer——但编译器不让你这么做。</p>
+
+<h3>3.2 C# 13：有条件放行</h3>
+
+<p>规则很简单——ref 变量<strong>不能跨越 await / yield 边界</strong>。在边界之前声明和使用 = 完全合法：</p>
+
+<div class="comparison">
+  <div class="old"><h4>😣 C# 12 — 完全禁止</h4>
+<pre><code><span class="kw">async</span> Task&lt;<span class="kw">int</span>&gt; ReadAsync(Stream s) {
+    Span&lt;<span class="kw">byte</span>&gt; buf = stackalloc <span class="kw">byte</span>[<span class="num">16</span>];
+    <span class="cmt">// ❌ CS8344</span>
+}</code></pre>
+  </div>
+  <div class="new"><h4>😎 C# 13 — await 之前可用</h4>
+<pre><code><span class="kw">async</span> Task&lt;<span class="kw">int</span>&gt; ReadAsync(Stream s) {
+    Span&lt;<span class="kw">byte</span>&gt; buf = stackalloc <span class="kw">byte</span>[<span class="num">16</span>];
+    <span class="kw">await</span> s.ReadAsync(buf);   <span class="cmt">// ✅</span>
+    <span class="kw">var</span> r = BitConverter.ToInt32(buf);
+    <span class="cmt">// buf 用完即弃——安全</span>
+    <span class="kw">return</span> r;
+}</code></pre>
+  </div>
+</div>
+
+<pre><code><span class="cmt">// ❌ 但仍然不能跨越 await——编译器会在 await 后将 ref 变量标记为"未赋值"</span>
+<span class="kw">async</span> Task Bad(Stream s) {
+    Span&lt;<span class="kw">byte</span>&gt; buf = stackalloc <span class="kw">byte</span>[<span class="num">16</span>];
+    <span class="kw">await</span> Task.Delay(<span class="num">1</span>);
+    Console.WriteLine(buf[<span class="num">0</span>]);  <span class="cmt">// ❌ CS4015: ref local 在 await 后已失效</span>
+}</code></pre>
+
+<h3>3.3 规则速查</h3>
+
+<table>
+  <tr><th>场景</th><th>允许</th><th>不允许</th></tr>
+  <tr><td><code>Span&lt;T&gt;</code> 在 await 之前</td><td>✅</td><td></td></tr>
+  <tr><td><code>Span&lt;T&gt;</code> 跨越 await</td><td></td><td>❌ 编译器视为已失效</td></tr>
+  <tr><td><code>unsafe { }</code> 含 await</td><td></td><td>❌ await 不能在 unsafe 中</td></tr>
+  <tr><td><code>unsafe { }</code> 在迭代器中</td><td>✅（不含 yield 的部分）</td><td>❌ yield return 不能在 unsafe 中</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>实用价值：</strong>网络/文件 I/O 场景非常普遍——读 header、解析协议帧、验证签名。模式是"await 之前用 Span 做高性能同步解析，await 之后交给堆对象"。C# 13 之前你必须用 <code>byte[]</code>（堆分配），现在可以用 <code>stackalloc</code>（零分配）。核心思想：<strong>裸金属部分用 Span，跨越 await 时用堆对象。</strong>
+</div>
+
+<!-- ========================== QUIZ ========================== -->
+
+<h2>四、小测验</h2>
+
+<div class="quiz" id="q1">
+<div class="question">1/4 · ref struct 实现 IDisposable 后，以下哪项<strong>不能</strong>做？</div>
+<label><input type="radio" name="q1" value="0">A. 在 using 语句中使用</label>
+<label><input type="radio" name="q1" value="1">B. 作为 T 传给 where T : IDisposable 的泛型方法</label>
+<label><input type="radio" name="q1" value="2">C. 赋值给 IDisposable 类型的变量</label>
+<label><input type="radio" name="q1" value="3">D. 在 Dispose() 中清理非托管资源</label>
+<div class="feedback" id="fb1"></div>
+</div>
+
+<div class="quiz" id="q2">
+<div class="question">2/4 · allows ref struct——哪项描述最准确？</div>
+<label><input type="radio" name="q2" value="0">A. 限制 T 必须是 ref struct</label>
+<label><input type="radio" name="q2" value="1">B. 在已有约束基础上额外允许 T 是 ref struct</label>
+<label><input type="radio" name="q2" value="2">C. 替代 where T : struct 约束</label>
+<label><input type="radio" name="q2" value="3">D. 让 ref struct 可以装箱到堆上</label>
+<div class="feedback" id="fb2"></div>
+</div>
+
+<div class="quiz" id="q3">
+<div class="question">3/4 · ref/unsafe 进 async——以下哪项在 C# 13 中<strong>仍然不合法</strong>？</div>
+<label><input type="radio" name="q3" value="0">A. async 方法中在 await 之前声明 Span&lt;T&gt;</label>
+<label><input type="radio" name="q3" value="1">B. async 方法中在 await 之后访问已声明的 Span&lt;T&gt;</label>
+<label><input type="radio" name="q3" value="2">C. 迭代器方法中在 yield 之前声明 ref 局部变量</label>
+<label><input type="radio" name="q3" value="3">D. unsafe 块出现在 async 方法中（不含 await）</label>
+<div class="feedback" id="fb3"></div>
+</div>
+
+<div class="quiz" id="q4">
+<div class="question">4/4 · 三个特性串联——它们的共同设计目标是什么？</div>
+<label><input type="radio" name="q4" value="0">A. 让 ref struct 取代 class 成为默认选择</label>
+<label><input type="radio" name="q4" value="1">B. 消除"ref struct 是二等公民"的限制——实现接口、进入泛型、进入 async</label>
+<label><input type="radio" name="q4" value="2">C. 让所有类型都可以作为泛型参数</label>
+<label><input type="radio" name="q4" value="3">D. 允许 ref struct 在堆上分配</label>
+<div class="feedback" id="fb4"></div>
+
+<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
+<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+</div>
+
+<script>
+const answers = { q1: 2, q2: 1, q3: 1, q4: 1 };
+const explanations = {
+  q1: { correct: "✅ 正确！ref struct 实现了接口但不能装箱——赋值给接口变量（IDisposable d = buf）触发装箱，编译错误。A（using）、B（泛型特化不装箱）、D 都合法。", wrong: "❌ 不是。C 是正确答案——ref struct 不能装箱，因此不能赋值给接口类型变量。A/B/D 都是合法的。" },
+  q2: { correct: "✅ 正确！allows ref struct 是\"反约束\"——扩张而非收缩。在已有的约束（如 IDisposable）基础上再放行 ref struct。", wrong: "❌ 不是。B 是正确答案。allows ref struct 是反约束（扩张），不是限制（收缩）。不能替代 where T : struct，也不能让 ref struct 装箱。" },
+  q3: { correct: "✅ 正确！Span 不能跨越 await 边界——await 之后编译器将其视为已失效（CS4015）。A/C/D 在 C# 13 中都合法。", wrong: "❌ 不是。B 是正确答案——在 await 之后访问 Span 仍然不合法（CS4015）。A/C/D 在 C# 13 中都已合法。" },
+  q4: { correct: "✅ 正确！三个特性共同消除 ref struct 的二等公民地位：能实现接口（1）、能进泛型（2）、能进 async（3）。", wrong: "❌ 不是。B 是正确答案——C# 13 三个 ref struct 改进共享一个设计哲学：让 ref struct 不再被排斥在语言的基本抽象之外。" },
+};
+function checkAll() {
+  let correct = 0;
+  for (let qid of ['q1','q2','q3','q4']) {
+    const selected = document.querySelector(`input[name="${qid}"]:checked`);
+    const fb = document.getElementById('fb' + qid.slice(1));
+    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
+    if (parseInt(selected.value) === answers[qid]) {
+      fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++;
+    } else {
+      fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show';
+    }
+  }
+  const scoreEl = document.getElementById('score');
+  scoreEl.style.display = 'block';
+  scoreEl.textContent = `得分：${correct} / 4`;
+  scoreEl.style.color = correct === 4 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
+}
+</script>
+
+<!-- ========================== SUMMARY ========================== -->
+
+<h2>五、小结</h2>
+
+<table>
+  <tr><th>特性</th><th>解决的问题</th><th>使用场景</th></tr>
+  <tr><td><strong>ref struct 实现接口</strong></td><td>Span 不能参与泛型抽象</td><td>消除 Span 的冗余重载；泛型约束消费</td></tr>
+  <tr><td><strong>allows ref struct</strong></td><td>泛型天然拒绝 ref struct</td><td>让泛型方法接受 Span 等 ref struct 参数</td></tr>
+  <tr><td><strong>ref/unsafe 进 async</strong></td><td>async 方法完全不能用 Span</td><td>I/O 场景——await 前用 stackalloc 零分配</td></tr>
+</table>
+
+<h2>六、下一步</h2>
+
+<ul>
+  <li><strong>Lesson 20：</strong>C# 13 小特性合集——<code>\e</code> 转义、方法组自然类型改进、partial 属性、OverloadResolutionPriority 等。</li>
+  <li><strong>实践建议：</strong>搜索项目中接受 <code>IEnumerable&lt;T&gt;</code> 的泛型方法——给它们加上 <code>allows ref struct</code>，然后试试传 Span。</li>
+</ul>
+
+<div class="callout callout--info" style="margin-top:2rem;">
+<strong>💬 有问题？</strong>ref struct 接口的装箱限制？allows ref struct 和 where T : struct 的交互？async 中 Span 的边界规则？随时问。
+</div>
+
+</body>
+</html>

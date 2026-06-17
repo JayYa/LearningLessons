@@ -122,6 +122,10 @@
 <span class="str">"publisher"</span>: <span class="str">"ezoosk"</span>,                 <span class="cmt">// VS Code Marketplace 发布者 ID</span>
 <span class="str">"license"</span>: <span class="str">"MIT"</span>,
 <span class="str">"icon"</span>: <span class="str">"images/icon.png"</span>,            <span class="cmt">// 扩展图标（Marketplace 展示用）</span></pre>
+	<div class="callout">
+	  <strong>📋 关于 <code>"name"</code> 字段：</strong>"全小写，短横线分隔"其实是两件事——<strong>"全小写"是 npm registry 的强制规则</strong>（含大写字母的新包会被拒绝），而<strong>"短横线"是社区约定</strong>（<code>_</code> 和 <code>.</code> 在包名内部也合法，只是不能放开头）。完整规则速查见 <a href="../reference/npm-package-naming-rules.html">npm 包命名规则参考</a>。
+	</div>
+
 
 <div class="callout">
   <strong>🆕 对你来说：</strong><code>"publisher"</code> 字段是 VS Code 扩展独有的。它必须匹配你在 <a href="https://marketplace.visualstudio.com/manage">VS Code Marketplace</a> 上注册的发布者 ID。发布扩展时需要用到它。
@@ -139,6 +143,10 @@
 <p>
   <code>engines.vscode</code> 声明了兼容的最低 VS Code 版本。<code>^1.74.0</code> 表示需要 1.74.0 或更高版本（但不能是 2.0）。
 </p>
+
+<div class="callout">
+  <strong>🔒 为什么不能是 2.0？</strong><code>^</code>（caret）是 npm semver 语法——它<strong>锁定最左非零段</strong>。<code>^1.74.0</code> 中 <code>1</code> 是第一段非零数字，所以 major 被锁定，覆盖范围是 <code>&gt;=1.74.0 &lt;2.0.0</code>。主版本号变化意味着不兼容的 API 变更，自动排除。<a href="../reference/vscode-extension-api-basics.html">完整 SemVer 语法速查 →</a>
+</div>
 
 <p>
   <code>activationEvents</code> 是关键的<strong>性能机制</strong>：它告诉 VS Code <em>什么时候</em>才加载你的扩展。常见的激活事件有：
@@ -185,6 +193,15 @@
 <p>
   <code>contributes</code> 是扩展向 VS Code <strong>注入能力</strong>的方式。claude-context-bar 只贡献了一种东西：<strong>用户配置项</strong>。每个配置项会自动出现在用户的 <code>settings.json</code> 中，提供自动补全和类型检查。
 </p>
+
+<div class="callout">
+  <strong>🔗 数据流：从声明到消费，三步走</strong><br><br>
+  以 <code>claudeContextBar.warningThreshold</code> 为例：<br><br>
+  <strong>① 扩展声明</strong>（<code>package.json</code>）→ 定义类型、默认值、描述<br>
+  <strong>② 用户覆盖</strong>（<code>settings.json</code>）→ 用户在 VS Code 设置面板中修改（不改则用默认值）<br>
+  <strong>③ 代码读取</strong>（<code>extension.ts</code>）→ <code>vscode.workspace.getConfiguration('claudeContextBar').get('warningThreshold')</code><br><br>
+  VS Code 负责了中间所有脏活：UI 渲染、类型校验（<code>number</code> 类型不允许填字符串）、默认值回退、搜索和自动补全。这是 VS Code <strong>声明式扩展模型</strong>的核心——扩展只声明自己需要什么，VS Code 负责呈现和管理。
+</div>
 
 <p>扩展可以贡献的其他东西（本扩展没用到，但你将来可能用到）：</p>
 <ul style="margin: .5rem 0 1rem 1.5rem;">

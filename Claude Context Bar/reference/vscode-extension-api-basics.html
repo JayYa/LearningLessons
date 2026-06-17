@@ -28,7 +28,7 @@
 
 <h1>VS Code 扩展 API 基础 — 速查手册</h1>
 
-<p style="color:#888; font-size:.9rem;">本参考随课程推进持续更新。当前覆盖：Lesson 0001 涉及的概念。</p>
+<p style="color:#888; font-size:.9rem;">本参考随课程推进持续更新。当前覆盖：Lesson 0001 涉及的概念及后续问答补充。</p>
 
 <h2>package.json 扩展专有字段</h2>
 
@@ -44,6 +44,37 @@
   <tr><td>keywords</td><td>string[]</td><td>Marketplace 搜索关键词</td></tr>
 </table>
 
+<h2>SemVer 版本范围语法</h2>
+
+  <p style="margin:.5rem 0; font-size:.9rem; color:#666;">
+    <code>"engines"</code>、<code>"dependencies"</code>、<code>"devDependencies"</code> 中的版本号都使用 npm semver range 语法。最常用的是 <code>^</code>（caret）和 <code>~</code>（tilde）。
+  </p>
+
+  <table>
+    <tr><th>写法</th><th>含义</th><th>实际覆盖范围</th></tr>
+    <tr><td><code>1.74.0</code></td><td>精确匹配</td><td>只取 <code>1.74.0</code></td></tr>
+    <tr><td><code>^1.74.0</code></td><td>锁定 major，兼容 minor/patch</td><td><code>&gt;=1.74.0 &lt;2.0.0</code></td></tr>
+    <tr><td><code>~1.74.0</code></td><td>锁定 major.minor，兼容 patch</td><td><code>&gt;=1.74.0 &lt;1.75.0</code></td></tr>
+    <tr><td><code>&gt;=1.74.0</code></td><td>无上限</td><td>包括 2.0、3.0……</td></tr>
+    <tr><td><code>1.74.x</code> 或 <code>1.74.*</code></td><td>通配 patch</td><td><code>&gt;=1.74.0 &lt;1.75.0</code></td></tr>
+    <tr><td><code>*</code> 或 <code>x</code></td><td>任意版本</td><td>所有版本</td></tr>
+  </table>
+
+  <h3><code>^</code> 的规则：锁定最左边非零段</h3>
+
+  <p style="font-size:.9rem;"><code>^</code> 不是简单的"锁定 major"——它锁定的是<strong>最左边非零数字</strong>所在的段：</p>
+
+  <table>
+    <tr><th>写法</th><th>覆盖范围</th><th>为什么</th></tr>
+    <tr><td><code>^1.74.0</code></td><td><code>&gt;=1.74.0 &lt;2.0.0</code></td><td>最左非零是 <code>1</code>（major），锁定它</td></tr>
+    <tr><td><code>^0.74.0</code></td><td><code>&gt;=0.74.0 &lt;0.75.0</code></td><td>最左非零是 <code>74</code>（minor），锁定它</td></tr>
+    <tr><td><code>^0.0.3</code></td><td><code>&gt;=0.0.3 &lt;0.0.4</code></td><td>最左非零是 <code>3</code>（patch），锁定它</td></tr>
+  </table>
+
+  <blockquote style="border-left:3px solid #2563eb; padding:.5rem 0 .5rem 1.2rem; margin:1rem 0; color:#555; font-size:.9rem;">
+    <strong>为什么 <code>0.x</code> 特别？</strong>semver 规定 <code>0.y.z</code> 阶段属于"初始开发"，任何 minor 变化都可能是不兼容的。所以 <code>^0.74.0</code> 只覆盖 <code>0.74.z</code>，不覆盖 <code>0.75.0</code>。
+  </blockquote>
+
 <h2>激活事件速查</h2>
 
 <table>
@@ -55,6 +86,64 @@
   <tr><td>onView:viewId</td><td>视图变为可见时</td><td>侧边栏视图扩展</td></tr>
   <tr><td>workspaceContains:pattern</td><td>工作区包含匹配文件时</td><td>框架特定工具</td></tr>
 </table>
+
+<h2>contributes.configuration — 用户配置项</h2>
+
+  <p style="margin:.5rem 0; font-size:.9rem; color:#666;">
+    扩展通过 <code>contributes.configuration</code> 向 VS Code 的 <code>settings.json</code> 注入配置项。数据流分三步：扩展声明 → 用户覆盖 → 代码读取。
+  </p>
+
+  <h3>配置项属性速查</h3>
+
+  <table>
+    <tr><th>属性</th><th>类型</th><th>必需</th><th>说明</th></tr>
+    <tr><td><code>type</code></td><td>string</td><td>是</td><td>值类型：<code>"boolean"</code> / <code>"string"</code> / <code>"number"</code> / <code>"object"</code> / <code>"array"</code></td></tr>
+    <tr><td><code>default</code></td><td>any</td><td>是</td><td>用户未设置时的默认值</td></tr>
+    <tr><td><code>description</code></td><td>string</td><td>是</td><td>纯文本描述，显示在设置面板中</td></tr>
+    <tr><td><code>markdownDescription</code></td><td>string</td><td>否</td><td>Markdown 格式描述（支持链接、代码块）。与 <code>description</code> 二选一</td></tr>
+    <tr><td><code>enum</code></td><td>string[]</td><td>否</td><td>限定可选值，强制下拉选择</td></tr>
+    <tr><td><code>minimum</code> / <code>maximum</code></td><td>number</td><td>否</td><td>数值范围约束</td></tr>
+    <tr><td><code>scope</code></td><td>string</td><td>否</td><td><code>"window"</code>（默认）/ <code>"resource"</code> / <code>"machine"</code> 等，控制配置同步范围</td></tr>
+    <tr><td><code>order</code></td><td>number</td><td>否</td><td>在设置面板中的排序权重（越小越靠前）</td></tr>
+  </table>
+
+  <h3>类型决定 UI</h3>
+
+  <table>
+    <tr><th><code>type</code></th><th>设置面板中的 UI</th><th>示例</th></tr>
+    <tr><td><code>boolean</code></td><td>复选框</td><td><code>"claudeContextBar.autoColor": true</code></td></tr>
+    <tr><td><code>string</code></td><td>文本框；有 <code>enum</code> 时变为下拉框</td><td><code>"claudeContextBar.baseColor": "White"</code></td></tr>
+    <tr><td><code>number</code></td><td>数字输入框；有 <code>minimum</code>/<code>maximum</code> 时带范围校验</td><td><code>"claudeContextBar.idleTimeout": 180</code></td></tr>
+    <tr><td><code>object</code></td><td>JSON 编辑器</td><td><code>"claudeContextBar.shortNames": {}</code></td></tr>
+  </table>
+
+  <h3>代码中读取配置</h3>
+
+  <pre><span class="kw">import</span> * <span class="kw">as</span> vscode <span class="kw">from</span> <span class="str">'vscode'</span>;
+
+<span class="cmt">// getConfiguration 的参数是配置前缀（package.json 中 properties 的公共前缀）</span>
+<span class="kw">const</span> config = vscode.workspace.getConfiguration(<span class="str">'claudeContextBar'</span>);
+
+<span class="cmt">// 读取单个值——如果用户没设置，返回 default</span>
+<span class="kw">const</span> threshold = config.get&lt;<span class="kw">number</span>&gt;(<span class="str">'warningThreshold'</span>);  <span class="cmt">// → 50（默认值）或 60（用户改过）</span>
+<span class="kw">const</span> color = config.get&lt;<span class="kw">string</span>&gt;(<span class="str">'baseColor'</span>);          <span class="cmt">// → "White"</span>
+<span class="kw">const</span> shortNames = config.get&lt;<span class="kw">object</span>&gt;(<span class="str">'shortNames'</span>);     <span class="cmt">// → {}</span>
+
+<span class="cmt">// 泛型参数不是必需的，但推荐写上以获得类型提示</span>
+<span class="kw">const</span> autoColor = config.get(<span class="str">'autoColor'</span>);  <span class="cmt">// 也可以</span></pre>
+
+  <h3>监听配置变化</h3>
+
+  <pre><span class="cmt">// 用户在 settings.json 中修改时，扩展可以实时响应</span>
+vscode.workspace.onDidChangeConfiguration(event => {
+    <span class="kw">if</span> (event.affectsConfiguration(<span class="str">'claudeContextBar.warningThreshold'</span>)) {
+        <span class="cmt">// 重新读取并更新 UI</span>
+        <span class="kw">const</span> newThreshold = vscode.workspace
+            .getConfiguration(<span class="str">'claudeContextBar'</span>)
+            .get&lt;<span class="kw">number</span>&gt;(<span class="str">'warningThreshold'</span>);
+        updateStatusBar(newThreshold);
+    }
+});</pre>
 
 <h2>编译与发布脚本</h2>
 
