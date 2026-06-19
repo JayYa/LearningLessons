@@ -4,119 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 06: C# 8 收尾 — Default Interface Methods 与其他实用特性</title>
-<style>
-  :root {
-    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
-    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
-    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
-    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.7;
-    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
-  }
-  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
-  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
-  p { margin: 0.75rem 0; color: #333; }
-  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
-  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
-  .en::before { content: ' ('; } .en::after { content: ')'; }
-
-  .callout {
-    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
-  }
-  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
-  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
-  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
-  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
-
-  .comparison {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
-  }
-  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
-  .comparison > div {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1rem 1.25rem;
-  }
-  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
-  .comparison > div.old h4 { color: var(--bad); }
-  .comparison > div.new h4 { color: var(--good); }
-
-  table {
-    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
-  }
-  th, td {
-    text-align: left; padding: 0.6rem 0.8rem;
-    border-bottom: 1px solid var(--border);
-  }
-  th { background: var(--code-bg); font-weight: 600; }
-  tr:nth-child(even) td { background: #fafaf9; }
-
-  pre {
-    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
-    border-radius: var(--radius); overflow-x: auto;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
-  }
-  code {
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.88em; background: var(--code-bg);
-    padding: 0.15em 0.35em; border-radius: 4px;
-  }
-  pre code { background: none; padding: 0; font-size: inherit; }
-  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
-  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
-
-  .quiz {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
-  }
-  .quiz h3 { margin-top: 0; }
-  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
-  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
-  .quiz label:hover { background: var(--code-bg); }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
-    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback {
-    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
-  }
-  .feedback.show { display: block; }
-  .feedback.correct { background: var(--good-bg); color: var(--good); }
-  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
-  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
-  li { margin: 0.3rem 0; }
-  .mild { font-size: 0.9rem; color: var(--text-muted); }
-
-  .diagram {
-    background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius);
-    padding: 1.5rem; margin: 1.5rem 0; font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
-    font-size: 0.82rem; line-height: 1.6; white-space: pre; overflow-x: auto;
-    color: #333;
-  }
-  .diagram .arrow { color: var(--accent); font-weight: bold; }
-  .diagram .label { color: var(--text-muted); font-style: italic; font-size: 0.85em; }
-
-  .timeline {
-    display: flex; gap: 0; margin: 1.5rem 0; overflow-x: auto;
-    background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 1rem;
-  }
-  .timeline-item {
-    display: flex; flex-direction: column; align-items: center; text-align: center;
-    min-width: 90px; flex: 0 0 auto; font-size: 0.82rem;
-  }
-  .timeline-item .ver { font-weight: 700; color: var(--accent); }
-  .timeline-item .feat { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; }
-  .timeline-item .arrow { margin: 0 0.3rem; color: var(--border); font-size: 1.2rem; align-self: center; }
-</style>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
 </head>
 <body>
 
@@ -483,7 +371,7 @@ s.Say();</code></pre>
   <div class="feedback" id="f_q6"></div>
 </div>
 
-<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<hr class="section-divider">
 <p class="mild">
   Lesson 06 · C# 8 收尾 · 下一课预告：<strong>C# 9 Records</strong>——不可变引用类型，值相等语义
 </p>
@@ -491,46 +379,35 @@ s.Say();</code></pre>
   有任何不清楚的地方？<strong>直接在对话中追问</strong>——Agent 就是你的私教。
 </p>
 
+<script src="../assets/scripts/quiz.js"></script>
 <script>
-function check(qid, correct) {
-  var f = document.getElementById('f_' + qid);
-  var selected = document.querySelector('input[name="' + qid + '"]:checked');
-  if (!selected) {
-    f.textContent = '⚠️ 请先选择一个答案。';
-    f.className = 'feedback show wrong';
-    return;
+var answers = {
+  q1: {
+    correct: '✅ 正确！默认接口方法只能通过接口类型的引用访问，Speaker 类型上没有 Say 方法。这是面试必考题。',
+    wrong:   '❌ 答案是「编译错误」。默认接口方法只属于接口——Speaker 类没有实现 Say 方法，所以 s.Say() 编译报错。必须写 ISpeak i = new Speaker(); i.Say(); 才能走默认实现。'
+  },
+  q2: {
+    correct: '✅ 正确！Default Interface Methods 的核心动机是 API 进化——让接口可以在不破坏已有实现的前提下安全地增加新成员。Java 8 和 Swift 都先于 C# 做到了这点。',
+    wrong:   '❌ 答案是 b。Default Interface Methods 不是为了代替抽象类或实现多重继承，它是为解决 API 进化问题而设计的——允许已发布的接口安全地添加新成员。'
+  },
+  q3: {
+    correct: '✅ 正确！C# 的菱形继承解决方案很清晰——不自动选择，不随机，必须由开发者显式消歧。',
+    wrong:   '❌ 答案是「编译错误」。C# 不会自动帮你选——两个接口的 Move() 发生冲突时，类必须显式实现（或给出自己的实现），否则编译报错。这是 C# 比 C++ 更安全的设计选择。'
+  },
+  q4: {
+    correct: '✅ 正确！<code>x ??= y</code> 就是 <code>x = x ?? y</code> 的语法糖：如果 x 不是 null，保持不变；如果是 null，赋值为 y。',
+    wrong:   '❌ 答案是 <code>x = x ?? y</code>。<code>??=</code> 是复合赋值运算符，编译器将其展开为 <code>x = x ?? y</code>（LHS 只求值一次）。C 选项在 x 非 null 时会把 x 清成 null——与 ??= 的"保持不变"语义完全相反。D 选项条件反了。B 先无条件赋 y 再检查，逻辑也是错的。'
+  },
+  q5: {
+    correct: '✅ 正确！<code>static</code> 局部函数保证了"纯函数"语义——它不能看到外部作用域的变量，所有数据必须通过参数传入。这既明确了意图，又避免了隐式闭包产生的堆分配。',
+    wrong:   '❌ 答案是 c。static 局部函数不能捕获外部变量。如果尝试在 static 函数里引用外部的局部变量或字段，编译器会报错。这个设计是为了防止意外的闭包捕获（堆分配）和明确函数的数据依赖。'
+  },
+  q6: {
+    correct: '✅ 正确！<code>IAsyncDisposable.DisposeAsync()</code> 返回 <code>ValueTask</code>，支持真正的异步析构——如 EF Core 的 DbContext 归还连接到连接池。配合 <code>await using</code>，离开作用域时编译器自动生成 <code>await DisposeAsync()</code>。',
+    wrong:   '❌ 答案是 b。<code>DisposeAsync()</code> 返回 <code>ValueTask</code>（不是 void），支持异步 I/O 的析构逻辑。<code>IDisposable</code> 和 <code>IAsyncDisposable</code> 是独立接口——一个类可以只实现其中一个，也可以两个都实现。<code>await using</code> 适用于任何 IAsyncDisposable，EF Core、文件流、网络流等都可以用，绝非异步流专用。'
   }
-  var isCorrect = selected.value === correct;
-  var answers = {
-    q1: {
-      correct: '✅ 正确！默认接口方法只能通过接口类型的引用访问，Speaker 类型上没有 Say 方法。这是面试必考题。',
-      wrong:   '❌ 答案是「编译错误」。默认接口方法只属于接口——Speaker 类没有实现 Say 方法，所以 s.Say() 编译报错。必须写 ISpeak i = new Speaker(); i.Say(); 才能走默认实现。'
-    },
-    q2: {
-      correct: '✅ 正确！Default Interface Methods 的核心动机是 API 进化——让接口可以在不破坏已有实现的前提下安全地增加新成员。Java 8 和 Swift 都先于 C# 做到了这点。',
-      wrong:   '❌ 答案是 b。Default Interface Methods 不是为了代替抽象类或实现多重继承，它是为解决 API 进化问题而设计的——允许已发布的接口安全地添加新成员。'
-    },
-    q3: {
-      correct: '✅ 正确！C# 的菱形继承解决方案很清晰——不自动选择，不随机，必须由开发者显式消歧。',
-      wrong:   '❌ 答案是「编译错误」。C# 不会自动帮你选——两个接口的 Move() 发生冲突时，类必须显式实现（或给出自己的实现），否则编译报错。这是 C# 比 C++ 更安全的设计选择。'
-    },
-    q4: {
-      correct: '✅ 正确！<code>x ??= y</code> 就是 <code>x = x ?? y</code> 的语法糖：如果 x 不是 null，保持不变；如果是 null，赋值为 y。',
-      wrong:   '❌ 答案是 <code>x = x ?? y</code>。<code>??=</code> 是复合赋值运算符，编译器将其展开为 <code>x = x ?? y</code>（LHS 只求值一次）。C 选项在 x 非 null 时会把 x 清成 null——与 ??= 的"保持不变"语义完全相反。D 选项条件反了。B 先无条件赋 y 再检查，逻辑也是错的。'
-    },
-    q5: {
-      correct: '✅ 正确！<code>static</code> 局部函数保证了"纯函数"语义——它不能看到外部作用域的变量，所有数据必须通过参数传入。这既明确了意图，又避免了隐式闭包产生的堆分配。',
-      wrong:   '❌ 答案是 c。static 局部函数不能捕获外部变量。如果尝试在 static 函数里引用外部的局部变量或字段，编译器会报错。这个设计是为了防止意外的闭包捕获（堆分配）和明确函数的数据依赖。'
-    },
-    q6: {
-      correct: '✅ 正确！<code>IAsyncDisposable.DisposeAsync()</code> 返回 <code>ValueTask</code>，支持真正的异步析构——如 EF Core 的 DbContext 归还连接到连接池。配合 <code>await using</code>，离开作用域时编译器自动生成 <code>await DisposeAsync()</code>。',
-      wrong:   '❌ 答案是 b。<code>DisposeAsync()</code> 返回 <code>ValueTask</code>（不是 void），支持异步 I/O 的析构逻辑。<code>IDisposable</code> 和 <code>IAsyncDisposable</code> 是独立接口——一个类可以只实现其中一个，也可以两个都实现。<code>await using</code> 适用于任何 IAsyncDisposable，EF Core、文件流、网络流等都可以用，绝非异步流专用。'
-    }
-  };
-  var a = answers[qid];
-  f.textContent = isCorrect ? a.correct : a.wrong;
-  f.className = 'feedback show ' + (isCorrect ? 'correct' : 'wrong');
-}
+};
+function check(qid, correct) { Quiz.check(qid, correct, answers[qid]); }
 </script>
 
 </body>

@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 0003 — 丹麦征服英格兰：维京人的北海霸权</title>
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/timeline.css">
+<link rel="stylesheet" href="../assets/compare.css">
+<link rel="stylesheet" href="../assets/tags.css">
+<link rel="stylesheet" href="../assets/reminder.css">
 <style>
   :root {
     --bg: #fdfaf5;
@@ -14,189 +20,13 @@
     --border: #d4c5a9;
     --highlight: #f5ecd7;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, "Times New Roman", serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.85;
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 3rem 1.5rem 5rem;
-  }
-  h1 { font-size: 2rem; text-align: center; color: var(--accent); letter-spacing: 0.04em; margin-bottom: 0.3rem; }
-  .subtitle { text-align: center; color: var(--muted); font-size: 0.95rem; margin-bottom: 2.5rem; }
-  h2 { font-size: 1.35rem; color: var(--accent); margin: 2.5rem 0 1rem; padding-bottom: 0.35rem; border-bottom: 2px solid var(--border); }
-  h3 { font-size: 1.1rem; color: #5a3a1a; margin: 1.5rem 0 0.6rem; }
-  p { margin-bottom: 1rem; }
-  .lead {
-    font-size: 1.05rem;
-    background: var(--highlight);
-    padding: 1.2rem 1.5rem;
-    border-radius: 6px;
-    border-left: 4px solid var(--accent);
-    margin: 1rem 0 2rem;
-  }
-  .card {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.3rem 1.5rem;
-    margin: 1.2rem 0;
-  }
-  .card h3 { margin-top: 0; }
-
-  /* Timeline */
-  .timeline {
-    position: relative;
-    padding-left: 2.2rem;
-    margin: 1.5rem 0 1rem 0.5rem;
-  }
-  .timeline::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0.4rem; bottom: 0.4rem;
-    width: 2px;
-    background: #c4a97d;
-  }
-  .tl-item {
-    position: relative;
-    margin-bottom: 1.3rem;
-  }
-  .tl-item::before {
-    content: '';
-    position: absolute;
-    left: -2.55rem; top: 0.45rem;
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: 2px solid var(--bg);
-  }
-  .tl-item.key::before {
-    background: #c62828;
-    width: 14px; height: 14px;
-    left: -2.67rem; top: 0.35rem;
-  }
-  .tl-year {
-    font-weight: 700;
-    color: var(--accent);
-    font-size: 0.9rem;
-  }
-  .tl-item.key .tl-year { color: #c62828; }
-  .tl-text { font-size: 0.95rem; }
-
-  /* Tags */
-  .tag {
-    display: inline-block;
-    padding: 0.08rem 0.5rem;
-    border-radius: 3px;
-    font-size: 0.7rem;
-    font-family: system-ui, sans-serif;
-    color: #fff;
-    margin-left: 0.4rem;
-    vertical-align: middle;
-  }
-  .tag-manga { background: #2e7d32; }
-  .tag-history { background: #6d4c41; }
-
-  /* Compare columns */
-  .compare {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.8rem;
-    margin: 0.8rem 0;
-  }
-  @media (max-width: 600px) { .compare { grid-template-columns: 1fr; } }
-  .compare-col {
-    background: var(--highlight);
-    border-radius: 6px;
-    padding: 0.8rem 1rem;
-    font-size: 0.9rem;
-  }
-  .compare-col.real { background: #e8f5e9; }
-  .compare-col.real h4 { color: #2e7d32; font-size: 0.85rem; margin: 0 0 0.4rem; font-family: system-ui, sans-serif; }
-  .compare-col.manga { background: #fff3e0; }
-  .compare-col.manga h4 { color: #e65100; font-size: 0.85rem; margin: 0 0 0.4rem; font-family: system-ui, sans-serif; }
-
-  /* Tables */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-    font-size: 0.9rem;
-  }
-  th, td {
-    border: 1px solid var(--border);
-    padding: 0.5rem 0.7rem;
-    text-align: left;
-  }
-  th { background: var(--highlight); color: var(--accent); font-weight: 600; }
-
-  /* Quote */
+  /* File-specific: blockquote (unique to this lesson) */
   .quote {
     font-style: italic;
     color: var(--muted);
     border-left: 3px solid var(--border);
     padding-left: 1rem;
     margin: 1rem 0;
-  }
-
-  /* Quiz */
-  .quiz {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.5rem;
-    margin: 1.5rem 0;
-  }
-  .quiz .q { font-weight: 600; margin-bottom: 0.7rem; }
-  .quiz label { display: block; padding: 0.4rem 0; cursor: pointer; }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem;
-    padding: 0.5rem 1.8rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    font-size: 0.95rem;
-    cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback {
-    margin-top: 0.8rem;
-    padding: 0.7rem 1rem;
-    border-radius: 4px;
-    display: none;
-  }
-  .feedback.correct { background: #e8f5e9; color: #2e7d32; display: block; }
-  .feedback.incorrect { background: #fbe9e7; color: #c62828; display: block; }
-
-  .reminder {
-    background: #fff8e1;
-    border: 1px solid #ffcc02;
-    border-radius: 6px;
-    padding: 1rem 1.3rem;
-    margin: 2rem 0 1rem;
-    font-size: 0.92rem;
-  }
-  .reminder strong { color: #c79100; }
-  .cite { font-size: 0.78rem; color: var(--muted); }
-  .cite a { color: var(--muted); }
-  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-
-  /* Big number */
-  .big-num {
-    font-size: 3rem;
-    font-weight: 700;
-    color: var(--accent);
-    line-height: 1;
-    font-family: Georgia, serif;
-  }
-
-  @media print {
-    body { font-size: 11pt; padding: 1rem; }
-    .quiz button { display: none; }
   }
 </style>
 </head>
@@ -501,7 +331,7 @@
   <label><input type="radio" name="q1" value="a">A. 丹麦人全部撤离了英格兰</label>
   <label><input type="radio" name="q1" value="b">B. 英格兰成功阻止了维京入侵</label>
   <label><input type="radio" name="q1" value="c">C. 给斯韦恩提供了发动全面复仇战争的正当理由</label>
-  <button onclick="checkQ1()">确认答案</button>
+  <button onclick="checkQuiz(1,'c','正确！屠杀——尤其是斯韦恩妹妹的死——给了斯韦恩发动全面复仇战争的理由。从此维京人的目标从“拿钱走人”升级为“夺取王位”。','不对。正确答案是C：屠杀给斯韦恩提供了复仇的正当理由，直接触发了此后持续十余年的征服战争。')">确认答案</button>
   <div class="feedback" id="f1"></div>
 </div>
 
@@ -510,7 +340,7 @@
   <label><input type="radio" name="q2" value="a">A. 约5年</label>
   <label><input type="radio" name="q2" value="b">B. 约5个月</label>
   <label><input type="radio" name="q2" value="c">C. 约5周</label>
-  <button onclick="checkQ2()">确认答案</button>
+  <button onclick="checkQuiz(2,'c','正确！斯韦恩于1013年圣诞节加冕，1014年2月3日去世——仅做了约五周的英格兰国王。他的突然死亡是整段历史中最大的转折点。','不对。正确答案是C：约5周。斯韦恩于1013年12月25日加冕，1014年2月3日去世。')">确认答案</button>
   <div class="feedback" id="f2"></div>
 </div>
 
@@ -519,7 +349,7 @@
   <label><input type="radio" name="q3" value="a">A. 1013年10月</label>
   <label><input type="radio" name="q3" value="b">B. 1016年10月</label>
   <label><input type="radio" name="q3" value="c">C. 1018年10月</label>
-  <button onclick="checkQ3()">确认答案</button>
+  <button onclick="checkQuiz(3,'b','正确！阿桑顿战役发生在1016年10月18日。克努特击败埃德蒙·艾恩赛德，这场战役决定了英格兰的归属。','不对。正确答案是B：1016年10月18日。一个月后（11月30日）埃德蒙去世，克努特成为全英格兰唯一的国王。')">确认答案</button>
   <div class="feedback" id="f3"></div>
 </div>
 
@@ -528,7 +358,7 @@
   <label><input type="radio" name="q4" value="a">A. 完全真实——斯韦恩的确被一名混血佣兵刺杀</label>
   <label><input type="radio" name="q4" value="b">B. 虚构嫁接——斯韦恩确实突然死亡，但死于疾病而非刺杀</label>
   <label><input type="radio" name="q4" value="c">C. 完全虚构——斯韦恩根本没有入侵英格兰</label>
-  <button onclick="checkQ4()">确认答案</button>
+  <button onclick="checkQuiz(4,'b','正确！幸村诚用虚构人物阿谢拉特“执行”了这个真实的历史转折。斯韦恩确实突然死了（大概率是中风/心脏病），漫画的嫁接天衣无缝——反正历史上他也是突然死的。','不对。正确答案是B：斯韦恩确实突然死亡（大概率是疾病），漫画用虚构角色阿谢拉特进行了戏剧化的嫁接。他是真的做了五周国王然后死了——只是历史上不是被刺杀的。')">确认答案</button>
   <div class="feedback" id="f4"></div>
 </div>
 
@@ -542,7 +372,7 @@
   </ul>
 </div>
 
-<div class="reminder" style="background:#e3f0ff;border-color:#90c4f9;">
+<div class="reminder reminder-qa">
   <strong>🤖 有疑问？</strong> 随时向你的AI老师提问！例如：<br>
   <span style="font-size:0.88rem;">"埃塞尔雷德为什么要付丹麦金——这不是在给自己挖坑吗？"<br>"埃德蒙·艾恩赛德到底是怎么死的？"<br>"克努特娶埃玛的政治逻辑是什么？"<br>"为什么漫画选择把斯韦恩的死写成刺杀而不是疾病？"</span>
 </div>
@@ -564,56 +394,7 @@
   · Winroth, A. (2014). <em>The Age of the Vikings</em>. Princeton University Press.
 </p>
 
-<script>
-function checkQ1() {
-  var f = document.getElementById('f1');
-  var sel = document.querySelector('input[name="q1"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'c') {
-    f.className='feedback correct';
-    f.textContent='✅ 正确！屠杀——尤其是斯韦恩妹妹的死——给了斯韦恩发动全面复仇战争的理由。从此维京人的目标从"拿钱走人"升级为"夺取王位"。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='❌ 不对。正确答案是C：屠杀给斯韦恩提供了复仇的正当理由，直接触发了此后持续十余年的征服战争。';
-  }
-}
-function checkQ2() {
-  var f = document.getElementById('f2');
-  var sel = document.querySelector('input[name="q2"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'c') {
-    f.className='feedback correct';
-    f.textContent='✅ 正确！斯韦恩于1013年圣诞节加冕，1014年2月3日去世——仅做了约五周的英格兰国王。他的突然死亡是整段历史中最大的转折点。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='❌ 不对。正确答案是C：约5周。斯韦恩于1013年12月25日加冕，1014年2月3日去世。';
-  }
-}
-function checkQ3() {
-  var f = document.getElementById('f3');
-  var sel = document.querySelector('input[name="q3"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
-    f.className='feedback correct';
-    f.textContent='✅ 正确！阿桑顿战役发生在1016年10月18日。克努特击败埃德蒙·艾恩赛德，这场战役决定了英格兰的归属。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='❌ 不对。正确答案是B：1016年10月18日。一个月后（11月30日）埃德蒙去世，克努特成为全英格兰唯一的国王。';
-  }
-}
-function checkQ4() {
-  var f = document.getElementById('f4');
-  var sel = document.querySelector('input[name="q4"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
-    f.className='feedback correct';
-    f.textContent='✅ 正确！幸村诚用虚构人物阿谢拉特"执行"了这个真实的历史转折。斯韦恩确实突然死了（大概率是中风/心脏病），漫画的嫁接天衣无缝——反正历史上他也是突然死的。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='❌ 不对。正确答案是B：斯韦恩确实突然死亡（大概率是疾病），漫画用虚构角色阿谢拉特进行了戏剧化的嫁接。他是真的做了五周国王然后死了——只是历史上不是被刺杀的。';
-  }
-}
-</script>
+<script src="../assets/quiz.js"></script>
 
 </body>
 </html>

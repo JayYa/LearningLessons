@@ -1,6 +1,6 @@
 # Learning Lessons
 
-这套课程沿三条并行轨道展开：核心轨道是现代 .NET 技术纵深，从 C# 8 可空引用类型与模式匹配起步，历经 yield return 迭代器与 IAsyncEnumerable 异步流的编译器状态机拆解，深入 SynchronizationContext 的 await 续延调度核心，随后贯穿 C# 9 records 不可变类型、C# 10 记录结构体、C# 11 原始字符串字面量与列表模式、C# 12 主构造函数与集合表达式，最终抵达 C# 13 的 params 集合增强、新型 Lock 对象、ref struct 三部曲与诸多精致小特性，构成从 Framework 4.8 到最新 .NET 的完整演进全景。工具轨道聚焦开发环境底层——通过 VS Code 扩展解剖，从扩展的 manifest 架构到激活事件与生命周期管理，揭示扩展宿主与 API 体系的设计原理。历史轨道以《冰海战纪》为锚点，从维京时代概览、角色原型史实对照，到丹麦征服英格兰、克努特北海帝国，再到维京东线与瓦良格卫队，为漫画叙事提供可验证的史实坐标。三条线索共同织成一张从语法表层下沉到编译器内部、从工具底层上升到历史语境的知识网络。
+这套课程沿三条并行轨道展开：核心轨道是现代 .NET 技术纵深，从 C# 8 可空引用类型与模式匹配起步，历经 yield return 迭代器与 IAsyncEnumerable 异步流的编译器状态机拆解，深入 SynchronizationContext 的 await 续延调度核心，随后贯穿 C# 9 records 不可变类型、C# 10 记录结构体、C# 11 原始字符串字面量与列表模式、C# 12 主构造函数与集合表达式、C# 13 的 params 集合增强、新型 Lock 对象与 ref struct 三部曲，最终抵达 C# 14 的 field 关键字，构成从 Framework 4.8 到最新 .NET 的完整演进全景。工具轨道聚焦 VS Code 扩展开发底层——从扩展的 manifest 解剖与激活生命周期，到 StatusBarItem 状态栏 UI 原语，揭示扩展宿主与 API 体系的设计原理。历史轨道以《冰海战纪》为锚点，从维京时代概览、角色原型史实对照，到丹麦征服英格兰、克努特北海帝国、维京东线与瓦良格卫队，直至文兰——北欧人发现北美与定居失败，为漫画叙事提供可验证的史实坐标。三条线索共同织成一张从语法表层下沉到编译器内部、从工具底层上升到历史语境的知识网络。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
@@ -26,8 +26,9 @@
 | 16 | [Lesson 16: C# 12 — ref readonly 参数 + 内联数组](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/16-csharp12-ref-readonly-inline-arrays.html) | 讲解 ref readonly 参数传递语义与内联数组的高性能栈分配技巧 |
 | 17 | [Lesson 17: C# 12 — Lambda 默认参数 · 任意类型别名 · Experimental · Interceptors](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/17-csharp12-small-features.html) | 收尾 C# 12 小特性集：Lambda 默认参数、任意类型别名、Experimental 特性与 Interceptors 拦截器预览 |
 | 18 | [Lesson 18: C# 13 — params 集合 + 新 Lock 对象](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/18-csharp13-params-lock.html) | 讲解 C# 13 的 params 集合增强与新型 Lock 对象，拥抱最新语言特性 |
-| 19 | [Lesson 19: C# 13 — ref struct 三部曲](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/19-csharp13-ref-struct-trilogy.html) | 深入 C# 13 ref struct 接口约束与泛型反变等三部曲，解锁高性���场景新可能 |
+| 19 | [Lesson 19: C# 13 — ref struct 三部曲](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/19-csharp13-ref-struct-trilogy.html) | 深入 C# 13 ref struct 接口约束与泛型反变等三部曲，解锁高性能场景新可能 |
 | 20 | [Lesson 20: C# 13 — 小特性合集](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/20-csharp13-small-features.html) | 速览 C# 13 中多项实用小特性，收尾现代 .NET 语言演进全景 |
+| 21 | [Lesson 21: C# 14 — field 关键字](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/21-csharp14-field-keyword.html) | 探索 C# 14 field 关键字，简化属性访问器的自定义逻辑编写 |
 
 **参考资料：**
 - [异步流速查 · Async Streams · C# 8](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/async-streams-cheatsheet.html) — IAsyncEnumerable 消费、取消与配置速查
@@ -51,9 +52,14 @@
 | 3 | [Lesson 0003 — 丹麦征服英格兰：维京人的北海霸权](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0003-danish-conquest-of-england.html) | 讲述丹麦王朝对英格兰的征服历程，梳理维京人在北海的霸权兴衰 |
 | 4 | [Lesson 0004 — 克努特大帝与北海帝国](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0004-cnut-north-sea-empire.html) | 剖析克努特大帝如何整合英格兰、丹麦与挪威，建立横跨北海的维京帝国 |
 | 5 | [Lesson 0005 — 维京东线与瓦良格卫队](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0005-varangian-east.html) | 探索维京人的东进之路，讲述瓦良格卫队在拜占庭帝国的传奇与历史影响 |
+| 6 | [Lesson 0006 — 文兰：北欧人发现北美与定居失败](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0006-vinland-norse-in-north-america.html) | 追寻北欧人向西探索文兰的航海壮举，解析北美定居尝试的成败与考古证据 |
 
 **参考资料：**
+- [🗺 东部地理术语指南](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/eastern-geography-guide.html) — 拜占庭 · 罗斯 · 基辅 · 君士坦丁堡地理术语速查
+- [🏛 诺曼起源争议参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/normanist-debate.html) — 诺曼起源争议学术背景与关键论据
 - [维京时代大事年表](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-age-timeline.html) — Vinland Saga 历史时间线参考
+- [📐 维京战船与 Portage 参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-ships-and-portage.html) — 维京长船设计与陆地运船技术参考
+- [🪙 维京白银经济参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-silver-economy.html) — 维京时代白银贸易与经济体系参考
 - [角色-史实对照表](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/vinland-saga-character-reference.html) — Vinland Saga 漫画角色与历史原型速查
 
 ## Claude Context Bar
@@ -62,9 +68,10 @@
 |---|------|------|
 | 1 | [Lesson 0001 — VS Code 扩展的解剖结构](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0001-extension-anatomy.html) | 拆解 VS Code 扩展的 manifest、激活事件与代码骨架，理解扩展生命周期 |
 | 2 | [Lesson 0002 — 激活与生命周期](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0002-activation-lifecycle.html) | 深入 VS Code 扩展的激活事件类型与生命周期管理机制 |
+| 3 | [Lesson 0003 — StatusBarItem：状态栏 UI 原语](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0003-statusbar-api.html) | 解析 StatusBarItem API 的设计与用法，掌握状态栏 UI 元素的创建与控制 |
 
 **参考资料：**
-- [npm 包命名规则](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/npm-package-naming-rules.html) — npm 包名称约束、作用域包与命名最佳实践
-- [VS Code 扩展 API 基础](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/vscode-extension-api-basics.html) — 扩展清单、贡献点与核心 API 速查
+- [参考：npm 包命名规则](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/npm-package-naming-rules.html) — npm 包名称约束、作用域包与命名最佳实践
+- [参考：VS Code 扩展 API 基础](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/vscode-extension-api-basics.html) — 扩展清单、贡献点与核心 API 速查
 
 *自动生成*

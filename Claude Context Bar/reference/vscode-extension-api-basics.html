@@ -4,27 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>参考：VS Code 扩展 API 基础</title>
+<link rel="stylesheet" href="../assets/style.css">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.7; color: #1a1a2e; background: #fafaf8; max-width: 780px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
-  h1 { font-size: 1.6rem; font-weight: 600; margin-bottom: .5rem; }
-  h2 { font-size: 1.15rem; font-weight: 600; margin: 2rem 0 .5rem; padding-top: 1.2rem; border-top: 1px solid #e0e0d8; }
-  h3 { font-size: 1rem; font-weight: 600; margin: 1.2rem 0 .4rem; }
-  code { font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: .88em; background: #f0f0ea; padding: .1em .35em; border-radius: 3px; }
-  pre { font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: .82rem; background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.2rem; border-radius: 8px; overflow-x: auto; margin: .8rem 0 1.2rem; line-height: 1.55; }
-  pre .kw { color: #cba6f7; }
-  pre .str { color: #a6e3a1; }
-  pre .cmt { color: #6c7086; font-style: italic; }
-  table { width: 100%; border-collapse: collapse; margin: .8rem 0 1.2rem; font-size: .88rem; }
-  th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #e0e0d8; }
-  th { font-weight: 600; color: #555; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
-  td:first-child { font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: .82rem; white-space: nowrap; }
-  a { color: #2563eb; }
-  .nav { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid #e0e0d8; font-size: .85rem; color: #888; }
+  /* Reference-specific: keep code-like first columns from wrapping */
+  td:first-child { white-space: nowrap; }
 </style>
 </head>
-<body>
+<body class="ref">
 
 <h1>VS Code 扩展 API 基础 — 速查手册</h1>
 
@@ -183,6 +169,76 @@ vscode.workspace.onDidChangeConfiguration(event => {
 <p style="margin-top:1rem; font-size:.88rem; color:#666;">
   claude-context-bar 的依赖非常精简——只有 3 个 devDependencies，没有运行时依赖。VS Code 本身提供了 <code>vscode</code> 模块，不需要安装。
 </p>
+
+<h2>StatusBarItem — 状态栏 UI 原语</h2>
+
+  <p style="margin:.5rem 0; font-size:.9rem; color:#666;">
+    状态栏条目是 claude-context-bar 使用的核心 UI 组件。通过 <code>vscode.window.createStatusBarItem()</code> 创建。
+  </p>
+
+  <h3>创建</h3>
+
+  <pre><span class="kw">const</span> item = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,  <span class="cmt">// 对齐方向</span>
+    900                               <span class="cmt">// 优先级</span>
+);</pre>
+
+  <h3>对齐方向</h3>
+
+  <table>
+    <tr><th>枚举值</th><th>位置</th><th>高优先级 = 更靠……</th></tr>
+    <tr><td><code>StatusBarAlignment.Left</code></td><td>左侧</td><td>左</td></tr>
+    <tr><td><code>StatusBarAlignment.Right</code></td><td>右侧</td><td>左（反直觉！）</td></tr>
+  </table>
+
+  <h3>核心属性</h3>
+
+  <table>
+    <tr><th>属性</th><th>类型</th><th>说明</th></tr>
+    <tr><td><code>text</code></td><td>string</td><td>显示文本（支持 emoji）</td></tr>
+    <tr><td><code>tooltip</code></td><td>string | MarkdownString</td><td>悬停提示</td></tr>
+    <tr><td><code>command</code></td><td>string | Command</td><td>点击触发的命令</td></tr>
+    <tr><td><code>color</code></td><td>string | ThemeColor</td><td>文字颜色</td></tr>
+    <tr><td><code>backgroundColor</code></td><td>ThemeColor</td><td>背景颜色（推荐用 ThemeColor 而非硬编码）</td></tr>
+    <tr><td><code>alignment</code></td><td>StatusBarAlignment</td><td>只读，对齐方向</td></tr>
+    <tr><td><code>priority</code></td><td>number</td><td>只读，优先级</td></tr>
+  </table>
+
+  <h3>方法</h3>
+
+  <table>
+    <tr><th>方法</th><th>说明</th></tr>
+    <tr><td><code>show()</code></td><td>显示在状态栏中（创建后默认隐藏）</td></tr>
+    <tr><td><code>hide()</code></td><td>隐藏但不销毁，可再次 show</td></tr>
+    <tr><td><code>dispose()</code></td><td>彻底销毁，释放资源。之后不可再使用</td></tr>
+  </table>
+
+  <h3>ThemeColor — 主题自适应颜色</h3>
+
+  <pre><span class="cmt">// 不要硬编码颜色——使用 ThemeColor 让 VS Code 根据主题自动解析</span>
+item.backgroundColor = <span class="kw">new</span> vscode.ThemeColor(<span class="str">'statusBarItem.errorBackground'</span>);
+item.backgroundColor = <span class="kw">new</span> vscode.ThemeColor(<span class="str">'statusBarItem.warningBackground'</span>);</pre>
+
+  <h3>完整生命周期示例</h3>
+
+  <pre><span class="cmt">// 1. 创建（默认隐藏）</span>
+<span class="kw">const</span> item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 900);
+
+<span class="cmt">// 2. 配置</span>
+item.text = <span class="str">'$(warning) My Project: 72%'</span>;
+item.tooltip = <span class="kw">new</span> vscode.MarkdownString(<span class="str">'**Token Usage**: 144K / 200K'</span>);
+item.command = { command: <span class="str">'myExt.showDetails'</span>, title: <span class="str">'Show'</span>, arguments: [<span class="str">'arg'</span>] };
+item.backgroundColor = <span class="kw">new</span> vscode.ThemeColor(<span class="str">'statusBarItem.warningBackground'</span>);
+
+<span class="cmt">// 3. 显示</span>
+item.show();
+
+<span class="cmt">// 4. 更新 —— 直接修改属性，VS Code 自动重绘</span>
+item.text = <span class="str">'$(error) My Project: 85%'</span>;
+item.backgroundColor = <span class="kw">new</span> vscode.ThemeColor(<span class="str">'statusBarItem.errorBackground'</span>);
+
+<span class="cmt">// 5. 销毁</span>
+item.dispose();</pre>
 
 <h2>TypeScript 基础（本课程需要的最低知识）</h2>
 

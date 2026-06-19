@@ -4,103 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 03: C# yield return 同步迭代器</title>
-<style>
-  :root {
-    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
-    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
-    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
-    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.7;
-    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
-  }
-  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
-  p { margin: 0.75rem 0; color: #333; }
-  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
-  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
-  .en::before { content: ' ('; } .en::after { content: ')'; }
-
-  .callout {
-    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
-  }
-  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
-  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
-  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
-  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
-
-  .comparison {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
-  }
-  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
-  .comparison > div {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1rem 1.25rem;
-  }
-  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
-  .comparison > div.old h4 { color: var(--bad); }
-  .comparison > div.new h4 { color: var(--good); }
-
-  table {
-    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
-  }
-  th, td {
-    text-align: left; padding: 0.6rem 0.8rem;
-    border-bottom: 1px solid var(--border);
-  }
-  th { background: var(--code-bg); font-weight: 600; }
-  tr:nth-child(even) td { background: #fafaf9; }
-
-  pre {
-    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
-    border-radius: var(--radius); overflow-x: auto;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
-  }
-  code {
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.88em; background: var(--code-bg);
-    padding: 0.15em 0.35em; border-radius: 4px;
-  }
-  pre code { background: none; padding: 0; font-size: inherit; }
-  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
-  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
-
-  .quiz {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
-  }
-  .quiz h3 { margin-top: 0; }
-  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
-  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
-  .quiz label:hover { background: var(--code-bg); }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
-    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback {
-    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
-  }
-  .feedback.show { display: block; }
-  .feedback.correct { background: var(--good-bg); color: var(--good); }
-  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
-  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
-  li { margin: 0.3rem 0; }
-  .mild { font-size: 0.9rem; color: var(--text-muted); }
-
-  .diagram {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1rem 0;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.85rem; line-height: 1.6; white-space: pre; overflow-x: auto;
-  }
-</style>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
 </head>
 <body>
 
@@ -571,8 +475,8 @@ Console.WriteLine(<span class="str">"after call"</span>);
   <label><input type="radio" name="q1" value="b"> "after call" → "start" → "1"</label>
   <label><input type="radio" name="q1" value="c"> "start" → "1" → "after call"</label>
   <label><input type="radio" name="q1" value="d"> 编译错误——yield return 不能和 Console.WriteLine 混用</label>
-  <button onclick="checkQ1()">确认</button>
-  <div class="feedback" id="f1"></div>
+  <button onclick="Quiz.check('q1','b',q1fb)">确认</button>
+  <div class="feedback" id="f_q1"></div>
 </div>
 
 <div class="quiz" id="q2">
@@ -582,8 +486,8 @@ Console.WriteLine(<span class="str">"after call"</span>);
   <label><input type="radio" name="q2" value="b"> yield return 一次只在内存里保留当前元素，List&lt;T&gt; 保留全部</label>
   <label><input type="radio" name="q2" value="c"> yield return 在调用时把所有结果预计算好，存在隐藏的数组里</label>
   <label><input type="radio" name="q2" value="d"> 内存使用和 List&lt;T&gt; 没有任何区别</label>
-  <button onclick="checkQ2()">确认</button>
-  <div class="feedback" id="f2"></div>
+  <button onclick="Quiz.check('q2','b',q2fb)">确认</button>
+  <div class="feedback" id="f_q2"></div>
 </div>
 
 <div class="quiz" id="q3">
@@ -593,8 +497,8 @@ Console.WriteLine(<span class="str">"after call"</span>);
   <label><input type="radio" name="q3" value="b"> 一个实现了 IEnumerable&lt;T&gt; 和 IEnumerator&lt;T&gt; 的状态机类</label>
   <label><input type="radio" name="q3" value="c"> 一个 SQL 查询计划</label>
   <label><input type="radio" name="q3" value="d"> 一个动态代理类，用反射调用原方法</label>
-  <button onclick="checkQ3()">确认</button>
-  <div class="feedback" id="f3"></div>
+  <button onclick="Quiz.check('q3','b',q3fb)">确认</button>
+  <div class="feedback" id="f_q3"></div>
 </div>
 
 <div class="quiz" id="q4">
@@ -609,8 +513,8 @@ Console.WriteLine(<span class="str">"after call"</span>);
   <label><input type="radio" name="q4" value="b"> 编译错误：不能返回 List&lt;T&gt; 给 IEnumerable&lt;T&gt;</label>
   <label><input type="radio" name="q4" value="c"> 问题：调用方可以把返回值 cast 回 List&lt;T&gt; 并修改它，破坏了封装</label>
   <label><input type="radio" name="q4" value="d"> 运行时每次迭代都会崩溃</label>
-  <button onclick="checkQ4()">确认</button>
-  <div class="feedback" id="f4"></div>
+  <button onclick="Quiz.check('q4','c',q4fb)">确认</button>
+  <div class="feedback" id="f_q4"></div>
 </div>
 
 <div class="quiz" id="q5">
@@ -620,8 +524,8 @@ Console.WriteLine(<span class="str">"after call"</span>);
   <label><input type="radio" name="q5" value="b"> 两者都依赖操作系统信号</label>
   <label><input type="radio" name="q5" value="c"> 编译器都把它们编译成状态机类，在暂停点用 switch 恢复执行</label>
   <label><input type="radio" name="q5" value="d"> 没有任何共同点</label>
-  <button onclick="checkQ5()">确认</button>
-  <div class="feedback" id="f5"></div>
+  <button onclick="Quiz.check('q5','c',q5fb)">确认</button>
+  <div class="feedback" id="f_q5"></div>
 </div>
 
 <div class="quiz" id="q6">
@@ -631,11 +535,11 @@ Console.WriteLine(<span class="str">"after call"</span>);
   <label><input type="radio" name="q6" value="b"> 暂停迭代，但不终止</label>
   <label><input type="radio" name="q6" value="c"> 提前终止迭代——就像普通方法里的 return</label>
   <label><input type="radio" name="q6" value="d"> 跳过一次迭代，继续下一个</label>
-  <button onclick="checkQ6()">确认</button>
-  <div class="feedback" id="f6"></div>
+  <button onclick="Quiz.check('q6','c',q6fb)">确认</button>
+  <div class="feedback" id="f_q6"></div>
 </div>
 
-<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<hr class="section-divider">
 <p class="mild">
   Lesson 03 · yield return 同步迭代器 · 下一课预告：<a href="04-csharp8-async-streams.html">Lesson 04 — C# 8 Async Streams</a>
 </p>
@@ -643,67 +547,32 @@ Console.WriteLine(<span class="str">"after call"</span>);
   💬 有任何不理解的地方？随时问 agent 老师——追问是学习的正确姿势。
 </p>
 
+<script src="../assets/scripts/quiz.js"></script>
 <script>
-  function checkQ1() {
-    var f = document.getElementById('f1');
-    var sel = document.querySelector('input[name="q1"]:checked');
-    if (!sel) return;
-    var ok = sel.value === 'b';
-    f.textContent = ok
-      ? '✅ 正确！yield return 是延迟执行的——调用 GetNumbers() 时方法体不会执行（此时什么都不打印）。只有 foreach 第一次 MoveNext() 时，方法体才开始执行，打印 "start"，然后 yield return 1。'
-      : '❌ 答案是 b："after call" → "start" → "1"。调用 GetNumbers() 时方法不执行（延迟执行），foreach 才会触发真正的执行。';
-    f.className = 'feedback show ' + (ok ? 'correct' : 'wrong');
-  }
-  function checkQ2() {
-    var f = document.getElementById('f2');
-    var sel = document.querySelector('input[name="q2"]:checked');
-    if (!sel) return;
-    var ok = sel.value === 'b';
-    f.textContent = ok
-      ? '✅ 正确！yield return 是流式的——一次只在内存里持有当前元素。而 List<T> 需要先全部生成再返回。注意：yield return 不是"运行更快"，而是"内存更省 + 首条延迟更低"。'
-      : '❌ 答案是 b。yield return 一次只保留当前元素在内存里。它不是"更快"——事实上状态机调度有微小开销——但内存节省和低延迟是它的核心优势。';
-    f.className = 'feedback show ' + (ok ? 'correct' : 'wrong');
-  }
-  function checkQ3() {
-    var f = document.getElementById('f3');
-    var sel = document.querySelector('input[name="q3"]:checked');
-    if (!sel) return;
-    var ok = sel.value === 'b';
-    f.textContent = ok
-      ? '✅ 正确！编译器生成一个同时实现 IEnumerable<T> 和 IEnumerator<T> 的嵌套类，核心是 MoveNext() 里的 switch 状态机。局部变量都提升为字段。'
-      : '❌ 答案是 b。编译器生成一个状态机类——不涉及线程、不涉及反射、不涉及 SQL。这是在编译时完成的纯 IL 变换。';
-    f.className = 'feedback show ' + (ok ? 'correct' : 'wrong');
-  }
-  function checkQ4() {
-    var f = document.getElementById('f4');
-    var sel = document.querySelector('input[name="q4"]:checked');
-    if (!sel) return;
-    var ok = sel.value === 'c';
-    f.textContent = ok
-      ? '✅ 正确！虽然 List<T> 实现了 IEnumerable<T>，编译没问题——但调用方可以把结果转型回 List<T> 并修改它，破坏了"我只给你读"的契约。用 yield return 逐条产出可以防止这种"后门修改"。'
-      : '❌ 答案是 c。编译没问题（List<T> 实现了 IEnumerable<T>），但调用方可以 cast 回 List<T> 并随意修改数据——破坏了只读语义。用 yield return 可以天然防止这个问题。';
-    f.className = 'feedback show ' + (ok ? 'correct' : 'wrong');
-  }
-  function checkQ5() {
-    var f = document.getElementById('f5');
-    var sel = document.querySelector('input[name="q5"]:checked');
-    if (!sel) return;
-    var ok = sel.value === 'c';
-    f.textContent = ok
-      ? '✅ 正确！yield return 和 async/await 都是编译器魔法——方法体被切成多个"断点"，局部变量提升为字段，用 switch 状态机恢复执行。结构几乎一样，只是触发恢复的条件不同（MoveNext vs IO 完成）。'
-      : '❌ 答案是 c。两者都被编译成状态机类，这是 C# 编译器最漂亮的两个变换。理解其中一个，再学另一个就非常快。';
-    f.className = 'feedback show ' + (ok ? 'correct' : 'wrong');
-  }
-  function checkQ6() {
-    var f = document.getElementById('f6');
-    var sel = document.querySelector('input[name="q6"]:checked');
-    if (!sel) return;
-    var ok = sel.value === 'c';
-    f.textContent = ok
-      ? '✅ 正确！yield break 提前终止整个迭代，等价于普通方法里的 return。之后 foreach 循环退出，不会再调用 MoveNext()。'
-      : '❌ 答案是 c。yield break 是终止迭代，不是跳过一条（跳过一条应该用 continue），也不是暂停（yield return 才暂停）。';
-    f.className = 'feedback show ' + (ok ? 'correct' : 'wrong');
-  }
+var q1fb = {
+  correct: '✅ 正确！yield return 是延迟执行的——调用 GetNumbers() 时方法体不会执行（此时什么都不打印）。只有 foreach 第一次 MoveNext() 时，方法体才开始执行，打印 "start"，然后 yield return 1。',
+  wrong:   '❌ 答案是 b："after call" → "start" → "1"。调用 GetNumbers() 时方法不执行（延迟执行），foreach 才会触发真正的执行。'
+};
+var q2fb = {
+  correct: '✅ 正确！yield return 是流式的——一次只在内存里持有当前元素。而 List<T> 需要先全部生成再返回。注意：yield return 不是"运行更快"，而是"内存更省 + 首条延迟更低"。',
+  wrong:   '❌ 答案是 b。yield return 一次只保留当前元素在内存里。它不是"更快"——事实上状态机调度有微小开销——但内存节省和低延迟是它的核心优势。'
+};
+var q3fb = {
+  correct: '✅ 正确！编译器生成一个同时实现 IEnumerable<T> 和 IEnumerator<T> 的嵌套类，核心是 MoveNext() 里的 switch 状态机。局部变量都提升为字段。',
+  wrong:   '❌ 答案是 b。编译器生成一个状态机类——不涉及线程、不涉及反射、不涉及 SQL。这是在编译时完成的纯 IL 变换。'
+};
+var q4fb = {
+  correct: '✅ 正确！虽然 List<T> 实现了 IEnumerable<T>，编译没问题——但调用方可以把结果转型回 List<T> 并修改它，破坏了"我只给你读"的契约。用 yield return 逐条产出可以防止这种"后门修改"。',
+  wrong:   '❌ 答案是 c。编译没问题（List<T> 实现了 IEnumerable<T>），但调用方可以 cast 回 List<T> 并随意修改数据——破坏了只读语义。用 yield return 可以天然防止这个问题。'
+};
+var q5fb = {
+  correct: '✅ 正确！yield return 和 async/await 都是编译器魔法——方法体被切成多个"断点"，局部变量提升为字段，用 switch 状态机恢复执行。结构几乎一样，只是触发恢复的条件不同（MoveNext vs IO 完成）。',
+  wrong:   '❌ 答案是 c。两者都被编译成状态机类，这是 C# 编译器最漂亮的两个变换。理解其中一个，再学另一个就非常快。'
+};
+var q6fb = {
+  correct: '✅ 正确！yield break 提前终止整个迭代，等价于普通方法里的 return。之后 foreach 循环退出，不会再调用 MoveNext()。',
+  wrong:   '❌ 答案是 c。yield break 是终止迭代，不是跳过一条（跳过一条应该用 continue），也不是暂停（yield return 才暂停）。'
+};
 </script>
 
 </body>

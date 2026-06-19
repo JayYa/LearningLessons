@@ -4,51 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 0002 — 激活与生命周期</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; line-height: 1.7; color: #1a1a2e; background: #fafaf8; max-width: 780px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
-  h1 { font-size: 1.8rem; font-weight: 600; margin-bottom: .25rem; letter-spacing: -.02em; }
-  h1 .lesson-num { display: block; font-size: .75rem; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: .08em; margin-bottom: .25rem; }
-  h2 { font-size: 1.25rem; font-weight: 600; margin: 2.5rem 0 .75rem; padding-top: 1.5rem; border-top: 1px solid #e0e0d8; }
-  h3 { font-size: 1rem; font-weight: 600; margin: 1.5rem 0 .5rem; color: #333; }
-  p { margin-bottom: 1rem; }
-  a { color: #2563eb; text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .lede { font-size: 1.1rem; color: #555; margin-bottom: 2rem; }
-  code { font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: .88em; background: #f0f0ea; padding: .1em .35em; border-radius: 3px; }
-  pre { font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: .82rem; background: #1e1e2e; color: #cdd6f4; padding: 1.2rem 1.4rem; border-radius: 8px; overflow-x: auto; margin: 1rem 0 1.5rem; line-height: 1.55; }
-  pre .kw { color: #cba6f7; }
-  pre .str { color: #a6e3a1; }
-  pre .cmt { color: #6c7086; font-style: italic; }
-  pre .num { color: #fab387; }
-  pre .fn { color: #89b4fa; }
-  pre .hl { color: #f9e2af; }
-  blockquote { border-left: 3px solid #2563eb; padding: .5rem 0 .5rem 1.2rem; margin: 1.2rem 0; color: #555; font-style: italic; }
-  .callout { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 1rem 1.2rem; margin: 1.2rem 0; font-size: .92rem; }
-  .callout strong { color: #1e40af; }
-  .callout.warn { background: #fffbeb; border-color: #fde68a; }
-  .callout.warn strong { color: #92400e; }
-  .quiz { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 1.2rem 1.4rem; margin: 1.5rem 0; }
-  .quiz h3 { margin-top: 0; color: #92400e; }
-  .quiz label { display: block; padding: .35rem 0; cursor: pointer; }
-  .quiz button { margin-top: .8rem; padding: .45rem 1.2rem; background: #2563eb; color: #fff; border: none; border-radius: 5px; font-size: .9rem; cursor: pointer; }
-  .quiz .feedback { margin-top: .8rem; padding: .6rem .8rem; border-radius: 5px; display: none; font-size: .9rem; }
-  .quiz .feedback.correct { background: #d1fae5; color: #065f46; display: block; }
-  .quiz .feedback.incorrect { background: #fee2e2; color: #991b1b; display: block; }
-  .nav { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #e0e0d8; font-size: .88rem; color: #888; }
-  .nav a { margin-right: 1.5rem; }
-  table { width: 100%; border-collapse: collapse; margin: 1rem 0 1.5rem; font-size: .9rem; }
-  th, td { text-align: left; padding: .5rem .75rem; border-bottom: 1px solid #e0e0d8; }
-  th { font-weight: 600; color: #555; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
-  td:first-child { font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: .85rem; }
-  .file-ref { font-size: .82rem; color: #888; margin-top: -.5rem; margin-bottom: 1rem; }
-  .file-ref code { background: transparent; color: #888; }
-  ol { margin: .5rem 0 1rem 1.5rem; }
-  ol li { margin-bottom: .35rem; }
-  ul { margin: .5rem 0 1rem 1.5rem; }
-  ul li { margin-bottom: .25rem; }
-</style>
+<link rel="stylesheet" href="../assets/style.css">
 </head>
 <body>
 
@@ -89,6 +45,68 @@
   <strong>🔑 关键概念：<code>subscriptions</code></strong> 是 VS Code 扩展中最重要的资源管理模式。把它想象成一个"自动清理清单"——你注册命令、绑定事件监听器时，把返回的 <code>Disposable</code> 对象 push 进这个数组。当扩展被停用时，VS Code 会自动调用每个对象的 <code>dispose()</code> 方法。你不需要手动逐一清理。
 </div>
 
+<h3>1.2 为什么 subscriptions 不能自动管理？</h3>
+
+<p>
+  你可能会想：既然每个 <code>registerXxx()</code> 都返回 <code>Disposable</code>，为什么 VS Code 不自动把它们加到 <code>subscriptions</code> 里？为什么要开发者手动 push？这触及了 VS Code Extension API 的<strong>设计哲学</strong>核心。
+</p>
+
+<h4>原因一：技术约束——注册时拿不到 Context</h4>
+
+<pre><span class="cmt">// registerCommand 是 vscode.commands 上的静态方法
+// 它不在 activate() 内部，根本访问不到 context</span>
+<span class="kw">const</span> disposable = vscode.commands.registerCommand(<span class="str">'my.command'</span>, callback);
+<span class="cmt">// context 只在 activate(context) 的参数里出现
+// 两者在代码结构上是完全分离的</span></pre>
+
+<p>
+  <code>registerCommand()</code> 是挂载在 <code>vscode.commands</code> 命名空间上的全局静态方法，它不知道——也不应该知道——当前的 <code>ExtensionContext</code> 在哪里。要把它们耦合在一起，API 需要改头换面（比如让每个 register 方法接受一个可选的 context 参数），但 VS Code 团队刻意没这么做。
+</p>
+
+<h4>原因二：生命周期 ≠ 扩展生命周期</h4>
+
+<p>不是所有 <code>Disposable</code> 都应该活到扩展停用。有时你需要<strong>中途销毁</strong>某个资源：</p>
+
+<pre><span class="cmt">// 场景：切换工作区时重建监听器</span>
+<span class="kw">let</span> workspaceWatcher: vscode.Disposable;
+
+<span class="kw">function</span> <span class="fn">setupWorkspace</span>() {
+    workspaceWatcher?.dispose();  <span class="cmt">// 先清理旧的</span>
+    workspaceWatcher = vscode.workspace.onDidChangeTextDocument(handleChange);
+    <span class="cmt">// 这个监听器不应该进 subscriptions——我们要在切换工作区时手动 dispose</span>
+}</pre>
+
+<p>如果 VS Code 自动把所有东西塞进 <code>subscriptions</code>，你就<strong>失去了中途清理的能力</strong>——资源只能等扩展停用才释放。这会浪费内存，甚至因为持有了已失效的引用而出错。</p>
+
+<h4>原因三：拥有权原则</h4>
+
+<blockquote>
+  "创建资源的人负责销毁它。"<br>
+  ——<a href="https://en.wikipedia.org/wiki/Dispose_pattern">Dispose Pattern</a>（源自 .NET / RxJS 社区）
+</blockquote>
+
+<p>
+  <code>registerCommand()</code> 创建了一个命令注册，但它把<strong>所有权</strong>以 <code>Disposable</code> 对象的形式<strong>转移给你</strong>。你可以选择：
+</p>
+
+<ul>
+  <li>推入 <code>subscriptions</code>——让它随扩展一起消亡</li>
+  <li>自己持有并在合适的时机 <code>.dispose()</code>——中途取消</li>
+  <li>用 <code>vscode.Disposable.from(d1, d2, d3)</code> 合并管理多个 Disposable</li>
+</ul>
+
+<p>自动管理会剥夺这种<strong>选择权</strong>。手动 push 不是负担，而是赋权。</p>
+
+<h4>原因四：非 VS Code 资源</h4>
+
+<p>
+  <code>fs.watch()</code> 返回的是 Node.js 的 <code>FSWatcher</code>，不是 VS Code 的 <code>Disposable</code>。VS Code 不可能自动管理它不认识的资源类型。但通过<strong>适配器模式</strong>——包一层 <code>{ dispose: () => watcher.close() }</code>——你可以把任意资源包装成 VS Code 约定，享受统一的清理待遇。
+</p>
+
+<div class="callout">
+  <strong>📐 一句话总结：</strong><code>subscriptions</code> 不是 VS Code "帮不了你"的妥协，而是<strong>把资源生命周期的控制权交给你</strong>。这是一种赋权，不是负担。
+</div>
+
 <h2>2. activate() 内部：claude-context-bar 做了什么</h2>
 
 <p>打开 <a href="../temp_repo/src/extension.ts">temp_repo/src/extension.ts</a> 第 36 行，<code>activate()</code> 做了五件事，按照顺序：</p>
@@ -107,6 +125,34 @@ context.subscriptions.push(hideCommand);  <span class="cmt">// ⬅ 关键：推�
 <p>
   <code>registerCommand()</code> 返回一个 <code>Disposable</code>。如果不 push 到 <code>subscriptions</code>，扩展停用后命令引用会泄漏——用户点击状态栏上的隐藏按钮时 VS Code 会尝试调用一个已经不存在的回调。
 </p>
+
+<div class="callout">
+  <strong>📖 registerCommand 详解：两种命令，两种注册方式</strong><br><br>
+  VS Code 命令分为<strong>用户命令</strong>和<strong>内部命令</strong>两类，注册方式和用途完全不同：
+
+  <table style="margin-top:.5rem;">
+    <tr><th></th><th>用户命令</th><th>内部命令</th></tr>
+    <tr><td>声明位置</td><td><code>package.json</code> → <code>contributes.commands</code></td><td>只在代码中 <code>registerCommand()</code></td></tr>
+    <tr><td>命令面板</td><td>✅ 出现在 <code>Ctrl+Shift+P</code></td><td>❌ 不出现</td></tr>
+    <tr><td>快捷键</td><td>✅ 可绑定</td><td>❌ 不可绑定</td></tr>
+    <tr><td>典型用途</td><td>用户主动触发的操作</td><td>UI 组件的点击回调、程序间通信</td></tr>
+  </table>
+
+  <br>
+  <code>claudeContextBar.hideSession</code> 是<strong>内部命令</strong>——你在 <code>package.json</code> 里找不到它，因为它不是给用户在命令面板里调用的。它存在的唯一目的是：<strong>当用户点击状态栏条目时，VS Code 执行对应的回调</strong>。<br><br>
+
+  触发链路：<code>用户点击状态栏条目</code> → VS Code 读取 <code>StatusBarItem.command</code> → 按 ID 找到 <code>registerCommand</code> 注册的回调 → 传入 <code>arguments</code> 作为参数 → 回调执行。<br><br>
+
+  除了 UI 点击，命令还有其他触发方式：
+  <ul>
+    <li><strong>程序化调用</strong>——<code>vscode.commands.executeCommand('claudeContextBar.hideSession', ...)</code></li>
+    <li><strong>命令面板</strong>——前提是在 <code>package.json</code> 的 <code>contributes.commands</code> 中声明了</li>
+    <li><strong>键盘快捷键</strong>——同上，需要在 <code>package.json</code> 中声明才能在 keybindings 中使用</li>
+    <li><strong>菜单项</strong>——右键菜单、编辑器标题栏等，同样需要先声明</li>
+  </ul>
+
+  不在 <code>package.json</code> 声明 <code>hideSession</code> 是一种<strong>有意为之</strong>：用户不应该在命令面板中看到 "Hide Session" 这个选项（他们不知道 session 是什么），这个命令只作为状态栏点击的"技术回调"存在。声明式配置管用户界面，命令式注册管内部逻辑——各司其职。
+</div>
 
 <h3>2.2 监听配置变化</h3>
 
@@ -190,16 +236,46 @@ refreshInterval = setInterval(refreshAllSessions, intervalSeconds * 1000);</pre>
 }</pre>
 
 <p>
-  claude-context-bar 的 <code>deactivate()</code> <strong>和 subscriptions 中那个 dispose 函数几乎一模一样</strong>。这不是 bug——这是双重保险。原因：
+  claude-context-bar 的 <code>deactivate()</code> <strong>和 subscriptions 中那个 dispose 函数几乎一模一样</strong>。实际上，在正常流程下这是<strong>冗余的</strong>——因为两者都会在扩展停用时被调用。
 </p>
 
-<ul>
-  <li><code>subscriptions</code> 中的 dispose 在 <strong>VS Code 停用扩展时</strong>触发</li>
-  <li><code>deactivate()</code> 在 <strong>VS Code 停用扩展时</strong>也被调用</li>
-  <li>但 dispose 对象不一定被调用（如果你没有正确 push），而 <code>deactivate()</code> 一定会被调用</li>
-</ul>
+<h4>正常流程中发生了什么</h4>
 
-<p>两者同时存在是安全网，确保无论 VS Code 走哪条代码路径，资源都会被释放。</p>
+<pre><span class="cmt">// VS Code 停用扩展时的执行顺序：</span>
+<span class="fn">deactivate</span>() 被调用
+  → fileWatcher.close()
+  → clearInterval(refreshInterval)
+  → statusBarItems dispose
+  ↓
+context.subscriptions 逐个 dispose
+  → 包装对象 dispose() 被调用
+  → fileWatcher.close()       ← <span class="hl">第二次调用</span>
+  → clearInterval(refreshInterval)  ← <span class="hl">第二次调用</span>
+  → statusBarItems dispose    ← <span class="hl">第二次调用</span></pre>
+
+<p>
+  好在这些操作（<code>close()</code>、<code>clearInterval()</code>、<code>dispose()</code>）重复调用通常是<strong>无害的 no-op</strong>——不会崩溃，只是多余。
+</p>
+
+<h4>这更像演化痕迹而非精心设计</h4>
+
+<ol>
+  <li>开发者先写了 <code>deactivate()</code>——这是教程教会每个人的标准模式</li>
+  <li>后来学到了 subscriptions 的"乾坤袋"模式，又在 activate 末尾加了一个</li>
+  <li>两者没被重构合并——因为重复无害，清理掉反而要改两处</li>
+</ol>
+
+<p>这种"防御性编程"在工程中很常见，但它防御的场景其实不存在——如果 VS Code 连 <code>deactivate()</code> 都不调用，那它大概率也顾不上 dispose subscriptions 了。</p>
+
+<h4>最佳实践：选一个，不要混用</h4>
+
+<table>
+  <tr><th>方案</th><th>优点</th><th>风险</th></tr>
+  <tr><td><strong>A. 全押 subscriptions</strong>（推荐）<br><code>context.subscriptions.push(disposable)</code></td><td>每注册一个资源立刻 push，不会漏；省去写 <code>deactivate()</code> 的心智负担</td><td>需要手动中途 dispose 的资源要自己持有引用</td></tr>
+  <tr><td><strong>B. 全在 deactivate 手动清理</strong><br>不 push 到 subscriptions</td><td>所有清理逻辑集中一处，便于审查</td><td>容易漏：你必须在 activate 和 deactivate 之间维护"注册了什么"的对应关系</td></tr>
+</table>
+
+<p>两者<strong>不要同时写</strong>——那是没有收益的心智负担。如果你不确定选哪个，<strong>方案 A 是 VS Code 社区的默认做法</strong>。</p>
 
 <h2>5. 完整时间线</h2>
 
@@ -234,7 +310,7 @@ refreshInterval = setInterval(refreshAllSessions, intervalSeconds * 1000);</pre>
   <label><input type="radio" name="q1" value="b"> context.subscriptions</label>
   <label><input type="radio" name="q1" value="c"> vscode.Disposable</label>
   <label><input type="radio" name="q1" value="d"> package.json</label>
-  <button onclick="checkQ1()">检查答案</button>
+  <button onclick="checkQuiz('q1','b','registerCommand() 返回的 Disposable 被推入 context.subscriptions，VS Code 在停用扩展时自动调用它的 dispose()。','再看一下第 2.1 节的代码。registerCommand 的返回值被 push 到了哪里？')">检查答案</button>
   <div class="feedback" id="q1-fb"></div>
 </div>
 
@@ -245,7 +321,7 @@ refreshInterval = setInterval(refreshAllSessions, intervalSeconds * 1000);</pre>
   <label><input type="radio" name="q2" value="b"> 通过一个包装了 dispose() 的对象 push 到 subscriptions，同时在 deactivate() 中手动 close</label>
   <label><input type="radio" name="q2" value="c"> 通过 registerCommand() 间接注册</label>
   <label><input type="radio" name="q2" value="d"> 通过 onDidChangeConfiguration 的事件回调清理</label>
-  <button onclick="checkQ2()">检查答案</button>
+  <button onclick="checkQuiz('q2','b','它在 activate 末尾被包进一个有 dispose() 方法的对象 push 到 subscriptions，同时在 deactivate() 中也有 close()——双重保险。','复习第 2.4 节和第 3 节。fs.watch 返回的不是 VS Code Disposable，需要特殊处理。')">检查答案</button>
   <div class="feedback" id="q2-fb"></div>
 </div>
 
@@ -256,8 +332,19 @@ refreshInterval = setInterval(refreshAllSessions, intervalSeconds * 1000);</pre>
   <label><input type="radio" name="q3" value="b"> 定时器是兜底——文件监听在某些场景下会漏掉变化</label>
   <label><input type="radio" name="q3" value="c"> 定时器用于 UI 动画，文件监听用于数据同步</label>
   <label><input type="radio" name="q3" value="d"> 这是代码冗余，两者可以合并</label>
-  <button onclick="checkQ3()">检查答案</button>
+  <button onclick="checkQuiz('q3','b','文件监听在某些文件系统（网络挂载、WSL 等）中不可靠，定时器作为兜底确保状态栏最终一致性。','再读第 2.5 节。这是一种常见的工程防御模式。')">检查答案</button>
   <div class="feedback" id="q3-fb"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>问题 4</h3>
+  <p>VS Code 为什么<strong>不</strong>在 <code>registerCommand()</code> 内部自动帮你把 Disposable 添加到 subscriptions？</p>
+  <label><input type="radio" name="q4" value="a"> 技术上做不到——registerCommand 是静态方法，访问不到当前 ExtensionContext</label>
+  <label><input type="radio" name="q4" value="b"> 以上全部</label>
+  <label><input type="radio" name="q4" value="c"> 有些 Disposable 需要在扩展停用前中途销毁，自动管理剥夺了这种选择权</label>
+  <label><input type="radio" name="q4" value="d"> 非 VS Code 资源（如 fs.watch）返回的不是 Disposable，API 无法统一管理</label>
+  <button onclick="checkQuiz('q4','b','以上全部都是原因。技术约束、生命周期灵活性、拥有权原则、非 VS Code 资源的适配——这些共同构成了为什么 VS Code 把控制权交给你而不是自动管理。','这个选项本身没错，但不是最完整的答案。复习第 1.2 节——四个原因不是互斥的，它们共同解释了这一设计。')">检查答案</button>
+  <div class="feedback" id="q4-fb"></div>
 </div>
 
 <h2>8. 推荐深入阅读</h2>
@@ -277,44 +364,7 @@ refreshInterval = setInterval(refreshAllSessions, intervalSeconds * 1000);</pre>
   <a href="../reference/vscode-extension-api-basics.html">📋 参考：VS Code 扩展 API 基础</a>
 </div>
 
-<script>
-function checkQ1() {
-  const fb = document.getElementById('q1-fb');
-  const checked = document.querySelector('input[name="q1"]:checked');
-  if (!checked) { fb.textContent = '请先选择一个答案。'; fb.className = 'feedback incorrect'; return; }
-  if (checked.value === 'b') {
-    fb.textContent = '✓ 正确！registerCommand() 返回的 Disposable 被推入 context.subscriptions，VS Code 在停用扩展时自动调用它的 dispose()。';
-    fb.className = 'feedback correct';
-  } else {
-    fb.textContent = '✗ 再看一下第 2.1 节的代码。registerCommand 的返回值被 push 到了哪里？';
-    fb.className = 'feedback incorrect';
-  }
-}
-function checkQ2() {
-  const fb = document.getElementById('q2-fb');
-  const checked = document.querySelector('input[name="q2"]:checked');
-  if (!checked) { fb.textContent = '请先选择一个答案。'; fb.className = 'feedback incorrect'; return; }
-  if (checked.value === 'b') {
-    fb.textContent = '✓ 正确！它在 activate 末尾被包进一个有 dispose() 方法的对象 push 到 subscriptions，同时在 deactivate() 中也有 close()——双重保险。';
-    fb.className = 'feedback correct';
-  } else {
-    fb.textContent = '✗ 复习第 2.4 节和第 3 节。fs.watch 返回的不是 VS Code Disposable，需要特殊处理。';
-    fb.className = 'feedback incorrect';
-  }
-}
-function checkQ3() {
-  const fb = document.getElementById('q3-fb');
-  const checked = document.querySelector('input[name="q3"]:checked');
-  if (!checked) { fb.textContent = '请先选择一个答案。'; fb.className = 'feedback incorrect'; return; }
-  if (checked.value === 'b') {
-    fb.textContent = '✓ 正确！文件监听在某些文件系统（网络挂载、WSL 等）中不可靠，定时器作为兜底确保状态栏最终一致性。';
-    fb.className = 'feedback correct';
-  } else {
-    fb.textContent = '✗ 再读第 2.5 节。这是一种常见的工程防御模式。';
-    fb.className = 'feedback incorrect';
-  }
-}
-</script>
+<script src="../assets/quiz.js"></script>
 
 </body>
 </html>

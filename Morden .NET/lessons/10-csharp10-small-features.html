@@ -4,81 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 10: C# 10 — 文件范围命名空间 · 全局引用 · 常量内插字符串</title>
-<style>
-  :root {
-    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
-    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
-    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
-    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.7;
-    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
-  }
-  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
-  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
-  p { margin: 0.75rem 0; color: #333; }
-  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
-  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
-  .en::before { content: ' ('; } .en::after { content: ')'; }
-  .callout { padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem; }
-  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
-  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
-  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
-  .comparison {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
-  }
-  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
-  .comparison > div {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1rem 1.25rem;
-  }
-  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
-  .comparison > div.old h4 { color: var(--bad); }
-  .comparison > div.new h4 { color: var(--good); }
-  table {
-    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
-  }
-  th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
-  th { background: var(--code-bg); font-weight: 600; }
-  tr:nth-child(even) td { background: #fafaf9; }
-  pre {
-    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
-    border-radius: var(--radius); overflow-x: auto;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
-  }
-  code {
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.88em; background: var(--code-bg); padding: 0.15em 0.35em; border-radius: 4px;
-  }
-  pre code { background: none; padding: 0; font-size: inherit; }
-  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
-  .num { color: #fab387; } .type { color: #89b4fa; }
-  .quiz {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
-  }
-  .quiz h3 { margin-top: 0; }
-  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
-  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
-  .quiz label:hover { background: var(--code-bg); }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button { margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer; }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback { margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem; }
-  .feedback.show { display: block; }
-  .feedback.correct { background: var(--good-bg); color: var(--good); }
-  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
-  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; } li { margin: 0.3rem 0; }
-  .mild { font-size: 0.9rem; color: var(--text-muted); }
-  .badge { display: inline-block; padding: 0.15em 0.55em; border-radius: 100px; font-size: 0.78rem; font-weight: 600; }
-  .badge--val { background: #dafbe1; color: #1a7f37; }
-</style>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
 </head>
 <body>
 
@@ -320,6 +246,7 @@ app.Run();</code></pre>
 <div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
 </div>
 
+<script src="../assets/scripts/quiz.js"></script>
 <script>
 const answers = { q1: 'b', q2: 'b', q3: 'b' };
 const explanations = {
@@ -327,20 +254,7 @@ const explanations = {
   q2: { correct: "✅ 正确！隐式导入是 SDK 自动生成的 global using——机制完全相同（都编译为全局可见的 using 指令），只是来源不同（SDK vs 你手写）。两者可叠加。", wrong: "❌ 答案是 b。不是同一东西（a错），控制台和类库也有（c错），可以和你的 global using 叠加（d错）。" },
   q3: { correct: "✅ 正确！nameof() 是编译时常量表达式——编译器在编译时知道类名。数字字面量 3 也是常量。两个都是常量 → const 插值合法。零运行时开销。", wrong: "❌ 答案是 b。nameof 是编译时常量——可以用于 const 插值。不能用于 const 插值的是 Math.PI（静态字段）、DateTime.Now（运行时属性）等。" },
 };
-function checkAll() {
-  let correct = 0;
-  for (let qid of ['q1','q2','q3']) {
-    const selected = document.querySelector(`input[name="${qid}"]:checked`);
-    const fb = document.getElementById('fb' + qid.slice(1));
-    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
-    if (selected.value === answers[qid]) { fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++; }
-    else { fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show'; }
-  }
-  const scoreEl = document.getElementById('score');
-  scoreEl.style.display = 'block';
-  scoreEl.textContent = `得分：${correct} / 3`;
-  scoreEl.style.color = correct === 3 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
-}
+function checkAll() { Quiz.checkAll(answers, explanations); }
 </script>
 
 <h2>七、下一步</h2>

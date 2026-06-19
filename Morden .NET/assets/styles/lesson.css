@@ -1,0 +1,441 @@
+/* ============================================================
+   Lesson Stylesheet — Morden .NET Course
+   Shared across all lesson HTML files.
+   One source of truth for design tokens, typography, layout,
+   and reusable components.
+   ============================================================ */
+
+/* ── Design Tokens ────────────────────────────────────────── */
+:root {
+  --bg: #faf9f7;
+  --card-bg: #ffffff;
+  --text: #1a1a1a;
+  --text-muted: #6b6b6b;
+  --border: #e0ded8;
+  --accent: #512bd4;
+  --accent-light: #ede4ff;
+  --good: #1a7f37;
+  --good-bg: #dafbe1;
+  --warn: #9a6700;
+  --warn-bg: #fff8c5;
+  --bad: #cf222e;
+  --bad-bg: #ffebe9;
+  --code-bg: #f0efeb;
+  --radius: 12px;
+}
+
+/* ── Reset & Base ─────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 6rem;
+}
+
+/* ── Typography ───────────────────────────────────────────── */
+h1 {
+  font-size: 2rem;
+  margin-bottom: 0.25rem;
+}
+
+h2 {
+  font-size: 1.35rem;
+  margin: 2.5rem 0 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+h3 {
+  font-size: 1.1rem;
+  margin: 1.5rem 0 0.5rem;
+}
+
+h4 {
+  font-size: 1rem;
+  margin: 1.25rem 0 0.35rem;
+}
+
+p {
+  margin: 0.75rem 0;
+  color: #333;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+}
+
+/* ── English Annotation ───────────────────────────────────── */
+.en {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  font-style: italic;
+}
+.en::before { content: ' ('; }
+.en::after  { content: ')'; }
+
+.mild {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* ── Lists ────────────────────────────────────────────────── */
+ul, ol {
+  margin: 0.5rem 0 0.5rem 1.5rem;
+}
+li {
+  margin: 0.3rem 0;
+}
+
+/* ── Links ────────────────────────────────────────────────── */
+a {
+  color: var(--accent);
+}
+
+/* ── Callout Boxes ────────────────────────────────────────── */
+.callout {
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius);
+  margin: 1rem 0;
+  font-size: 0.95rem;
+}
+
+.callout--info {
+  background: #eef1ff;
+  border-left: 4px solid #512bd4;
+}
+
+.callout--warn {
+  background: var(--warn-bg);
+  border-left: 4px solid #9a6700;
+}
+
+.callout--good {
+  background: var(--good-bg);
+  border-left: 4px solid #1a7f37;
+}
+
+.callout--bad {
+  background: var(--bad-bg);
+  border-left: 4px solid #cf222e;
+}
+
+/* ── Before/After Comparison Grid ─────────────────────────── */
+.comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+@media (max-width: 600px) {
+  .comparison {
+    grid-template-columns: 1fr;
+  }
+}
+
+.comparison > div {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+}
+
+.comparison > div h4 {
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-muted);
+}
+
+.comparison > div.old h4 {
+  color: var(--bad);
+}
+
+.comparison > div.new h4 {
+  color: var(--good);
+}
+
+/* ── Code Blocks ──────────────────────────────────────────── */
+pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  margin: 0.75rem 0;
+}
+
+code {
+  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* ── Syntax Highlighting (Catppuccin Mocha) ───────────────── */
+.kw   { color: #cba6f7; }  /* keyword */
+.str  { color: #a6e3a1; }  /* string */
+.cmt  { color: #6c7086; }  /* comment */
+.num  { color: #fab387; }  /* number */
+.type { color: #89b4fa; }  /* type */
+.pnk  { color: #f38ba8; }  /* pink/misc */
+
+/* ── Tables ───────────────────────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.92rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  background: var(--code-bg);
+  font-weight: 600;
+}
+
+tr:nth-child(even) td {
+  background: #fafaf9;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── Timeline Component ───────────────────────────────────── */
+.timeline {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+
+.timeline-item {
+  flex: 1;
+  min-width: 100px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.timeline-item .year {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.timeline-item .plat {
+  color: var(--accent);
+}
+
+.timeline-item .lang {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+}
+
+.timeline-item.current {
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+/* ── Triad — 3-Column Comparison Grid ─────────────────────── */
+.triad {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+@media (max-width: 650px) {
+  .triad {
+    grid-template-columns: 1fr;
+  }
+}
+
+.triad > div {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  font-size: 0.88rem;
+}
+
+.triad > div h5 {
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+}
+
+/* ── Diagram Component (ASCII art) ────────────────────────── */
+.diagram {
+  background: var(--card-bg);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+  color: #333;
+}
+
+.diagram .arrow { color: var(--accent); font-weight: bold; }
+.diagram .label { color: var(--text-muted); font-style: italic; font-size: 0.85em; }
+
+/* ── Badge Component ──────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 0.15em 0.55em;
+  border-radius: 100px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge--pro     { background: var(--good-bg);      color: var(--good); }
+.badge--lts     { background: var(--accent-light); color: var(--accent); }
+.badge--preview { background: var(--warn-bg);      color: var(--warn); }
+.badge--daily   { background: var(--good-bg);      color: var(--good); }
+.badge--perf    { background: #eef1ff;             color: var(--accent); }
+.badge--val     { background: var(--good-bg);      color: var(--good); }
+.badge--new     { background: var(--good-bg);      color: var(--good); }
+.badge--ref     { background: var(--accent-light); color: var(--accent); }
+.badge--core    { background: var(--accent-light); color: var(--accent); }
+.badge--rare    { background: var(--warn-bg);      color: var(--warn); }
+
+/* ── Quiz Widget ──────────────────────────────────────────── */
+.quiz {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin: 1.5rem 0;
+}
+
+.quiz h3 {
+  margin-top: 0;
+}
+
+.quiz .question {
+  font-weight: 600;
+  margin: 1rem 0 0.5rem;
+}
+
+.quiz label {
+  display: block;
+  margin: 0.35rem 0;
+  cursor: pointer;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+}
+
+.quiz label:hover {
+  background: var(--code-bg);
+}
+
+.quiz input[type="radio"] {
+  margin-right: 0.5rem;
+}
+
+.quiz button {
+  margin-top: 1rem;
+  padding: 0.5rem 1.25rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.quiz button:hover {
+  opacity: 0.9;
+}
+
+/* ── Feedback Widget (quiz answers) ───────────────────────── */
+.feedback {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  display: none;
+  font-size: 0.92rem;
+}
+
+.feedback.show {
+  display: block;
+}
+
+.feedback.correct {
+  background: var(--good-bg);
+  color: var(--good);
+}
+
+.feedback.wrong {
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+
+/* ── Score Display ────────────────────────────────────────── */
+.score {
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin: 0.75rem 0;
+}
+
+/* ── Section Divider ──────────────────────────────────────── */
+.section-divider {
+  margin: 3rem 0 1.5rem;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Footer (lesson metadata) ─────────────────────────────── */
+.lesson-footer {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* ── Details/Accordion ────────────────────────────────────── */
+details {
+  margin: 1rem 0;
+}
+
+details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+details > div {
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--border);
+  margin-top: 0.5rem;
+}

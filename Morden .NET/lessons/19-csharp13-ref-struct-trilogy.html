@@ -4,92 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 19: C# 13 — ref struct 三部曲</title>
-<style>
-  :root {
-    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
-    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
-    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
-    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.7;
-    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
-  }
-  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
-  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
-  p { margin: 0.75rem 0; color: #333; }
-  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
-  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
-  .en::before { content: ' ('; } .en::after { content: ')'; }
-  .callout { padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem; }
-  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
-  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
-  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
-  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
-  .comparison {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
-  }
-  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
-  .comparison > div {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1rem 1.25rem;
-  }
-  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
-  .comparison > div.old h4 { color: var(--bad); }
-  .comparison > div.new h4 { color: var(--good); }
-  table {
-    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
-  }
-  th, td {
-    text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border);
-  }
-  th { background: var(--code-bg); font-weight: 600; }
-  pre {
-    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
-    border-radius: var(--radius); overflow-x: auto;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
-  }
-  code {
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.88em; background: var(--code-bg);
-    padding: 0.15em 0.35em; border-radius: 4px;
-  }
-  pre code { background: none; padding: 0; font-size: inherit; }
-  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
-  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
-  .quiz {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
-  }
-  .quiz h3 { margin-top: 0; }
-  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
-  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
-  .quiz label:hover { background: var(--code-bg); }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
-    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback {
-    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
-  }
-  .feedback.show { display: block; }
-  .feedback.correct { background: var(--good-bg); color: var(--good); }
-  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
-  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
-  li { margin: 0.3rem 0; }
-  .mild { font-size: 0.9rem; color: var(--text-muted); }
-  .badge { display: inline-block; padding: 0.15em 0.55em; border-radius: 100px; font-size: 0.78rem; font-weight: 600; }
-  .badge--core { background: #ede4ff; color: #512bd4; }
-  .badge--daily { background: #dafbe1; color: #1a7f37; }
-  .badge--perf  { background: #eef1ff; color: #512bd4; }
-</style>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
 </head>
 <body>
 
@@ -232,7 +147,7 @@ ForEach((ReadOnlySpan&lt;<span class="kw">int</span>&gt;)stackalloc <span class=
 
 <h3>3.2 C# 13：有条件放行</h3>
 
-<p>规则很简单——ref 变量<strong>不能跨越 await / yield 边界</strong>。在边界之前声明和使用 = 完全合法：</p>
+<p>规则很简单——ref 变量<strong>不能跨越 await / yield 边界</strong>。必须在 await 之前"死亡"（最后一次引用之后），await 之后不能再访问：</p>
 
 <div class="comparison">
   <div class="old"><h4>😣 C# 12 — 完全禁止</h4>
@@ -241,12 +156,13 @@ ForEach((ReadOnlySpan&lt;<span class="kw">int</span>&gt;)stackalloc <span class=
     <span class="cmt">// ❌ CS8344</span>
 }</code></pre>
   </div>
-  <div class="new"><h4>😎 C# 13 — await 之前可用</h4>
+  <div class="new"><h4>😎 C# 13 — buf 在 await 前死亡</h4>
 <pre><code><span class="kw">async</span> Task&lt;<span class="kw">int</span>&gt; ReadAsync(Stream s) {
     Span&lt;<span class="kw">byte</span>&gt; buf = stackalloc <span class="kw">byte</span>[<span class="num">16</span>];
-    <span class="kw">await</span> s.ReadAsync(buf);   <span class="cmt">// ✅</span>
-    <span class="kw">var</span> r = BitConverter.ToInt32(buf);
-    <span class="cmt">// buf 用完即弃——安全</span>
+    s.Read(buf);                         <span class="cmt">// 同步读取——没有 await</span>
+    <span class="kw">var</span> r = BitConverter.ToInt32(buf);    <span class="cmt">// buf 在这里"死亡"</span>
+    <span class="cmt">// 之后不再引用 buf——安全</span>
+    <span class="kw">await</span> s.FlushAsync();                 <span class="cmt">// ✅ await 在 buf 死亡之后</span>
     <span class="kw">return</span> r;
 }</code></pre>
   </div>
@@ -270,12 +186,46 @@ ForEach((ReadOnlySpan&lt;<span class="kw">int</span>&gt;)stackalloc <span class=
 </table>
 
 <div class="callout callout--good">
-<strong>实用价值：</strong>网络/文件 I/O 场景非常普遍——读 header、解析协议帧、验证签名。模式是"await 之前用 Span 做高性能同步解析，await 之后交给堆对象"。C# 13 之前你必须用 <code>byte[]</code>（堆分配），现在可以用 <code>stackalloc</code>（零分配）。核心思想：<strong>裸金属部分用 Span，跨越 await 时用堆对象。</strong>
+<strong>实用价值：</strong>网络/文件 I/O 场景非常普遍——读 header、解析协议帧、验证签名。模式是"await 之前用 Span 做高性能同步解析，await 之后交给堆对象"。C# 13 之前你必须用 <code>byte[]</code>（堆分配），现在可以用 <code>stackalloc</code>（零分配）。核心思想：<strong>同步解析部分用 Span（零分配栈内存），跨越 await 时才用堆对象。</strong>
+</div>
+
+<!-- ========================== DAILY-IMPACT ========================== -->
+
+<h2>四、日常开发中你会用到几个？</h2>
+
+<p>三个特性对普通开发者的影响程度不同：</p>
+
+<table>
+  <tr><th>特性</th><th>你直接写吗</th><th>好处怎么到你身上</th></tr>
+  <tr><td><strong>ref struct 实现接口</strong></td><td>几乎不</td><td>BCL 替你做完了——<code>Span&lt;T&gt;</code> 现在实现 <code>IEnumerable&lt;T&gt;</code>，你能直接把 Span 传给 <code>string.Join</code>、<code>foreach</code> 等</td></tr>
+  <tr><td><strong>allows ref struct</strong></td><td>偶尔</td><td>你写的泛型工具方法加一行约束，就能接受 Span 参数。不写泛型方法就用不到</td></tr>
+  <tr><td><strong>ref 进 async</strong></td><td><strong>经常</strong></td><td>任何 async I/O 方法里，想用 <code>stackalloc</code> 替代 <code>new byte[]</code> 省一次堆分配，直接写就行</td></tr>
+</table>
+
+<p>真正每天受益的是第三个。比如之前你要在 async 方法里读 header：</p>
+
+<div class="comparison">
+  <div class="old"><h4>😣 C# 12 — 被迫堆分配</h4>
+<pre><code><span class="kw">async</span> Task&lt;<span class="kw">int</span>&gt; ReadHeaderAsync(Stream s) {
+    <span class="kw">byte</span>[] buf = <span class="kw">new</span> <span class="kw">byte</span>[<span class="num">16</span>];   <span class="cmt">// 堆分配——只为了 16 字节</span>
+    <span class="kw">await</span> s.ReadAsync(buf, <span class="num">0</span>, <span class="num">16</span>);
+    <span class="kw">return</span> BitConverter.ToInt32(buf, <span class="num">0</span>);
+}</code></pre>
+  </div>
+  <div class="new"><h4>😎 C# 13 — 栈上搞定</h4>
+<pre><code><span class="kw">async</span> Task&lt;<span class="kw">int</span>&gt; ReadHeaderAsync(Stream s) {
+    Span&lt;<span class="kw">byte</span>&gt; buf = stackalloc <span class="kw">byte</span>[<span class="num">16</span>];  <span class="cmt">// 零分配</span>
+    s.Read(buf);                            <span class="cmt">// 同步读完</span>
+    <span class="kw">var</span> result = BitConverter.ToInt32(buf); <span class="cmt">// buf 死亡</span>
+    <span class="kw">await</span> s.FlushAsync();                   <span class="cmt">// 可以 await</span>
+    <span class="kw">return</span> result;
+}</code></pre>
+  </div>
 </div>
 
 <!-- ========================== QUIZ ========================== -->
 
-<h2>四、小测验</h2>
+<h2>五、小测验</h2>
 
 <div class="quiz" id="q1">
 <div class="question">1/4 · ref struct 实现 IDisposable 后，以下哪项<strong>不能</strong>做？</div>
@@ -283,7 +233,7 @@ ForEach((ReadOnlySpan&lt;<span class="kw">int</span>&gt;)stackalloc <span class=
 <label><input type="radio" name="q1" value="1">B. 作为 T 传给 where T : IDisposable 的泛型方法</label>
 <label><input type="radio" name="q1" value="2">C. 赋值给 IDisposable 类型的变量</label>
 <label><input type="radio" name="q1" value="3">D. 在 Dispose() 中清理非托管资源</label>
-<div class="feedback" id="fb1"></div>
+<div class="feedback" id="f_q1"></div>
 </div>
 
 <div class="quiz" id="q2">
@@ -292,7 +242,7 @@ ForEach((ReadOnlySpan&lt;<span class="kw">int</span>&gt;)stackalloc <span class=
 <label><input type="radio" name="q2" value="1">B. 在已有约束基础上额外允许 T 是 ref struct</label>
 <label><input type="radio" name="q2" value="2">C. 替代 where T : struct 约束</label>
 <label><input type="radio" name="q2" value="3">D. 让 ref struct 可以装箱到堆上</label>
-<div class="feedback" id="fb2"></div>
+<div class="feedback" id="f_q2"></div>
 </div>
 
 <div class="quiz" id="q3">
@@ -301,7 +251,7 @@ ForEach((ReadOnlySpan&lt;<span class="kw">int</span>&gt;)stackalloc <span class=
 <label><input type="radio" name="q3" value="1">B. async 方法中在 await 之后访问已声明的 Span&lt;T&gt;</label>
 <label><input type="radio" name="q3" value="2">C. 迭代器方法中在 yield 之前声明 ref 局部变量</label>
 <label><input type="radio" name="q3" value="3">D. unsafe 块出现在 async 方法中（不含 await）</label>
-<div class="feedback" id="fb3"></div>
+<div class="feedback" id="f_q3"></div>
 </div>
 
 <div class="quiz" id="q4">
@@ -310,12 +260,13 @@ ForEach((ReadOnlySpan&lt;<span class="kw">int</span>&gt;)stackalloc <span class=
 <label><input type="radio" name="q4" value="1">B. 消除"ref struct 是二等公民"的限制——实现接口、进入泛型、进入 async</label>
 <label><input type="radio" name="q4" value="2">C. 让所有类型都可以作为泛型参数</label>
 <label><input type="radio" name="q4" value="3">D. 允许 ref struct 在堆上分配</label>
-<div class="feedback" id="fb4"></div>
+<div class="feedback" id="f_q4"></div>
 
-<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
-<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+<button onclick="checkAll()">提交全部答案</button>
+<div id="score" style="display:none;"></div>
 </div>
 
+<script src="../assets/scripts/quiz.js"></script>
 <script>
 const answers = { q1: 2, q2: 1, q3: 1, q4: 1 };
 const explanations = {
@@ -324,28 +275,12 @@ const explanations = {
   q3: { correct: "✅ 正确！Span 不能跨越 await 边界——await 之后编译器将其视为已失效（CS4015）。A/C/D 在 C# 13 中都合法。", wrong: "❌ 不是。B 是正确答案——在 await 之后访问 Span 仍然不合法（CS4015）。A/C/D 在 C# 13 中都已合法。" },
   q4: { correct: "✅ 正确！三个特性共同消除 ref struct 的二等公民地位：能实现接口（1）、能进泛型（2）、能进 async（3）。", wrong: "❌ 不是。B 是正确答案——C# 13 三个 ref struct 改进共享一个设计哲学：让 ref struct 不再被排斥在语言的基本抽象之外。" },
 };
-function checkAll() {
-  let correct = 0;
-  for (let qid of ['q1','q2','q3','q4']) {
-    const selected = document.querySelector(`input[name="${qid}"]:checked`);
-    const fb = document.getElementById('fb' + qid.slice(1));
-    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
-    if (parseInt(selected.value) === answers[qid]) {
-      fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++;
-    } else {
-      fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show';
-    }
-  }
-  const scoreEl = document.getElementById('score');
-  scoreEl.style.display = 'block';
-  scoreEl.textContent = `得分：${correct} / 4`;
-  scoreEl.style.color = correct === 4 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
-}
+function checkAll() { Quiz.checkAll(answers, explanations); }
 </script>
 
 <!-- ========================== SUMMARY ========================== -->
 
-<h2>五、小结</h2>
+<h2>六、小结</h2>
 
 <table>
   <tr><th>特性</th><th>解决的问题</th><th>使用场景</th></tr>
@@ -354,7 +289,7 @@ function checkAll() {
   <tr><td><strong>ref/unsafe 进 async</strong></td><td>async 方法完全不能用 Span</td><td>I/O 场景——await 前用 stackalloc 零分配</td></tr>
 </table>
 
-<h2>六、下一步</h2>
+<h2>七、下一步</h2>
 
 <ul>
   <li><strong>Lesson 20：</strong>C# 13 小特性合集——<code>\e</code> 转义、方法组自然类型改进、partial 属性、OverloadResolutionPriority 等。</li>

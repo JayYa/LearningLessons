@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 0004 — 克努特大帝与北海帝国</title>
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/timeline.css">
+<link rel="stylesheet" href="../assets/compare.css">
+<link rel="stylesheet" href="../assets/tags.css">
+<link rel="stylesheet" href="../assets/reminder.css">
 <style>
   :root {
     --bg: #fdfaf5;
@@ -15,86 +21,11 @@
     --highlight: #eaf0f7;
     --sea: #d4e6f1;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, "Times New Roman", serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.85;
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 3rem 1.5rem 5rem;
-  }
-  h1 { font-size: 2rem; text-align: center; color: var(--accent); letter-spacing: 0.04em; margin-bottom: 0.3rem; }
-  .subtitle { text-align: center; color: var(--muted); font-size: 0.95rem; margin-bottom: 2.5rem; }
-  h2 { font-size: 1.35rem; color: var(--accent); margin: 2.5rem 0 1rem; padding-bottom: 0.35rem; border-bottom: 2px solid var(--border); }
-  h3 { font-size: 1.1rem; color: #1a3a4a; margin: 1.5rem 0 0.6rem; }
-  p { margin-bottom: 1rem; }
-  .lead {
-    font-size: 1.05rem;
-    background: var(--highlight);
-    padding: 1.2rem 1.5rem;
-    border-radius: 6px;
-    border-left: 4px solid var(--accent);
-    margin: 1rem 0 2rem;
-  }
-  .card {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.3rem 1.5rem;
-    margin: 1.2rem 0;
-  }
-  .card h3 { margin-top: 0; }
-
-  /* Compare columns */
-  .compare {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.8rem;
-    margin: 0.8rem 0;
-  }
-  @media (max-width: 600px) { .compare { grid-template-columns: 1fr; } }
-  .compare-col {
-    background: var(--highlight);
-    border-radius: 6px;
-    padding: 0.8rem 1rem;
-    font-size: 0.9rem;
-  }
+  /* File-specific overrides and components */
+  h3 { color: #1a3a4a; }
   .compare-col.real { background: #e8f0f8; }
-  .compare-col.real h4 { color: #1a5276; font-size: 0.85rem; margin: 0 0 0.4rem; font-family: system-ui, sans-serif; }
-  .compare-col.manga { background: #fff3e0; }
-  .compare-col.manga h4 { color: #e65100; font-size: 0.85rem; margin: 0 0 0.4rem; font-family: system-ui, sans-serif; }
+  .compare-col.real h4 { color: #1a5276; }
 
-  /* Tags */
-  .tag {
-    display: inline-block;
-    padding: 0.08rem 0.5rem;
-    border-radius: 3px;
-    font-size: 0.7rem;
-    font-family: system-ui, sans-serif;
-    color: #fff;
-    margin-left: 0.4rem;
-    vertical-align: middle;
-  }
-  .tag-manga { background: #2e7d32; }
-  .tag-history { background: #6d4c41; }
-
-  /* Tables */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-    font-size: 0.9rem;
-  }
-  th, td {
-    border: 1px solid var(--border);
-    padding: 0.5rem 0.7rem;
-    text-align: left;
-  }
-  th { background: var(--highlight); color: var(--accent); font-weight: 600; }
-
-  /* Annotations */
   .sidenote {
     font-size: 0.82rem;
     color: var(--muted);
@@ -103,7 +34,6 @@
     border-left: 2px solid var(--border);
   }
 
-  /* Empire diagram */
   .empire-map {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -134,110 +64,12 @@
     color: var(--muted);
   }
 
-  /* Timeline */
-  .timeline {
-    position: relative;
-    padding-left: 2.2rem;
-    margin: 1.5rem 0 1rem 0.5rem;
-  }
-  .timeline::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0.4rem; bottom: 0.4rem;
-    width: 2px;
-    background: #98b4c8;
-  }
-  .tl-item {
-    position: relative;
-    margin-bottom: 1.3rem;
-  }
-  .tl-item::before {
-    content: '';
-    position: absolute;
-    left: -2.55rem; top: 0.45rem;
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: 2px solid var(--bg);
-  }
-  .tl-item.key::before {
-    background: #c62828;
-    width: 14px; height: 14px;
-    left: -2.67rem; top: 0.35rem;
-  }
-  .tl-year {
-    font-weight: 700;
-    color: var(--accent);
-    font-size: 0.9rem;
-  }
-  .tl-item.key .tl-year { color: #c62828; }
-  .tl-text { font-size: 0.95rem; }
-
-  /* Quote */
   .quote {
     font-style: italic;
     color: var(--muted);
     border-left: 3px solid var(--border);
     padding-left: 1rem;
     margin: 1rem 0;
-  }
-
-  /* Quiz */
-  .quiz {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.5rem;
-    margin: 1.5rem 0;
-  }
-  .quiz .q { font-weight: 600; margin-bottom: 0.7rem; }
-  .quiz label { display: block; padding: 0.4rem 0; cursor: pointer; }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem;
-    padding: 0.5rem 1.8rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    font-size: 0.95rem;
-    cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback {
-    margin-top: 0.8rem;
-    padding: 0.7rem 1rem;
-    border-radius: 4px;
-    display: none;
-  }
-  .feedback.correct { background: #e8f5e9; color: #2e7d32; display: block; }
-  .feedback.incorrect { background: #fbe9e7; color: #c62828; display: block; }
-
-  .reminder {
-    background: #fff8e1;
-    border: 1px solid #ffcc02;
-    border-radius: 6px;
-    padding: 1rem 1.3rem;
-    margin: 2rem 0 1rem;
-    font-size: 0.92rem;
-  }
-  .reminder strong { color: #c79100; }
-  .cite { font-size: 0.78rem; color: var(--muted); }
-  .cite a { color: var(--muted); }
-  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-
-  /* Big number */
-  .big-num {
-    font-size: 3rem;
-    font-weight: 700;
-    color: var(--accent);
-    line-height: 1;
-    font-family: Georgia, serif;
-  }
-
-  @media print {
-    body { font-size: 11pt; padding: 1rem; }
-    .quiz button { display: none; }
   }
 </style>
 </head>
@@ -590,7 +422,7 @@
   <label><input type="radio" name="q1" value="a">A. 英格兰、冰岛、挪威</label>
   <label><input type="radio" name="q1" value="b">B. 英格兰、丹麦、挪威</label>
   <label><input type="radio" name="q1" value="c">C. 丹麦、瑞典、挪威</label>
-  <button onclick="checkQ1()">确认答案</button>
+  <button onclick="checkQuiz(1,'b','正确！北海帝国由英格兰（1016年征服）、丹麦（1018年继承）和挪威（1028年驱逐国王后控制）组成。','不对。正确答案是B：英格兰、丹麦、挪威。冰岛从未被克努特直接统治，瑞典仅南部部分地区受其影响。')">确认答案</button>
   <div class="feedback" id="f1"></div>
 </div>
 
@@ -599,7 +431,7 @@
   <label><input type="radio" name="q2" value="a">A. 国王的狂妄——他认为自己可以控制自然</label>
   <label><input type="radio" name="q2" value="b">B. 国王的谦卑——他表演给朝臣看，证明即使是国王在上帝面前也是凡人</label>
   <label><input type="radio" name="q2" value="c">C. 维京人对海洋的崇拜仪式</label>
-  <button onclick="checkQ2()">确认答案</button>
+  <button onclick="checkQuiz(2,'b','正确！亨廷顿记载的故事是克努特故意表演给朝臣看的一场“谦卑秀”——证明即使是伟大的国王，在自然和上帝面前也毫无力量。现代流行文化常常把这个故事曲解为傲慢。','不对。正确答案是B：这是一出精心设计的表演，目的是向谄媚的朝臣展示国王的谦卑和上帝的至高。克努特后来据说再也没有戴过王冠。')">确认答案</button>
   <div class="feedback" id="f2"></div>
 </div>
 
@@ -608,7 +440,7 @@
   <label><input type="radio" name="q3" value="a">A. 被英格兰军队反攻夺回</label>
   <label><input type="radio" name="q3" value="b">B. 基督教会拒绝支持克努特的继承人</label>
   <label><input type="radio" name="q3" value="c">C. 帝国完全依赖克努特个人能力，没有制度化结构</label>
-  <button onclick="checkQ3()">确认答案</button>
+  <button onclick="checkQuiz(3,'c','正确！北海帝国没有官僚系统、没有共同议会、没有继承法——全靠克努特一个人的精力、判断力和英格兰税收运转。1035年他一死，七个继承人在七年内把帝国拆回了三国。','不对。正确答案是C：帝国是“个人联合”，没有制度化——没有联合政府、没有统一法律、没有继承机制。克努特一死就裂了。')">确认答案</button>
   <div class="feedback" id="f3"></div>
 </div>
 
@@ -617,7 +449,7 @@
   <label><input type="radio" name="q4" value="a">A. 用英格兰的财富贿赂挪威贵族，而非大规模军事入侵</label>
   <label><input type="radio" name="q4" value="b">B. 派遣舰队封锁挪威所有港口</label>
   <label><input type="radio" name="q4" value="c">C. 通过政治婚姻获得挪威王位继承权</label>
-  <button onclick="checkQ4()">确认答案</button>
+  <button onclick="checkQuiz(4,'a','正确！克努特的核心策略是经济战：用英格兰的财富大量收买挪威贵族，让奥拉夫·哈拉尔松众叛亲离，几乎不战而胜。英格兰的税收是北海帝国的引擎。','不对。正确答案是A：克努特用英格兰的巨额财富贿赂挪威贵族，使奥拉夫失去支持后逃亡。圣河之战（1026）只是削弱了奥拉夫的外部盟友，真正拿下挪威靠的是钱，不是军队。')">确认答案</button>
   <div class="feedback" id="f4"></div>
 </div>
 
@@ -634,7 +466,7 @@
       <li>克努特在罗马的谈判、与教会的关系、对挪威贵族的贿赂——这些都不是"维京式"的行为。他是维京时代的最终产品：一个学会了所有欧洲政治规则的斯堪的纳维亚国王。</li>
     </ul>
   </div>
-<div class="reminder" style="background:#e3f0ff;border-color:#90c4f9;">
+<div class="reminder reminder-qa">
   <strong>🤖 有疑问？</strong> 随时向你的AI老师提问！例如：<br>
   <span style="font-size:0.88rem;">
     "如果克努特活得更久，北海帝国能变成永久帝国吗？"<br>
@@ -669,56 +501,7 @@
   · World History Encyclopedia: <a href="https://www.worldhistory.org/Cnut_the_Great/">Cnut the Great</a>.
 </p>
 
-<script>
-function checkQ1() {
-  var f = document.getElementById('f1');
-  var sel = document.querySelector('input[name="q1"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
-    f.className='feedback correct';
-    f.textContent='✅ 正确！北海帝国由英格兰（1016年征服）、丹麦（1018年继承）和挪威（1028年驱逐国王后控制）组成。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='❌ 不对。正确答案是B：英格兰、丹麦、挪威。冰岛从未被克努特直接统治，瑞典仅南部部分地区受其影响。';
-  }
-}
-function checkQ2() {
-  var f = document.getElementById('f2');
-  var sel = document.querySelector('input[name="q2"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
-    f.className='feedback correct';
-    f.textContent='✅ 正确！亨廷顿记载的故事是克努特故意表演给朝臣看的一场"谦卑秀"——证明即使是伟大的国王，在自然和上帝面前也毫无力量。现代流行文化常常把这个故事曲解为傲慢。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='❌ 不对。正确答案是B：这是一出精心设计的表演，目的是向谄媚的朝臣展示国王的谦卑和上帝的至高。克努特后来据说再也没有戴过王冠。';
-  }
-}
-function checkQ3() {
-  var f = document.getElementById('f3');
-  var sel = document.querySelector('input[name="q3"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'c') {
-    f.className='feedback correct';
-    f.textContent='✅ 正确！北海帝国没有官僚系统、没有共同议会、没有继承法——全靠克努特一个人的精力、判断力和英格兰税收运转。1035年他一死，七个继承人在七年内把帝国拆回了三国。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='❌ 不对。正确答案是C：帝国是"个人联合"，没有制度化——没有联合政府、没有统一法律、没有继承机制。克努特一死就裂了。';
-  }
-}
-function checkQ4() {
-  var f = document.getElementById('f4');
-  var sel = document.querySelector('input[name="q4"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'a') {
-    f.className='feedback correct';
-    f.textContent='✅ 正确！克努特的核心策略是经济战：用英格兰的财富大量收买挪威贵族，让奥拉夫·哈拉尔松众叛亲离，几乎不战而胜。英格兰的税收是北海帝国的引擎。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='❌ 不对。正确答案是A：克努特用英格兰的巨额财富贿赂挪威贵族，使奥拉夫失去支持后逃亡。圣河之战（1026）只是削弱了奥拉夫的外部盟友，真正拿下挪威靠的是钱，不是军队。';
-  }
-}
-</script>
+<script src="../assets/quiz.js"></script>
 
 </body>
 </html>

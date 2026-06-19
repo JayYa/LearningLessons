@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 0001 — 维京时代概览：冰海战纪的历史舞台</title>
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/timeline.css">
+<link rel="stylesheet" href="../assets/tags.css">
+<link rel="stylesheet" href="../assets/reminder.css">
 <style>
   :root {
     --bg: #fdfaf5;
@@ -15,107 +20,7 @@
     --highlight: #f5ecd7;
     --timeline-line: #c4a97d;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, "Times New Roman", serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.85;
-    max-width: 780px;
-    margin: 0 auto;
-    padding: 3rem 1.5rem 5rem;
-  }
-  h1 {
-    font-size: 2.2rem;
-    text-align: center;
-    margin-bottom: 0.3rem;
-    color: var(--accent);
-    letter-spacing: 0.04em;
-  }
-  .subtitle {
-    text-align: center;
-    color: var(--muted);
-    font-size: 0.95rem;
-    margin-bottom: 2.5rem;
-  }
-  h2 {
-    font-size: 1.4rem;
-    color: var(--accent);
-    margin: 2.5rem 0 1rem;
-    padding-bottom: 0.35rem;
-    border-bottom: 2px solid var(--border);
-  }
-  h3 {
-    font-size: 1.1rem;
-    color: #5a3a1a;
-    margin: 1.5rem 0 0.6rem;
-  }
-  p { margin-bottom: 1rem; }
-  .lead {
-    font-size: 1.1rem;
-    background: var(--highlight);
-    padding: 1.2rem 1.5rem;
-    border-radius: 6px;
-    border-left: 4px solid var(--accent);
-    margin: 1rem 0 2rem;
-  }
-  .card {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.3rem 1.5rem;
-    margin: 1.2rem 0;
-  }
-  .card h3 { margin-top: 0; }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-    font-size: 0.92rem;
-  }
-  th, td {
-    border: 1px solid var(--border);
-    padding: 0.55rem 0.75rem;
-    text-align: left;
-  }
-  th {
-    background: var(--highlight);
-    color: var(--accent);
-    font-weight: 600;
-  }
-  /* Timeline */
-  .timeline {
-    position: relative;
-    padding-left: 2.2rem;
-    margin: 1.5rem 0 1rem 0.5rem;
-  }
-  .timeline::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0.4rem; bottom: 0.4rem;
-    width: 2px;
-    background: var(--timeline-line);
-  }
-  .tl-item {
-    position: relative;
-    margin-bottom: 1.3rem;
-  }
-  .tl-item::before {
-    content: '';
-    position: absolute;
-    left: -2.55rem; top: 0.45rem;
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: 2px solid var(--bg);
-  }
-  .tl-year {
-    font-weight: 700;
-    color: var(--accent);
-    font-size: 0.9rem;
-  }
-  .tl-text { font-size: 0.95rem; }
-  /* Map box — now prominent at top */
+  /* File-specific: map and region components */
   .map-box {
     background: #fffdf8;
     border: 1px solid var(--border);
@@ -137,7 +42,6 @@
   .legend-w { display: inline-block; width: 24px; height: 2px; border-top: 2px dashed #c62828; }
   .legend-s { display: inline-block; width: 24px; height: 2px; border-top: 2px dashed #2e7d32; }
   .legend-e { display: inline-block; width: 24px; height: 2px; border-top: 2px dashed #1565c0; }
-  /* Region highlight cards */
   .region-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -158,79 +62,6 @@
     margin: 0 0 0.3rem;
   }
   .region-card p { margin: 0; font-size: 0.85rem; color: var(--muted); }
-  /* Tags */
-  .tag {
-    display: inline-block;
-    background: var(--accent);
-    color: #fff;
-    padding: 0.1rem 0.55rem;
-    border-radius: 3px;
-    font-size: 0.78rem;
-    margin-right: 0.3rem;
-    font-family: system-ui, sans-serif;
-  }
-  .tag-manga { background: #2e7d32; }
-  .tag-history { background: #6d4c41; }
-  /* Quiz */
-  .quiz {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.5rem;
-    margin: 1.5rem 0;
-  }
-  .quiz .q {
-    font-weight: 600;
-    margin-bottom: 0.7rem;
-  }
-  .quiz label {
-    display: block;
-    padding: 0.4rem 0;
-    cursor: pointer;
-  }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem;
-    padding: 0.5rem 1.8rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    font-size: 0.95rem;
-    cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback {
-    margin-top: 0.8rem;
-    padding: 0.7rem 1rem;
-    border-radius: 4px;
-    display: none;
-  }
-  .feedback.correct { background: #e8f5e9; color: #2e7d32; display: block; }
-  .feedback.incorrect { background: #fbe9e7; color: #c62828; display: block; }
-  .cite {
-    font-size: 0.78rem;
-    color: var(--muted);
-  }
-  .cite a { color: var(--muted); }
-  .reminder {
-    background: #fff8e1;
-    border: 1px solid #ffcc02;
-    border-radius: 6px;
-    padding: 1rem 1.3rem;
-    margin: 2rem 0 1rem;
-    font-size: 0.92rem;
-  }
-  .reminder strong { color: #c79100; }
-  hr {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 2rem 0;
-  }
-  @media print {
-    body { font-size: 11pt; padding: 1rem; }
-    .quiz button { display: none; }
-  }
 </style>
 </head>
 <body>
@@ -518,7 +349,7 @@
   <label><input type="radio" name="q1" value="a">A. 英格兰和法兰克</label>
   <label><input type="radio" name="q1" value="b">B. 冰岛、格陵兰和文兰</label>
   <label><input type="radio" name="q1" value="c">C. 罗斯和拜占庭</label>
-  <button onclick="checkQ1()">确认答案</button>
+  <button onclick="checkQuiz(1,'c','正确！东线（瑞典维京人/瓦良格人）经俄罗斯的河流南下，到达拜占庭帝国（君士坦丁堡，维京人称“米克拉加德”）和阿拉伯世界。漫画“东方远征篇”就是这条路线。','不对。正确答案是C：罗斯和拜占庭。西线通往冰岛→格陵兰→文兰，南线通往英格兰和法兰克。')">确认答案</button>
   <div class="feedback" id="f1"></div>
 </div>
 
@@ -527,7 +358,7 @@
   <label><input type="radio" name="q2" value="a">A. 英格兰、法兰西、德意志</label>
   <label><input type="radio" name="q2" value="b">B. 瑞典、挪威、芬兰</label>
   <label><input type="radio" name="q2" value="c">C. 英格兰、丹麦、挪威</label>
-  <button onclick="checkQ2()">确认答案</button>
+  <button onclick="checkQuiz(2,'c','正确！克努特大帝建立了横跨英格兰、丹麦、挪威的北海帝国（1018–1035年）。','不对。正确答案是C：英格兰、丹麦、挪威——这就是所谓的“北海帝国”。')">确认答案</button>
   <div class="feedback" id="f2"></div>
 </div>
 
@@ -536,7 +367,7 @@
   <label><input type="radio" name="q3" value="a">A. 罗马陷落（476）— 十字军东征（1096）</label>
   <label><input type="radio" name="q3" value="b">B. 林迪斯法恩洗劫（793）— 斯坦福桥战役（1066）</label>
   <label><input type="radio" name="q3" value="c">C. 查理曼加冕（800）— 黑死病爆发（1347）</label>
-  <button onclick="checkQ3()">确认答案</button>
+  <button onclick="checkQuiz(3,'b','正确！793年林迪斯法恩修道院洗劫标志着维京时代的开始，1066年斯坦福桥战役标志着传统意义上的终结。','不对。正确答案是B：793年林迪斯法恩洗劫—1066年斯坦福桥战役。')">确认答案</button>
   <div class="feedback" id="f3"></div>
 </div>
 
@@ -545,7 +376,7 @@
   <label><input type="radio" name="q4" value="a">A. 斯堪的纳维亚 → 英格兰 → 冰岛 → 文兰</label>
   <label><input type="radio" name="q4" value="b">B. 斯堪的纳维亚 → 冰岛 → 格陵兰 → 文兰</label>
   <label><input type="radio" name="q4" value="c">C. 斯堪的纳维亚 → 格陵兰 → 冰岛 → 文兰</label>
-  <button onclick="checkQ4()">确认答案</button>
+  <button onclick="checkQuiz(4,'b','正确！挪威人先定居冰岛（870年代），再从冰岛向西发现格陵兰（985年），最后从格陵兰到达文兰（约1000年）。这是一条逐步“跳岛”的北大西洋航线。','不对。正确答案是B：斯堪的纳维亚 → 冰岛 → 格陵兰 → 文兰。这是北大西洋“跳岛”航线的正确顺序。')">确认答案</button>
   <div class="feedback" id="f4"></div>
 </div>
 
@@ -559,7 +390,7 @@
   </ul>
 </div>
 
-<div class="reminder" style="background:#e3f0ff;border-color:#90c4f9;">
+<div class="reminder reminder-qa">
   <strong>🤖 有疑问？</strong> 随时向你的AI老师提问！例如：<br>
   <span style="font-size:0.88rem;">"维京时代之前，斯堪的纳维亚是什么样子？"<br>"为什么维京长船在军事上如此成功？"<br>"漫画里的约姆斯维京人在历史上真的存在吗？"<br>"东线的瓦良格人到拜占庭走了哪些河流？"</span>
 </div>
@@ -579,56 +410,7 @@
   📄 关联参考：<a href="../reference/viking-age-timeline.html">维京时代大事年表</a>（可打印版本）
 </p>
 
-<script>
-function checkQ1() {
-  var f = document.getElementById('f1');
-  var sel = document.querySelector('input[name="q1"]:checked');
-  if (!sel) { f.className = 'feedback incorrect'; f.textContent = '请先选择一个答案。'; return; }
-  if (sel.value === 'c') {
-    f.className = 'feedback correct';
-    f.textContent = '✅ 正确！东线（瑞典维京人/瓦良格人）经俄罗斯的河流南下，到达拜占庭帝国（君士坦丁堡，维京人称"米克拉加德"）和阿拉伯世界。漫画"东方远征篇"就是这条路线。';
-  } else {
-    f.className = 'feedback incorrect';
-    f.textContent = '❌ 不对。正确答案是C：罗斯和拜占庭。西线通往冰岛→格陵兰→文兰，南线通往英格兰和法兰克。';
-  }
-}
-function checkQ2() {
-  var f = document.getElementById('f2');
-  var sel = document.querySelector('input[name="q2"]:checked');
-  if (!sel) { f.className = 'feedback incorrect'; f.textContent = '请先选择一个答案。'; return; }
-  if (sel.value === 'c') {
-    f.className = 'feedback correct';
-    f.textContent = '✅ 正确！克努特大帝建立了横跨英格兰、丹麦、挪威的北海帝国（1018–1035年）。';
-  } else {
-    f.className = 'feedback incorrect';
-    f.textContent = '❌ 不对。正确答案是C：英格兰、丹麦、挪威——这就是所谓的"北海帝国"。';
-  }
-}
-function checkQ3() {
-  var f = document.getElementById('f3');
-  var sel = document.querySelector('input[name="q3"]:checked');
-  if (!sel) { f.className = 'feedback incorrect'; f.textContent = '请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
-    f.className = 'feedback correct';
-    f.textContent = '✅ 正确！793年林迪斯法恩修道院洗劫标志着维京时代的开始，1066年斯坦福桥战役标志着传统意义上的终结。';
-  } else {
-    f.className = 'feedback incorrect';
-    f.textContent = '❌ 不对。正确答案是B：793年林迪斯法恩洗劫—1066年斯坦福桥战役。';
-  }
-}
-function checkQ4() {
-  var f = document.getElementById('f4');
-  var sel = document.querySelector('input[name="q4"]:checked');
-  if (!sel) { f.className = 'feedback incorrect'; f.textContent = '请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
-    f.className = 'feedback correct';
-    f.textContent = '✅ 正确！挪威人先定居冰岛（870年代），再从冰岛向西发现格陵兰（985年），最后从格陵兰到达文兰（约1000年）。这是一条逐步"跳岛"的北大西洋航线。';
-  } else {
-    f.className = 'feedback incorrect';
-    f.textContent = '❌ 不对。正确答案是B：斯堪的纳维亚 → 冰岛 → 格陵兰 → 文兰。这是北大西洋"跳岛"航线的正确顺序。';
-  }
-}
-</script>
+<script src="../assets/quiz.js"></script>
 
 </body>
 </html>

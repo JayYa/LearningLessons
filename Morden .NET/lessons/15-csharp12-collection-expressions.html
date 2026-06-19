@@ -4,96 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 15: C# 12 — Collection Expressions（集合表达式）</title>
-<style>
-  :root {
-    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
-    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
-    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
-    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.7;
-    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
-  }
-  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
-  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
-  p { margin: 0.75rem 0; color: #333; }
-  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
-  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
-  .en::before { content: ' ('; } .en::after { content: ')'; }
-  .callout {
-    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
-  }
-  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
-  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
-  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
-  .comparison {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
-  }
-  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
-  .comparison > div {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1rem 1.25rem;
-  }
-  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
-  .comparison > div.old h4 { color: var(--bad); }
-  .comparison > div.new h4 { color: var(--good); }
-  table {
-    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
-  }
-  th, td {
-    text-align: left; padding: 0.6rem 0.8rem;
-    border-bottom: 1px solid var(--border);
-  }
-  th { background: var(--code-bg); font-weight: 600; }
-  tr:nth-child(even) td { background: #fafaf9; }
-  pre {
-    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
-    border-radius: var(--radius); overflow-x: auto;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
-  }
-  code {
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.88em; background: var(--code-bg);
-    padding: 0.15em 0.35em; border-radius: 4px;
-  }
-  pre code { background: none; padding: 0; font-size: inherit; }
-  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
-  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
-  .quiz {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
-  }
-  .quiz h3 { margin-top: 0; }
-  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
-  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
-  .quiz label:hover { background: var(--code-bg); }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
-    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback {
-    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
-  }
-  .feedback.show { display: block; }
-  .feedback.correct { background: var(--good-bg); color: var(--good); }
-  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
-  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
-  li { margin: 0.3rem 0; }
-  .mild { font-size: 0.9rem; color: var(--text-muted); }
-  .badge {
-    display: inline-block; padding: 0.15em 0.55em; border-radius: 100px;
-    font-size: 0.78rem; font-weight: 600;
-  }
-  .badge--fast { background: #dafbe1; color: #1a7f37; }
-</style>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
 </head>
 <body>
 
@@ -343,7 +254,7 @@ MySet&lt;<span class="kw">int</span>&gt; set = [<span class="num">1</span>, <spa
 <label><input type="radio" name="q1" value="1">B. 编译器优化为 <code>Array.Empty&lt;int&gt;()</code>——零堆分配</label>
 <label><input type="radio" name="q1" value="2">C. 编译错误——空集合表达式不允许用于数组</label>
 <label><input type="radio" name="q1" value="3">D. 分配一个长度为 1 的数组，元素为 default(int)</label>
-<div class="feedback" id="fb1"></div>
+<div class="feedback" id="f_q1"></div>
 </div>
 
 <div class="quiz" id="q2">
@@ -352,7 +263,7 @@ MySet&lt;<span class="kw">int</span>&gt; set = [<span class="num">1</span>, <spa
 <label><input type="radio" name="q2" value="1">B. <code>..e</code> 和 <code>e.ToArray()</code> 的行为和性能完全相同</label>
 <label><input type="radio" name="q2" value="2">C. <code>..e</code> 是编译时展开——编译器知道目标大小，可精确分配</label>
 <label><input type="radio" name="q2" value="3">D. <code>..</code> 只能在集合表达式的开头使用</label>
-<div class="feedback" id="fb2"></div>
+<div class="feedback" id="f_q2"></div>
 </div>
 
 <div class="quiz" id="q3">
@@ -361,12 +272,13 @@ MySet&lt;<span class="kw">int</span>&gt; set = [<span class="num">1</span>, <spa
 <label><input type="radio" name="q3" value="1">B. 预分配 capacity = 3，通过 <code>CollectionsMarshal</code> 写入</label>
 <label><input type="radio" name="q3" value="2">C. 转换为数组再拷贝到 List——所以比直接初始化慢</label>
 <label><input type="radio" name="q3" value="3">D. 每次都调用 <code>list.Add()</code> 三次，和手动写一样</label>
-<div class="feedback" id="fb3"></div>
+<div class="feedback" id="f_q3"></div>
 
-<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
-<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+<button onclick="checkAll()">提交全部答案</button>
+<div id="score" style="display:none;"></div>
 </div>
 
+<script src="../assets/scripts/quiz.js"></script>
 <script>
 const answers = { q1: 1, q2: 2, q3: 1 };
 const explanations = {
@@ -374,23 +286,7 @@ const explanations = {
   q2: { correct: "✅ 正确！.. 是编译时展开。编译器知道所有展开源和元素的总数，可以一次性分配目标集合的精确大小——比 LINQ Concat 的动态扩容更高效。", wrong: "❌ 不是。.. 是编译时展开，可用于任何实现了正确模式的集合类型，可出现在集合表达式的任意位置。正确答案是 C。" },
   q3: { correct: "✅ 正确！对于 List&lt;T&gt;，编译器预分配 capacity = N，然后通过 CollectionsMarshal.AsSpan 获取内部 Span 直接写入——绕过了 Add() 方法的边界检查和容量检查。", wrong: "❌ 不是。编译器预分配 capacity 并通过 Span 直接写入 List 内部缓冲区——比逐个 Add() 更高效。正确答案是 B。" },
 };
-function checkAll() {
-  let correct = 0;
-  for (let qid of ['q1','q2','q3']) {
-    const selected = document.querySelector(`input[name="${qid}"]:checked`);
-    const fb = document.getElementById('fb' + qid.slice(1));
-    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
-    if (parseInt(selected.value) === answers[qid]) {
-      fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++;
-    } else {
-      fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show';
-    }
-  }
-  const scoreEl = document.getElementById('score');
-  scoreEl.style.display = 'block';
-  scoreEl.textContent = `得分：${correct} / 3`;
-  scoreEl.style.color = correct === 3 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
-}
+function checkAll() { Quiz.checkAll(answers, explanations); }
 </script>
 
 <!-- ============ 7. NEXT ============ -->

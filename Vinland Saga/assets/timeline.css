@@ -1,0 +1,76 @@
+/* ============================================================
+   assets/timeline.css — 时间线组件样式
+   Vinland Saga 教学 workspace
+
+   依赖：base.css（:root 变量）
+
+   HTML 结构：
+     <div class="timeline">
+       <div class="tl-item">
+         <div class="tl-year">793</div>
+         <div class="tl-text">林迪斯法恩修道院遭袭……</div>
+       </div>
+       <div class="tl-item key">
+         <div class="tl-year">1002</div>
+         <div class="tl-text">圣布里斯节大屠杀……</div>
+       </div>
+     </div>
+
+   .tl-item.key 用于标记关键转折事件（红色圆点 + 红色年份）。
+   ============================================================ */
+
+.timeline {
+  position: relative;
+  padding-left: 2.2rem;
+  margin: 1.5rem 0 1rem 0.5rem;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.4rem;
+  bottom: 0.4rem;
+  width: 2px;
+  background: var(--border);
+}
+
+.tl-item {
+  position: relative;
+  margin-bottom: 1.3rem;
+}
+
+.tl-item::before {
+  content: '';
+  position: absolute;
+  left: -2.55rem;
+  top: 0.45rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+}
+
+/* 关键事件变体 */
+.tl-item.key::before {
+  background: #c62828;
+  width: 14px;
+  height: 14px;
+  left: -2.67rem;
+  top: 0.35rem;
+}
+
+.tl-year {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.tl-item.key .tl-year {
+  color: #c62828;
+}
+
+.tl-text {
+  font-size: 0.95rem;
+}

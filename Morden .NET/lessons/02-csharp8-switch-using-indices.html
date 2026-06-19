@@ -4,85 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 02: C# 8 Switch Expressions · Using Declarations · Indices/Ranges</title>
-<style>
-  :root {
-    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
-    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
-    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
-    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.7;
-    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
-  }
-  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
-  p { margin: 0.75rem 0; color: #333; }
-  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
-  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
-  .en::before { content: ' ('; } .en::after { content: ')'; }
-
-  .callout {
-    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
-  }
-  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
-  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
-  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
-
-  .comparison {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
-  }
-  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
-  .comparison > div {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1rem 1.25rem;
-  }
-  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
-  .comparison > div.old h4 { color: var(--bad); }
-  .comparison > div.new h4 { color: var(--good); }
-
-  pre {
-    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
-    border-radius: var(--radius); overflow-x: auto;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
-  }
-  code {
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.88em; background: var(--code-bg);
-    padding: 0.15em 0.35em; border-radius: 4px;
-  }
-  pre code { background: none; padding: 0; font-size: inherit; }
-  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
-  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
-
-  .quiz {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
-  }
-  .quiz h3 { margin-top: 0; }
-  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
-  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
-  .quiz label:hover { background: var(--code-bg); }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
-    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback {
-    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
-  }
-  .feedback.show { display: block; }
-  .feedback.correct { background: var(--good-bg); color: var(--good); }
-  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
-  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
-  li { margin: 0.3rem 0; }
-  .mild { font-size: 0.9rem; color: var(--text-muted); }
-</style>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
 </head>
 <body>
 
@@ -601,8 +523,8 @@ arr[2..5];    <span class="cmt">// [30,40,50]——"从索引 2 到末尾"</span
   <label><input type="radio" name="q1" value="b"> B</label>
   <label><input type="radio" name="q1" value="c"> C</label>
   <label><input type="radio" name="q1" value="d"> A 和 B 都会失败</label>
-  <button onclick="checkQ1()">确认</button>
-  <div class="feedback" id="f1"></div>
+  <button onclick="Quiz.check('q1','b',q1fb)">确认</button>
+  <div class="feedback" id="f_q1"></div>
 </div>
 
 <div class="quiz" id="q2">
@@ -612,8 +534,8 @@ arr[2..5];    <span class="cmt">// [30,40,50]——"从索引 2 到末尾"</span
   <label><input type="radio" name="q2" value="b"> using 声明在变量离开作用域时释放</label>
   <label><input type="radio" name="q2" value="c"> using 声明不需要实现 IDisposable</label>
   <label><input type="radio" name="q2" value="d"> using 声明只能在 .csproj 中开启</label>
-  <button onclick="checkQ2()">确认</button>
-  <div class="feedback" id="f2"></div>
+  <button onclick="Quiz.check('q2','b',q2fb)">确认</button>
+  <div class="feedback" id="f_q2"></div>
 </div>
 
 <div class="quiz" id="q3">
@@ -623,8 +545,8 @@ arr[2..5];    <span class="cmt">// [30,40,50]——"从索引 2 到末尾"</span
   <label><input type="radio" name="q3" value="b"> [40, 50]</label>
   <label><input type="radio" name="q3" value="c"> [30, 40]</label>
   <label><input type="radio" name="q3" value="d"> 运行时异常</label>
-  <button onclick="checkQ3()">确认</button>
-  <div class="feedback" id="f3"></div>
+  <button onclick="Quiz.check('q3','b',q3fb)">确认</button>
+  <div class="feedback" id="f_q3"></div>
 </div>
 
 <div class="quiz" id="q4">
@@ -644,8 +566,8 @@ arr[2..5];    <span class="cmt">// [30,40,50]——"从索引 2 到末尾"</span
   <label><input type="radio" name="q4" value="b"> "在 Y 轴上"</label>
   <label><input type="radio" name="q4" value="c"> "第四象限"</label>
   <label><input type="radio" name="q4" value="d"> 编译错误——穷尽检查失败</label>
-  <button onclick="checkQ4()">确认</button>
-  <div class="feedback" id="f4"></div>
+  <button onclick="Quiz.check('q4','d',q4fb)">确认</button>
+  <div class="feedback" id="f_q4"></div>
 </div>
 
 <div class="quiz" id="q5">
@@ -655,66 +577,37 @@ arr[2..5];    <span class="cmt">// [30,40,50]——"从索引 2 到末尾"</span
   <label><input type="radio" name="q5" value="b"> when 条件失败时，会抛出一个异常</label>
   <label><input type="radio" name="q5" value="c"> when 可以调用方法，模式本身不能</label>
   <label><input type="radio" name="q5" value="d"> when 可以比较模式中绑定出来的变量</label>
-  <button onclick="checkQ5()">确认</button>
-  <div class="feedback" id="f5"></div>
+  <button onclick="Quiz.check('q5','b',q5fb)">确认</button>
+  <div class="feedback" id="f_q5"></div>
 </div>
 
-<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<hr class="section-divider">
 <p class="mild">
   Lesson 02 · C# 8 Switch Expressions / Using Declarations / Indices &amp; Ranges · 下一课预告：<a href="03-sync-yield-return-iterators.html">Lesson 03 — yield return 同步迭代器</a>（异步流的前置基础）
 </p>
 
+<script src="../assets/scripts/quiz.js"></script>
 <script>
-  function checkQ1() {
-    var f = document.getElementById('f1');
-    var selected = document.querySelector('input[name="q1"]:checked');
-    if (!selected) return;
-    var correct = selected.value === 'b';
-    f.textContent = correct
-      ? '✅ 正确！B 缺少丢弃模式 _（或穷举所有 int 值），switch 表达式要求穷尽匹配。A 和 C 都有 _ 兜底。'
-      : '❌ 答案是 B。switch 表达式要求穷尽匹配，B 只覆盖了 1 和 2，缺少 _ 来兜底所有其他 int 值。A 和 C 都有 _ 兜底。';
-    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
-  }
-  function checkQ2() {
-    var f = document.getElementById('f2');
-    var selected = document.querySelector('input[name="q2"]:checked');
-    if (!selected) return;
-    var correct = selected.value === 'b';
-    f.textContent = correct
-      ? '✅ 正确！using 声明在变量离开作用域时释放——通常是方法结束。如果要尽早释放，用老式 using 语句。'
-      : '❌ 答案是 b。using 声明在变量离开作用域时释放（通常方法结束），不是语句结束。它仍然需要 IDisposable。';
-    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
-  }
-  function checkQ3() {
-    var f = document.getElementById('f3');
-    var selected = document.querySelector('input[name="q3"]:checked');
-    if (!selected) return;
-    var correct = selected.value === 'b';
-    f.textContent = correct
-      ? '✅ 正确！^2 = 索引3（元素 40），^0 = 索引5（= Length，右边界不包含），所以范围是 [3..5) → [40, 50]。'
-      : '❌ 答案是 [40, 50]。^2 = 索引3（元素 40），^0 = 索引5（= Length），范围 [3..5) 是左闭右开 → [40, 50]。';
-    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
-  }
-  function checkQ4() {
-    var f = document.getElementById('f4');
-    var selected = document.querySelector('input[name="q4"]:checked');
-    if (!selected) return;
-    var correct = selected.value === 'd';
-    f.textContent = correct
-      ? '✅ 正确！编译错误。switch 表达式要求穷尽匹配，代码只覆盖了 7 种情况，编译器无法证明所有 (int x, int y) 组合都被覆盖，必须加 _ 兜底。'
-      : '❌ 答案是「编译错误」。这个 switch 表达式缺少 _ 丢弃模式，编译器无法证明 (int, int) 的所有组合都被覆盖，所以报错。回答"在 Y 轴上"的话——(0, -5) 确实 x=0，但 y≠0，所以不命中 (0, _)，即使命中也编译不过。';
-    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
-  }
-  function checkQ5() {
-    var f = document.getElementById('f5');
-    var selected = document.querySelector('input[name="q5"]:checked');
-    if (!selected) return;
-    var correct = selected.value === 'b';
-    f.textContent = correct
-      ? '✅ 正确！when 条件失败时不会抛异常，而是跳过当前分支继续尝试下一个分支。这就是 when 的核心语义——"模式匹配 + 条件过滤"。'
-      : '❌ 答案是 b（错误说法）。when 条件失败不会抛异常——它会继续尝试下一个分支。A、C、D 都是对 when 的正确描述。';
-    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
-  }
+var q1fb = {
+  correct: '✅ 正确！B 缺少丢弃模式 _（或穷举所有 int 值），switch 表达式要求穷尽匹配。A 和 C 都有 _ 兜底。',
+  wrong:   '❌ 答案是 B。switch 表达式要求穷尽匹配，B 只覆盖了 1 和 2，缺少 _ 来兜底所有其他 int 值。A 和 C 都有 _ 兜底。'
+};
+var q2fb = {
+  correct: '✅ 正确！using 声明在变量离开作用域时释放——通常是方法结束。如果要尽早释放，用老式 using 语句。',
+  wrong:   '❌ 答案是 b。using 声明在变量离开作用域时释放（通常方法结束），不是语句结束。它仍然需要 IDisposable。'
+};
+var q3fb = {
+  correct: '✅ 正确！^2 = 索引3（元素 40），^0 = 索引5（= Length，右边界不包含），所以范围是 [3..5) → [40, 50]。',
+  wrong:   '❌ 答案是 [40, 50]。^2 = 索引3（元素 40），^0 = 索引5（= Length），范围 [3..5) 是左闭右开 → [40, 50]。'
+};
+var q4fb = {
+  correct: '✅ 正确！编译错误。switch 表达式要求穷尽匹配，代码只覆盖了 7 种情况，编译器无法证明所有 (int x, int y) 组合都被覆盖，必须加 _ 兜底。',
+  wrong:   '❌ 答案是「编译错误」。这个 switch 表达式缺少 _ 丢弃模式，编译器无法证明 (int, int) 的所有组合都被覆盖，所以报错。回答"在 Y 轴上"的话——(0, -5) 确实 x=0，但 y≠0，所以不命中 (0, _)，即使命中也编译不过。'
+};
+var q5fb = {
+  correct: '✅ 正确！when 条件失败时不会抛异常，而是跳过当前分支继续尝试下一个分支。这就是 when 的核心语义——"模式匹配 + 条件过滤"。',
+  wrong:   '❌ 答案是 b（错误说法）。when 条件失败不会抛异常——它会继续尝试下一个分支。A、C、D 都是对 when 的正确描述。'
+};
 </script>
 
 </body>

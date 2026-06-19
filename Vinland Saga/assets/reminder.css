@@ -1,0 +1,40 @@
+/* ============================================================
+   assets/reminder.css — 提醒/提示框组件
+   Vinland Saga 教学 workspace
+
+   依赖：base.css（:root 变量）
+
+   HTML 结构：
+     <!-- 标准黄色提醒框 -->
+     <div class="reminder">
+       <strong>💡 提示：</strong>……
+     </div>
+
+     <!-- 蓝色追问提示框 -->
+     <div class="reminder reminder-qa">
+       <strong>💬 想更深入？</strong>……
+     </div>
+   ============================================================ */
+
+.reminder {
+  background: #fff8e1;
+  border: 1px solid #ffcc02;
+  border-radius: 6px;
+  padding: 1rem 1.3rem;
+  margin: 2rem 0 1rem;
+  font-size: 0.92rem;
+}
+
+.reminder strong {
+  color: #c79100;
+}
+
+/* --- 蓝色变体：AI 追问 / Q&A 提示 --- */
+.reminder-qa {
+  background: #e3f0ff;
+  border-color: #90c4f9;
+}
+
+.reminder-qa strong {
+  color: #1a5276;
+}

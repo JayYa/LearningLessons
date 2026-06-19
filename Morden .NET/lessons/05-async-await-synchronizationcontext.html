@@ -4,106 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 05: SynchronizationContext — await 续延调度的核心机制</title>
-<style>
-  :root {
-    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
-    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
-    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
-    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.7;
-    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
-  }
-  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
-  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
-  p { margin: 0.75rem 0; color: #333; }
-  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
-  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
-  .en::before { content: ' ('; } .en::after { content: ')'; }
-
-  .callout {
-    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
-  }
-  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
-  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
-  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
-  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
-
-  .comparison {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
-  }
-  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
-  .comparison > div {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1rem 1.25rem;
-  }
-  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
-  .comparison > div.old h4 { color: var(--bad); }
-  .comparison > div.new h4 { color: var(--good); }
-
-  table {
-    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
-  }
-  th, td {
-    text-align: left; padding: 0.6rem 0.8rem;
-    border-bottom: 1px solid var(--border);
-  }
-  th { background: var(--code-bg); font-weight: 600; }
-  tr:nth-child(even) td { background: #fafaf9; }
-
-  pre {
-    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
-    border-radius: var(--radius); overflow-x: auto;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
-  }
-  code {
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.88em; background: var(--code-bg);
-    padding: 0.15em 0.35em; border-radius: 4px;
-  }
-  pre code { background: none; padding: 0; font-size: inherit; }
-  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
-  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
-
-  .quiz {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
-  }
-  .quiz h3 { margin-top: 0; }
-  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
-  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
-  .quiz label:hover { background: var(--code-bg); }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
-    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback {
-    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
-  }
-  .feedback.show { display: block; }
-  .feedback.correct { background: var(--good-bg); color: var(--good); }
-  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
-  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
-  li { margin: 0.3rem 0; }
-  .mild { font-size: 0.9rem; color: var(--text-muted); }
-
-  .diagram {
-    background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius);
-    padding: 1.5rem; margin: 1.5rem 0; font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
-    font-size: 0.82rem; line-height: 1.6; white-space: pre; overflow-x: auto;
-    color: #333;
-  }
-  .diagram .arrow { color: var(--accent); font-weight: bold; }
-  .diagram .label { color: var(--text-muted); font-style: italic; font-size: 0.85em; }
-</style>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
 </head>
 <body>
 
@@ -788,7 +689,7 @@ Console.WriteLine(t1 == t2);  <span class="cmt">// 输出什么？</span></code>
   <div class="feedback" id="f_q5"></div>
 </div>
 
-<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<hr class="section-divider">
 <p class="mild">
   Lesson 05 · SynchronizationContext 与 await 续延调度 · 下一课预告：<a href="06-csharp8-wrapup-default-interface-methods.html">Lesson 06 — C# 8 收尾 (Default Interface Methods)</a>
 </p>
@@ -796,42 +697,31 @@ Console.WriteLine(t1 == t2);  <span class="cmt">// 输出什么？</span></code>
   有任何不清楚的地方？<strong>直接在对话中追问</strong>——Agent 就是你的私教。
 </p>
 
+<script src="../assets/scripts/quiz.js"></script>
 <script>
-function check(qid, correct) {
-  var f = document.getElementById('f_' + qid);
-  var selected = document.querySelector('input[name="' + qid + '"]:checked');
-  if (!selected) {
-    f.textContent = '⚠️ 请先选择一个答案。';
-    f.className = 'feedback show wrong';
-    return;
+var answers = {
+  q1: {
+    correct: '✅ 正确！Post() 把委托异步投递到目标上下文，不阻塞调用方（区别于 Send 的同步等待）。',
+    wrong:   '❌ 答案是「b 异步投递」。Post 不是同步执行（那是 Send），也不创建新线程，而是把委托排队给目标上下文去调度。'
+  },
+  q2: {
+    correct: '✅ 正确！这就是 AspNetSynchronizationContext 死锁的完整因果链——.Result 占着请求上下文，续延需要上下文，形成循环等待。',
+    wrong:   '❌ 答案是 c——最完整的解释。仅有 .Result 阻塞线程本身不会死锁（线程池会补充线程）；关键是 await 的续延需要排回 AspNetSynchronizationContext，而这个上下文被 .Result 占用着。'
+  },
+  q3: {
+    correct: '✅ 正确！ASP.NET Core 移除了 SynchronizationContext。WinForms/WPF 和 .NET Framework ASP.NET 都有各自的上下文实现。',
+    wrong:   '❌ 答案是 c（ASP.NET Core）。WinForms/WPF 有 UI 上下文，.NET Framework ASP.NET 有 AspNetSynchronizationContext，只有 ASP.NET Core 是 null。'
+  },
+  q4: {
+    correct: '✅ 正确！这句话是错的——ConfigureAwait(false) <strong>只影响 SynchronizationContext</strong>，不影响 ExecutionContext 和 AsyncLocal&lt;T&gt; 的流动。',
+    wrong:   '❌ 答案是 c（那是错误说法）。ConfigureAwait(false) 只阻止 SynchronizationContext 的捕获和恢复，不影响 ExecutionContext——AsyncLocal&lt;T&gt; 的数据仍然会流动。其余三句都是对的。'
+  },
+  q5: {
+    correct: '✅ 正确！Framework ASP.NET 有 AspNetSynchronizationContext，await 后 Post 回同一上下文的线程（可能同个线程，也可能被串行化但碰巧相同）；ASP.NET Core 没有 SC，续延在线程池上跑，几乎肯定是不同线程。',
+    wrong:   '❌ 答案是 c。Framework ASP.NET 的 SynchronizationContext 保证续延在同一上下文中执行（线程可能相同），Core 没有 SC，续延在随机线程池线程上——线程 ID 大概率不同。'
   }
-  var isCorrect = selected.value === correct;
-  var answers = {
-    q1: {
-      correct: '✅ 正确！Post() 把委托异步投递到目标上下文，不阻塞调用方（区别于 Send 的同步等待）。',
-      wrong:   '❌ 答案是「b 异步投递」。Post 不是同步执行（那是 Send），也不创建新线程，而是把委托排队给目标上下文去调度。'
-    },
-    q2: {
-      correct: '✅ 正确！这就是 AspNetSynchronizationContext 死锁的完整因果链——.Result 占着请求上下文，续延需要上下文，形成循环等待。',
-      wrong:   '❌ 答案是 c——最完整的解释。仅有 .Result 阻塞线程本身不会死锁（线程池会补充线程）；关键是 await 的续延需要排回 AspNetSynchronizationContext，而这个上下文被 .Result 占用着。'
-    },
-    q3: {
-      correct: '✅ 正确！ASP.NET Core 移除了 SynchronizationContext。WinForms/WPF 和 .NET Framework ASP.NET 都有各自的上下文实现。',
-      wrong:   '❌ 答案是 c（ASP.NET Core）。WinForms/WPF 有 UI 上下文，.NET Framework ASP.NET 有 AspNetSynchronizationContext，只有 ASP.NET Core 是 null。'
-    },
-    q4: {
-      correct: '✅ 正确！这句话是错的——ConfigureAwait(false) <strong>只影响 SynchronizationContext</strong>，不影响 ExecutionContext 和 AsyncLocal&lt;T&gt; 的流动。',
-      wrong:   '❌ 答案是 c（那是错误说法）。ConfigureAwait(false) 只阻止 SynchronizationContext 的捕获和恢复，不影响 ExecutionContext——AsyncLocal&lt;T&gt; 的数据仍然会流动。其余三句都是对的。'
-    },
-    q5: {
-      correct: '✅ 正确！Framework ASP.NET 有 AspNetSynchronizationContext，await 后 Post 回同一上下文的线程（可能同个线程，也可能被串行化但碰巧相同）；ASP.NET Core 没有 SC，续延在线程池上跑，几乎肯定是不同线程。',
-      wrong:   '❌ 答案是 c。Framework ASP.NET 的 SynchronizationContext 保证续延在同一上下文中执行（线程可能相同），Core 没有 SC，续延在随机线程池线程上——线程 ID 大概率不同。'
-    }
-  };
-  var a = answers[qid];
-  f.textContent = isCorrect ? a.correct : a.wrong;
-  f.className = 'feedback show ' + (isCorrect ? 'correct' : 'wrong');
-}
+};
+function check(qid, correct) { Quiz.check(qid, correct, answers[qid]); }
 </script>
 
 </body>

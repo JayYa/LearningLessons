@@ -4,48 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Reference: SynchronizationContext &amp; await 续延调度</title>
+<link rel="stylesheet" href="../assets/styles/reference.css">
 <style>
-  :root {
-    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
-    --border: #e0ded8; --accent: #512bd4; --code-bg: #f0efeb; --radius: 8px;
-    --good: #1a7f37; --bad: #cf222e; --warn: #9a6700;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.6;
-    max-width: 860px; margin: 0 auto; padding: 1.5rem 1.5rem 4rem;
-  }
-  h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
-  h3 { font-size: 1rem; margin: 1rem 0 0.35rem; }
-  .subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; }
-
-  table {
-    width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.85rem;
-  }
-  th, td {
-    text-align: left; padding: 0.45rem 0.6rem;
-    border-bottom: 1px solid var(--border);
-    vertical-align: top;
-  }
-  th { background: var(--code-bg); font-weight: 600; font-size: 0.8rem; }
-  tr:nth-child(even) td { background: #fafaf9; }
-
-  pre {
-    background: #1e1e2e; color: #cdd6f4; padding: 0.75rem 1rem;
-    border-radius: var(--radius); overflow-x: auto;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.8rem; line-height: 1.5; margin: 0.5rem 0;
-  }
-  code {
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.85em; background: var(--code-bg); padding: 0.1em 0.3em; border-radius: 3px;
-  }
-  pre code { background: none; padding: 0; font-size: inherit; }
-  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
-  .type { color: #89b4fa; } .pnk { color: #f38ba8; }
-
   .box {
     border: 1px solid var(--border); border-radius: var(--radius);
     padding: 0.75rem 1rem; margin: 0.75rem 0; background: var(--card-bg);
@@ -54,16 +14,7 @@
   .box--bad  { border-left: 4px solid var(--bad); }
   .box--warn { border-left: 4px solid var(--warn); }
 
-  .tag { display: inline-block; padding: 0.15em 0.5em; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
   .tag--fw  { background: #ffebe9; color: var(--bad); }
-  .tag--core { background: #dafbe1; color: var(--good); }
-  .tag--both { background: #eef1ff; color: var(--accent); }
-
-  @media print {
-    body { font-size: 10pt; padding: 0.5in; }
-    h2 { page-break-after: avoid; }
-    table { page-break-inside: avoid; }
-  }
 </style>
 </head>
 <body>
@@ -318,7 +269,7 @@ ConfigureAwait(false) = 只改目的地，不改背包里的东西
 </table>
 
 <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border);">
-<p style="font-size:0.8rem; color: var(--text-muted);">
+<p class="ref-footer">
   相关课程：<a href="../lessons/05-async-await-synchronizationcontext.html">Lesson 05</a> ·
   <a href="../lessons/04-csharp8-async-streams.html">Lesson 04 (Async Streams)</a> ·
   <a href="../lessons/03-sync-yield-return-iterators.html">Lesson 03 (Yield Return Iterators)</a>

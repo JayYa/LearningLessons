@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 0002 — 漫画 vs 史实：《冰海战纪》角色原型对照</title>
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/compare.css">
+<link rel="stylesheet" href="../assets/tags.css">
+<link rel="stylesheet" href="../assets/reminder.css">
 <style>
   :root {
     --bg: #fdfaf5;
@@ -14,39 +19,8 @@
     --border: #d4c5a9;
     --highlight: #f5ecd7;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, "Times New Roman", serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.85;
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 3rem 1.5rem 5rem;
-  }
-  h1 { font-size: 2rem; text-align: center; color: var(--accent); letter-spacing: 0.04em; margin-bottom: 0.3rem; }
-  .subtitle { text-align: center; color: var(--muted); font-size: 0.95rem; margin-bottom: 2.5rem; }
-  h2 { font-size: 1.35rem; color: var(--accent); margin: 2.5rem 0 1rem; padding-bottom: 0.35rem; border-bottom: 2px solid var(--border); }
-  h3 { font-size: 1.1rem; color: #5a3a1a; margin: 1.5rem 0 0.6rem; }
-  p { margin-bottom: 1rem; }
-  .lead {
-    font-size: 1.05rem;
-    background: var(--highlight);
-    padding: 1.2rem 1.5rem;
-    border-radius: 6px;
-    border-left: 4px solid var(--accent);
-    margin: 1rem 0 2rem;
-  }
-  .card {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.3rem 1.5rem;
-    margin: 1.2rem 0;
-  }
-  .card h3 { margin-top: 0; }
 
-  /* Accuracy spectrum bar */
+  /* File-specific: accuracy spectrum bar */
   .spectrum-bar {
     display: flex;
     border-radius: 8px;
@@ -74,7 +48,7 @@
   }
   .spectrum-legend span { display: block; }
 
-  /* Character profile card */
+  /* File-specific: character profile card */
   .char-card {
     background: var(--card-bg);
     border: 1px solid var(--border);
@@ -100,7 +74,7 @@
   .char-card.compact h3 { font-size: 1rem; margin-bottom: 0.2rem; }
   .char-card.compact p { font-size: 0.9rem; margin-bottom: 0; }
 
-  /* Accuracy badge */
+  /* File-specific: accuracy badge (different system from .tag) */
   .badge {
     display: inline-block;
     padding: 0.15rem 0.65rem;
@@ -114,47 +88,7 @@
   .badge-mid   { background: #e65100; }
   .badge-fic   { background: #c62828; }
 
-  /* Side-by-side columns */
-  .compare {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.8rem;
-    margin: 0.8rem 0;
-  }
-  @media (max-width: 600px) { .compare { grid-template-columns: 1fr; } }
-  .compare-col {
-    background: var(--highlight);
-    border-radius: 6px;
-    padding: 0.8rem 1rem;
-    font-size: 0.9rem;
-  }
-  .compare-col h4 {
-    font-size: 0.85rem;
-    margin: 0 0 0.4rem;
-    color: var(--accent);
-    font-family: system-ui, sans-serif;
-  }
-  .compare-col.real { background: #e8f5e9; }
-  .compare-col.real h4 { color: #2e7d32; }
-  .compare-col.manga { background: #fff3e0; }
-  .compare-col.manga h4 { color: #e65100; }
-
-  /* Tags */
-  .tag {
-    display: inline-block;
-    padding: 0.08rem 0.5rem;
-    border-radius: 3px;
-    font-size: 0.7rem;
-    font-family: system-ui, sans-serif;
-    color: #fff;
-    margin-left: 0.4rem;
-    vertical-align: middle;
-  }
-  .tag-real  { background: #2e7d32; }
-  .tag-fic   { background: #c62828; }
-  .tag-mixed { background: #e65100; }
-
-  /* Grid for fictional characters */
+  /* File-specific: fiction character grid */
   .fic-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -162,7 +96,7 @@
   }
   @media (max-width: 600px) { .fic-grid { grid-template-columns: 1fr; } }
 
-  /* Big reveal box */
+  /* File-specific: big reveal box */
   .reveal-box {
     background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%);
     border: 2px solid #f9a825;
@@ -171,59 +105,6 @@
     margin: 1.5rem 0;
   }
   .reveal-box h3 { color: #e65100; margin-top: 0; }
-
-  /* Quiz */
-  .quiz {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.5rem;
-    margin: 1.5rem 0;
-  }
-  .quiz .q { font-weight: 600; margin-bottom: 0.7rem; }
-  .quiz label { display: block; padding: 0.4rem 0; cursor: pointer; }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem;
-    padding: 0.5rem 1.8rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    font-size: 0.95rem;
-    cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback {
-    margin-top: 0.8rem;
-    padding: 0.7rem 1rem;
-    border-radius: 4px;
-    display: none;
-  }
-  .feedback.correct { background: #e8f5e9; color: #2e7d32; display: block; }
-  .feedback.incorrect { background: #fbe9e7; color: #c62828; display: block; }
-
-  .reminder {
-    background: #fff8e1;
-    border: 1px solid #ffcc02;
-    border-radius: 6px;
-    padding: 1rem 1.3rem;
-    margin: 2rem 0 1rem;
-    font-size: 0.92rem;
-  }
-  .reminder strong { color: #c79100; }
-  .cite { font-size: 0.78rem; color: var(--muted); }
-  .cite a { color: var(--muted); }
-  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-
-  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
-  th, td { border: 1px solid var(--border); padding: 0.5rem 0.7rem; text-align: left; }
-  th { background: var(--highlight); color: var(--accent); font-weight: 600; }
-
-  @media print {
-    body { font-size: 11pt; padding: 1rem; }
-    .quiz button { display: none; }
-  }
 </style>
 </head>
 <body>
@@ -318,11 +199,9 @@
     <div class="compare-col manga">
       <h4>🎨 漫画形象</h4>
       <p>深不可测的老国王，临终前与阿谢拉特的对峙是漫画经典场景。漫画对其性格做了大量戏剧化处理，但<strong>征服英格兰后突然死亡的时间线完全正确</strong>。</p>
-	    </div>
-	  </div>
-	  <p style="font-size:0.85rem;color:var(--muted);">▲ 斯韦恩的真实死因史无明载——《盎格鲁-撒克逊编年史》仅记录1014年2月3日死亡，未提原因。《埃玛王后颂》称「突发疾病」。现代史家推测为<strong>中风或心脏病</strong>（加冕后仅五周即猝死，约50余岁）。12世纪教会史料渲染「圣埃德蒙显灵刺杀」纯属虔信宣传。漫画用虚构人物阿谢拉特执行这一历史节点，是幸村诚的精妙嫁接——反正斯韦恩确实是突然死的。</p>
     </div>
   </div>
+  <p style="font-size:0.85rem;color:var(--muted);">▲ 斯韦恩的真实死因史无明载——《盎格鲁-撒克逊编年史》仅记录1014年2月3日死亡，未提原因。《埃玛王后颂》称「突发疾病」。现代史家推测为<strong>中风或心脏病</strong>（加冕后仅五周即猝死，约50余岁）。12世纪教会史料渲染「圣埃德蒙显灵刺杀」纯属虔信宣传。漫画用虚构人物阿谢拉特执行这一历史节点，是幸村诚的精妙嫁接——反正斯韦恩确实是突然死的。</p>
 </div>
 
 <!-- Gudrid -->
@@ -442,7 +321,7 @@
     <li>萨迦描述他们是一支驻扎在波罗的海约姆斯堡（Jomsborg）的<strong>雇佣兵兄弟会</strong>，有严格规章（不许带女人、不许逃跑、战利品均分）。</li>
     <li>一些历史学家认为约姆斯维京人纯属萨迦文学创作；另一些认为他们<strong>可能有真实原型</strong>——波罗的海确实有维京要塞（如丹麦的 Trelleborg 环形堡垒）。</li>
     <li><strong>漫画的态度：</strong>幸村诚把它当作"存在于萨迦中"的真实事物来处理，这是一种合理的创作选择——毕竟漫画本身就像一部现代萨迦。</li>
-	    <li><strong>声望 ≠ 军阶：</strong>在维京社会中，个人声望（hreysti，源于战功与决斗）和正式官职是两个维度。托尔兹是约姆的「武力天花板」，弗洛基身为指挥官却不敢公开对抗——只能设伏暗杀。托鲁克尔也不是克努特的军官，而是带私人武装的独立军阀。这种「声望逆差」是理解漫画权力动态的关键。</li>
+    <li><strong>声望 ≠ 军阶：</strong>在维京社会中，个人声望（hreysti，源于战功与决斗）和正式官职是两个维度。托尔兹是约姆的「武力天花板」，弗洛基身为指挥官却不敢公开对抗——只能设伏暗杀。托鲁克尔也不是克努特的军官，而是带私人武装的独立军阀。这种「声望逆差」是理解漫画权力动态的关键。</li>
   </ul>
 </div>
 
@@ -606,7 +485,7 @@
   <label><input type="radio" name="q1" value="a">A. 维京战士，丹麦军队佣兵</label>
   <label><input type="radio" name="q1" value="b">B. 商人和探险家</label>
   <label><input type="radio" name="q1" value="c">C. 约姆斯维京人指挥官</label>
-  <button onclick="checkQ1()">确认答案</button>
+  <button onclick="checkQuiz(1,'b','正确！历史托尔芬是冰岛商人/探险家，不是战士。他的父亲是地主，不是约姆斯维京人。整个“为父复仇”的设定是漫画创作。','不对。历史托尔芬是商人和探险家，从未参与维京战争。他的父亲是冰岛地主Thord Horse-head。')">确认答案</button>
   <div class="feedback" id="f1"></div>
 </div>
 
@@ -615,7 +494,7 @@
   <label><input type="radio" name="q2" value="a">A. 阿谢拉特</label>
   <label><input type="radio" name="q2" value="b">B. 托尔兹</label>
   <label><input type="radio" name="q2" value="c">C. 高个子托鲁克尔</label>
-  <button onclick="checkQ2()">确认答案</button>
+  <button onclick="checkQuiz(2,'c','正确！高个子托鲁克尔是真实历史人物，在《盎格鲁-撒克逊编年史》中有记载。阿谢拉特和托尔兹都是完全虚构的。','不对。阿谢拉特和托尔兹均为虚构，只有托鲁克尔（Thorkell the Tall）是真实历史人物。')">确认答案</button>
   <div class="feedback" id="f2"></div>
 </div>
 
@@ -624,7 +503,7 @@
   <label><input type="radio" name="q3" value="a">A. 真实存在——但仇人是克努特，不是阿谢拉特</label>
   <label><input type="radio" name="q3" value="b">B. 完全不存在的虚构设定</label>
   <label><input type="radio" name="q3" value="c">C. 真实存在——但发生在文兰而非英格兰</label>
-  <button onclick="checkQ3()">确认答案</button>
+  <button onclick="checkQuiz(3,'b','正确！历史托尔芬没有任何杀父仇人或复仇动机。他的父亲Thord Horse-head是自然老去的冰岛地主，与战争和谋杀无关。','不对。整个复仇故事线是幸村诚的原创。历史上托尔芬的父亲是一位安分守己的冰岛地主。')">确认答案</button>
   <div class="feedback" id="f3"></div>
 </div>
 
@@ -633,7 +512,7 @@
   <label><input type="radio" name="q4" value="a">A. 主角团队（如埃纳尔、希尔妲）</label>
   <label><input type="radio" name="q4" value="b">B. 政治军事人物（如克努特、斯韦恩、托鲁克尔）</label>
   <label><input type="radio" name="q4" value="c">C. 反派角色（如嘉尔达）</label>
-  <button onclick="checkQ4()">确认答案</button>
+  <button onclick="checkQuiz(4,'b','正确！漫画的策略很清晰：政治军事人物（国王、首领、探险家）基本遵循史实；主角的同伴和对手（阿谢拉特、埃纳尔、希尔妲等）则多为虚构。','不对。克努特、斯韦恩、托鲁克尔等政治军事人物是真实的。主角团（托尔芬除外）和农场篇人物大部分是虚构的。')">确认答案</button>
   <div class="feedback" id="f4"></div>
 </div>
 
@@ -647,7 +526,7 @@
   </ul>
 </div>
 
-<div class="reminder" style="background:#e3f0ff;border-color:#90c4f9;">
+<div class="reminder reminder-qa">
   <strong>🤖 有疑问？</strong> 随时向你的AI老师提问！例如：<br>
   <span style="font-size:0.88rem;">"托鲁克尔为什么反复在英格兰和丹麦之间跳槽？"<br>"历史上的古德丽德是个什么样的人？"<br>"如果托尔芬是商人，文兰远征到底是怎么组织的？"</span>
 </div>
@@ -669,56 +548,7 @@
   · <a href="https://www.gcores.com/articles/139782">机核网 — 《浅谈〈冰海传奇〉设计背后的神话与文化背景》</a>
 </p>
 
-<script>
-function checkQ1() {
-  var f = document.getElementById('f1');
-  var sel = document.querySelector('input[name="q1"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
-    f.className='feedback correct';
-    f.textContent='✅ 正确！历史托尔芬是冰岛商人/探险家，不是战士。他的父亲是地主，不是约姆斯维京人。整个"为父复仇"的设定是漫画创作。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='❌ 不对。历史托尔芬是商人和探险家，从未参与维京战争。他的父亲是冰岛地主Thord Horse-head。';
-  }
-}
-function checkQ2() {
-  var f = document.getElementById('f2');
-  var sel = document.querySelector('input[name="q2"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'c') {
-    f.className='feedback correct';
-    f.textContent='✅ 正确！高个子托鲁克尔是真实历史人物，在《盎格鲁-撒克逊编年史》中有记载。阿谢拉特和托尔兹都是完全虚构的。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='❌ 不对。阿谢拉特和托尔兹均为虚构，只有托鲁克尔（Thorkell the Tall）是真实历史人物。';
-  }
-}
-function checkQ3() {
-  var f = document.getElementById('f3');
-  var sel = document.querySelector('input[name="q3"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
-    f.className='feedback correct';
-    f.textContent='✅ 正确！历史托尔芬没有任何杀父仇人或复仇动机。他的父亲Thord Horse-head是自然老去的冰岛地主，与战争和谋杀无关。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='❌ 不对。整个复仇故事线是幸村诚的原创。历史上托尔芬的父亲是一位安分守己的冰岛地主。';
-  }
-}
-function checkQ4() {
-  var f = document.getElementById('f4');
-  var sel = document.querySelector('input[name="q4"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
-    f.className='feedback correct';
-    f.textContent='✅ 正确！漫画的策略很清晰：政治军事人物（国王、首领、探险家）基本遵循史实；主角的同伴和对手（阿谢拉特、埃纳尔、希尔妲等）则多为虚构。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='❌ 不对。克努特、斯韦恩、托鲁克尔等政治军事人物是真实的。主角团（托尔芬除外）和农场篇人物大部分是虚构的。';
-  }
-}
-</script>
+<script src="../assets/quiz.js"></script>
 
 </body>
 </html>

@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 0005 — 维京东线与瓦良格卫队</title>
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/timeline.css">
+<link rel="stylesheet" href="../assets/compare.css">
+<link rel="stylesheet" href="../assets/tags.css">
+<link rel="stylesheet" href="../assets/reminder.css">
 <style>
   :root {
     --bg: #fdfaf5;
@@ -15,87 +21,11 @@
     --highlight: #f5edf8;
     --east: #e8dff0;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, "Times New Roman", serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.85;
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 3rem 1.5rem 5rem;
-  }
-  h1 { font-size: 2rem; text-align: center; color: var(--accent); letter-spacing: 0.04em; margin-bottom: 0.3rem; }
-  .subtitle { text-align: center; color: var(--muted); font-size: 0.95rem; margin-bottom: 2.5rem; }
-  h2 { font-size: 1.35rem; color: var(--accent); margin: 2.5rem 0 1rem; padding-bottom: 0.35rem; border-bottom: 2px solid var(--border); }
-  h3 { font-size: 1.1rem; color: #3d1a4a; margin: 1.5rem 0 0.6rem; }
-  p { margin-bottom: 1rem; }
-  .lead {
-    font-size: 1.05rem;
-    background: var(--highlight);
-    padding: 1.2rem 1.5rem;
-    border-radius: 6px;
-    border-left: 4px solid var(--accent);
-    margin: 1rem 0 2rem;
-  }
-
-  .card {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.3rem 1.5rem;
-    margin: 1.2rem 0;
-  }
-  .card h3 { margin-top: 0; }
-
-  /* Compare columns */
-  .compare {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.8rem;
-    margin: 0.8rem 0;
-  }
-  @media (max-width: 600px) { .compare { grid-template-columns: 1fr; } }
-  .compare-col {
-    background: var(--highlight);
-    border-radius: 6px;
-    padding: 0.8rem 1rem;
-    font-size: 0.9rem;
-  }
+  /* File-specific overrides and components */
+  h3 { color: #3d1a4a; }
   .compare-col.real { background: #e8f0f8; }
-  .compare-col.real h4 { color: #1a5276; font-size: 0.85rem; margin: 0 0 0.4rem; font-family: system-ui, sans-serif; }
-  .compare-col.manga { background: #fff3e0; }
-  .compare-col.manga h4 { color: #e65100; font-size: 0.85rem; margin: 0 0 0.4rem; font-family: system-ui, sans-serif; }
+  .compare-col.real h4 { color: #1a5276; }
 
-  /* Tags */
-  .tag {
-    display: inline-block;
-    padding: 0.08rem 0.5rem;
-    border-radius: 3px;
-    font-size: 0.7rem;
-    font-family: system-ui, sans-serif;
-    color: #fff;
-    margin-left: 0.4rem;
-    vertical-align: middle;
-  }
-  .tag-manga { background: #2e7d32; }
-  .tag-history { background: #6d4c41; }
-
-  /* Tables */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-    font-size: 0.9rem;
-  }
-  th, td {
-    border: 1px solid var(--border);
-    padding: 0.5rem 0.7rem;
-    text-align: left;
-  }
-  th { background: var(--highlight); color: var(--accent); font-weight: 600; }
-
-  /* Annotations */
   .sidenote {
     font-size: 0.82rem;
     color: var(--muted);
@@ -104,7 +34,6 @@
     border-left: 2px solid var(--border);
   }
 
-  /* Route diagram */
   .route-diagram {
     display: flex;
     flex-wrap: wrap;
@@ -123,111 +52,6 @@
     white-space: nowrap;
   }
   .route-arrow { color: var(--accent); font-weight: 700; font-size: 1rem; margin: 0 0.1rem; }
-
-  /* Timeline */
-  .timeline {
-    position: relative;
-    padding-left: 2.2rem;
-    margin: 1.5rem 0 1rem 0.5rem;
-  }
-  .timeline::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0.4rem; bottom: 0.4rem;
-    width: 2px;
-    background: #b49ec0;
-  }
-  .tl-item {
-    position: relative;
-    margin-bottom: 1.3rem;
-  }
-  .tl-item::before {
-    content: '';
-    position: absolute;
-    left: -2.55rem; top: 0.45rem;
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: 2px solid var(--bg);
-  }
-  .tl-item.key::before {
-    background: #c62828;
-    width: 14px; height: 14px;
-    left: -2.67rem; top: 0.35rem;
-  }
-  .tl-year {
-    font-weight: 700;
-    color: var(--accent);
-    font-size: 0.9rem;
-  }
-  .tl-item.key .tl-year { color: #c62828; }
-  .tl-text { font-size: 0.95rem; }
-
-  /* Quote */
-  .quote {
-    font-style: italic;
-    color: var(--muted);
-    border-left: 3px solid var(--border);
-    padding-left: 1rem;
-    margin: 1rem 0;
-  }
-
-  /* Quiz */
-  .quiz {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.5rem;
-    margin: 1.5rem 0;
-  }
-  .quiz .q { font-weight: 600; margin-bottom: 0.7rem; }
-  .quiz label { display: block; padding: 0.4rem 0; cursor: pointer; }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem;
-    padding: 0.5rem 1.8rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    font-size: 0.95rem;
-    cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback {
-    margin-top: 0.8rem;
-    padding: 0.7rem 1rem;
-    border-radius: 4px;
-    display: none;
-  }
-  .feedback.correct { background: #e8f5e9; color: #2e7d32; display: block; }
-  .feedback.incorrect { background: #fbe9e7; color: #c62828; display: block; }
-
-  .reminder {
-    background: #fff8e1;
-    border: 1px solid #ffcc02;
-    border-radius: 6px;
-    padding: 1rem 1.3rem;
-    margin: 2rem 0 1rem;
-    font-size: 0.92rem;
-  }
-  .reminder strong { color: #c79100; }
-  .cite { font-size: 0.78rem; color: var(--muted); }
-  .cite a { color: var(--muted); }
-  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-
-  .big-num {
-    font-size: 3rem;
-    font-weight: 700;
-    color: var(--accent);
-    line-height: 1;
-    font-family: Georgia, serif;
-  }
-
-  @media print {
-    body { font-size: 11pt; padding: 1rem; }
-    .quiz button { display: none; }
-  }
 </style>
 </head>
 <body>
@@ -312,12 +136,14 @@
   <h3>🪵 拖船（Portage）：东线的关键技能</h3>
   <p style="margin-bottom:0.5rem;">东线的关键不在航海——在于<strong>把船从一条河扛到另一条河</strong>。在第聂伯河下游，还有七处湍急的险滩必须绕过。维京人的长船吃水浅（约0.5米），可以在俄罗斯的浅河中航行；当两条河之间没有水道连接时，船员们把船拖上岸，用滚木把船扛到下一段水路。东线用的是更小、更轻的船，不是北海那种大战舰。</p>
   <p class="sidenote" style="margin:0.4rem 0 0;">
-    💡 第聂伯河的七个险滩现在已被第聂伯水电站大坝（1932年建成）淹没。但在维京时代，这些急流是最危险的路段——佩切涅格游牧民经常在险滩附近伏击过往的商船。
+    💡 第聂伯河的七个险滩现在已被第聂伯水电站大坝（1932年建成）淹没。但在维京时代，这些急流是最危险的路段——佩切涅格游牧民经常在险滩附近伏击过往的商船。<br>
+        📄 <strong>延伸阅读：</strong><a href="../reference/viking-ships-and-portage.html">维京战船与 Portage 完整参考</a>——漫画"扛船翻山" vs 历史拖船、东西两条 portage 路线对比、现代实验考古数据。
   </p>
 </div>
 
 <p>
-  还有一条并行路线——<strong>伏尔加河路线</strong>，通往里海和阿拉伯哈里发国。这就是为什么瑞典出土了超过60万枚阿拉伯银币（dirham）：瑞典维京人卖毛皮、琥珀、奴隶和蜂蜜，换回伊斯兰世界的白银。
+  还有一条并行路线——<strong>伏尔加河路线</strong>，通往里海和阿拉伯哈里发国。这就是为什么瑞典出土了超过60万枚阿拉伯银币（dirham）：瑞典维京人卖毛皮、琥珀、奴隶和蜂蜜，换回伊斯兰世界的白银。<br>
+  📄 <strong>延伸阅读：</strong><a href="../reference/viking-silver-economy.html">维京白银经济完整参考</a>——迪尔汗姆如何在瑞典使用（按重量而非面值）、hacksilver（砍银）找零机制、银臂环"穿戴式银行"、哥特兰700+窖藏、萨曼银矿枯竭如何导致维京经济重心从东线转向西线。
 </p>
 
 <!-- ====== SECTION 3: RUS ====== -->
@@ -358,6 +184,10 @@
   <h3>📜 "Rus'"这个词从哪来？</h3>
   <p style="margin-bottom:0.5rem;">学界有争议，但主流观点认为：<strong>Rus'</strong> 来自古诺尔斯语 <strong>*rōþs-</strong>（"划船的人"），经由芬兰语 <em>Ruotsi</em>（芬兰人至今仍用这个词指瑞典）传入斯拉夫语，变成 Rus'。也就是说，"俄罗斯"这个名字很可能源自"瑞典划船维京人"。</p>
   <p style="margin-bottom:0; font-size:0.9rem;">北欧人眼中的东欧叫 <strong>Garðaríki</strong>——"堡垒之国"——因为河流沿线的城镇大多有围栏或木墙防护。诺夫哥罗德叫 <strong>Holmgarðr</strong>（岛上的堡垒），基辅叫 <strong>Kœnugarðr</strong>（船坞）。</p>
+  <p class="sidenote" style="margin:0.5rem 0 0;">
+    📄 <strong>延伸阅读：</strong><a href="../reference/eastern-geography-guide.html">东部地理术语完整指南</a>——拜占庭·罗斯·基辅·君士坦丁堡·希腊·俄罗斯的关系与位置、"罗斯→俄罗斯"名称演变链条（五种语言）、地图空间关系。<br>
+    🏛 <strong>延伸阅读：</strong><a href="../reference/normanist-debate.html">诺曼起源争议完整参考</a>——"维京人建立了俄罗斯"为何在俄罗斯争论了250年？诺曼派 vs 反诺曼派、苏联时期的意识形态化、今日学界共识。
+  </p>
 </div>
 
 <!-- ====== SECTION 4: MIKLAGARD ====== -->
@@ -531,7 +361,7 @@
   <tr>
     <td>瓦良格卫队的存在</td>
     <td>988年后</td>
-    <td>完全真实。但漫画中托尔芬是否加入卫队取决于叙事选择</td>
+    <td>完全真实。漫画中瓦良格卫队出现在<strong>东方远征篇后期</strong>（第100–166话中后段），托尔芬一行抵达君士坦丁堡（米克拉加德）时——作为拜占庭帝国军事体系的一部分被描绘。诺尔斯战士持长斧守卫在帝国宫殿和城墙上的画面直接取材于历史记载</td>
     <td><span style="color:#2e7d32;">● 高</span></td>
   </tr>
   <tr>
@@ -550,7 +380,7 @@
   <label><input type="radio" name="q1" value="a">A. 西方（英格兰、法兰克）</label>
   <label><input type="radio" name="q1" value="b">B. 南方（地中海、北非）</label>
   <label><input type="radio" name="q1" value="c">C. 东方（俄罗斯、拜占庭、阿拉伯）</label>
-  <button onclick="checkQ1()">确认答案</button>
+  <button onclick="checkQuiz(1,'c','正确！瑞典维京人主要向东方扩张——顺着俄罗斯的河流系统到达拜占庭（东罗马帝国）和阿拉伯哈里发国。丹麦和挪威人主要向西。','不对。正确答案是C：东方。瑞典维京人穿过了今天的俄罗斯，到达拜占庭和阿拉伯世界。西方是丹麦和挪威人的方向。')">确认答案</button>
   <div class="feedback" id="f1"></div>
 </div>
 
@@ -559,7 +389,7 @@
   <label><input type="radio" name="q2" value="a">A. Garðaríki（堡垒之国）</label>
   <label><input type="radio" name="q2" value="b">B. Miklagarðr（大城）</label>
   <label><input type="radio" name="q2" value="c">C. Kœnugarðr（船坞）</label>
-  <button onclick="checkQ2()">确认答案</button>
+  <button onclick="checkQuiz(2,'b','正确！Miklagarðr（"大城"）是北欧人对君士坦丁堡的称呼。Garðaríki（"堡垒之国"）指罗斯地区，Kœnugarðr（"船坞"）是基辅的北欧名。','不对。正确答案是B：Miklagarðr。Garðaríki 指整个罗斯，Kœnugarðr 是基辅。')">确认答案</button>
   <div class="feedback" id="f2"></div>
 </div>
 
@@ -568,7 +398,7 @@
   <label><input type="radio" name="q3" value="a">A. 862年，留里克</label>
   <label><input type="radio" name="q3" value="b">B. 988年，巴西尔二世</label>
   <label><input type="radio" name="q3" value="c">C. 1016年，克努特大帝</label>
-  <button onclick="checkQ3()">确认答案</button>
+  <button onclick="checkQuiz(3,'b','正确！988年，基辅大公弗拉基米尔送给拜占庭皇帝巴西尔二世6,000名瓦良格战士，巴西尔二世将其组建为瓦良格卫队——他的私人禁卫军。','不对。正确答案是B：988年，巴西尔二世。留里克是罗斯建国者（862年），克努特从未与拜占庭有直接军事联系。')">确认答案</button>
   <div class="feedback" id="f3"></div>
 </div>
 
@@ -577,7 +407,7 @@
   <label><input type="radio" name="q4" value="a">A. 克努特大帝</label>
   <label><input type="radio" name="q4" value="b">B. 哈拉尔·哈德拉达（Harald Hardrada）</label>
   <label><input type="radio" name="q4" value="c">C. 红发埃里克</label>
-  <button onclick="checkQ4()">确认答案</button>
+  <button onclick="checkQuiz(4,'b','正确！哈拉尔·哈德拉达（Harald Hardrada）在1034–1042年间在瓦良格卫队服役，在地中海打了九年仗，带着一船黄金回到挪威成为国王。他最终于1066年死于斯坦福桥战役。','不对。正确答案是B：哈拉尔·哈德拉达。克努特大帝从未去过拜占庭，他自己有北海帝国。红发埃里克的方向是格陵兰（西方）。')">确认答案</button>
   <div class="feedback" id="f4"></div>
 </div>
 
@@ -586,7 +416,7 @@
   <label><input type="radio" name="q5" value="a">A. 去过——他在瓦良格卫队服役了十年</label>
   <label><input type="radio" name="q5" value="b">B. 没有——他的一生全部在格陵兰和文兰，东方远征是漫画原创</label>
   <label><input type="radio" name="q5" value="c">C. 他去过君士坦丁堡但没有加入卫队</label>
-  <button onclick="checkQ5()">确认答案</button>
+  <button onclick="checkQuiz(5,'b','正确！历史的托尔芬·卡尔塞夫尼所有有记载的活动都在格陵兰和文兰（纽芬兰）。他从未去过拜占庭。东方远征是幸村诚赋予他的虚构旅程——一个叙事桥梁。','不对。正确答案是B：他从未去过。历史托尔芬的全部有记载活动都在格陵兰和北美。东方远征是漫画原创的叙事设计——用来连接奴隶篇的觉醒和文兰篇的行动。')">确认答案</button>
   <div class="feedback" id="f5"></div>
 </div>
 
@@ -598,16 +428,17 @@
     <li>瓦良格卫队是<strong>北欧人在异国最成功的"职业道路"</strong>——没有政治根基、靠长斧和忠诚拿白银。这延续了 Lesson 0004 中 housecarls 的"职业战士"线索</li>
     <li>哈拉尔·哈德拉达的一生（1030–1066）是<strong>维京时代末期的完美缩影</strong>——东方赚钱，西方花钱，死在斯坦福桥</li>
     <li>1066年后盎格鲁-撒克逊人加入瓦良格卫队——老对头诺曼人在迪拉基翁再次屠杀他们。历史的对称性有时残酷得像个北欧传奇</li>
+    <li><strong>🆕 本课关联参考文档：</strong>Portage（<a href="../reference/viking-ships-and-portage.html">战船与陆地运船</a>）、白银经济（<a href="../reference/viking-silver-economy.html">迪尔汗姆与重量经济</a>）、东部地理（<a href="../reference/eastern-geography-guide.html">术语辨析与地图</a>）、诺曼争议（<a href="../reference/normanist-debate.html">250年史学争论</a>）——这些构成了理解维京东线的<strong>四层知识底座</strong>：技术 → 经济 → 地理 → 史学</li>
   </ul>
 </div>
 
-<div class="reminder" style="background:#e3f0ff;border-color:#90c4f9;">
+<div class="reminder reminder-qa">
   <strong>🤖 有疑问？</strong> 随时向你的AI老师提问！例如：<br>
   <span style="font-size:0.88rem;">
     "留里克被邀请统治诺夫哥罗德——这个故事可信吗？有没有可能是后来编的？"<br>
     "哈拉尔·哈德拉达在拜占庭到底赚了多少钱？够他买下挪威王位吗？"<br>
     "为什么瑞典人去了东方而挪威人去了西方——只是地理原因还是有文化差异？"<br>
-    "俄罗斯人怎么看'维京人建立了俄罗斯'这个说法？"<br>
+    "俄罗斯人怎么看'维京人建立了俄罗斯'这个说法？（← 已收录为 <a href='../reference/normanist-debate.html'>诺曼争议参考</a>）"<br>
     "瓦良格卫队和housecarls有什么区别？"<br>
     "漫画东方远征篇还有哪些其他历史细节是准确的？"
   </span>
@@ -634,68 +465,7 @@
   · 瑞典国家遗产委员会 — 符文石数据库（Sveriges runinskrifter）。
 </p>
 
-<script>
-function checkQ1() {
-  var f = document.getElementById('f1');
-  var sel = document.querySelector('input[name="q1"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'c') {
-    f.className='feedback correct';
-    f.textContent='正确！瑞典维京人主要向东方扩张——顺着俄罗斯的河流系统到达拜占庭（东罗马帝国）和阿拉伯哈里发国。丹麦和挪威人主要向西。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='不对。正确答案是C：东方。瑞典维京人穿过了今天的俄罗斯，到达拜占庭和阿拉伯世界。西方是丹麦和挪威人的方向。';
-  }
-}
-function checkQ2() {
-  var f = document.getElementById('f2');
-  var sel = document.querySelector('input[name="q2"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
-    f.className='feedback correct';
-    f.textContent='正确！Miklagarðr（"大城"）是北欧人对君士坦丁堡的称呼。Garðaríki（"堡垒之国"）指罗斯地区，Kœnugarðr（"船坞"）是基辅的北欧名。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='不对。正确答案是B：Miklagarðr。Garðaríki 指整个罗斯，Kœnugarðr 是基辅。';
-  }
-}
-function checkQ3() {
-  var f = document.getElementById('f3');
-  var sel = document.querySelector('input[name="q3"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
-    f.className='feedback correct';
-    f.textContent='正确！988年，基辅大公弗拉基米尔送给拜占庭皇帝巴西尔二世6,000名瓦良格战士，巴西尔二世将其组建为瓦良格卫队——他的私人禁卫军。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='不对。正确答案是B：988年，巴西尔二世。留里克是罗斯建国者（862年），克努特从未与拜占庭有直接军事联系。';
-  }
-}
-function checkQ4() {
-  var f = document.getElementById('f4');
-  var sel = document.querySelector('input[name="q4"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
-    f.className='feedback correct';
-    f.textContent='正确！哈拉尔·哈德拉达（Harald Hardrada）在1034–1042年间在瓦良格卫队服役，在地中海打了九年仗，带着一船黄金回到挪威成为国王。他最终于1066年死于斯坦福桥战役。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='不对。正确答案是B：哈拉尔·哈德拉达。克努特大帝从未去过拜占庭，他自己有北海帝国。红发埃里克的方向是格陵兰（西方）。';
-  }
-}
-function checkQ5() {
-  var f = document.getElementById('f5');
-  var sel = document.querySelector('input[name="q5"]:checked');
-  if (!sel) { f.className='feedback incorrect'; f.textContent='请先选择一个答案。'; return; }
-  if (sel.value === 'b') {
-    f.className='feedback correct';
-    f.textContent='正确！历史的托尔芬·卡尔塞夫尼所有有记载的活动都在格陵兰和文兰（纽芬兰）。他从未去过拜占庭。东方远征是幸村诚赋予他的虚构旅程——一个叙事桥梁。';
-  } else {
-    f.className='feedback incorrect';
-    f.textContent='不对。正确答案是B：他从未去过。历史托尔芬的全部有记载活动都在格陵兰和北美。东方远征是漫画原创的叙事设计——用来连接奴隶篇的觉醒和文兰篇的行动。';
-  }
-}
-</script>
+<script src="../assets/quiz.js"></script>
 
 </body>
 </html>

@@ -1,0 +1,34 @@
+/* ============================================================
+   assets/tags.css — 标签/徽章系统
+   Vinland Saga 教学 workspace
+
+   依赖：base.css（:root 变量）
+
+   使用方式：
+     <span class="tag tag-real">史实</span>
+     <span class="tag tag-fic">虚构</span>
+     <span class="tag tag-mixed">混合</span>
+
+   如需文件特定的标签颜色变体，在文件级 <style> 中添加。
+   ============================================================ */
+
+/* --- 基础标签 --- */
+.tag {
+  display: inline-block;
+  padding: 0.08rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-family: system-ui, sans-serif;
+  color: #fff;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+
+/* --- 标准三色系统（用于 lessons） --- */
+.tag-real  { background: #2e7d32; }  /* 史实 / 高度吻合 */
+.tag-fic   { background: #c62828; }  /* 虚构 / 漫画原创 */
+.tag-mixed { background: #e65100; }  /* 混合 / 大幅改编 */
+
+/* --- 兼容旧版双色系统 --- */
+.tag-manga  { background: #2e7d32; }  /* 漫画中有、史实也有 */
+.tag-history { background: #6d4c41; } /* 仅作为历史背景 */

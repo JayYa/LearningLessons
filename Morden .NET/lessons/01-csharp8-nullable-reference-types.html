@@ -4,162 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 01: C# 8 Nullable Reference Types — 从 Framework 4.8 到现代 .NET</title>
-<style>
-  :root {
-    --bg: #faf9f7;
-    --card-bg: #ffffff;
-    --text: #1a1a1a;
-    --text-muted: #6b6b6b;
-    --border: #e0ded8;
-    --accent: #512bd4;
-    --accent-light: #ede4ff;
-    --good: #1a7f37;
-    --good-bg: #dafbe1;
-    --warn: #9a6700;
-    --warn-bg: #fff8c5;
-    --bad: #cf222e;
-    --bad-bg: #ffebe9;
-    --code-bg: #f0efeb;
-    --radius: 12px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.7;
-    max-width: 860px;
-    margin: 0 auto;
-    padding: 2rem 1.5rem 6rem;
-  }
-  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
-  p { margin: 0.75rem 0; color: #333; }
-  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
-
-  .callout {
-    padding: 1rem 1.25rem;
-    border-radius: var(--radius);
-    margin: 1rem 0;
-    font-size: 0.95rem;
-  }
-  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
-  .en::before { content: ' ('; }
-  .en::after { content: ')'; }
-
-  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
-  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
-  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
-
-  .comparison {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin: 1rem 0;
-  }
-  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
-  .comparison > div {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1rem 1.25rem;
-  }
-  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
-  .comparison > div.old h4 { color: var(--bad); }
-  .comparison > div.new h4 { color: var(--good); }
-
-  pre {
-    background: #1e1e2e;
-    color: #cdd6f4;
-    padding: 1rem 1.25rem;
-    border-radius: var(--radius);
-    overflow-x: auto;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.85rem;
-    line-height: 1.55;
-    margin: 0.75rem 0;
-  }
-  code {
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.88em;
-    background: var(--code-bg);
-    padding: 0.15em 0.35em;
-    border-radius: 4px;
-  }
-  pre code { background: none; padding: 0; font-size: inherit; }
-  .kw { color: #cba6f7; }
-  .str { color: #a6e3a1; }
-  .cmt { color: #6c7086; }
-  .num { color: #fab387; }
-  .type { color: #89b4fa; }
-
-  .quiz {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1.25rem 1.5rem;
-    margin: 1.5rem 0;
-  }
-  .quiz h3 { margin-top: 0; }
-  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
-  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
-  .quiz label:hover { background: var(--code-bg); }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem;
-    padding: 0.5rem 1.25rem;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.95rem;
-    cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback { margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem; }
-  .feedback.show { display: block; }
-  .feedback.correct { background: var(--good-bg); color: var(--good); }
-  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-    font-size: 0.93rem;
-  }
-  th, td {
-    text-align: left;
-    padding: 0.6rem 0.8rem;
-    border-bottom: 1px solid var(--border);
-  }
-  th { font-weight: 600; color: var(--text-muted); font-size: 0.82rem; text-transform: uppercase; }
-  tr:last-child td { border-bottom: none; }
-
-  .timeline {
-    display: flex;
-    gap: 0.5rem;
-    margin: 1rem 0;
-    flex-wrap: wrap;
-  }
-  .timeline-item {
-    flex: 1;
-    min-width: 100px;
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 0.75rem;
-    text-align: center;
-    font-size: 0.85rem;
-  }
-  .timeline-item .year { font-weight: 700; font-size: 1.1rem; }
-  .timeline-item .plat { color: var(--accent); }
-  .timeline-item .lang { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.15rem; }
-  .timeline-item.current {
-    border: 2px solid var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-light);
-  }
-</style>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
 </head>
 <body>
 
@@ -455,8 +300,8 @@ list ??= <span class="kw">new</span> List&lt;<span class="type">string</span>&gt
   <label><input type="radio" name="q1" value="1"> 1 处</label>
   <label><input type="radio" name="q1" value="2"> 2 处</label>
   <label><input type="radio" name="q1" value="3"> 3 处</label>
-  <button onclick="checkQ1()">确认</button>
-  <div class="feedback" id="f1"></div>
+  <button onclick="Quiz.check('q1','2',q1fb)">确认</button>
+  <div class="feedback" id="f_q1"></div>
 </div>
 
 <div class="quiz" id="q2">
@@ -466,8 +311,8 @@ list ??= <span class="kw">new</span> List&lt;<span class="type">string</span>&gt
   <label><input type="radio" name="q2" value="b"> <code>name!</code></label>
   <label><input type="radio" name="q2" value="c"> <code>name?.</code></label>
   <label><input type="radio" name="q2" value="d"> <code>name??</code></label>
-  <button onclick="checkQ2()">确认</button>
-  <div class="feedback" id="f2"></div>
+  <button onclick="Quiz.check('q2','b',q2fb)">确认</button>
+  <div class="feedback" id="f_q2"></div>
 </div>
 
 <div class="quiz" id="q3">
@@ -477,54 +322,30 @@ list ??= <span class="kw">new</span> List&lt;<span class="type">string</span>&gt
   <label><input type="radio" name="q3" value="b"> 编译时静态分析，减少 null 引用的可能性</label>
   <label><input type="radio" name="q3" value="c"> 自动为所有方法添加 null check</label>
   <label><input type="radio" name="q3" value="d"> 让所有引用类型变成值类型</label>
-  <button onclick="checkQ3()">确认</button>
-  <div class="feedback" id="f3"></div>
+  <button onclick="Quiz.check('q3','b',q3fb)">确认</button>
+  <div class="feedback" id="f_q3"></div>
 </div>
 
-<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
-<p style="color: var(--text-muted); font-size: 0.85rem;">
+<hr class="section-divider">
+<p class="lesson-footer">
   Lesson 01 · C# 8 Nullable Reference Types · 下一课预告：Switch Expressions、Using Declarations、Indices/Ranges
 </p>
 
+<script src="../assets/scripts/quiz.js"></script>
 <script>
-  function show(el, correct) {
-    el.classList.add('show');
-    el.classList.add(correct ? 'correct' : 'wrong');
-    el.classList.remove(correct ? 'wrong' : 'correct');
-  }
-
-  function checkQ1() {
-    var f = document.getElementById('f1');
-    var selected = document.querySelector('input[name="q1"]:checked');
-    if (!selected) return;
-    var correct = selected.value === '2';
-    f.textContent = correct
-      ? '✅ 正确！第3行 string b = a（将 T? 赋给 T）和第5行 int len1 = c.Length（对 T? 直接访问成员）各一个警告。第6行的 ! 和第7行的 ! 抑制了警告。'
-      : '❌ 是 2 处。第3行 string b = a（将 T? 赋给 T）和第5行 int len1 = c.Length（对 T? 直接访问成员）各一个警告。';
-    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
-  }
-
-  function checkQ2() {
-    var f = document.getElementById('f2');
-    var selected = document.querySelector('input[name="q2"]:checked');
-    if (!selected) return;
-    var correct = selected.value === 'b';
-    f.textContent = correct
-      ? '✅ 正确！name! 是 null-forgiving operator——告诉编译器闭嘴，我保证它不是 null。'
-      : '❌ 正确答案是 name!（null-forgiving operator）。name? 是 nullable 类型标注，name?. 是 null-conditional 调用，name?? 不存在。';
-    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
-  }
-
-  function checkQ3() {
-    var f = document.getElementById('f3');
-    var selected = document.querySelector('input[name="q3"]:checked');
-    if (!selected) return;
-    var correct = selected.value === 'b';
-    f.textContent = correct
-      ? '✅ 正确！NRT 纯粹是编译时静态分析。JIT 不会插入任何 null 检查。它改变的是你的编码习惯和编译器给你的反馈速度——从运行时爆炸变成编译时警告。'
-      : '❌ 正确答案是 b。NRT 纯粹是编译时静态分析，不是运行时机制。JIT 不会插入 null 检查。';
-    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
-  }
+// Quiz feedback messages for Lesson 01
+var q1fb = {
+  correct: '✅ 正确！第3行 string b = a（将 T? 赋给 T）和第5行 int len1 = c.Length（对 T? 直接访问成员）各一个警告。第6行的 ! 和第7行的 ! 抑制了警告。',
+  wrong:   '❌ 是 2 处。第3行 string b = a（将 T? 赋给 T）和第5行 int len1 = c.Length（对 T? 直接访问成员）各一个警告。'
+};
+var q2fb = {
+  correct: '✅ 正确！name! 是 null-forgiving operator——告诉编译器闭嘴，我保证它不是 null。',
+  wrong:   '❌ 正确答案是 name!（null-forgiving operator）。name? 是 nullable 类型标注，name?. 是 null-conditional 调用，name?? 不存在。'
+};
+var q3fb = {
+  correct: '✅ 正确！NRT 纯粹是编译时静态分析。JIT 不会插入任何 null 检查。它改变的是你的编码习惯和编译器给你的反馈速度——从运行时爆炸变成编译时警告。',
+  wrong:   '❌ 正确答案是 b。NRT 纯粹是编译时静态分析，不是运行时机制。JIT 不会插入 null 检查。'
+};
 </script>
 
 </body>

@@ -1,0 +1,129 @@
+/* ============================================================
+   assets/base.css — 共享基础样式
+   Vinland Saga 教学 workspace · 所有 lessons 和 reference 共用
+
+   使用方式：在每个 HTML 的 <style> 标签开头 @import：
+     @import '../assets/base.css';
+   或在 <head> 中：
+     <link rel="stylesheet" href="../assets/base.css">
+
+   前提：每个 HTML 文件需在自己的 <style> 中定义 :root 变量：
+     --bg, --text, --accent, --muted, --card-bg, --border, --highlight
+   ============================================================ */
+
+/* --- Reset --- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* --- Body & Typography --- */
+body {
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, "Times New Roman", serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.85;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 5rem;
+}
+
+h1 {
+  font-size: 2rem;
+  text-align: center;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  margin-bottom: 0.3rem;
+}
+
+.subtitle {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin-bottom: 2.5rem;
+}
+
+h2 {
+  font-size: 1.35rem;
+  color: var(--accent);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 2px solid var(--border);
+}
+
+h3 {
+  font-size: 1.1rem;
+  color: #5a3a1a;
+  margin: 1.5rem 0 0.6rem;
+}
+
+p { margin-bottom: 1rem; }
+
+ul, ol { padding-left: 1.4rem; margin-bottom: 0.8rem; }
+li { margin-bottom: 0.3rem; }
+
+/* --- Lead paragraph --- */
+.lead {
+  font-size: 1.05rem;
+  background: var(--highlight);
+  padding: 1.2rem 1.5rem;
+  border-radius: 6px;
+  border-left: 4px solid var(--accent);
+  margin: 1rem 0 2rem;
+}
+
+/* --- Card box --- */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.3rem 1.5rem;
+  margin: 1.2rem 0;
+}
+.card h3 { margin-top: 0; }
+
+/* --- Tables --- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+}
+th, td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+}
+th {
+  background: var(--highlight);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* --- Horizontal rule --- */
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+
+/* --- Citation / footer text --- */
+.cite {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.cite a { color: var(--muted); }
+
+/* --- Big number display --- */
+.big-num {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+  font-family: Georgia, serif;
+}
+
+/* --- Print styles --- */
+@media print {
+  body {
+    font-size: 11pt;
+    padding: 1rem;
+  }
+}

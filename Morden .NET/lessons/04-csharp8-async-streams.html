@@ -4,97 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 04: C# 8 Async Streams — 异步流</title>
-<style>
-  :root {
-    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
-    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
-    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
-    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.7;
-    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
-  }
-  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
-  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
-  p { margin: 0.75rem 0; color: #333; }
-  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
-  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
-  .en::before { content: ' ('; } .en::after { content: ')'; }
-
-  .callout {
-    padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem;
-  }
-  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
-  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
-  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
-  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
-
-  .comparison {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
-  }
-  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
-  .comparison > div {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1rem 1.25rem;
-  }
-  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
-  .comparison > div.old h4 { color: var(--bad); }
-  .comparison > div.new h4 { color: var(--good); }
-
-  table {
-    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
-  }
-  th, td {
-    text-align: left; padding: 0.6rem 0.8rem;
-    border-bottom: 1px solid var(--border);
-  }
-  th { background: var(--code-bg); font-weight: 600; }
-  tr:nth-child(even) td { background: #fafaf9; }
-
-  pre {
-    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
-    border-radius: var(--radius); overflow-x: auto;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
-  }
-  code {
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.88em; background: var(--code-bg);
-    padding: 0.15em 0.35em; border-radius: 4px;
-  }
-  pre code { background: none; padding: 0; font-size: inherit; }
-  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
-  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
-
-  .quiz {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
-  }
-  .quiz h3 { margin-top: 0; }
-  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
-  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
-  .quiz label:hover { background: var(--code-bg); }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
-    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback {
-    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
-  }
-  .feedback.show { display: block; }
-  .feedback.correct { background: var(--good-bg); color: var(--good); }
-  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
-  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
-  li { margin: 0.3rem 0; }
-  .mild { font-size: 0.9rem; color: var(--text-muted); }
-</style>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
 </head>
 <body>
 
@@ -641,8 +551,8 @@ Console.WriteLine(card2.Current);  <span class="cmt">// 10</span></code></pre>
   <label><input type="radio" name="q1" value="b"> 第一条数据可以边拉边处理，不需要等全部数据就绪</label>
   <label><input type="radio" name="q1" value="c"> 不需要 await</label>
   <label><input type="radio" name="q1" value="d"> 速度一定更快</label>
-  <button onclick="checkQ1()">确认</button>
-  <div class="feedback" id="f1"></div>
+  <button onclick="Quiz.check('q1','b',q1fb)">确认</button>
+  <div class="feedback" id="f_q1"></div>
 </div>
 
 <div class="quiz" id="q2">
@@ -663,8 +573,8 @@ Console.WriteLine(card2.Current);  <span class="cmt">// 10</span></code></pre>
   <label><input type="radio" name="q2" value="b"> 编译错误：IAsyncEnumerable&lt;T&gt; 不能用 foreach 遍历</label>
   <label><input type="radio" name="q2" value="c"> 编译通过，但运行时会死循环</label>
   <label><input type="radio" name="q2" value="d"> 编译通过，但运行时 Task.Delay 会被跳过</label>
-  <button onclick="checkQ2()">确认</button>
-  <div class="feedback" id="f2"></div>
+  <button onclick="Quiz.check('q2','b',q2fb)">确认</button>
+  <div class="feedback" id="f_q2"></div>
 </div>
 
 <div class="quiz" id="q3">
@@ -674,8 +584,8 @@ Console.WriteLine(card2.Current);  <span class="cmt">// 10</span></code></pre>
   <label><input type="radio" name="q3" value="b"> 返回 ValueTask&lt;bool&gt;，为减少堆分配</label>
   <label><input type="radio" name="q3" value="c"> 返回 void，用 out 参数表示结果</label>
   <label><input type="radio" name="q3" value="d"> 返回 bool，但可以 await</label>
-  <button onclick="checkQ3()">确认</button>
-  <div class="feedback" id="f3"></div>
+  <button onclick="Quiz.check('q3','b',q3fb)">确认</button>
+  <div class="feedback" id="f_q3"></div>
 </div>
 
 <div class="quiz" id="q4">
@@ -685,8 +595,8 @@ Console.WriteLine(card2.Current);  <span class="cmt">// 10</span></code></pre>
   <label><input type="radio" name="q4" value="b"> 在迭代器方法参数上使用 <code>[EnumeratorCancellation]</code></label>
   <label><input type="radio" name="q4" value="c"> 方法签名包含 <code>out</code> 参数</label>
   <label><input type="radio" name="q4" value="d"> 在 using 语句中使用 <code>await using</code></label>
-  <button onclick="checkQ4()">确认</button>
-  <div class="feedback" id="f4"></div>
+  <button onclick="Quiz.check('q4','c',q4fb)">确认</button>
+  <div class="feedback" id="f_q4"></div>
 </div>
 
 <div class="quiz" id="q5">
@@ -696,66 +606,37 @@ Console.WriteLine(card2.Current);  <span class="cmt">// 10</span></code></pre>
   <label><input type="radio" name="q5" value="b"> 翻页消费 GitHub API 的所有 Issue</label>
   <label><input type="radio" name="q5" value="c"> 返回 5 条固定的配置项</label>
   <label><input type="radio" name="q5" value="d"> 从消息队列逐条消费消息</label>
-  <button onclick="checkQ5()">确认</button>
-  <div class="feedback" id="f5"></div>
+  <button onclick="Quiz.check('q5','c',q5fb)">确认</button>
+  <div class="feedback" id="f_q5"></div>
 </div>
 
-<hr style="margin: 3rem 0 1.5rem; border: none; border-top: 1px solid var(--border);">
+<hr class="section-divider">
 <p class="mild">
   Lesson 04 · C# 8 Async Streams · 下一课预告：<a href="05-async-await-synchronizationcontext.html">Lesson 05 — SynchronizationContext 与 await 续延调度</a>
 </p>
 
+<script src="../assets/scripts/quiz.js"></script>
 <script>
-  function checkQ1() {
-    var f = document.getElementById('f1');
-    var selected = document.querySelector('input[name="q1"]:checked');
-    if (!selected) return;
-    var correct = selected.value === 'b';
-    f.textContent = correct
-      ? '✅ 正确！异步流的核心价值是流式处理：第一条数据可用即可开始处理，不需要等全部数据就绪。'
-      : '❌ 答案是 b。异步流的核心优势不是代码更短或速度更快，而是"不等人齐"——低延迟、省内存的流式处理。';
-    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
-  }
-  function checkQ2() {
-    var f = document.getElementById('f2');
-    var selected = document.querySelector('input[name="q2"]:checked');
-    if (!selected) return;
-    var correct = selected.value === 'b';
-    f.textContent = correct
-      ? '✅ 正确！编译错误。IAsyncEnumerable&lt;T&gt; 没有实现 IEnumerable&lt;T&gt;，不能用 foreach 遍历——必须用 await foreach。'
-      : '❌ 答案是"编译错误"。IAsyncEnumerable&lt;T&gt; 没有实现 IEnumerable&lt;T&gt;，foreach 只能用于同步的可枚举类型。编译器会直接报错。';
-    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
-  }
-  function checkQ3() {
-    var f = document.getElementById('f3');
-    var selected = document.querySelector('input[name="q3"]:checked');
-    if (!selected) return;
-    var correct = selected.value === 'b';
-    f.textContent = correct
-      ? '✅ 正确！MoveNextAsync 返回 ValueTask&lt;bool&gt;，在同步完成时（如已缓存的数据）不会分配堆内存。因为迭代循环非常频繁，这个优化很关键。'
-      : '❌ 答案是 b。返回 ValueTask&lt;bool&gt; 是故意的性能优化——迭代循环调用 MoveNextAsync 极其频繁，ValueTask 在同步完成时避免堆分配。';
-    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
-  }
-  function checkQ4() {
-    var f = document.getElementById('f4');
-    var selected = document.querySelector('input[name="q4"]:checked');
-    if (!selected) return;
-    var correct = selected.value === 'c';
-    f.textContent = correct
-      ? '✅ 正确！async IAsyncEnumerable 方法不能有 out/ref 参数，这是状态机实现限制——和 async Task 方法一致。yield + await 混用、[EnumeratorCancellation]、await using 都是合法的。'
-      : '❌ 答案是 c。async IAsyncEnumerable 方法不能有 out/ref 参数。其他三项都是正确的异步流用法。';
-    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
-  }
-  function checkQ5() {
-    var f = document.getElementById('f5');
-    var selected = document.querySelector('input[name="q5"]:checked');
-    if (!selected) return;
-    var correct = selected.value === 'c';
-    f.textContent = correct
-      ? '✅ 正确！5 条固定配置项数据量很小、没有异步 I/O，用普通的 Task&lt;List&lt;T&gt;&gt; 或同步 IEnumerable&lt;T&gt; 更简单。异步流的收益在大数据量 + 有 I/O 的场景。'
-      : '❌ 答案是 c。5 条配置项数据量太小，用异步流是过度设计。异步流的优势在于大数据量 + 流式 I/O 的场景。';
-    f.className = 'feedback show ' + (correct ? 'correct' : 'wrong');
-  }
+var q1fb = {
+  correct: '✅ 正确！异步流的核心价值是流式处理：第一条数据可用即可开始处理，不需要等全部数据就绪。',
+  wrong:   '❌ 答案是 b。异步流的核心优势不是代码更短或速度更快，而是"不等人齐"——低延迟、省内存的流式处理。'
+};
+var q2fb = {
+  correct: '✅ 正确！编译错误。IAsyncEnumerable&lt;T&gt; 没有实现 IEnumerable&lt;T&gt;，不能用 foreach 遍历——必须用 await foreach。',
+  wrong:   '❌ 答案是"编译错误"。IAsyncEnumerable&lt;T&gt; 没有实现 IEnumerable&lt;T&gt;，foreach 只能用于同步的可枚举类型。编译器会直接报错。'
+};
+var q3fb = {
+  correct: '✅ 正确！MoveNextAsync 返回 ValueTask&lt;bool&gt;，在同步完成时（如已缓存的数据）不会分配堆内存。因为迭代循环非常频繁，这个优化很关键。',
+  wrong:   '❌ 答案是 b。返回 ValueTask&lt;bool&gt; 是故意的性能优化——迭代循环调用 MoveNextAsync 极其频繁，ValueTask 在同步完成时避免堆分配。'
+};
+var q4fb = {
+  correct: '✅ 正确！async IAsyncEnumerable 方法不能有 out/ref 参数，这是状态机实现限制——和 async Task 方法一致。yield + await 混用、[EnumeratorCancellation]、await using 都是合法的。',
+  wrong:   '❌ 答案是 c。async IAsyncEnumerable 方法不能有 out/ref 参数。其他三项都是正确的异步流用法。'
+};
+var q5fb = {
+  correct: '✅ 正确！5 条固定配置项数据量很小、没有异步 I/O，用普通的 Task&lt;List&lt;T&gt;&gt; 或同步 IEnumerable&lt;T&gt; 更简单。异步流的收益在大数据量 + 有 I/O 的场景。',
+  wrong:   '❌ 答案是 c。5 条配置项数据量太小，用异步流是过度设计。异步流的优势在于大数据量 + 流式 I/O 的场景。'
+};
 </script>
 
 </body>

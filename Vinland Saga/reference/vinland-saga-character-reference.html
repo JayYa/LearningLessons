@@ -4,28 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>角色-史实对照表 — Vinland Saga 历史参考</title>
+<link rel="stylesheet" href="../assets/base.css">
 <style>
   :root {
     --bg: #fdfaf5; --text: #2c2416; --accent: #8b4513;
     --muted: #6b5e4a; --card-bg: #fffdf8; --border: #d4c5a9;
     --highlight: #f5ecd7;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: "Noto Serif SC", "Source Han Serif SC", Georgia, serif;
-    background: var(--bg); color: var(--text);
-    line-height: 1.7; max-width: 800px; margin: 0 auto;
-    padding: 2.5rem 1.5rem 4rem;
-  }
-  h1 { font-size: 1.8rem; text-align: center; color: var(--accent); margin-bottom: 0.3rem; }
-  .subtitle { text-align: center; color: var(--muted); font-size: 0.9rem; margin-bottom: 2rem; }
-  h2 { font-size: 1.2rem; color: var(--accent); margin: 1.8rem 0 0.8rem; padding-bottom: 0.25rem; border-bottom: 1.5px solid var(--border); }
+  /* Body overrides (tighter spacing than base.css) */
+  body { line-height: 1.7; padding: 2.5rem 1.5rem 4rem; font-size: inherit; }
+  h1 { font-size: 1.8rem; }
+  .subtitle { font-size: 0.9rem; margin-bottom: 2rem; }
 
-  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
-  th, td { border: 1px solid var(--border); padding: 0.5rem 0.7rem; text-align: left; vertical-align: top; }
-  th { background: var(--highlight); color: var(--accent); font-weight: 600; }
-  td:nth-child(1) { font-weight: 600; white-space: nowrap; width: 110px; }
-
+  /* Badge system (different from tags.css .tag — keep inline) */
   .badge {
     display: inline-block;
     padding: 0.1rem 0.5rem;
@@ -41,19 +32,11 @@
   .badge-mid   { background: #e65100; }
   .badge-fic   { background: #c62828; }
 
-  .card {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 1rem 1.3rem;
-    margin: 1rem 0;
-  }
-  .card h3 { font-size: 1rem; color: var(--accent); margin: 0 0 0.5rem; }
+  /* Specialized table column widths */
+  td:nth-child(1) { font-weight: 600; white-space: nowrap; width: 110px; }
+  td:nth-child(5) { font-size: 0.82rem; }
 
-  @media print {
-    body { font-size: 10pt; padding: 0.5rem; }
-    @page { margin: 1.5cm; }
-  }
+  @page { margin: 1.5cm; }
 </style>
 </head>
 <body>

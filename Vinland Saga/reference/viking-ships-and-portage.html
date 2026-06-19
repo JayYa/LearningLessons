@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📐 维京战船与 Portage（陆地运船）参考</title>
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/compare.css">
+<link rel="stylesheet" href="../assets/tags.css">
+<style>
+  :root {
+    --bg: #fdfaf5;
+    --text: #2c2416;
+    --accent: #1a5276;
+    --muted: #6b5e4a;
+    --card-bg: #fffdf8;
+    --border: #b0c4de;
+    --highlight: #eaf0f7;
+  }
+  body { font-size: 15px; }
+  h3 { color: #1a3a4a; }
+
+  .sidenote {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin: 0.3rem 0 0.8rem;
+    padding-left: 1rem;
+    border-left: 2px solid var(--border);
+  }
+
+  .tag-term { background: #1a5276; }
+
+  /* Ship diagram */
+  .ship-features {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin: 0.8rem 0;
+  }
+  @media (max-width: 550px) { .ship-features { grid-template-columns: 1fr; } }
+  .feature {
+    background: var(--highlight);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.8rem;
+    text-align: center;
+  }
+  .feature .icon { font-size: 1.5rem; margin-bottom: 0.3rem; }
+  .feature .label { font-weight: 600; font-size: 0.9rem; color: var(--accent); }
+  .feature .desc { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+</style>
+</head>
+<body>
+
+<h1>📐 维京战船与 Portage</h1>
+<p class="subtitle">Reference — 维京长船设计如何成就陆地运船能力 · 漫画对照</p>
+
+<!-- ====== QUICK REFERENCE ====== -->
+<h2>📋 速查卡</h2>
+
+<div class="card">
+  <table style="margin:0;">
+    <tr><th style="width:18%;">术语</th><th>含义</th></tr>
+    <tr>
+      <td><strong>Portage</strong></td>
+      <td>将船只从一处水域经陆地运往另一处水域的做法。法语借词，源自拉丁语 <em>portare</em>（携带）。维京人实操的核心技能。</td>
+    </tr>
+    <tr>
+      <td><strong>Hlunnr</strong><br><span style="font-size:0.8rem;color:var(--muted);">(古诺尔斯语)</span></td>
+      <td>Portage 时垫在船底的<strong>圆木滚轮</strong>。将圆木劈成两半，平面朝上、圆面朝下，船在其上滑行。可重复使用——前端拉出再垫到后端。</td>
+    </tr>
+    <tr>
+      <td><strong>Clinker-built</strong><br><span style="font-size:0.8rem;color:var(--muted);">叠接法</span></td>
+      <td>维京船的<strong>核心建造技术</strong>：木板从龙骨向上逐层叠压，铁钉铆接。结构轻、韧、有弹性（而非刚性），是 portage 可能性的物质基础。</td>
+    </tr>
+    <tr>
+      <td><strong>Skipdráttr</strong><br><span style="font-size:0.8rem;color:var(--muted);">(古诺尔斯语)</span></td>
+      <td>字面"拖船"（ship-dragging）。在萨迦和地名中出现的词，指 portage 行为。</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ====== SHIP TYPES ====== -->
+<h2>🛶 维京战船分类</h2>
+
+<table>
+  <tr><th>船型</th><th>长度</th><th>桨手数</th><th>用途</th><th>Portage 适用性</th></tr>
+  <tr>
+    <td><strong>Karvi</strong>（小型战船）</td>
+    <td>12–17 m</td>
+    <td>12–32</td>
+    <td>近岸巡逻、短途运输</td>
+    <td>✅ 极佳（最轻）</td>
+  </tr>
+  <tr>
+    <td><strong>Snekkja</strong>（长蛇船）</td>
+    <td>17–20 m</td>
+    <td>30–40</td>
+    <td>主力战船（《冰海战纪》中最常见类型）</td>
+    <td>✅ 良好</td>
+  </tr>
+  <tr>
+    <td><strong>Skeið</strong>（大型长船）</td>
+    <td>25–35 m</td>
+    <td>40–60+</td>
+    <td>大规模远征、王族旗舰</td>
+    <td>⚠️ 勉强可行（重）</td>
+  </tr>
+  <tr>
+    <td><strong>Knarr</strong>（商船）</td>
+    <td>16–18 m</td>
+    <td>6–10</td>
+    <td>远洋贸易、殖民运输（去冰岛/格陵兰）</td>
+    <td>⚠️ 可但更费力（9吨级）</td>
+  </tr>
+</table>
+
+<p class="sidenote">
+  🎨 <strong>漫画关联：</strong>《冰海战纪》中阿谢拉特团使用的是一艘 snekkja 级别的长船。托鲁克尔的约姆斯维京人船队规模更大，可能有 skeið。托尔芬和埃纳尔去文兰时乘坐的雷夫的船更接近 knarr（商船/殖民船）。
+</p>
+
+<!-- ====== WHY PORTAGE IS POSSIBLE ====== -->
+<h2>🔑 为什么维京船能做到而其他文明的船做不到？</h2>
+
+<div class="ship-features">
+  <div class="feature">
+    <div class="icon">📏</div>
+    <div class="label">极浅吃水</div>
+    <div class="desc">吃水仅 0.5–1 m，可直冲海滩<br>无需港口设施即可上岸</div>
+  </div>
+  <div class="feature">
+    <div class="icon">🪶</div>
+    <div class="label">极轻自重</div>
+    <div class="desc">叠接法薄木板 + 铁钉<br>30人战船仅 1–2 吨</div>
+  </div>
+  <div class="feature">
+    <div class="icon">🔧</div>
+    <div class="label">可拆卸设计</div>
+    <div class="desc">桅杆可放下 · 压舱石可卸<br>重量骤降 30–50%</div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:0.8rem;">
+  <h3>⚖️ 对比：为什么地中海船不行？</h3>
+  <table style="margin:0.4rem 0;">
+    <tr><th style="width:25%;">维度</th><th>维京长船</th><th>同代地中海桨帆船</th></tr>
+    <tr><td>建造方式</td><td>叠接法（轻韧）</td><td>平接法（重刚）</td></tr>
+    <tr><td>典型重量</td><td>1–3 吨</td><td>20–50+ 吨</td></tr>
+    <tr><td>吃水</td><td>0.5–1 m</td><td>2–3 m</td></tr>
+    <tr><td>可否上岸</td><td>✅ 可 — 拖上任何沙滩</td><td>❌ 不可 — 需要港口深水</td></tr>
+    <tr><td>可否 portage</td><td>✅ 可</td><td>❌ 完全不可</td></tr>
+  </table>
+  <p style="font-size:0.9rem;margin-top:0.4rem;">这解释了为什么维京人能在没有港口设施的情况下突袭内陆、穿越东欧河流系统、以及跨越苏格兰地峡——这些战术和地理能力直接来自造船技术。</p>
+</div>
+
+<!-- ====== HOW PORTAGE WORKED ====== -->
+<h2>🔨 Portage 如何操作？</h2>
+
+<h3>标准拖行流程</h3>
+<ol>
+  <li><strong>卸船：</strong>移除压舱石、货物、不必要的装备。放下桅杆。</li>
+  <li><strong>上岸：</strong>利用浅吃水直接将船冲上岸滩或浅水区。</li>
+  <li><strong>铺滚轮：</strong>将劈开的圆木（<em>hlunnr</em>）垫在船底，平面朝上、圆面朝下。</li>
+  <li><strong>润滑：</strong>在滚轮上涂抹海藻、鱼肝油或动物油脂减少摩擦。</li>
+  <li><strong>拖行：</strong>船员通过船体本身拉拽 + 可能使用马/牛辅助。有时将杉木杆穿过桨孔作为杠杆支点。</li>
+  <li><strong>下水：</strong>到达目标水域后推船下水，重新装载。</li>
+</ol>
+
+<div class="card">
+  <h3>🧪 现代实验考古数据</h3>
+  <p style="margin-bottom:0.4rem;">丹麦维京船博物馆（Vikingeskibsmuseet）使用复刻长船测试得出：</p>
+  <table style="margin:0.3rem 0;">
+    <tr><th>船型</th><th>重量</th><th>人力</th><th>距离</th><th>耗时</th></tr>
+    <tr><td><em>Helge Ask</em>（战船复刻）</td><td>~2 吨</td><td>27 人</td><td>300 m</td><td>~15–16 分钟</td></tr>
+    <tr><td><em>Helge Ask</em></td><td>~2 吨</td><td>18 人 + 4 匹矮马</td><td>300 m</td><td>~12 分钟</td></tr>
+    <tr><td><em>Ottar</em>（商船复刻）</td><td>~9 吨</td><td>多人 + 马</td><td>300 m</td><td>可行但更费力</td></tr>
+  </table>
+  <p class="sidenote" style="margin:0.4rem 0 0;">
+    📖 来源：Vikingeskibsmuseet, "Ship over Land" 展览。Institute for Northern Studies, "Norse and the Sea" project (2024).
+  </p>
+</div>
+
+<!-- ====== HISTORICAL EVIDENCE ====== -->
+<h2>📜 历史证据</h2>
+
+<table>
+  <tr><th style="width:15%;">来源</th><th style="width:10%;">时代</th><th>内容</th></tr>
+  <tr>
+    <td><strong>《马格努斯赤脚王萨迦》</strong></td>
+    <td>13世纪</td>
+    <td>挪威国王马格努斯三世（r. 1093–1103）在金泰尔半岛（苏格兰西海岸）的 Tarbert 地峡让人把船拖过陆地。他坐在船尾掌舵，宣称"船能拖过去的地方就是岛"——由此将金泰尔纳入挪威领土。</td>
+  </tr>
+  <tr>
+    <td><strong>君士坦丁七世《论帝国管理》</strong></td>
+    <td>约950年</td>
+    <td>拜占庭皇帝描述了罗斯人（北欧维京人在东欧的后裔）如何将船只拖过第聂伯河的七处急流——有时甚至需要全程扛货物而非船。</td>
+  </tr>
+  <tr>
+    <td><strong>《往年纪事》</strong><br>(Primary Chronicle)</td>
+    <td>约1100年</td>
+    <td>基辅罗斯编年史，记录了从波罗的海经第聂伯河到黑海的贸易路线——其中包括多处必须 portage 的河段。</td>
+  </tr>
+  <tr>
+    <td><strong>苏格兰地名</strong></td>
+    <td>延续至今</td>
+    <td>Tarbert/Tarbet（盖尔语 <em>tairbeart</em> = "拖拽"）和 Drag（<em>drágr</em> = "拉/拖"）标记了大量历史上的 portage 地点。这些地名从金泰尔到设得兰群岛随处可见。</td>
+  </tr>
+  <tr>
+    <td><strong>西塔伯特木构考古</strong></td>
+    <td>待确认年代</td>
+    <td>1990年代农民在西塔伯特（West Tarbert）犁地时翻出长达 4.95 m 的橡木构件——可能为 portage 系统的滚轮或枕木。目前由 UHI 北欧研究所进行"摆动匹配"定年。</td>
+  </tr>
+</table>
+
+<!-- ====== EAST VS WEST ====== -->
+<h2>🗺 东西两条路线上的 Portage</h2>
+
+<div class="compare">
+  <div class="compare-col">
+    <h4>🏴󠁧󠁢󠁳󠁣󠁴󠁿 西线：苏格兰地峡</h4>
+    <p style="font-size:0.85rem;margin:0;">
+      <strong>目的：</strong>避开危险潮汐海峡<br>
+      <strong>距离：</strong>通常 300 m–2 km<br>
+      <strong>例子：</strong>金泰尔半岛 Tarbert（最窄处仅 ~1.5 km）——绕海路 64 km、约9小时，拖过去约3.5小时<br>
+      <strong>历史时期：</strong>维京时代至中世纪盛期
+    </p>
+  </div>
+  <div class="compare-col">
+    <h4>🇺🇦 东线：第聂伯河急流</h4>
+    <p style="font-size:0.85rem;margin:0;">
+      <strong>目的：</strong>绕过七处不可通航急流<br>
+      <strong>距离：</strong>每处几百米至数公里<br>
+      <strong>路线：</strong>波罗的海 → 涅瓦河 → 拉多加湖 → 第聂伯河 → 黑海 → 君士坦丁堡<br>
+      <strong>历史时期：</strong>9–11世纪（← 这是<a href="../lessons/0005-varangian-east.html">Lesson 0005</a>的地理核心）
+    </p>
+  </div>
+</div>
+
+<!-- ====== MANGA VS HISTORY ====== -->
+<h2>🎨 漫画描绘 vs 历史事实</h2>
+
+<div class="card">
+  <table style="margin:0;">
+    <tr><th style="width:18%;">维度</th><th style="width:40%;"><span class="tag tag-manga">漫画</span> 《冰海战纪》</th><th style="width:40%;"><span class="tag tag-history">历史</span> 维京时代</th></tr>
+    <tr>
+      <td>运船方式</td>
+      <td><strong>扛在肩上</strong>——战士直接抬起船体翻山</td>
+      <td><strong>在地面拖行</strong>——借助滚轮、润滑、畜力</td>
+    </tr>
+    <tr>
+      <td>地形</td>
+      <td>翻越山丘——起伏地形</td>
+      <td>尽量选择平坦地峡、河谷——最短路径</td>
+    </tr>
+    <tr>
+      <td>距离暗示</td>
+      <td>看起来可以翻越整座山</td>
+      <td>通常 300 m–2 km，极少超过 3 km</td>
+    </tr>
+    <tr>
+      <td>战术使用</td>
+      <td>突袭——从意想不到的方向出现</td>
+      <td>主要是后勤/贸易功能——连接不同水系</td>
+    </tr>
+    <tr>
+      <td>历史正确性</td>
+      <td>核心概念（= 船能上陆地）✅ 正确</td>
+      <td>执行方式（= 扛着走）❌ 艺术夸张</td>
+    </tr>
+  </table>
+</div>
+
+<p class="sidenote">
+  💡 幸村诚的处理方式体现了《冰海战纪》一贯的创作哲学：历史框架真实，执行方式为叙事服务。漫画中"扛船翻山"在视觉上传达了与历史 portage 完全相同的核心信息——维京长船无与伦比的机动性——但用了一个更震撼的视觉来实现它。正如阿谢拉特这个角色：历史上不存在此人，但他所处的历史环境完全真实。
+</p>
+
+<!-- ====== WHY THIS MATTERS ====== -->
+<h2>🧠 为什么 Portage 是一个"大概念"？</h2>
+
+<p>Portage 不是一个小技巧——它是理解维京时代地理扩张的关键：</p>
+
+<ol>
+  <li><strong>没有 portage，就没有东方路线。</strong> 第聂伯河不可通航的急流意味着：能拖船的文明才能到达君士坦丁堡。这是地理决定历史的最直接例子。</li>
+  <li><strong>没有 portage，维京突袭的不可预测性大打折扣。</strong> 敌人以为你在河的这边——你已经出现在那边了。这种机动性让盎格鲁-撒克逊人的防御体系几乎无效。</li>
+  <li><strong>没有 portage，苏格兰西海岸的维京定居模式完全不同。</strong> 地名（Tarbert/Drag）至今标记着这些历史上的"捷径"——它们成了地理档案。</li>
+  <li><strong>Portage 是维京船设计哲学的终极体现：</strong> 船不是为了在港口里好看——是工具。能在海上航行、能在河里深入内陆、能拖上任何海滩、能翻越陆地——<strong>一船四用</strong>。</li>
+</ol>
+
+<hr>
+
+<h2>🔗 关联资源</h2>
+<ul style="list-style:none;padding:0;">
+  <li>📄 <a href="viking-age-timeline.html">维京时代大事年表</a></li>
+  <li>📄 <a href="vinland-saga-character-reference.html">《冰海战纪》角色-史实对照表</a></li>
+  <li>📖 <a href="../lessons/0003-danish-conquest-of-england.html">Lesson 0003 — 丹麦征服英格兰</a>（战争篇中的战术应用）</li>
+  <li>📖 <a href="../lessons/0005-varangian-east.html">Lesson 0005 — 东方远征与瓦良格卫队</a>（第聂伯河 portage 路线）</li>
+</ul>
+
+<h2>📚 主要来源</h2>
+<p class="cite">
+  · Vikingeskibsmuseet (Roskilde). "Ship over Land" exhibition. <a href="https://www.vikingeskibsmuseet.dk/">vikingeskibsmuseet.dk</a><br>
+  · Institute for Northern Studies, UHI. "Norse and the Sea" project (2024). <a href="https://institutefornorthernstudies.com/">institutefornorthernstudies.com</a><br>
+  · Sanmark, A. et al. — ongoing experimental archaeology on portage sites in Scotland.<br>
+  · Porphyrogenitus, Constantine. <em>De Administrando Imperio</em> (c. 950).<br>
+  · <em>Heimskringla: Magnúss saga berfœtts</em> (Saga of Magnus Barelegs, 13th c.).<br>
+  · <em>Primary Chronicle</em> (Повѣсть времѧньныхъ лѣтъ, c. 1100).<br>
+  · Price, N. (2020). <em>The Children of Ash and Elm</em>. Penguin — contains excellent sections on ship technology.<br>
+  · Winroth, A. (2014). <em>The Age of the Vikings</em>. Princeton University Press.
+</p>
+
+</body>
+</html>

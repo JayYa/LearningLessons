@@ -4,92 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 20: C# 13 — 小特性合集</title>
-<style>
-  :root {
-    --bg: #faf9f7; --card-bg: #ffffff; --text: #1a1a1a; --text-muted: #6b6b6b;
-    --border: #e0ded8; --accent: #512bd4; --accent-light: #ede4ff;
-    --good: #1a7f37; --good-bg: #dafbe1; --warn: #9a6700; --warn-bg: #fff8c5;
-    --bad: #cf222e; --bad-bg: #ffebe9; --code-bg: #f0efeb; --radius: 12px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.7;
-    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
-  }
-  h1 { font-size: 2rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.35rem; margin: 2.5rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
-  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
-  h4 { font-size: 1rem; margin: 1.25rem 0 0.35rem; }
-  p { margin: 0.75rem 0; color: #333; }
-  .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
-  .en { color: var(--text-muted); font-size: 0.9em; font-style: italic; }
-  .en::before { content: ' ('; } .en::after { content: ')'; }
-  .callout { padding: 1rem 1.25rem; border-radius: var(--radius); margin: 1rem 0; font-size: 0.95rem; }
-  .callout--info  { background: #eef1ff; border-left: 4px solid #512bd4; }
-  .callout--warn  { background: var(--warn-bg); border-left: 4px solid #9a6700; }
-  .callout--good  { background: var(--good-bg); border-left: 4px solid #1a7f37; }
-  .callout--bad   { background: var(--bad-bg); border-left: 4px solid #cf222e; }
-  .comparison {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
-  }
-  @media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }
-  .comparison > div {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1rem 1.25rem;
-  }
-  .comparison > div h4 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-muted); }
-  .comparison > div.old h4 { color: var(--bad); }
-  .comparison > div.new h4 { color: var(--good); }
-  table {
-    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem;
-  }
-  th, td {
-    text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border);
-  }
-  th { background: var(--code-bg); font-weight: 600; }
-  pre {
-    background: #1e1e2e; color: #cdd6f4; padding: 1rem 1.25rem;
-    border-radius: var(--radius); overflow-x: auto;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.85rem; line-height: 1.55; margin: 0.75rem 0;
-  }
-  code {
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 0.88em; background: var(--code-bg);
-    padding: 0.15em 0.35em; border-radius: 4px;
-  }
-  pre code { background: none; padding: 0; font-size: inherit; }
-  .kw { color: #cba6f7; } .str { color: #a6e3a1; } .cmt { color: #6c7086; }
-  .num { color: #fab387; } .type { color: #89b4fa; } .pnk { color: #f38ba8; }
-  .quiz {
-    background: var(--card-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem 1.5rem; margin: 1.5rem 0;
-  }
-  .quiz h3 { margin-top: 0; }
-  .quiz .question { font-weight: 600; margin: 1rem 0 0.5rem; }
-  .quiz label { display: block; margin: 0.35rem 0; cursor: pointer; padding: 0.4rem 0.6rem; border-radius: 6px; }
-  .quiz label:hover { background: var(--code-bg); }
-  .quiz input[type="radio"] { margin-right: 0.5rem; }
-  .quiz button {
-    margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--accent);
-    color: #fff; border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
-  }
-  .quiz button:hover { opacity: 0.9; }
-  .feedback {
-    margin-top: 0.75rem; padding: 0.6rem 0.8rem; border-radius: 6px; display: none; font-size: 0.92rem;
-  }
-  .feedback.show { display: block; }
-  .feedback.correct { background: var(--good-bg); color: var(--good); }
-  .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
-  ul, ol { margin: 0.5rem 0 0.5rem 1.5rem; }
-  li { margin: 0.3rem 0; }
-  .mild { font-size: 0.9rem; color: var(--text-muted); }
-  .badge { display: inline-block; padding: 0.15em 0.55em; border-radius: 100px; font-size: 0.78rem; font-weight: 600; }
-  .badge--daily { background: #dafbe1; color: #1a7f37; }
-  .badge--rare  { background: #fff8c5; color: #9a6700; }
-  .badge--preview { background: #fff8c5; color: #9a6700; }
-</style>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
 </head>
 <body>
 
@@ -268,9 +183,29 @@ Log(userId, operation, elapsed);  <span class="cmt">// 自动选 Span 版本 ✅
 <strong>⚠️ 预览特性：</strong>需要在 .csproj 中设置 <code>&lt;LangVersion&gt;preview&lt;/LangVersion&gt;</code> 并添加 <code>&lt;Features&gt;field&lt;/Features&gt;</code>。API 和语法在最终发布前可能变动。预计在 C# 14（.NET 10）中正式发布。
 </div>
 
+<!-- ========================== DAILY-IMPACT ========================== -->
+
+<h2>七、实际用到几个？</h2>
+
+<p>这六个特性在日常编程中的出场率差别很大——诚实评估：</p>
+
+<table>
+  <tr><th>特性</th><th>频率</th><th>谁在用</th><th>你什么时候受益</th></tr>
+  <tr><td><code>\e</code> 转义</td><td>低频</td><td>CLI / 终端工具作者</td><td>写控制台应用输出彩色文字、进度条时</td></tr>
+  <tr><td>方法组自然类型改进</td><td>极低</td><td>修了个 Bug</td><td>你被 CS8917 困扰过才感知到——大多数人不遇到</td></tr>
+  <tr><td>partial 属性</td><td>零（你不写）</td><td>源生成器 / 框架作者</td><td>MVVM 框架、JSON 序列化器替你生成属性实现</td></tr>
+  <tr><td>OverloadResolutionPriority</td><td>极低</td><td>库作者</td><td>API 演进时控制重载选择——普通项目用不上</td></tr>
+  <tr><td><code>^</code> 进对象初始器</td><td>偶尔</td><td>所有人</td><td>省一次心算 <code>Length - N</code>，代码意图更清晰</td></tr>
+  <tr><td>field 关键字</td><td><strong>高</strong>（C# 14 正式后）</td><td>所有人</td><td>每个手写 <code>get/set</code> 的属性省一行 <code>_field</code> 声明</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>本课最有价值的两个：</strong>① <strong>field 关键字</strong>（预览→C# 14 正式）——这会是日常频率最高的改进，每写一个带逻辑的属性都少一行样板；② <strong>partial 属性</strong>——你从不写，但当你用 CommunityToolkit.Mvvm 或 System.Text.Json 源生成器时，后台就在用这个特性替你干活。
+</div>
+
 <!-- ========================== QUIZ ========================== -->
 
-<h2>七、小测验</h2>
+<h2>八、小测验</h2>
 
 <div class="quiz" id="q1">
 <div class="question">1/4 · \e 转义——C# 13 引入它的主要原因是什么？</div>
@@ -278,7 +213,7 @@ Log(userId, operation, elapsed);  <span class="cmt">// 自动选 Span 版本 ✅
 <label><input type="radio" name="q1" value="1">B. \x1b 可能贪婪匹配后续十六进制数字，产生歧义</label>
 <label><input type="radio" name="q1" value="2">C. ESC 字符之前完全无法在 C# 中表示</label>
 <label><input type="radio" name="q1" value="3">D. 为了和其他语言（如 Rust）保持一致</label>
-<div class="feedback" id="fb1"></div>
+<div class="feedback" id="f_q1"></div>
 </div>
 
 <div class="quiz" id="q2">
@@ -287,7 +222,7 @@ Log(userId, operation, elapsed);  <span class="cmt">// 自动选 Span 版本 ✅
 <label><input type="radio" name="q2" value="1">B. 逐作用域剪枝——先看实例方法，匹配了就停止搜索</label>
 <label><input type="radio" name="q2" value="2">C. 任何方法组都能自动推断为通用的 Func 委托</label>
 <label><input type="radio" name="q2" value="3">D. 扩展方法优先级永远高于实例方法</label>
-<div class="feedback" id="fb2"></div>
+<div class="feedback" id="f_q2"></div>
 </div>
 
 <div class="quiz" id="q3">
@@ -296,7 +231,7 @@ Log(userId, operation, elapsed);  <span class="cmt">// 自动选 Span 版本 ✅
 <label><input type="radio" name="q3" value="1">B. 源生成器和框架作者</label>
 <label><input type="radio" name="q3" value="2">C. 数据库管理员</label>
 <label><input type="radio" name="q3" value="3">D. UI 设计师</label>
-<div class="feedback" id="fb3"></div>
+<div class="feedback" id="f_q3"></div>
 </div>
 
 <div class="quiz" id="q4">
@@ -305,12 +240,13 @@ Log(userId, operation, elapsed);  <span class="cmt">// 自动选 Span 版本 ✅
 <label><input type="radio" name="q4" value="1">B. 只在编译器无法通过类型匹配区分重载时才生效</label>
 <label><input type="radio" name="q4" value="2">C. 可以用于废弃旧 API——给 -1 让它靠后</label>
 <label><input type="radio" name="q4" value="3">D. 数值越高总是优先，即使另一重载是类型完美匹配</label>
-<div class="feedback" id="fb4"></div>
+<div class="feedback" id="f_q4"></div>
 
-<button onclick="checkAll()" style="padding:0.6rem 1.5rem; font-size:1rem; background:var(--accent); color:#fff; border:none; border-radius:6px; cursor:pointer; margin:1rem 0;">提交全部答案</button>
-<div id="score" style="font-weight:600; margin:0.5rem 0; display:none;"></div>
+<button onclick="checkAll()">提交全部答案</button>
+<div id="score" style="display:none;"></div>
 </div>
 
+<script src="../assets/scripts/quiz.js"></script>
 <script>
 const answers = { q1: 1, q2: 1, q3: 1, q4: 3 };
 const explanations = {
@@ -319,28 +255,12 @@ const explanations = {
   q3: { correct: "✅ 正确！partial 属性主要为源生成器和框架作者服务——MVVM 框架、JSON 序列化、ORM 等在后台生成属性实现。", wrong: "❌ 不是。B 是正确答案——partial 属性是工具链向特性，为源生成器和框架服务，间接让所有开发者受益。" },
   q4: { correct: "✅ 正确！D 是错的。即使有 OverloadResolutionPriority，正常的类型匹配规则仍然优先。这个属性只在两个重载同等适用时才打破平局——不会覆盖类型完美匹配。", wrong: "❌ 不是。D 是错误描述——OverloadResolutionPriority 不会覆盖正常的类型匹配规则。它只在编译器无法通过类型匹配区分时才生效。A/B/C 都是正确的。" },
 };
-function checkAll() {
-  let correct = 0;
-  for (let qid of ['q1','q2','q3','q4']) {
-    const selected = document.querySelector(`input[name="${qid}"]:checked`);
-    const fb = document.getElementById('fb' + qid.slice(1));
-    if (!selected) { fb.textContent = '⚠ 请选择一个答案'; fb.className = 'feedback wrong show'; continue; }
-    if (parseInt(selected.value) === answers[qid]) {
-      fb.textContent = explanations[qid].correct; fb.className = 'feedback correct show'; correct++;
-    } else {
-      fb.textContent = explanations[qid].wrong; fb.className = 'feedback wrong show';
-    }
-  }
-  const scoreEl = document.getElementById('score');
-  scoreEl.style.display = 'block';
-  scoreEl.textContent = `得分：${correct} / 4`;
-  scoreEl.style.color = correct === 4 ? 'var(--good)' : correct >= 2 ? 'var(--warn)' : 'var(--bad)';
-}
+function checkAll() { Quiz.checkAll(answers, explanations); }
 </script>
 
 <!-- ========================== C# 13 全部特性总结 ========================== -->
 
-<h2>八、C# 13 全部特性总结</h2>
+<h2>九、C# 13 全部特性总结</h2>
 
 <table>
   <tr><th>特性</th><th>一句话</th><th>影响面</th><th>课程</th></tr>
@@ -357,7 +277,7 @@ function checkAll() {
   <tr><td>field 关键字</td><td>直接访问自动属性的后备字段</td><td>预览</td><td>本课</td></tr>
 </table>
 
-<h2>九、下一步</h2>
+<h2>十、下一步</h2>
 
 <ul>
   <li><strong>C# 8~13 全部覆盖完毕 🎉</strong>——从 Lesson 1 到这里共 20 课，覆盖了 C# 8 到 C# 13 的全部特性。</li>
