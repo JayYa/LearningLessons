@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0007 — 维京人的社会结构：Jarl、Karl 与奴隶</title>
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/compare.css">
+<link rel="stylesheet" href="../assets/tags.css">
+<link rel="stylesheet" href="../assets/reminder.css">
+<style>
+  :root {
+    --bg: #fdfaf5;
+    --text: #2c2416;
+    --accent: #8b5000;
+    --muted: #7a6b55;
+    --card-bg: #fffdf8;
+    --border: #d4c0a0;
+    --highlight: #faf3e5;
+  }
+
+  h3 { color: #5a3810; }
+
+  .thrall-tag { background: #f5e8e0; color: #8b4513; border: 1px solid #d4a080; }
+  .karl-tag  { background: #e8f0e8; color: #2e5c2e; border: 1px solid #98c098; }
+  .jarl-tag  { background: #e0e8f5; color: #1a3a6e; border: 1px solid #98b0d4; }
+
+  /* --- Pyramid diagram --- */
+  .pyramid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 1.5rem 0;
+    gap: 0;
+    font-family: system-ui, sans-serif;
+  }
+  .pyramid .layer {
+    text-align: center;
+    padding: 0.6rem 1rem;
+    color: #fff;
+    font-weight: 700;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .pyramid .layer small {
+    font-weight: 400;
+    opacity: 0.85;
+    font-size: 0.75rem;
+  }
+  .pyramid .l-jarl {
+    background: #3a5a8c;
+    width: 180px;
+    border-radius: 4px 4px 0 0;
+  }
+  .pyramid .l-karl {
+    background: #4a7a4a;
+    width: 380px;
+  }
+  .pyramid .l-thrall {
+    background: #8b5a3a;
+    width: 560px;
+    border-radius: 0 0 4px 4px;
+  }
+
+  /* --- Class feature grid --- */
+  .class-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.8rem;
+    margin: 1.2rem 0;
+    font-family: system-ui, sans-serif;
+  }
+  .class-grid > div {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+  }
+  .class-grid h4 {
+    margin: 0 0 0.5rem;
+    font-size: 0.95rem;
+  }
+  .class-grid ul {
+    font-size: 0.82rem;
+    padding-left: 1.1rem;
+    margin: 0;
+  }
+  .class-grid li { margin-bottom: 0.2rem; }
+
+  @media (max-width: 640px) {
+    .class-grid { grid-template-columns: 1fr; }
+    .pyramid .l-jarl { width: 120px; }
+    .pyramid .l-karl { width: 260px; }
+    .pyramid .l-thrall { width: 400px; }
+  }
+
+  /* --- Gift economy flow --- */
+  .gift-flow {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-family: system-ui, sans-serif;
+    font-size: 0.88rem;
+  }
+  .gift-flow .gf-box {
+    background: var(--card-bg);
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    text-align: center;
+  }
+  .gift-flow .gf-arrow {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .quote {
+    font-style: italic;
+    color: var(--muted);
+    border-left: 3px solid var(--border);
+    padding-left: 1rem;
+    margin: 1rem 0;
+  }
+
+  /* --- Spectrum --- */
+  .spectrum-bar {
+    height: 8px;
+    border-radius: 4px;
+    margin: 0.4rem 0;
+  }
+</style>
+</head>
+<body>
+
+<h1>🏠 维京人的社会结构：Jarl、Karl 与奴隶</h1>
+<p class="subtitle">Lesson 0007 — 从《冰海战纪》「奴隶篇」看维京社会的三个阶层</p>
+
+<p class="lead">
+  《冰海战纪》中最震撼的篇章之一，是托尔芬沦为奴隶后在凯蒂尔农场上度过的岁月。漫画中呈现的奴隶制度、自由农生活、领主权力，并非作者的凭空想象——它们精确反映了维京时代的真实社会结构。维京社会由三个阶层组成：<strong>Jarl（贵族）</strong>、<strong>Karl（自由民）</strong>、<strong>Þræll（奴隶）</strong>。这一课将带你解剖这个三层金字塔，并用漫画中的角色帮你理解每一层的人如何生活。
+</p>
+
+<!-- ====== SECTION 1: THE THREE CLASSES ====== -->
+<h2>一、三层金字塔——不同于封建</h2>
+
+<p>
+  维京社会是一个严格分层的等级社会，但它<strong>不是</strong>后来欧洲那种封建制度（领主→封臣→农奴，以土地为纽带）。维京制度更古老，更北欧——它的核心不是土地，而是<strong>个人自由</strong>（frjáls vs ófrjáls）。
+</p>
+
+<div class="pyramid">
+  <div class="layer l-jarl">Jarl <small>贵族/首领 · 约2–5%</small></div>
+  <div class="layer l-karl">Karl <small>自由民 · 约70–80%</small></div>
+  <div class="layer l-thrall">Þræll <small>奴隶 · 约15–25%</small></div>
+</div>
+
+<p style="text-align:center;font-size:0.82rem;color:var(--muted);margin-top:0.3rem;">人口比例基于考古与萨迦交叉估计。奴隶比例在不同地区差异很大——冰岛较低，丹麦和瑞典较高。</p>
+
+<div class="card">
+<h3>维京社会 ≠ 欧洲封建</h3>
+<table>
+  <tr><th></th><th>维京社会</th><th>欧洲封建</th></tr>
+  <tr><td>基础纽带</td><td>个人自由 + 双向忠诚</td><td>土地持有 + 单向效忠</td></tr>
+  <tr><td>自由民身份</td><td><strong>Karl 有土地、武器、投票权</strong></td><td>农奴（serf）无自由，依附于土地</td></tr>
+  <tr><td>贵族与平民</td><td>Jarl 与 Karl 可同桌喝酒</td><td>领主与农奴严格隔离</td></tr>
+  <tr><td>奴隶</td><td>动产（chattel），但可赎身</td><td>农奴不可买卖，但也不可离开</td></tr>
+  <tr><td>法律参与</td><td>自由民男性全体参加 Thing</td><td>领主法庭，平民无权</td></tr>
+</table>
+</div>
+
+<p>
+  理解这个区别很重要，因为漫画中凯蒂尔既不是"地主老财"式的封建领主，托尔芬和埃纳尔也不是"农奴"——他们是<strong>动产奴隶</strong>（chattel slaves），一种比农奴更彻底的非人化身份，但也有着农奴不具备的<strong>赎身可能</strong>。
+</p>
+
+<!-- ====== SECTION 2: THRALLS ====== -->
+<h2>二、Þræll——奴隶：人身即财产</h2>
+
+<p>
+  在维京社会的最底层是Þræll（古诺尔斯语 þræll，英语 "thrall" 即源于此）。奴隶<strong>在法律上是财产，不是人</strong>——这是维京奴隶制与后来封建农奴制最本质的区别。
+</p>
+
+<h3>如何沦为奴隶？</h3>
+<ul>
+  <li><strong>战俘</strong>（最常见来源）——劫掠中俘获的英格兰人、爱尔兰人、斯拉夫人、法兰克人</li>
+  <li><strong>债务</strong>——还不起债的自由民可被债权人收为奴隶</li>
+  <li><strong>出生</strong>——奴隶的孩子自动成为奴隶</li>
+  <li><strong>犯罪</strong>——严重犯罪者可能被判处为奴</li>
+  <li><strong>海盗劫掠</strong>——沿海平民被掳走后在奴隶市场出售</li>
+</ul>
+
+<div class="quote">
+  「一件 þræll 的价值大约相当于 8–12 头奶牛，或一匹好马。这个价格在萨迦中多次提到。」——<em>The Children of Ash and Elm</em>, Neil Price (2020), ch. 8
+</div>
+
+<p>
+  漫画中托尔芬被以"几头羊的价格"卖给凯蒂尔——这是作者对奴隶价格的艺术化表达。在《格陵兰人萨迦》中，奴隶交易确实以牲畜为计价单位。
+</p>
+
+<h3>奴隶的生活</h3>
+<div class="class-grid">
+  <div>
+    <h4>❌ 没有的</h4>
+    <ul>
+      <li>法律人格——被伤害不算"伤人"</li>
+      <li>携带武器</li>
+      <li>参加 Thing（议事会）</li>
+      <li>拥有财产（理论上）</li>
+      <li>婚姻的法律效力</li>
+    </ul>
+  </div>
+  <div>
+    <h4>⛏️ 要做的事</h4>
+    <ul>
+      <li>最艰苦的体力劳动</li>
+      <li>耕作、砍柴、磨谷</li>
+      <li>挖泥炭、清粪坑</li>
+      <li>照料牲畜</li>
+      <li>任何主人不愿做的事</li>
+    </ul>
+  </div>
+  <div>
+    <h4>⚠️ 可能遭遇</h4>
+    <ul>
+      <li>被任意买卖</li>
+      <li>体罚（过度残忍会损主人声誉）</li>
+      <li>被用作陪葬（考古证据）</li>
+      <li>被用作活人献祭（Ibn Fadlan 记载）</li>
+      <li>女奴为主人提供性服务</li>
+    </ul>
+  </div>
+</div>
+
+<h3>自由之路</h3>
+<p>
+  奴隶<strong>可以被释放</strong>（古诺尔斯语：frelsi），常见路径有：
+</p>
+<ul>
+  <li><strong>主人主动释放</strong>——可能出于善意、宗教动机（基督教化后增多）或主人临终前的安排</li>
+  <li><strong>赎身</strong>——奴隶通过劳动攒钱（虽然极难）或由亲友筹集赎金</li>
+  <li><strong>被他人购买后释放</strong>——例如亲属找到被掳走的家人后赎买</li>
+</ul>
+
+<div class="card">
+<h3>⚠️ 获释 ≠ 平等</h3>
+<p style="margin-bottom:0.5rem;">
+  被释放的奴隶成为 <strong>freedman（leysingi / 自由人）</strong>，但社会地位<strong>远低于</strong>土生土长的自由民（Karl）。他们：
+</p>
+<ul style="margin-bottom:0;">
+  <li>在法律上对前主人及其家族有持续的义务</li>
+  <li>需要一两代人的时间，后代才能完全融入 Karl 阶层</li>
+  <li>在冰岛《灰雁法典》（Grágás）中有专门的 freedman 法条，地位介于奴隶和自由民之间</li>
+</ul>
+</div>
+
+<p>
+  漫画中托尔芬和埃纳尔都曾是奴隶，后来获得自由并成为文兰定居的核心成员——这正是"获释奴隶的第二代才能完全摆脱 stigma"的历史逻辑。埃纳尔的"攒钱赎身"计划在历史上并非不可能，只是极为艰难。
+</p>
+
+<!-- ====== SECTION 3: KARLS ====== -->
+<h2>三、Karl——自由民：维京社会的中坚</h2>
+
+<p>
+  Karl（卡尔）是维京社会<strong>最大的群体</strong>。他们是自由民——"自由"是维京人身份认同的<strong>核心</strong>。一个 Karl 不是任何人的财产，他可以携带武器、参加议事会、在法律面前有完整的人格。
+</p>
+
+<div class="class-grid">
+  <div>
+    <h4>🛡️ 权利</h4>
+    <ul>
+      <li>拥有土地和财产</li>
+      <li>携带武器（自由男性的标志）</li>
+      <li>参加 Thing 发言和投票</li>
+      <li>起诉和被起诉</li>
+      <li>缔结合法婚姻</li>
+      <li>接受/拒绝赔偿金（wergild）</li>
+    </ul>
+  </div>
+  <div>
+    <h4>🌾 职业</h4>
+    <ul>
+      <li>农民（bóndi）——最普遍的 Karl 身份</li>
+      <li>工匠——铁匠、木匠、造船工</li>
+      <li>商人——从本地市场到远洋贸易</li>
+      <li>战士/水手——夏季出海劫掠</li>
+      <li>诗人（skald）——受雇于贵族</li>
+    </ul>
+  </div>
+  <div>
+    <h4>🏠 日常生活</h4>
+    <ul>
+      <li>住在长屋（longhouse）里</li>
+      <li>主粮：大麦粥、面包</li>
+      <li>蛋白质：奶制品 + 偶尔的肉</li>
+      <li>穿羊毛衣、皮鞋</li>
+      <li>最重要的"家具"：织布机</li>
+      <li>兼业是常态——农民也是战士</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card">
+<h3>🪓 农民、战士、商人——同一个人</h3>
+<p style="margin-bottom:0;">
+  现代人习惯于职业分工，但维京 Karl 的生活是<strong>多重身份</strong>的：春天播种，夏天出海劫掠或贸易，秋天收获，冬天修理工具、讲故事、筹划明年的航行。漫画中，凯蒂尔在发迹之前就是一个普通的 bóndi——他拥有土地，自己劳动，但也会在必要时拿起武器。这种"农民-战士"的兼业模式是维京扩张得以实现的<strong>人力基础</strong>：不需要常备军——每个自由男性夏天都可以成为战士。
+</p>
+</div>
+
+<!-- ====== SECTION 4: JARLS ====== -->
+<h2>四、Jarl——贵族：礼物、忠诚与荣誉</h2>
+
+<p>
+  Jarl（雅尔）是维京社会的顶层。但他们不是欧洲那种住在城堡里与平民隔绝的封建领主——一个 Jarl 的权力来自<strong>追随者</strong>，而追随者是可以<strong>离开</strong>的。
+</p>
+
+<h3>Jarl 的权力支柱</h3>
+
+<div class="card">
+<table>
+  <tr><th>权力来源</th><th>为什么重要</th></tr>
+  <tr><td>土地和财富</td><td>基础经济实力，但规模远小于欧洲领主</td></tr>
+  <tr><td>追随者（hird）</td><td>武装的忠诚随从——Jarl 的核心军事力量</td></tr>
+  <tr><td><strong>慷慨</strong></td><td><strong>最关键的一项</strong>——不慷慨的 Jarl 会失去追随者</td></tr>
+  <tr><td>声誉和谱系</td><td>宣称自己是某位神祇或传奇英雄的后代</td></tr>
+  <tr><td>Thing 影响力</td><td>掌控地方议事会，影响法律判决</td></tr>
+</table>
+</div>
+
+<h3>「赐环者」——礼物经济</h3>
+
+<p>
+  在维京诗歌中，好领主被称为 <strong>"ring-giver"（baugbroti / 赐环者）</strong>——用金银臂环赏赐追随者。这不仅仅是美德，而是维京社会的<strong>运行机制</strong>：
+</p>
+
+<div class="gift-flow">
+  <div class="gf-box">Jarl 分发<br><strong>臂环·武器·宴会</strong></div>
+  <div class="gf-arrow">→</div>
+  <div class="gf-box">追随者回报<br><strong>忠诚·战斗·服务</strong></div>
+  <div class="gf-arrow">→</div>
+  <div class="gf-box">Jarl 获取更多<br><strong>战利品·土地·声望</strong></div>
+  <div class="gf-arrow">→</div>
+  <div class="gf-box">继续分发<br><strong>更多礼物</strong></div>
+</div>
+
+<p style="text-align:center;font-size:0.82rem;color:var(--muted);margin-top:0.2rem;">礼物经济（gift economy）——维京权力不是靠税收维持的，而是靠这个循环。</p>
+
+<div class="quote">
+  「一个从不给追随者分发臂环的国王，诗歌里不会留下他的名字。慷慨不是美德——是权力的机制。」——改编自 <em>The Age of the Vikings</em>, Anders Winroth (2014), ch. 5
+</div>
+
+<p>
+  <strong>漫画对照：</strong>阿谢拉特战团的运作方式正是礼物经济的缩影——追随者们跟随他，因为他能提供<strong>战利品、方向和领导力</strong>。当阿谢拉特在威尔士/英格兰战场上展现出卓越的领导才能时，他的战团坚定不移地追随他。而克努特的权力升级（参见 <a href="0004-cnut-north-sea-empire.html">Lesson 0004</a>）则是 Jarl 逻辑在王国规模上的终极体现——用土地、头衔和财富换取英格兰和丹麦贵族的忠诚。
+</p>
+
+<!-- ====== SECTION 5: THE THING ====== -->
+<h2>五、Thing——维京人的「议事会」</h2>
+
+<p>
+  维京社会有一个让外人惊讶的制度：自由民议事会，称为 <strong>Thing</strong>（古诺尔斯语 Þing，现代冰岛议会仍叫 Alþingi）。它不是现代民主，但确实给了自由民<strong>参与治理的渠道</strong>。
+</p>
+
+<h3>Thing 如何运作？</h3>
+
+<div class="class-grid">
+  <div>
+    <h4>🏛️ 基本设置</h4>
+    <ul>
+      <li>在固定时间、固定地点召开</li>
+      <li>所有自由民男性有权参加</li>
+      <li>由「法律讲述人」（lögsögumaður）主持</li>
+      <li>法律讲述人背诵全部法律（没有成文法）</li>
+      <li>大声表决（喊 "já" / 敲盾牌）</li>
+    </ul>
+  </div>
+  <div>
+    <h4>⚖️ 处理事务</h4>
+    <ul>
+      <li>法律纠纷（土地边界、财产争议）</li>
+      <li>刑事审判（杀人、盗窃）</li>
+      <li>赔偿金（wergild）的确定</li>
+      <li>宣布新法律或修改旧法</li>
+      <li>宣布某人"outlaw"（放逐）</li>
+    </ul>
+  </div>
+  <div>
+    <h4>⚠️ 局限性</h4>
+    <ul>
+      <li>不是现代民主——<strong>富人可以堆票</strong></li>
+      <li>女性不能参加（少数例外）</li>
+      <li>奴隶完全没有权利</li>
+      <li>有权势的 Jarl 可以操控判决</li>
+      <li>执行力靠的是社会压力而非国家暴力</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card">
+<h3>⚡ Outlaw——最严厉的刑罚</h3>
+<p style="margin-bottom:0;">
+  维京人没有监狱。最严厉的刑罚是<strong>放逐（outlawry）</strong>——宣布某人为"法外之人"（skógarmaðr，字面意思"森林之人"）。被放逐者失去一切法律保护：任何人可以杀他而不受惩罚，没有人可以收留他。漫画中阿谢拉特年轻时被放逐的情节，以及托尔兹逃离约姆战士团后的处境，都带有 outlaw 的色彩。在真实历史中，红发埃里克正是因为被冰岛放逐才向西航行发现了格陵兰——这正是 <a href="0006-vinland-norse-in-north-america.html">Lesson 0006</a> 中格陵兰殖民的起点。
+</p>
+</div>
+
+<!-- ====== SECTION 6: MANGA COMPARISON ====== -->
+<h2>六、漫画对照总表</h2>
+
+<table>
+  <tr>
+    <th>阶层</th>
+    <th>历史角色</th>
+    <th>漫画对应角色</th>
+    <th>准确度</th>
+  </tr>
+  <tr>
+    <td><span class="jarl-tag" style="font-size:0.78rem;padding:0.1rem 0.45rem;border-radius:3px;">Jarl</span></td>
+    <td>克努特大帝——北海帝国之王</td>
+    <td>克努特（王子→国王）</td>
+    <td><span class="tag-real">高度史实</span></td>
+  </tr>
+  <tr>
+    <td><span class="jarl-tag" style="font-size:0.78rem;padding:0.1rem 0.45rem;border-radius:3px;">Jarl</span></td>
+    <td>地方首领 / 战团领袖</td>
+    <td>阿谢拉特</td>
+    <td><span class="tag-mixed">混合</span>：人虚构，战团逻辑真实</td>
+  </tr>
+  <tr>
+    <td><span class="jarl-tag" style="font-size:0.78rem;padding:0.1rem 0.45rem;border-radius:3px;">Jarl</span></td>
+    <td>丹麦领主</td>
+    <td>弗洛基（约姆战士团首领）</td>
+    <td><span class="tag-fic">虚构</span>：但约姆战士团的战士团体逻辑有历史基础</td>
+  </tr>
+  <tr>
+    <td><span class="karl-tag" style="font-size:0.78rem;padding:0.1rem 0.45rem;border-radius:3px;">Karl</span></td>
+    <td>自由农 / 地主</td>
+    <td>凯蒂尔</td>
+    <td><span class="tag-real">高度史实</span></td>
+  </tr>
+  <tr>
+    <td><span class="karl-tag" style="font-size:0.78rem;padding:0.1rem 0.45rem;border-radius:3px;">Karl</span></td>
+    <td>水手 / 探险家 / 商人</td>
+    <td>雷夫·埃里克森</td>
+    <td><span class="tag-real">高度史实</span></td>
+  </tr>
+  <tr>
+    <td><span class="karl-tag" style="font-size:0.78rem;padding:0.1rem 0.45rem;border-radius:3px;">Karl</span></td>
+    <td>铁匠（自由工匠）</td>
+    <td>最早收留托尔芬的铁匠（冰岛篇早期）</td>
+    <td><span class="tag-real">高度史实</span></td>
+  </tr>
+  <tr>
+    <td><span class="thrall-tag" style="font-size:0.78rem;padding:0.1rem 0.45rem;border-radius:3px;">Þræll</span></td>
+    <td>战俘奴隶</td>
+    <td>托尔芬（奴隶篇）</td>
+    <td><span class="tag-mixed">混合</span>：人虚构，奴隶处境真实</td>
+  </tr>
+  <tr>
+    <td><span class="thrall-tag" style="font-size:0.78rem;padding:0.1rem 0.45rem;border-radius:3px;">Þræll</span></td>
+    <td>债务/战俘奴隶</td>
+    <td>埃纳尔</td>
+    <td><span class="tag-real">高度史实</span></td>
+  </tr>
+  <tr>
+    <td><span class="thrall-tag" style="font-size:0.78rem;padding:0.1rem 0.45rem;border-radius:3px;">Þræll</span></td>
+    <td>女奴</td>
+    <td>阿尔涅兹（Arnheid）</td>
+    <td><span class="tag-real">高度史实</span>：女奴的性别剥削是维京奴隶制的暗面</td>
+  </tr>
+  <tr>
+    <td>Freedman</td>
+    <td>获释奴隶</td>
+    <td>托尔芬、埃纳尔（文兰篇）</td>
+    <td><span class="tag-real">高度史实</span></td>
+  </tr>
+</table>
+
+<p style="font-size:0.82rem;color:var(--muted);">
+  🏷️ 标签说明：<span class="tag-real">高度史实</span> = 角色虚构但身份/处境准确，
+  <span class="tag-mixed">混合</span> = 部分准确部分虚构，
+  <span class="tag-fic">虚构</span> = 基本为创作。
+  详见 <a href="../reference/vinland-saga-character-reference.html">角色-史实对照表</a>。
+</p>
+
+<!-- ====== SECTION 7: KEY INSIGHT ====== -->
+<h2>七、核心洞见：自由与忠诚的双螺旋</h2>
+
+<p>
+  维京社会的运行逻辑可以浓缩为<strong>两条螺旋线</strong>：
+</p>
+
+<div class="card">
+<h3>🔑 横向：自由（frjáls）是身份的核心</h3>
+<p style="margin-bottom:0;">
+  Karl 之所以是 Karl，不是因为他有土地或财富（有些 Karl 很穷），而是因为他是<strong>自由的</strong>——自由携带武器、自由在 Thing 发言、自由选择追随谁。这种自由不是抽象概念，而是具体的、日常的身份标记。奴隶制和自由民身份之间的界限，是维京社会最根本的断层线。
+</p>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+<h3>🔑 纵向：忠诚是权力的货币</h3>
+<p style="margin-bottom:0;">
+  Jarl 和 Karl 之间的关系，靠的不是强制（没有常备军、没有官僚体系），而是<strong>双向的忠诚交换</strong>：Jarl 提供保护和慷慨，Karl 回报以服务和战斗。这种关系不牢靠——追随者可以离开不慷慨的领主，领主可以驱逐不忠的追随者。这是一种比封建社会更<strong>流动</strong>、更<strong>个人化</strong>的权力结构。
+</p>
+</div>
+
+<p>
+  《冰海战纪》最深刻地捕捉到的，正是这种"自由与忠诚"之间的张力——托尔芬从战士到奴隶再到自由民的人生轨迹，阿谢拉特作为"无国之人"在忠诚与利益之间的周旋，克努特在建构帝国过程中对这种古老北欧逻辑的改造。理解了 Jarl-Karl-Þræll 的三层结构，你就理解了漫画中几乎所有社会关系的<strong>骨架</strong>。
+</p>
+
+<!-- ====== QUIZ ====== -->
+<h2>📝 自我检测</h2>
+
+<div class="quiz">
+  <p><strong>Q1.</strong> 维京社会中，占人口最大比例的阶层是？</p>
+  <label><input type="radio" name="q1" value="a"> A. Jarl（贵族）</label>
+  <label><input type="radio" name="q1" value="b"> B. Karl（自由民）</label>
+  <label><input type="radio" name="q1" value="c"> C. Þræll（奴隶）</label>
+  <label><input type="radio" name="q1" value="d"> D. 三种阶层比例大致相等</label>
+  <button onclick="checkQuiz(1,'b','✅ 正确！Karl（自由民）约占维京人口的70–80%，是社会的中坚力量。','❌ 不对。正确答案是B。Karl（自由民）约占70–80%，是维京社会最大的群体。Jarl约占2–5%，奴隶约占15–25%。')">检查答案</button>
+  <div id="f1" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q2.</strong> 维京奴隶获得自由后，他们的社会地位如何？</p>
+  <label><input type="radio" name="q2" value="a"> A. 立刻与土生土长的自由民完全平等</label>
+  <label><input type="radio" name="q2" value="b"> B. 地位低于土生自由民，需一两代人才能完全融入</label>
+  <label><input type="radio" name="q2" value="c"> C. 自动获得土地和财产</label>
+  <label><input type="radio" name="q2" value="d"> D. 必须离开原主人的领地，终身不得返回</label>
+  <button onclick="checkQuiz(2,'b','✅ 正确！获释奴隶（freedman/leysingi）地位低于土生Karl，对前主人有持续义务，后代才能完全融入。','❌ 不对。正确答案是B。获释奴隶的地位介于奴隶和自由民之间，需要一两代人的时间后代才能完全融入Karl阶层。')">检查答案</button>
+  <div id="f2" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q3.</strong> 以下哪项<em>不是</em>维京Jarl维持权力的方式？</p>
+  <label><input type="radio" name="q3" value="a"> A. 给追随者分发臂环和武器</label>
+  <label><input type="radio" name="q3" value="b"> B. 举办宴会，展示慷慨</label>
+  <label><input type="radio" name="q3" value="c"> C. 控制地方Thing，影响法律判决</label>
+  <label><input type="radio" name="q3" value="d"> D. 每季度向追随者征收固定货币税</label>
+  <button onclick="checkQuiz(3,'d','✅ 正确！征收固定货币税是封建制度（尤其是诺曼征服后英格兰）的做法。维京Jarl靠的是礼物-忠诚交换，不是征税。','❌ 不对。正确答案是D。固定货币税是封建制度的特征，不是维京方式。维京Jarl靠的是礼物经济——分发礼物换取忠诚，而非征收税款。')">检查答案</button>
+  <div id="f3" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q4.</strong> Thing（议事会）中谁有发言权和投票权？</p>
+  <label><input type="radio" name="q4" value="a"> A. 所有维京成年人（含女性和奴隶）</label>
+  <label><input type="radio" name="q4" value="b"> B. 所有自由民男性</label>
+  <label><input type="radio" name="q4" value="c"> C. 只有Jarl阶层的男性</label>
+  <label><input type="radio" name="q4" value="d"> D. 所有成年男性（含奴隶）</label>
+  <button onclick="checkQuiz(4,'b','✅ 正确！所有自由民男性都有权参加Thing。女性和奴隶被排除，这是Thing的根本局限。','❌ 不对。正确答案是B。只有自由民男性可以参加Thing。奴隶完全没有权利，女性也有极少数例外但不能常规参加。富人可以用随从「堆票」，所以也不是一人一票的现代民主。')">检查答案</button>
+  <div id="f4" class="feedback"></div>
+</div>
+
+<!-- ====== LESSON NAV ====== -->
+<hr>
+
+<div class="card" style="text-align:center;">
+  <p style="margin-bottom:0.4rem;"><strong>📚 课程导航</strong></p>
+  <p style="font-size:0.88rem;color:var(--muted);margin-bottom:0;">
+    ← <a href="0006-vinland-norse-in-north-america.html">Lesson 0006：文兰</a>
+    &nbsp;·&nbsp;
+    <a href="0001-viking-age-overview.html">Lesson 0001：时代概览</a>
+    &nbsp;·&nbsp;
+    <a href="0004-cnut-north-sea-empire.html">Lesson 0004：北海帝国</a>
+    &nbsp;·&nbsp;
+    <a href="0005-varangian-east.html">Lesson 0005：维京东线</a>
+  </p>
+</div>
+
+<!-- ====== REMINDERS ====== -->
+<div class="reminder">
+  <strong>📖 建议阅读</strong><br>
+  Neil Price, <em>The Children of Ash and Elm</em> (2020), 第8–10章（社会结构、奴隶制、日常生活）——本课的核心知识来源。<br>
+  Anders Winroth, <em>The Age of the Vikings</em> (2014), 第5–6章（法律与Thing、权力结构）。
+</div>
+
+<div class="reminder-qa">
+  <strong>🤔 有疑问？</strong><br>
+  任何不清楚的地方——Thing的运作机制、礼物经济的具体案例、奴隶制与其他古代文明的异同——都可以直接问我。我是你的老师，帮你把每个概念吃透。也可以看看 <a href="../reference/vinland-saga-character-reference.html">角色-史实对照表</a> 和 <a href="../reference/viking-raid-causes.html">维京劫掠驱动因素</a> 来补充背景。
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>
