@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0002 — 标签状态机</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .state-diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin: 1.2rem 0;
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.82em;
+    line-height: 1.7;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .compare-table th:first-child, .compare-table td:first-child { white-space: nowrap; font-family: "SF Mono", monospace; font-size: 0.85em; }
+</style>
+</head>
+<body>
+
+<h1>📖 第二课：标签状态机</h1>
+
+<p><strong>预计完成时间：12 分钟</strong> &nbsp;|&nbsp;
+难度：中级 &nbsp;|&nbsp;
+类型：知识 + 技能</p>
+
+<div class="callout">
+  <strong>📌 前置要求：</strong>本课假设你已经完成了 <a href="0001-your-first-label-triggered-workflow.html">第 1 课</a>，理解了基本的标签触发模式。
+</div>
+
+<hr>
+
+<h2>本课目标</h2>
+<p>在本课结束时，你将能够：</p>
+<ul>
+  <li>理解为什么 sandcastle 和 course-video-manager 使用 4 个标签来追踪工作流状态</li>
+  <li>实现完整的 <strong>trigger → in-progress → done | blocked</strong> 状态转换</li>
+  <li>使用 <code>failure()</code> 和 <code>always()</code> 条件函数优雅地处理成功和失败路径</li>
+</ul>
+
+<hr>
+
+<h2>问题：只有一个标签不够</h2>
+
+<p>在第 1 课中，我们的工作流只是<strong>移除</strong>了触发标签。这在工作流 <em>总是成功</em> 的情况下没问题——但现实中不是这样。</p>
+
+<p>假设你给 Issue 添加了 <code class="label label-green">agent:implement</code>，工作流开始运行，然后由于 API 配额耗尽而失败了。标签已经被移除了。你怎么知道它失败了？你怎么重试？</p>
+
+<p>sandcastle 的答案：<strong>使用一组标签作为状态机</strong>。</p>
+
+<hr>
+
+<h2>核心概念：四个标签，四个状态</h2>
+
+<table class="compare-table">
+  <tr>
+    <th>标签</th>
+    <th>含义</th>
+    <th>类比</th>
+  </tr>
+  <tr>
+    <td><span class="label label-green">agent:implement</span></td>
+    <td><strong>触发标签</strong>：用户说"请实现这个 Issue"</td>
+    <td>命令/请求</td>
+  </tr>
+  <tr>
+    <td><span class="label label-yellow">agent:in-progress</span></td>
+    <td><strong>运行中标签</strong>：工作流正在执行，充当互斥锁</td>
+    <td>锁/信号量</td>
+  </tr>
+  <tr>
+    <td><span class="label label-red">agent:blocked</span></td>
+    <td><strong>阻塞标签</strong>：工作流失败了，需要人工干预</td>
+    <td>错误标志</td>
+  </tr>
+  <tr>
+    <td>(无特殊标签)</td>
+    <td><strong>完成状态</strong>：工作流成功完成，一切清理干净</td>
+    <td>就绪/空闲</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <strong>💡 关键洞见：</strong><code class="label label-yellow">agent:in-progress</code> 起着双重作用。它不仅<strong>显示</strong>工作流正在运行，它还<strong>阻止</strong>了同一个 Issue 被意外地重新触发——因为你一眼就能看到有东西正在运行。
+</div>
+
+<hr>
+
+<h2>状态转换图</h2>
+
+<p>这就是 sandcastle 和 course-video-manager 中<strong>每一个</strong>代理工作流遵循的精确状态机：</p>
+
+<div class="state-diagram">
+                    ┌──────────────────────────┐
+                    │  用户添加 agent:implement │
+                    └────────────┬─────────────┘
+                                 │
+                    ┌────────────▼─────────────┐
+                    │  工作流检测到标签          │
+                    │  if: label ==             │
+                    │    'agent:implement'      │
+                    └────────────┬─────────────┘
+                                 │
+                    ┌────────────▼─────────────┐
+                    │  START 转换：              │
+                    │  ─ remove agent:implement │
+                    │  ─ remove agent:blocked   │
+                    │  + add agent:in-progress  │
+                    └────────────┬─────────────┘
+                                 │
+                    ┌────────────▼─────────────┐
+                    │       执行任务             │
+                    │   (AI 代理写代码...)       │
+                    └──────┬──────────┬────────┘
+                           │          │
+                      ✅ 成功     ❌ 失败
+                           │          │
+              ┌────────────▼──┐  ┌────▼────────────────┐
+              │ DONE 转换：    │  │ FAIL 转换：           │
+              │ ─ remove      │  │ + add agent:blocked   │
+              │   in-progress │  │ (失败原因评论)         │
+              └───────┬───────┘  └───────────┬──────────┘
+                      │                      │
+              ┌───────▼───────┐    ┌─────────▼──────────┐
+              │              │    │ 用户调查失败原因     │
+              │   完成！ ✅    │    │ 修复后重新添加      │
+              │              │    │ agent:implement     │
+              └──────────────┘    └─────────┬──────────┘
+                                            │
+                                    回到顶部 🔄
+</div>
+
+<p><strong>重试路径</strong>是关键：当工作流失败时，它添加 <code class="label label-red">agent:blocked</code>。用户调查问题，修复根本原因，然后<strong>重新添加</strong> <code class="label label-green">agent:implement</code> 来重试。START 转换会移除 <code class="label label-red">agent:blocked</code>（如果存在），所以即使有遗留的阻塞标签，重试也能正常工作。</p>
+
+<hr>
+
+<h2>动手实践：完整的状态机工作流</h2>
+
+<p>下面是第 1 课中简单工作流的<strong>升级版</strong>，实现了完整的状态机。在你的仓库中替换或更新 <code>.github/workflows/agent-hello.yml</code>：</p>
+
+<div class="workflow-preview">
+  <div class="header">📄 .github/workflows/agent-hello.yml（完整版）</div>
+<pre><code>name: "Agent: Hello (with state machine)"
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  hello:
+    if: github.event.label.name == 'agent:hello'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    concurrency:
+      group: agent-hello-issue-${{ github.event.issue.number }}
+      cancel-in-progress: false
+
+    steps:
+      # ═══ 阶段 1: START 转换 ═══
+      - name: "Transition → in-progress"
+        run: |
+          gh issue edit "$N" --remove-label "agent:hello" || true
+          gh issue edit "$N" --remove-label "agent:blocked" || true
+          gh issue edit "$N" --add-label "agent:in-progress"
+        env:
+          N: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ═══ 阶段 2: 执行任务 ═══
+      - name: "Do the work"
+        id: work
+        run: |
+          echo "正在为 Issue #$N 执行任务..."
+          sleep 3
+
+          # 模拟：有时任务会失败
+          if [ "$RANDOM_FAIL" = "true" ]; then
+            echo "模拟失败！"
+            exit 1
+          fi
+
+          # 发表成功评论（写入文件以避免 shell 转义问题）
+          cat &lt;&lt;EOF &gt; "$RUNNER_TEMP/comment.md"
+          ✅ 任务成功完成！
+
+          - Issue 标题：**$ISSUE_TITLE**
+          - 完成时间：$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+          感谢使用 agent:hello 命令！
+          EOF
+
+          gh issue comment "$N" --body-file "$RUNNER_TEMP/comment.md"
+        env:
+          N: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          RANDOM_FAIL: "false"  # 改为 "true" 测试失败路径
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ═══ 阶段 3a: FAIL 转换 ═══
+      - name: "Transition → blocked (on failure)"
+        if: failure() && steps.work.outcome == 'failure'
+        run: |
+          gh issue edit "$N" --add-label "agent:blocked"
+
+          cat &lt;&lt;EOF | gh issue comment "$N" --body-file -
+          ❌ 任务执行失败。
+
+          已添加 **agent:blocked** 标签。请调查失败原因（检查 Actions 日志），修复后重新添加 \`agent:hello\` 标签来重试。
+          EOF
+        env:
+          N: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ═══ 阶段 3b: ALWAYS 清理 ═══
+      - name: "Transition → done (always)"
+        if: always()
+        run: |
+          gh issue edit "$N" --remove-label "agent:in-progress" || true
+        env:
+          N: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}</code></pre>
+</div>
+
+<h3>两个重要的运行环境概念</h3>
+
+	<p>在分析新代码之前，先了解两个工作流中频繁出现的概念：</p>
+
+	<table>
+	  <tr><th>概念</th><th>说明</th></tr>
+	  <tr>
+	    <td><code>$RUNNER_TEMP</code></td>
+	    <td>GitHub Actions 自动提供的<strong>临时目录路径</strong>。工作流结束后自动清理。用于存放中间文件（如要发表的评论内容）。不用手动创建或删除。</td>
+	  </tr>
+	  <tr>
+	    <td><code>$GITHUB_OUTPUT</code></td>
+	    <td>一个特殊文件路径。用 <code>echo "key=value" &gt;&gt; "$GITHUB_OUTPUT"</code> 写入后，后续步骤可以用 <code>steps.&lt;id&gt;.outputs.key</code> 读取该值。（本课暂未使用，第 3 课会用到）</td>
+	  </tr>
+	</table>
+
+	<h3>逐步解析：新增的部分</h3>
+
+<table>
+  <tr><th>新元素</th><th>作用</th></tr>
+  <tr>
+    <td><code>concurrency: group: ...</code></td>
+    <td>确保同一个 Issue 不会同时运行两个工作流实例。如果工作流正在运行，新的触发会被排队等待</td>
+  </tr>
+  <tr>
+    <td><code>--remove-label "agent:blocked"</code></td>
+    <td>清理上一次失败的阻塞标签，使得重试成为可能</td>
+  </tr>
+  <tr>
+    <td><code>if: failure()</code></td>
+    <td>GitHub Actions 的<strong>状态检查函数</strong>：仅在前面的步骤失败时运行</td>
+  </tr>
+  <tr>
+    <td><code>if: always()</code></td>
+    <td>无论前面步骤成功还是失败，都运行。用于<strong>必须执行</strong>的清理操作</td>
+  </tr>
+  <tr>
+    <td><code>steps.work.outcome == 'failure'</code></td>
+    <td>精确检查哪个步骤失败。当有多个步骤可能失败但你只想在某些失败时添加 blocked 标签时很有用</td>
+  </tr>
+  <tr>
+    <td><code>&lt;&lt;EOF ... EOF</code></td>
+    <td>heredoc 语法：将多行文本通过管道传给 <code>gh</code>，避免 shell 变量转义的麻烦</td>
+	  </tr>
+	  <tr>
+	    <td><code>if [ "$VAR" = "value" ]; then</code></td>
+	    <td>shell 的条件判断（不是 GitHub Actions 的 <code>if:</code>！）。<code>[ ]</code> 是 shell 的 test 命令，方括号<strong>内侧必须有空格</strong>。</td>
+  </tr>
+</table>
+
+<div class="callout warning">
+  <strong>⚠️ 重要：</strong><code>if: always()</code> 不可或缺。如果没有它，当任务步骤失败时，GitHub Actions 默认会<strong>跳过</strong>所有后续步骤。这意味着 <code class="label label-yellow">agent:in-progress</code> 会永远留在 Issue 上，后续的标签触发也不会工作。使用 <code>always()</code> 确保清理步骤<strong>总是</strong>执行。
+</div>
+
+<hr>
+
+<h2>对比：两个仓库如何使用状态机</h2>
+
+<p>sandcastle 和 course-video-manager 中的<strong>每个</strong>代理工作流都遵循这个模式。以下是它们的标签使用对比：</p>
+
+<table>
+  <tr><th>工作流</th><th>触发标签</th><th>成功后动作</th></tr>
+  <tr>
+    <td>Explore</td>
+    <td><span class="label label-green">agent:explore</span></td>
+    <td>移除 in-progress，Issue 回到空闲状态</td>
+  </tr>
+  <tr>
+    <td>Implement (Issue)</td>
+    <td><span class="label label-green">agent:implement</span></td>
+    <td>移除 in-progress，创建 PR，<strong>给 PR 添加</strong> <span class="label label-green">agent:review</span></td>
+  </tr>
+  <tr>
+    <td>Review (PR)</td>
+    <td><span class="label label-green">agent:review</span></td>
+    <td>移除 in-progress，发布审核结果，标记 PR 为 ready</td>
+  </tr>
+  <tr>
+    <td>Implement PR</td>
+    <td><span class="label label-green">agent:implement</span></td>
+    <td>移除 in-progress，发布代码修改和评论</td>
+  </tr>
+  <tr>
+    <td>Update Branch</td>
+    <td><span class="label label-green">agent:update-branch</span></td>
+    <td>移除 in-progress，推送合并结果</td>
+  </tr>
+</table>
+
+<p>注意 Implement 工作流的特殊行为：它在成功后<strong>链式触发</strong>了下一个工作流（给新 PR 添加 <code class="label label-green">agent:review</code>），这需要用到下一课要讲的 PAT 技巧。</p>
+
+<hr>
+
+<h2>✏️ 诊断性测验</h2>
+
+<div class="quiz" id="q1">
+  <p class="quiz-question">1. 如果 START 转换步骤没有移除 <code>agent:blocked</code>，会发生什么问题？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', false)">A. 工作流会立即失败，因为 detected duplicate label</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', true)">B. 重试时 blocked 标签会一直留在 Issue 上，无法区分新旧失败</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', false)">C. GitHub 会自动移除多余的标签</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', false)">D. 不会有问题，blocked 标签会被自动覆盖</div>
+  <p class="quiz-feedback" id="q1-feedback"></p>
+</div>
+
+<div class="quiz" id="q2">
+  <p class="quiz-question">2. 为什么清理步骤必须使用 <code>if: always()</code>？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', false)">A. 因为 GitHub Actions 要求所有步骤都使用条件</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', true)">B. 因为如果任务失败，GitHub 默认跳过后续步骤，in-progress 标签会永远留在 Issue 上</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', false)">C. 为了让工作流运行得更快</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', false)">D. 因为 always() 是 GitHub Actions 的默认行为</div>
+  <p class="quiz-feedback" id="q2-feedback"></p>
+</div>
+
+<div class="quiz" id="q3">
+  <p class="quiz-question">3. <code>concurrency</code> 配置中 <code>cancel-in-progress: false</code> 的作用是什么？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', false)">A. 允许同时运行多个实例以提高速度</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', false)">B. 禁止任何并发</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', true)">C. 当新触发到来时，不取消正在运行的实例，而是排队等待</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', false)">D. 自动取消运行超过 30 分钟的工作流</div>
+  <p class="quiz-feedback" id="q3-feedback"></p>
+</div>
+
+<script>
+function selectQuiz(el, quizId, isCorrect) {
+  const quiz = document.getElementById(quizId);
+  quiz.querySelectorAll('.quiz-option').forEach(o => {
+    o.classList.remove('selected', 'correct', 'incorrect');
+    o.style.pointerEvents = 'none';
+  });
+  el.classList.add('selected');
+  el.classList.add(isCorrect ? 'correct' : 'incorrect');
+
+  const fb = document.getElementById(quizId + '-feedback');
+  fb.classList.add('show');
+  fb.style.color = isCorrect ? 'var(--success)' : 'var(--danger)';
+  fb.textContent = isCorrect ? '✅ 正确！' : '❌ 再想想。回顾上面的课程内容。';
+}
+</script>
+
+<hr>
+
+<h2>🧪 技能练习</h2>
+
+<div class="callout">
+  <strong>🎯 任务：</strong>部署完整的状态机工作流，并<strong>故意触发失败路径</strong>来观察整个状态转换。
+</div>
+
+<ol>
+  <li><span class="step">1</span> 在 GitHub 网页上打开仓库 → <strong>Add file</strong> → <strong>Create new file</strong> → 文件名填 <code>.github/workflows/agent-hello.yml</code> → 粘贴上面的完整代码 → <strong>Commit new file</strong></li>
+  <li><span class="step">2</span> 创建标签：<span class="label label-green">agent:hello</span>、<span class="label label-yellow">agent:in-progress</span>、<span class="label label-red">agent:blocked</span></li>
+  <li><span class="step">3</span> <strong>测试成功路径：</strong>创建 Issue，添加 <code>agent:hello</code> → 观察标签变化：hello 消失 → in-progress 出现 → in-progress 消失 → 收到成功评论</li>
+  <li><span class="step">4</span> <strong>测试失败路径：</strong>打开 <code>.github/workflows/agent-hello.yml</code> 文件 → 点编辑按钮 → 把 <code>RANDOM_FAIL: "false"</code> 改为 <code>RANDOM_FAIL: "true"</code> → <strong>Commit changes</strong> → 创建新 Issue 并添加 <code>agent:hello</code> → 观察 blocked 标签出现</li>
+  <li><span class="step">5</span> <strong>测试重试：</strong>再次编辑文件，把 <code>RANDOM_FAIL</code> 改回 <code>"false"</code>，Commit → 在同一个 Issue 上重新添加 <code>agent:hello</code> → 观察 blocked 被清除，任务成功完成</li>
+  <li><span class="step">6</span> <strong>测试并发保护：</strong>快速连续两次添加 <code>agent:hello</code> → 观察 Actions 页面中的排队行为</li>
+</ol>
+
+<div class="callout success">
+  <strong>🎯 完成检查：</strong>当你看到 (a) 成功路径自动清理所有标签，(b) 失败路径正确添加 blocked 标签并保留失败评论，(c) 重试路径清除了 blocked 标签并重新开始——你就真正理解了标签状态机。
+</div>
+
+<hr>
+
+<h2>推荐进一步阅读</h2>
+<ul>
+  <li><strong>主阅读材料：</strong><a href="https://github.com/mattpocock/sandcastle/blob/main/.github/workflows/agent-explore.yml">sandcastle agent-explore.yml</a> — 看完整的状态机在一个 80 行的工作流中是如何实现的</li>
+  <li><a href="https://github.com/mattpocock/course-video-manager/blob/main/docs/agents/afk-agent-platform-spec.md">course-video-manager: AFK Agent Platform Spec</a> — 完整的规范文档，包含状态图、拒绝条件、并发模型</li>
+  <li><a href="../reference/github-actions-label-workflow-syntax.html">参考文档：标签工作流语法速查表</a> — 本课中出现的所有语法的快速参考</li>
+</ul>
+
+<hr>
+
+<div class="lesson-nav">
+  <a href="0001-your-first-label-triggered-workflow.html">← 第 1 课：第一个标签触发工作流</a>
+  <span>第 2 课 / 共 3 课</span>
+  <span><!-- 第 3 课链接预留 --></span>
+</div>
+
+<hr>
+
+<div class="callout">
+  <strong>💬 有问题？</strong>标签状态机是这两个仓库中最精妙的设计。如果你对任何部分感到困惑：
+  <ul>
+    <li>"为什么需要三个不同的失败处理步骤？"</li>
+    <li>"如果我不使用 concurrency 会怎么样？"</li>
+    <li>"in-progress 标签真的能阻止人类重复触发吗？"</li>
+  </ul>
+  直接向你的 AI 导师提问！
+</div>
+
+</body>
+</html>

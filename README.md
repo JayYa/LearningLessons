@@ -1,6 +1,6 @@
 # Learning Lessons
 
-这套课程沿三条独立轨道展开，各自深入一个专门领域：现代 .NET 技术纵深从 C# 8 一路推进到 C# 14，覆盖可空引用类型、异步流、records、主构造函数、集合表达式、ref struct 接口与泛型反变、field 关键字及扩展成员，构建从 Framework 4.8 到最新 .NET 的完整语言演进地图；历史轨道以《冰海战纪》为叙事锚点，从维京时代社会概览延伸到丹麦征服英格兰、北海帝国、维京东线、文兰探险、社会层级结构与基督教化；工具轨道聚焦 VS Code 扩展开发底层，从扩展解剖、激活生命周期到 StatusBarItem API 与 findActiveSessions 数据引擎。三条轨道虽主题各异，却共享同一方法论——从表层 API 下沉到内部机制，从孤立知识点串成系统认知。
+这套课程沿四条独立轨道展开，各自深入一个专门领域：现代 .NET 技术纵深从 C# 8 一路推进到 C# 14，覆盖可空引用类型、异步流、records、主构造函数、集合表达式、ref struct 接口与泛型反变、field 关键字及扩展成员，构建从 Framework 4.8 到最新 .NET 的完整语言演进地图；历史轨道以《冰海战纪》为叙事锚点，从维京时代社会概览延伸到丹麦征服英格兰、北海帝国、维京东线、文兰探险、社会层级结构与基督教化；工具轨道分两支——Claude Context Bar 聚焦 VS Code 扩展开发底层（扩展解剖、激活生命周期到 StatusBarItem API 与 findActiveSessions 数据引擎），GitHub and SandCastle 深入 GitHub Actions 标签触发自动化（从第一个工作流到状态机抽象再到链式触发与预检模式）。四条轨道虽主题各异，却共享同一方法论——从表层 API 下沉到内部机制，从孤立知识点串成系统认知。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
@@ -80,5 +80,16 @@
 - [参考：术语表](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/glossary.html) — VS Code 扩展开发核心术语速查
 - [参考：npm 包命名规则](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/npm-package-naming-rules.html) — npm 包名称约束、作用域包与命名最佳实践
 - [参考：VS Code 扩展 API 基础](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/vscode-extension-api-basics.html) — 扩展清单、贡献点与核心 API 速查
+
+## GitHub and SandCastle
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [Lesson 0001 — 你的第一个标签触发工作流](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0001-your-first-label-triggered-workflow.html) | 从零搭建第一个标签触发工作流，理解 GitHub Actions 的事件驱动模型 |
+| 2 | [Lesson 0002 — 标签状态机](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0002-the-label-state-machine.html) | 将标签工作流抽象为状态机，掌握工作流编排的工程化思维 |
+| 3 | [Lesson 0003 — 高级模式：链式触发、预检与形状检测](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0003-advanced-patterns.html) | 探索链式触发、预检与形状检测等高级模式，解决真实场景中的复杂自动化需求 |
+
+**参考资料：**
+- [Reference: 标签触发工作流语法速查表](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/reference/github-actions-label-workflow-syntax.html) — 标签触发工作流的事件类型、条件筛选与作业配置语法速查
 
 *自动生成*

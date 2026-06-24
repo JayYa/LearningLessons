@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0001 — 你的第一个标签触发工作流</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  /* Lesson-specific overrides */
+  .workflow-preview {
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 1.2rem 0;
+  }
+  .workflow-preview .header {
+    background: var(--code-bg);
+    padding: 0.4rem 1rem;
+    font-family: "SF Mono", monospace;
+    font-size: 0.8em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .diagram-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+    font-family: "SF Mono", monospace;
+    font-size: 0.9em;
+  }
+  .diagram-arrow { color: var(--muted); font-size: 1.2em; }
+</style>
+</head>
+<body>
+
+<h1>📖 第一课：你的第一个标签触发工作流</h1>
+
+<p><strong>预计完成时间：10 分钟</strong> &nbsp;|&nbsp;
+难度：入门 &nbsp;|&nbsp;
+类型：知识 + 技能</p>
+
+<hr>
+
+<h2>本课目标</h2>
+<p>在本课结束时，你将能够：</p>
+<ul>
+  <li>编写一个 GitHub Actions 工作流 <strong>YAML 文件</strong>，当你在 Issue 上添加特定标签时自动触发</li>
+  <li>理解 <code>github.event.label.name</code> 如何作为"选择器"工作</li>
+  <li>在工作流中使用 <code>gh</code> CLI 操作标签和评论</li>
+</ul>
+
+<hr>
+
+<h2>核心概念：标签即命令</h2>
+
+<p>这两个参考仓库的核心思想很简单：<strong>标签是一种向自动化系统发送命令的方式</strong>。</p>
+
+<p>想象一下，你不是点击按钮或输入命令，而是给 GitHub Issue 加一个标签，然后机器人醒来开始工作：</p>
+
+<div class="diagram-row">
+  <span class="label label-green">agent:explore</span>
+  <span class="diagram-arrow">→</span>
+  <span>GitHub Action 触发</span>
+  <span class="diagram-arrow">→</span>
+  <span>AI 代理探索代码库</span>
+  <span class="diagram-arrow">→</span>
+  <span>发表评论分析 Issue</span>
+</div>
+
+<div class="diagram-row">
+  <span class="label label-green">agent:implement</span>
+  <span class="diagram-arrow">→</span>
+  <span>GitHub Action 触发</span>
+  <span class="diagram-arrow">→</span>
+  <span>AI 代理实现功能</span>
+  <span class="diagram-arrow">→</span>
+  <span>创建 Pull Request</span>
+</div>
+
+<div class="callout">
+  <strong>💡 要点：</strong>这个模式与你在终端中运行的命令没有本质区别——只是触发方式变成了给 Issue 设置标签。一旦你掌握了这个模式，你就可以用它来驱动任何自动化任务。
+</div>
+
+<hr>
+
+<h2>基础知识：让工作流"听到"标签</h2>
+
+<p>GitHub Actions 工作流使用 <code>on</code> 键来声明监听的事件。要监听标签添加事件，我们需要两个关键配置：</p>
+
+<ol>
+  <li><strong>事件类型</strong>：<code>issues: types: [labeled]</code> — 当任何标签被添加到 Issue 时触发</li>
+  <li><strong>标签过滤</strong>：<code>if: github.event.label.name == 'agent:explore'</code> — 只对特定标签响应</li>
+</ol>
+
+<h3>为什么这个模式很重要？</h3>
+
+<p>你可能会问：为什么不直接在 Issue 创建时触发？两个原因：</p>
+
+<ul>
+  <li><strong>人机界面</strong>：不是每个 Issue 都需要自动化。标签让人来决定"这个准备好了，让机器人处理它"</li>
+  <li><strong>重试能力</strong>：如果工作流失败，你可以移除阻塞标签，然后<em>重新添加</em>触发器标签来重试</li>
+</ul>
+
+<hr>
+
+<h2>动手实践：你的第一个工作流文件</h2>
+
+<p>在你自己的仓库中，在 <code>.github/workflows/</code> 目录下创建以下文件。我们从一个最简单的例子开始：当你在 Issue 上添加 <code>agent:hello</code> 标签时，机器人会在该 Issue 下回复一条评论。</p>
+
+<div class="workflow-preview">
+  <div class="header">📄 .github/workflows/agent-hello.yml</div>
+<pre><code>name: "Agent: Hello"
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  hello:
+    # 🔑 关键：只在特定标签被添加时运行
+    if: github.event.label.name == 'agent:hello'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write          # 允许评论和操作标签
+    steps:
+      - name: "移除触发标签，防止重复触发"
+        run: |
+          gh issue edit "$ISSUE_NUMBER" \
+            --remove-label "agent:hello" || true
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "发表评论"
+        run: |
+          gh issue comment "$ISSUE_NUMBER" \
+            --body "👋 你好！我收到了你的 \`agent:hello\` 命令。
+
+            这个 Issue 的标题是：**$ISSUE_TITLE**
+
+            🕐 触发时间：$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}</code></pre>
+</div>
+
+<h3>逐步解析</h3>
+
+<table>
+  <tr><th>配置</th><th>作用</th></tr>
+  <tr>
+    <td><code>on: issues: types: [labeled]</code></td>
+    <td>告诉 GitHub：每次 Issue 被添加标签时，运行这个工作流</td>
+  </tr>
+  <tr>
+    <td><code>if: github.event.label.name == 'agent:hello'</code></td>
+    <td><strong>标签门控</strong>：只对 <code>agent:hello</code> 标签做出反应。如果没有这一行，<em>任何</em>标签的添加都会触发此工作流</td>
+  </tr>
+  <tr>
+    <td><code>github.event.issue.number</code></td>
+    <td>触发此工作流的 Issue 编号。来自 GitHub 的 <a href="https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/accessing-contextual-information-about-workflow-runs#github-context">事件上下文</a></td>
+  </tr>
+  <tr>
+    <td><code>secrets.GITHUB_TOKEN</code></td>
+    <td>GitHub 自动提供的令牌（无需手动创建）。权限在 <code>permissions:</code> 块中声明</td>
+  </tr>
+</table>
+
+<h2>标签生命周期模式</h2>
+
+<p>你注意到了吗？工作流做的第一件事是<strong>移除触发标签</strong>。这不是可有可无的——它是一个关键的设计决策：</p>
+
+<div class="diagram-row">
+  <span class="label label-green">agent:hello</span>
+  <span class="diagram-arrow">→</span>
+  <span>工作流开始</span>
+  <span class="diagram-arrow">→</span>
+  <span>移除 <span class="label label-green">agent:hello</span></span>
+  <span class="diagram-arrow">→</span>
+  <span>执行任务</span>
+  <span class="diagram-arrow">→</span>
+  <span>完成 ✅</span>
+</div>
+
+<p>为什么移除？因为如果工作流<strong>不</strong>移除标签，标签会一直留在 Issue 上。下次你添加任何标签时，工作流会<strong>再次</strong>被触发——即使你不想这样。</p>
+
+<p>在后面的课程中，我们将学习如何将移除替换为更高级的<strong>标签状态机</strong>（trigger → in-progress → done/blocked）。</p>
+
+<hr>
+
+<h2>✏️ 诊断性测验</h2>
+
+<p>以下测验帮助你检验是否真正理解了核心概念。请尝试在脑中回答后再展开答案。</p>
+
+<div class="quiz" id="q1">
+  <p class="quiz-question">1. 如果一个工作流监听 <code>issues: types: [labeled]</code> 但<strong>没有</strong> <code>if:</code> 门控，会发生什么？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', false)">A. 什么都不会发生，因为没有指定标签</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', false)">B. 只有在添加 <code>agent:*</code> 标签时才会触发</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', true)">C. 任何标签被添加到任何 Issue 时，都会触发工作流</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', false)">D. 工作流会因缺少配置而报错</div>
+  <p class="quiz-feedback" id="q1-feedback"></p>
+</div>
+
+<div class="quiz" id="q2">
+  <p class="quiz-question">2. 在工作流的第一步中移除触发标签的主要原因是什么？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', false)">A. 为了让 Issue 看起来更干净</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', true)">B. 防止后续无关标签操作导致工作流再次误触发</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', false)">C. GitHub 要求工作流必须清理自己的标签</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', false)">D. 为了触发其他监听该标签移除的工作流</div>
+  <p class="quiz-feedback" id="q2-feedback"></p>
+</div>
+
+<div class="quiz" id="q3">
+  <p class="quiz-question">3. <code>github.event.issue.number</code> 的值从哪里来？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', false)">A. 需要手动在工作流文件中定义</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', false)">B. 从仓库设置中读取</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', true)">C. GitHub 自动从触发事件的 Issue 中提取</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', false)">D. 通过 <code>gh issue list</code> 命令获取</div>
+  <p class="quiz-feedback" id="q3-feedback"></p>
+</div>
+
+<script>
+function selectQuiz(el, quizId, isCorrect) {
+  const quiz = document.getElementById(quizId);
+  quiz.querySelectorAll('.quiz-option').forEach(o => {
+    o.classList.remove('selected', 'correct', 'incorrect');
+    o.style.pointerEvents = 'none';
+  });
+  el.classList.add('selected');
+  el.classList.add(isCorrect ? 'correct' : 'incorrect');
+
+  const fb = document.getElementById(quizId + '-feedback');
+  fb.classList.add('show');
+  fb.style.color = isCorrect ? 'var(--success)' : 'var(--danger)';
+  fb.textContent = isCorrect ? '✅ 正确！' : '❌ 再想想。答案可以在上面的课程内容中找到。';
+}
+</script>
+
+<hr>
+
+<h2>🧪 技能练习：在你的仓库中部署这个工作流</h2>
+
+<p>现在是<strong>实际动手</strong>的时候了。在你的 GitHub 仓库中完成以下步骤：</p>
+
+<ol>
+  <li><span class="step">1</span> 在 GitHub 网页上打开你的仓库 → 点击 <strong>Add file</strong> → <strong>Create new file</strong> → 文件名填 <code>.github/workflows/agent-hello.yml</code>（注意以点开头，<code>workflows</code> 有 s）→ 将上面的代码粘贴到编辑器 → 点击 <strong>Commit new file</strong></li>
+  <li><span class="step">2</span> 进入仓库的 <strong>Issues</strong> → <strong>Labels</strong> → <strong>New label</strong> → 名称填 <code>agent:hello</code>，颜色随意 → <strong>Create label</strong></li>
+  <li><span class="step">3</span> 进入 <strong>Issues</strong> → <strong>New issue</strong> → 随便写标题和内容 → 提交后在右侧 Labels 面板选 <code>agent:hello</code></li>
+  <li><span class="step">4</span> 观察 Actions 标签页，查看工作流运行情况</li>
+  <li><span class="step">5</span> 检查 Issue 评论区 — 你应该看到机器人的回复！</li>
+</ol>
+
+<div class="callout success">
+  <strong>🎯 完成检查：</strong>如果你看到了机器人发表的评论，你就成功创建了人生中第一个标签触发工作流！这个简单的模式是 sandcastle 和 course-video-manager 中所有复杂自动化的基础。
+</div>
+
+<hr>
+
+<h2>推荐进一步阅读</h2>
+<ul>
+  <li><strong>主阅读材料：</strong><a href="https://github.com/mattpocock/sandcastle/blob/main/.github/workflows/agent-explore.yml">sandcastle/.github/workflows/agent-explore.yml</a> — 看看本课的模式在生产代码中是什么样子（约 80 行的完整工作流）</li>
+  <li><a href="https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#issues">GitHub Docs: issues 事件</a> — <code>issues</code> 事件的官方参考，包含 <code>labeled</code>、<code>opened</code> 等类型</li>
+  <li><a href="../reference/github-actions-label-workflow-syntax.html">参考文档：标签工作流语法速查表</a></li>
+</ul>
+
+<hr>
+
+<div class="lesson-nav">
+  <span></span>
+  <a href="0002-the-label-state-machine.html">下一课：标签状态机 →</a>
+</div>
+
+<hr>
+
+<div class="callout">
+  <strong>💬 有问题？</strong>在阅读或实践过程中遇到任何不清楚的地方，都可以直接向你的 AI 导师提问。例如：
+  <ul>
+    <li>"为什么我的工作流没有被触发？"</li>
+    <li>"如何调试工作流失败？"</li>
+    <li>"如何修改工作流使其同时监听 PR 的标签？"</li>
+  </ul>
+</div>
+
+</body>
+</html>
