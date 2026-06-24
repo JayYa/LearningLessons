@@ -373,19 +373,18 @@
 <h2>七、测验 <span class="en">Quiz</span></h2>
 
 <div class="quiz" id="q1">
-  <h3>Q1. field 关键字的本质</h3>
+  <h3>1/5 · field 关键字的本质</h3>
   <p class="question"><code>field</code> 关键字在编译后产生什么额外运行时开销？</p>
   <label><input type="radio" name="q1" value="a">A. 每次访问调用一次静态查找</label>
   <label><input type="radio" name="q1" value="b">B. 引入一个 ref struct 包装</label>
   <label><input type="radio" name="q1" value="c">C. 零额外开销——编译时完全消除为普通字段</label>
   <label><input type="radio" name="q1" value="d">D. 分配一个 WeakReference 包装</label>
-  <button onclick="Quiz.check('q1', 'c', '✅ 正确！field 是纯语法糖，编译后生成 &lt;PropertyName&gt;k__BackingField 字段，IL 与手动写后备字段完全一致。','❌ 答案是 C。field 是零开销抽象——编译时降低为普通字段访问。')">确认</button>
   <div class="feedback" id="f_q1"></div>
 </div>
 
 <div class="quiz" id="q2">
-  <h3>Q2. 歧义消除</h3>
-  <p class="question">以下代码中，<code>x</code> 的值最终是什么？</p>
+  <h3>2/5 · 歧义消除</h3>
+  <p class="question">以下代码执行后，<code>c.field</code> 的值最终是什么？（注意：x 不是变量名，看注释）</p>
   <pre><code><span class="kw">public</span> <span class="kw">class</span> C {
     <span class="kw">private</span> <span class="kw">string</span> field = <span class="str">"A"</span>;
     <span class="kw">public</span> <span class="kw">string</span> P {
@@ -401,47 +400,41 @@ c.P = <span class="str">"X"</span>;
   <label><input type="radio" name="q2" value="b">B. "B"</label>
   <label><input type="radio" name="q2" value="c">C. "C"</label>
   <label><input type="radio" name="q2" value="d">D. "X"</label>
-  <button onclick="Quiz.check('q2', 'c', '✅ 正确！set 中 field = "B" 赋给了合成的后备字段（属性 P 的后备字段），this.field = "C" 赋给了类中声明的 field 字段（"C" 覆盖了初始值 "A"）。c.field 读的是类字段，值为 "C"。','❌ 答案是 C。set 中 bare field → 合成的后备字段；this.field → 类中声明的 field 字段。类字段从 "A" → "C"。')">确认</button>
   <div class="feedback" id="f_q2"></div>
 </div>
 
 <div class="quiz" id="q3">
-  <h3>Q3. 编译器生成字段的命名</h3>
+  <h3>3/5 · 编译器生成字段的命名</h3>
   <p class="question">对于 <code>public string Name { get; set => field = value; }</code>，编译器生成的字段名是什么模式？</p>
   <label><input type="radio" name="q3" value="a">A. _Name</label>
   <label><input type="radio" name="q3" value="b">B. &lt;Name&gt;k__BackingField</label>
   <label><input type="radio" name="q3" value="c">C. __Name_BackingField</label>
   <label><input type="radio" name="q3" value="d">D. auto_Name_field</label>
-  <button onclick="Quiz.check('q3', 'b', '✅ 正确！与普通自动属性完全相同的命名模式：&lt;PropertyName&gt;k__BackingField。这证明了 field 关键字不引入任何新运行时概念。','❌ 答案是 B。field 属性使用与 auto-property 完全相同的后备字段命名模式。')">确认</button>
   <div class="feedback" id="f_q3"></div>
 </div>
 
 <div class="quiz" id="q4">
-  <h3>Q4. 实战判断</h3>
+  <h3>4/5 · 实战判断</h3>
   <p class="question">以下哪个场景<strong>不适合</strong>使用 <code>field</code> 关键字？</p>
   <label><input type="radio" name="q4" value="a">A. 属性 setter 需要验证 value 范围</label>
   <label><input type="radio" name="q4" value="b">B. 属性 getter 需要懒加载初始值</label>
   <label><input type="radio" name="q4" value="c">C. 属性的后备存储是两个不同字段的组合</label>
   <label><input type="radio" name="q4" value="d">D. MVVM 属性变更时既要验证又要发通知</label>
-  <button onclick="Quiz.check('q4', 'c', '✅ 正确！field 始终映射到<strong>单个</strong>类型与属性相同的后备字段。如果属性需要多个字段组合存储（如 FullName = FirstName + LastName），或后端类型与属性类型不同，仍应使用手动字段。','❌ 答案是 C。field 只生成一个与属性同类型的后备字段，无法用多个字段组合或类型转换。')">确认</button>
   <div class="feedback" id="f_q4"></div>
 </div>
 
 <div class="quiz" id="q5">
-  <h3>Q5. 历史判断</h3>
+  <h3>5/5 · 历史判断</h3>
   <p class="question"><code>field</code> 关键字在哪个版本首次作为预览特性出现，又在哪个版本正式发布？</p>
   <label><input type="radio" name="q5" value="a">A. C# 12 预览 → C# 13 正式</label>
   <label><input type="radio" name="q5" value="b">B. C# 13 预览 → C# 14 正式</label>
   <label><input type="radio" name="q5" value="c">C. C# 11 预览 → C# 13 正式</label>
   <label><input type="radio" name="q5" value="d">D. C# 14 直接正式，无预览期</label>
-  <button onclick="Quiz.check('q5', 'b', '✅ 正确！field 在 C# 13 中作为预览特性引入（我们在 L20 讨论过），经过社区反馈后于 C# 14 正式发布。这是 Roslyn 团队"先预览再正式"流程的典型案例。','❌ 答案是 B。field 在 C# 13（.NET 9）预览，C# 14（.NET 10）正式。你在 L20 中学过预览版——现在它终于转正了。')">确认</button>
   <div class="feedback" id="f_q5"></div>
-</div>
 
-<button onclick="Quiz.checkAll({'q1':'c','q2':'c','q3':'b','q4':'c','q5':'b'}, {'q1':{correct:'✅ Q1 正确！field 是零开销抽象。',wrong:'❌ Q1：field 是纯语法糖，编译时消除。'}, 'q2':{correct:'✅ Q2 正确！field → 合成字段，this.field → 类字段。',wrong:'❌ Q2：bare field → 合成后备字段，this.field → 类中声明的 field 字段。'}, 'q3':{correct:'✅ Q3 正确！与 auto-property 完全相同的命名。',wrong:'❌ Q3：&lt;Name&gt;k__BackingField，与自动属性一致。'}, 'q4':{correct:'✅ Q4 正确！多字段组合存储不适合 field。',wrong:'❌ Q4：field 只能映射单个同类型后备字段。'}, 'q5':{correct:'✅ Q5 正确！C# 13 预览 → C# 14 正式。',wrong:'❌ Q5：C# 13 预览，C# 14 正式发布。'}})">
-  提交全部答案
-</button>
-<div class="score" id="score" style="display:none"></div>
+  <button onclick="checkAll()">提交全部答案</button>
+  <div class="score" id="score" style="display:none"></div>
+</div>
 
 <!-- ========================== 8. NEXT ========================== -->
 
@@ -467,5 +460,16 @@ c.P = <span class="str">"X"</span>;
 </div>
 
 <script src="../assets/scripts/quiz.js"></script>
+<script>
+const answers = { q1: 'c', q2: 'c', q3: 'b', q4: 'c', q5: 'b' };
+const explanations = {
+  q1: { correct: '✅ 正确！field 是纯语法糖，编译后生成 &lt;PropertyName&gt;k__BackingField 字段，IL 与手动写后备字段完全一致。', wrong: '❌ 不是。field 是零开销抽象——编译时降低为普通字段访问（ldfld/stfld），无任何额外运行时开销。正确答案是 C。' },
+  q2: { correct: '✅ 正确！set 中 bare field = "B" → 合成后备字段；this.field = "C" → 类字段。c.field 读的是类字段，从 "A" 变为 "C"。', wrong: '❌ 不是。set 内 bare field → 属性的合成后备字段；this.field → 类中显式声明的 field 字段。类字段从 "A" → "C"，所以 c.field 输出 "C"。' },
+  q3: { correct: '✅ 正确！与普通自动属性完全相同的命名模式：&lt;Name&gt;k__BackingField。这证明了 field 关键字不引入任何新运行时概念。', wrong: '❌ 不是。field 属性使用与 auto-property 完全相同的命名 &lt;Name&gt;k__BackingField。正确答案是 B。' },
+  q4: { correct: '✅ 正确！field 始终映射到单个类型与属性相同的后备字段。多字段组合（如 FullName = FirstName + LastName）仍需手动字段。', wrong: '❌ 不是。A/B/D 都是 field 的典型用途。C（多字段组合存储）不适合——field 只能映射单个同类型后备字段。' },
+  q5: { correct: '✅ 正确！field 在 C# 13（.NET 9）中预览，经过社区反馈后于 C# 14（.NET 10 LTS）正式发布。', wrong: '❌ 不是。field 在 C# 13 预览，C# 14 正式。你在 L20 中学过预览版——现在它终于转正了。正确答案是 B。' },
+};
+function checkAll() { Quiz.checkAll(answers, explanations); }
+</script>
 </body>
 </html>

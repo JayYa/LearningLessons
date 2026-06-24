@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0008 — 北欧的基督教化：从奥丁到基督</title>
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/timeline.css">
+<link rel="stylesheet" href="../assets/compare.css">
+<link rel="stylesheet" href="../assets/tags.css">
+<link rel="stylesheet" href="../assets/reminder.css">
+<style>
+  :root {
+    --bg: #fdfaf5;
+    --text: #2c2416;
+    --accent: #4a3570;
+    --muted: #6b5e7a;
+    --card-bg: #fffdf8;
+    --border: #c4b8d4;
+    --highlight: #f5f0fa;
+  }
+
+  h3 { color: #3a2858; }
+
+  .compare-col.real { background: #f0ecf8; }
+  .compare-col.real h4 { color: #4a3570; }
+
+  .quote {
+    font-style: italic;
+    color: var(--muted);
+    border-left: 3px solid var(--border);
+    padding-left: 1rem;
+    margin: 1rem 0;
+  }
+
+  /* --- Mixed-belief indicator --- */
+  .mixed-bar {
+    display: flex;
+    height: 24px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0.6rem 0;
+    font-size: 0.7rem;
+    font-family: system-ui, sans-serif;
+    font-weight: 700;
+    text-align: center;
+    line-height: 24px;
+    color: #fff;
+  }
+  .mixed-bar .mb-pagan { background: #8b5a3a; }
+  .mixed-bar .mb-christian { background: #4a6a9a; }
+  .mixed-bar .mb-mixed { background: #7a7a5a; }
+
+  /* --- Jelling stone --- */
+  .jelling {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+    margin: 1.2rem 0;
+    flex-wrap: wrap;
+  }
+  .jelling .jelling-text {
+    flex: 1;
+    min-width: 260px;
+  }
+  .jelling .jelling-stone {
+    width: 140px;
+    height: 200px;
+    background: linear-gradient(175deg, #d4c8a0, #b8a878, #c8b888);
+    border-radius: 8px 8px 4px 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-family: system-ui, sans-serif;
+    font-size: 0.7rem;
+    color: #5a4a2a;
+    text-align: center;
+    padding: 1.2rem 0.7rem;
+    line-height: 1.5;
+    border: 2px solid #a09070;
+    position: relative;
+    writing-mode: horizontal-tb;
+  }
+  .jelling .jelling-stone::after {
+    content: "✝";
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    font-size: 1rem;
+    color: #5a4a30;
+  }
+
+  /* --- King path --- */
+  .king-path {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 1rem 0;
+    align-items: center;
+    justify-content: center;
+    font-family: system-ui, sans-serif;
+    font-size: 0.85rem;
+  }
+  .king-path .kp-node {
+    background: var(--card-bg);
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    padding: 0.5rem 0.9rem;
+    text-align: center;
+  }
+  .king-path .kp-arrow { font-weight: 700; color: var(--accent); font-size: 1.2rem; }
+
+  @media (max-width: 640px) {
+    .jelling { flex-direction: column-reverse; }
+    .jelling .jelling-stone { width: 100px; height: 150px; font-size: 0.62rem; padding: 0.8rem 0.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<h1>⛪ 北欧的基督教化：从奥丁到基督</h1>
+<p class="subtitle">Lesson 0008 — 维京人为何放弃了古老的神祇，以及这对《冰海战纪》意味着什么</p>
+
+<p class="lead">
+  历史有一个巨大的反讽：整个维京时代始于公元793年对林迪斯法恩<strong>修道院</strong>的劫掠，终于维京人自己变成了虔诚的<strong>教堂建造者</strong>。从北欧海盗到基督教国王——这个转变不是一瞬间的"皈依"，而是一场跨越<strong>两个多世纪</strong>、涉及政治计算、暴力胁迫和文化融合的浩大工程。《冰海战纪》中克努特对"地上乐园"的追求，正是这场转变在一个人物身上的集中体现。
+</p>
+
+<!-- ====== SECTION 1: WHY CONVERT ====== -->
+<h2>一、为什么皈依？——国王的算盘</h2>
+
+<p>
+  维京人不是被打败后被迫皈依的（不像萨克森人被查理曼屠杀式基督教化）。斯堪的纳维亚的基督教化是<strong>由国王推动、自上而下</strong>的过程。为什么一个维京国王会拥抱十字架？
+</p>
+
+<div class="card">
+<table>
+  <tr><th>动机</th><th>具体逻辑</th></tr>
+  <tr>
+    <td><strong>中央集权</strong></td>
+    <td>基督教提供了北欧传统宗教没有的东西——<strong>一个全能的、唯一的、不受挑战的神</strong>。奥丁和托尔不是你一个人的神——任何人（包括你的敌人）都可以崇拜他们。但基督教的 God 是排他的，而且国王是「上帝的代理人」。这给了王权一个无可辩驳的合法性来源。<strong>一个上帝 → 一个国王 → 一个王国</strong>——这套逻辑对野心勃勃的维京首领极具诱惑。</td>
+  </tr>
+  <tr>
+    <td><strong>欧洲外交</strong></td>
+    <td>如果你是一个基督教国王，其他基督教国王<strong>必须认真对待你</strong>。你可以签订由教会见证的条约，你的儿子可以娶法兰西或英格兰公主，你可以参加帝国加冕礼。异教徒国王在国际舞台上什么都不是。</td>
+  </tr>
+  <tr>
+    <td><strong>教会 = 行政机器</strong></td>
+    <td>基督教带来了维京社会从未有过的东西：<strong>识字的行政阶层</strong>。主教和神父能读会写拉丁文，可以起草法律、管理税收、记录土地所有——这些都是建设一个王国（而不只是一个战团）必需的工具。维京社会之前全靠口头传统和记忆，Thing 上的法律讲述人把全部法律背在脑子里——一旦王国规模变大，这套系统就撑不住了。</td>
+  </tr>
+  <tr>
+    <td><strong>经济整合</strong></td>
+    <td>基督教欧洲是11世纪最富有的经济体。通过皈依，斯堪的纳维亚国王可以合法地参与这个经济圈——获得贸易特权、免除"异教徒"的贸易障碍、接受教皇的财政支持。</td>
+  </tr>
+</table>
+</div>
+
+<p>
+  <strong>关键理解：</strong>维京国王们皈依基督教，首先不是因为"相信了"——而是因为基督教<strong>有用</strong>。它为国王们提供了一个旧宗教给不了的东西：把个人权力转化为制度权力的工具。这不是虚伪，这是一种极其务实的政治理性。
+</p>
+
+<!-- ====== SECTION 2: TIMELINE ====== -->
+<h2>二、时间线——三个王国，三种速度</h2>
+
+<p>
+  斯堪的纳维亚不是一夜之间变成基督教的。三个王国的速度和路径截然不同：
+</p>
+
+<div class="timeline">
+  <div class="tl-item key">
+    <div class="tl-year">~965</div>
+    <div class="tl-content">
+      <strong>🇩🇰 丹麦：蓝牙哈拉尔（Harald Bluetooth）宣布丹麦皈依</strong><br>
+      在父母合葬墓旁竖起耶灵石（Jelling Stone），宣告自己"使丹麦人成为基督徒"。这是斯堪的纳维亚第一个官方基督教国家。<br>
+      <span class="tag-real">漫画关联：克努特是哈拉尔蓝牙王的曾孙辈（通过 Sweyn Forkbeard）。丹麦王室已有三代基督徒传统。</span>
+    </div>
+  </div>
+
+  <div class="tl-item key">
+    <div class="tl-year">~995–1000</div>
+    <div class="tl-content">
+      <strong>🇳🇴 挪威：奥拉夫·特里格瓦松（Olaf Tryggvason）强制基督教化</strong><br>
+      以"皈依或死"的方式在挪威沿海推进基督教。也是他迫使冰岛、奥克尼群岛和法罗群岛皈依。1000年在斯沃尔德战役（Battle of Svolder）中阵亡。<br>
+      <span class="tag-mixed">漫画关联：漫画中克努特参与了对挪威的征服（1028），但当时挪威已有基督教基础。</span>
+    </div>
+  </div>
+
+  <div class="tl-item key">
+    <div class="tl-year">999/1000</div>
+    <div class="tl-content">
+      <strong>🇮🇸 冰岛：阿尔庭（Alþingi）投票皈依</strong><br>
+      法律讲述人 Þorgeirr Ljósvetningagoði 在毯子下躺了一天一夜后宣布：冰岛全体皈依基督教——但允许私下继续拜旧神。这是<strong>政治决定</strong>，不是宗教觉醒。避免了即将爆发的宗教内战。
+    </div>
+  </div>
+
+  <div class="tl-item key">
+    <div class="tl-year">~1015–1030</div>
+    <div class="tl-content">
+      <strong>🇳🇴 挪威：奥拉夫·哈拉尔松（St. Olaf）深化基督教化</strong><br>
+      继续并深化其同名前任的工作。1030年在斯蒂克莱斯塔战役（Stiklestad）中阵亡。死后被迅速封圣——<strong>他的圣徒崇拜反过来完成了挪威的基督教化</strong>。一个死去的国王比活着的国王更能推动宗教变革。
+    </div>
+  </div>
+
+  <div class="tl-item">
+    <div class="tl-year">~1027</div>
+    <div class="tl-content">
+      <strong>🇩🇰🇬🇧 克努特大帝的罗马朝圣</strong><br>
+      北海帝国鼎盛期，克努特前往罗马参加神圣罗马帝国皇帝康拉德二世的加冕礼。这不仅是一次朝圣——更是一次高调的国际外交秀。详见 <a href="0004-cnut-north-sea-empire.html">Lesson 0004</a>。
+    </div>
+  </div>
+
+  <div class="tl-item">
+    <div class="tl-year">~1080s–1160s</div>
+    <div class="tl-content">
+      <strong>🇸🇪 瑞典：最慢的皈依</strong><br>
+      乌普萨拉（Uppsala）的异教神庙一直运作到11世纪末。瑞典的基督教化零散而缓慢，到12世纪中期才基本完成——比丹麦晚了近<strong>200年</strong>。
+    </div>
+  </div>
+</div>
+
+<!-- ====== SECTION 3: JELLING STONE ====== -->
+<h2>三、耶灵石——"丹麦的洗礼证书"</h2>
+
+<div class="jelling">
+  <div class="jelling-text">
+    <p>
+      公元965年左右，丹麦国王蓝牙哈拉尔在耶灵（Jelling，日德兰半岛中部）为父母修建了宏伟的墓冢，并在两座墓冢之间竖起了一块<strong>符文石</strong>。这块石头今天被称为<strong>耶灵石（Jelling Stone）</strong>，丹麦人叫它"丹麦的洗礼证书"。
+    </p>
+    <p>
+      石头的三面刻着：
+    </p>
+    <ul>
+      <li>🦁 <strong>基督像</strong>——北欧艺术中最早的耶稣形象之一</li>
+      <li>🐉 <strong>北欧风格的动物纹饰</strong>——维京审美的延续</li>
+      <li>✍️ <strong>如尼文铭文</strong>：「哈拉尔王命人立此石，以纪念其父戈尔姆与其母翠拉。此哈拉尔王赢得了整个丹麦与挪威，并使丹麦人成为基督徒。」</li>
+    </ul>
+    <p>
+      这块石头是基督教与维京文化<strong>不是互相取代、而是互相叠加</strong>的完美象征。基督像和如尼文同时出现在一块石头上——这就是北欧基督教化的真实面貌：不是断裂，而是<strong>层叠</strong>。
+    </p>
+  </div>
+  <div class="jelling-stone">
+    <strong>ᚼᛅᚱᛅᛚᛏᚱ ᚴᚢᚾᚢᚴᛦ</strong><br>
+    <span style="font-size:0.65rem;">Harald King<br>…made the Danes Christian</span>
+  </div>
+</div>
+
+<div class="quote">
+  「耶灵石上的基督没有十字架——他被藤蔓缠绕，像一个被世界之蛇缠住的北欧英雄。这是一位维京人的基督。」——改编自 Neil Price, <em>The Children of Ash and Elm</em> (2020), ch. 15
+</div>
+
+<!-- ====== SECTION 4: CANUTE'S STRATEGIC CHRISTIANITY ====== -->
+<h2>四、克努特的战略基督教——漫画的核心背景</h2>
+
+<p>
+  这是与《冰海战纪》最直接相关的一节。漫画中克努特从一个怯懦的王子蜕变为追求"地上乐园"的铁腕国王——这个弧线在历史上有深刻基础。
+</p>
+
+<div class="card">
+<h3>克努特的基督教工具箱</h3>
+
+<table>
+  <tr><th>手段</th><th>历史行动</th><th>漫画呈现</th></tr>
+  <tr>
+    <td>教堂建造</td>
+    <td>在英格兰和丹麦大量修建教堂，向修道院捐赠巨额财富</td>
+    <td>漫画没有直接描绘教堂建造，但克努特宫廷的氛围体现了制度化宗教的存在</td>
+  </tr>
+  <tr>
+    <td>罗马朝圣（1027）</td>
+    <td>前往罗马参加康拉德二世加冕礼。写信回英格兰说自己在教皇面前为英格兰人民「争取到了公道」</td>
+    <td>漫画未直接描绘，但漫画中克努特对"神意"的执着与此一致</td>
+  </tr>
+  <tr>
+    <td>圣徒崇拜</td>
+    <td>大力推崇被谋杀的前任盎格鲁-撒克逊国王"殉道者爱德华"（Edward the Martyr）为圣徒——以一个<strong>英格兰</strong>圣徒来合法化一个<strong>丹麦</strong>国王的统治</td>
+    <td>漫画中克努特善于利用一切可用资源来建构权威——这与历史上的策略同出一辙</td>
+  </tr>
+  <tr>
+    <td>法律与教会的结合</td>
+    <td>颁布法典，以基督教伦理为法律基础（保护寡妇、禁止异教崇拜等）</td>
+    <td>漫画中克努特的"地上乐园"愿景包含了法律和秩序的重建</td>
+  </tr>
+  <tr>
+    <td>王权神授</td>
+    <td>自称为"上帝恩赐的英格兰、丹麦、挪威及部分瑞典人之王"</td>
+    <td><span class="tag-real">高度还原</span>——漫画中克努特明确将自己的统治与"神意"挂钩</td>
+  </tr>
+</table>
+</div>
+
+<p>
+  <strong>漫画的深度还原：</strong>《冰海战纪》对克努特最深刻的理解在于——他不是出于虔诚才拥抱基督教的。他理解基督教的<strong>工具性</strong>，就像他理解暴力、婚姻、和法律的工具性一样。漫画中的克努特想要"地上乐园"，本质上是在用基督教的语言描述一个<strong>政治工程</strong>：用宗教权威替代个人魅力（从"礼物经济"到"神授王权"），用教会的行政系统替代战团忠诚（从海盗王到基督教国王）。这正是历史上克努特所做的——也是 <a href="0007-viking-social-hierarchy.html">Lesson 0007</a> 中"Jarl 的礼物经济"在王国规模上被基督教制度取代的过程。
+</p>
+
+<!-- ====== SECTION 5: WHAT CHANGED ====== -->
+<h2>五、改变了什么？保留了什么？</h2>
+
+<p>
+  基督教化不是简单地把奥丁换成耶稣。它是维京社会最深层的<strong>重新编程</strong>——改变了权力、法律、死亡、时间的基本运作方式。
+</p>
+
+<div class="compare">
+  <div class="compare-col real">
+    <h4>🔄 被改变的</h4>
+    <ul>
+      <li><strong>权力来源：</strong>从个人声望 + 礼物经济 → 神授王权 + 成文法律</li>
+      <li><strong>法律：</strong>从口头传统（Thing 上的法律讲述人背诵） → 拉丁文成文法</li>
+      <li><strong>丧葬：</strong>从火葬 + 陪葬品（船葬） → 教堂墓地 + 无陪葬品土葬</li>
+      <li><strong>时间：</strong>从季节循环（冬至/夏至/Þorrablót） → 基督教历法（圣诞节/复活节/圣徒日）</li>
+      <li><strong>道德：</strong>从荣誉-复仇伦理 → 十诫 + 宽恕伦理</li>
+      <li><strong>奴隶制：</strong>虽然不是基督教直接废除的，但教会的"人在上帝面前平等"的教义在长远上削弱了奴隶制的合法性</li>
+    </ul>
+  </div>
+  <div class="compare-col manga">
+    <h4>🕯️ 被保留的（混合/共存）</h4>
+    <ul>
+      <li><strong>如尼文：</strong>在基督教化后继续使用了几百年——墓碑、纪念石上如尼文与拉丁字母并存</li>
+      <li><strong>民间信仰：</strong>地灵（landvættir）、troll、álfar（精灵）——民间层面的信仰持续了几个世纪，与基督教共存而非被取代</li>
+      <li><strong>萨迦传统：</strong>萨迦是在基督教时期被<strong>写下来的</strong>（不是口头传唱的）——基督教带来了书写，反而保存了异教时代的记忆</li>
+      <li><strong>暴力文化：</strong>正面冲突后，维京战士伦理通过十字军东征找到了新出口——挪威国王 Sigurd Jorsalfare（"耶路撒冷行者"）在 1108–1110 年率军参加十字军</li>
+      <li><strong>星期名称：</strong>英语中 Tuesday (Tyr), Wednesday (Odin), Thursday (Thor), Friday (Frigg/Freya) ——异教诸神活到了今天</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+<h3>🔑 关键洞见：不是取代，是叠加</h3>
+<p style="margin-bottom:0;">
+  考古学揭示了一个令人着迷的现象：在10-11世纪的斯堪的纳维亚，雷神之锤（Mjölnir）吊坠和十字架<strong>同时出现</strong>在同一层考古地层中。有些铸造模具<strong>一面铸造十字架，另一面铸造雷神之锤</strong>。维京人不是"放弃了"旧信仰然后"接受了"新信仰——他们在一个相当长的过渡期中<strong>两套系统同时使用</strong>。在风暴中向托尔祈祷，在法庭上向基督宣誓——这在几代人的时间里是完全正常的。
+</p>
+</div>
+
+<!-- ====== SECTION 6: MANGA COMPARISON ====== -->
+<h2>六、漫画中的基督教</h2>
+
+<table>
+  <tr><th>漫画情节/人物</th><th>历史背景</th></tr>
+  <tr>
+    <td>克努特追求「地上乐园」</td>
+    <td>反映基督教末世论（Kingdom of Heaven on Earth）与维京政治工程的结合。克努特在历史上的确将基督教作为统治工具——漫画作者幸村诚深刻理解了这一点，并把它戏剧化了。</td>
+  </tr>
+  <tr>
+    <td>克努特在战场上的宗教体验</td>
+    <td>漫画中克努特目睹死亡后产生的宗教性顿悟，呼应了基督教"面对死亡→皈依"的叙事模式。历史上奥拉夫·特里格瓦松据说也是在经历某种濒死体验后皈依的。</td>
+  </tr>
+  <tr>
+    <td>冰岛篇的教堂/神父角色</td>
+    <td>冰岛在 999/1000 年官方皈依后，教堂逐渐在定居点中建立。漫画托尔芬时代的冰岛已有基督教存在，但民间层面的异教习俗仍然普遍。</td>
+  </tr>
+  <tr>
+    <td>约姆战士团的异教色彩</td>
+    <td>漫画中约姆战士团保留了强烈的异教战士伦理——这在历史上是合理的。约姆斯堡（Jomsborg）传说中活跃于10世纪末，正是基督教化正在推进但尚未完成的时期。</td>
+  </tr>
+  <tr>
+    <td>文兰定居的理想主义</td>
+    <td>漫画将文兰描绘为"没有战争和奴隶制的新世界"——这种理念既有基督教和平主义（Pax Christiana）的影子，也超越了它。历史上文兰萨迦是在基督教框架下书写的——<br>远征是由基督教格陵兰人领导的，古德丽德最终去了罗马朝圣（见 <a href="0006-vinland-norse-in-north-america.html">Lesson 0006</a>）。</td>
+  </tr>
+</table>
+
+<!-- ====== SECTION 7: KEY INSIGHT ====== -->
+<h2>七、核心洞见：基督教化 = 维京时代的终结</h2>
+
+<p>
+  历史学家通常以<strong>1066年斯坦福桥战役</strong>（挪威国王哈拉尔·哈德拉达阵亡）作为维京时代的结束。但真正让维京时代结束的，不是某一场战役——而是<strong>斯堪的纳维亚变成了基督教王国</strong>。
+</p>
+
+<div class="card">
+<p style="margin-bottom:0;">
+  基督教化从<strong>三个层面</strong>终结了维京人的掠夺模式：
+</p>
+<ol style="margin-bottom:0;">
+  <li><strong>意识形态层面：</strong>抢劫修道院变成了一种罪行——不仅违法，而且<strong>渎神</strong>。一个基督教国王不能攻击另一个基督教王国的教堂。</li>
+  <li><strong>制度层面：</strong>国王们不再需要靠劫掠来养活追随者——教会提供了税收制度（什一税）和行政系统，使得基于领土的国家收入成为可能（参见 <a href="0004-cnut-north-sea-empire.html">Lesson 0004</a> 中克努特的税收体系）。</li>
+  <li><strong>身份层面：</strong>当一个维京首领不再称自己为"某某人之子"而开始称"上帝恩赐的某地之王"时——<strong>他就不是维京人了</strong>。他成了欧洲中世纪的国王。</li>
+</ol>
+</div>
+
+<p>
+  《冰海战纪》最悲剧性的人物弧线之一正是克努特的：他用基督教的语言建构了人类历史上最大的北欧帝国——但在这个过程中，他摧毁了那个帝国赖以建立的文化基础。建成之时，即是解体之时。
+</p>
+
+<!-- ====== QUIZ ====== -->
+<h2>📝 自我检测</h2>
+
+<div class="quiz">
+  <p><strong>Q1.</strong> 斯堪的纳维亚三个王国中，哪个最先官方皈依基督教？</p>
+  <label><input type="radio" name="q1" value="a"> A. 挪威（奥拉夫·特里格瓦松）</label>
+  <label><input type="radio" name="q1" value="b"> B. 丹麦（蓝牙哈拉尔）</label>
+  <label><input type="radio" name="q1" value="c"> C. 瑞典</label>
+  <label><input type="radio" name="q1" value="d"> D. 冰岛（阿尔庭投票）</label>
+  <button onclick="checkQuiz(1,'b','✅ 正确！丹麦在蓝牙哈拉尔治下于约965年最先皈依。耶灵石被称为「丹麦的洗礼证书」。','❌ 不对。正确答案是B。丹麦约965年最先皈依，挪威约995-1030年，冰岛999/1000年，瑞典最晚（12世纪中期才基本完成，比丹麦晚了近200年）。')">检查答案</button>
+  <div id="f1" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q2.</strong> 蓝牙哈拉尔宣布丹麦基督教化的纪念碑是什么？</p>
+  <label><input type="radio" name="q2" value="a"> A. 罗斯基勒大教堂（Roskilde Cathedral）</label>
+  <label><input type="radio" name="q2" value="b"> B. 耶灵石（Jelling Stone）</label>
+  <label><input type="radio" name="q2" value="c"> C. 贝叶挂毯（Bayeux Tapestry）</label>
+  <label><input type="radio" name="q2" value="d"> D. 乌普萨拉神庙（Temple at Uppsala）</label>
+  <button onclick="checkQuiz(2,'b','✅ 正确！耶灵石由蓝牙哈拉尔于约965年竖立，三面分别刻有基督像、北欧动物纹饰和如尼文铭文，被称为「丹麦的洗礼证书」。','❌ 不对。正确答案是B。耶灵石是蓝牙哈拉尔在父母墓旁竖立的符文石，宣告他「使丹麦人成为基督徒」。罗斯基勒大教堂是后来的建筑，贝叶挂毯是关于诺曼征服的，乌普萨拉神庙是瑞典异教的中心。')">检查答案</button>
+  <div id="f2" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q3.</strong> 维京国王皈依基督教的<em>首要</em>动机是什么？</p>
+  <label><input type="radio" name="q3" value="a"> A. 个人宗教体验和真诚信仰</label>
+  <label><input type="radio" name="q3" value="b"> B. 政治集权 + 欧洲外交——基督教对国王有用</label>
+  <label><input type="radio" name="q3" value="c"> C. 被法兰克帝国的军事力量击败后被迫皈依</label>
+  <label><input type="radio" name="q3" value="d"> D. 普通维京农民要求国王皈依</label>
+  <button onclick="checkQuiz(3,'b','✅ 正确！基督教提供了旧宗教无法提供的东西：一个神→一个国王→一个王国的逻辑、识字的行政阶层、欧洲外交圈的入场券。维京国王皈依首先是因为基督教「有用」，而非被武力征服。','❌ 不对。正确答案是B。与萨克森人被查理曼屠杀式基督教化不同，斯堪的纳维亚的基督教化是自上而下、由国王主动推动的——核心动机是政治集权和国际外交。个人信仰可能也有影响，但考古和文献证据表明政治计算是首要驱动力。')">检查答案</button>
+  <div id="f3" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q4.</strong> 基督教化后，以下哪项<em>没有被</em>取代或大幅改变？</p>
+  <label><input type="radio" name="q4" value="a"> A. 维京船葬习俗（火葬 + 陪葬品）</label>
+  <label><input type="radio" name="q4" value="b"> B. Thing（议事会）用口头传统背诵法律</label>
+  <label><input type="radio" name="q4" value="c"> C. 民间层面上的地灵（landvættir）、精灵（álfar）信仰</label>
+  <label><input type="radio" name="q4" value="d"> D. 国王权力的合法性来源</label>
+  <button onclick="checkQuiz(4,'c','✅ 正确！民间信仰（地灵、精灵、troll）在基督教化后持续了几个世纪，与现代基督教共存而非被取代。斯堪的纳维亚民间传说直到近代仍充满了这些古老信仰的元素。','❌ 不对。正确答案是C。民间信仰在基督教化后与基督教共存了数个世纪。船葬（A）被教堂墓地取代；口头法律传统（B）被拉丁文成文法取代；王权来源（D）从个人声望和礼物经济转向神授王权。但地灵和精灵信仰在民间一直活着。')">检查答案</button>
+  <div id="f4" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q5.</strong> （深度题）以下关于克努特大帝利用基督教的描述，哪一项<em>最准确</em>？</p>
+  <label><input type="radio" name="q5" value="a"> A. 克努特是虔诚的基督徒，其统治完全出于宗教动机，不关心政治利益</label>
+  <label><input type="radio" name="q5" value="b"> B. 克努特对基督教毫无兴趣，只是迫于教皇压力才表面接受</label>
+  <label><input type="radio" name="q5" value="c"> C. 克努特战略性地使用基督教作为统治工具——建造教堂、推崇圣徒、罗马朝圣——以合法化他对一个跨文化帝国的统治，同时真诚地将基督教伦理融入他的法律</label>
+  <label><input type="radio" name="q5" value="d"> D. 克努特试图创建一种融合了奥丁崇拜和基督教的新宗教</label>
+  <button onclick="checkQuiz(5,'c','✅ 正确！克努特的基督教政策是真诚信仰和政治工具的混合体——历史学家普遍认为两者并不矛盾。一个中世纪国王可以真诚地相信基督，同时也清醒地利用教会来巩固统治。《冰海战纪》的克努特深刻反映了这种双重性：他的「地上乐园」既有宗教理想主义的一面，也有冷酷政治计算的一面。','❌ 不对。正确答案是C。历史学家认为克努特的基督教政策是信仰与政治理性的混合——两者在中世纪国王身上并不矛盾。他真诚地捐赠教堂和朝圣，同时也清醒地利用基督教来合法化他跨越丹麦和英格兰的统治。漫画中的克努特正是这种双重性的戏剧化呈现。')">检查答案</button>
+  <div id="f5" class="feedback"></div>
+</div>
+
+<!-- ====== LESSON NAV ====== -->
+<hr>
+
+<div class="card" style="text-align:center;">
+  <p style="margin-bottom:0.4rem;"><strong>📚 课程导航</strong></p>
+  <p style="font-size:0.88rem;color:var(--muted);margin-bottom:0;">
+    ← <a href="0007-viking-social-hierarchy.html">Lesson 0007：社会结构</a>
+    &nbsp;·&nbsp;
+    <a href="0004-cnut-north-sea-empire.html">Lesson 0004：北海帝国</a>
+    &nbsp;·&nbsp;
+    <a href="0006-vinland-norse-in-north-america.html">Lesson 0006：文兰</a>
+    &nbsp;·&nbsp;
+    <a href="0002-character-prototypes.html">Lesson 0002：角色原型</a>
+  </p>
+</div>
+
+<!-- ====== REMINDERS ====== -->
+<div class="reminder">
+  <strong>📖 建议阅读</strong><br>
+  Anders Winroth, <em>The Conversion of Scandinavia: Vikings, Merchants, and Missionaries in the Remaking of Northern Europe</em> (2012)——本话题的权威学术专著，是本课的核心知识来源。<br>
+  Neil Price, <em>The Children of Ash and Elm</em> (2020), 第15–16章（宗教与死亡）——涵盖异教与基督教的过渡期物质文化证据（雷神之锤+十字架模具等）。
+</div>
+
+<div class="reminder-qa">
+  <strong>🤔 有疑问？</strong><br>
+  任何不清楚的地方——某个国王的皈依细节、基督教化对日常生活的具体影响、维京异教和基督教的教义对比——都可以直接问我。我是你的老师，帮你把概念吃透。也可以回顾 <a href="0004-cnut-north-sea-empire.html">Lesson 0004</a>（克努特的帝国治理）和 <a href="0007-viking-social-hierarchy.html">Lesson 0007</a>（社会结构如何被基督教重塑）来建立连接。
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

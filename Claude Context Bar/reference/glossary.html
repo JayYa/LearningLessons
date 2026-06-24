@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参考：术语表</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  /* Glossary uses a two-level structure: groups → entries */
+  .gloss-group { margin-bottom: 2rem; }
+  .gloss-group h2 {
+    border-top: none;
+    margin: 0 0 .8rem 0;
+    padding: 0;
+    font-size: 1.15rem;
+    color: #2563eb;
+  }
+  .gloss-group .group-intro {
+    font-size: .88rem;
+    color: #666;
+    margin-bottom: 1rem;
+  }
+  /* Main table: one row per term */
+  .gloss-group table td { vertical-align: top; }
+  .gloss-group table td:nth-child(1) {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600;
+    white-space: nowrap;
+    width: 15%;
+  }
+  .gloss-group table td:nth-child(2) {
+    width: 30%;
+    font-size: .9rem;
+  }
+  .gloss-group table td:nth-child(3) {
+    font-size: .85rem;
+    color: #888;
+    width: 14%;
+  }
+  /* Inline see-also links between related terms */
+  .see { color: #888; font-size: .82rem; }
+  .see a { color: #2563eb; }
+</style>
+</head>
+<body class="ref">
+
+<h1>VS Code 扩展开发 — 术语表</h1>
+
+<p style="color:#888; font-size:.9rem; margin-bottom:2rem;">
+  按概念分组，而非按拼音。组内按依赖顺序排列——先读上面的，才能理解下面的。持续随课程更新。
+</p>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="gloss-group">
+<h2>一、核心对象：VS Code 递给你的东西</h2>
+<p class="group-intro">
+  这些是你在 <code>extension.ts</code> 中实际创建、接收、操作的 VS Code 对象。它们是你写每一行代码时直接打交道的"实体"。
+</p>
+
+<table>
+  <tr><th>术语</th><th>一句话解释</th><th>首次出现</th></tr>
+
+  <tr>
+    <td>ExtensionContext</td>
+    <td>
+      VS Code 在调用 <code>activate()</code> 时传入的"工具箱"对象。它把扩展需要的所有系统服务打包在一起：资源管理（<code>subscriptions</code>）、持久化存储（<code>globalState</code> / <code>workspaceState</code> / <code>secrets</code>）、安装路径（<code>extensionPath</code>）。<br>
+      <p class="see">参见 <a href="../lessons/0002-activation-lifecycle.html">Lesson 0002 §1</a></p>
+    </td>
+    <td>Lesson 0002</td>
+  </tr>
+
+  <tr>
+    <td>context.subscriptions</td>
+    <td>
+      <code>ExtensionContext</code> 上的 <code>Disposable[]</code> 数组——"自动清理清单"。你在 <code>activate()</code> 中把命令注册、事件监听器等 push 进去，VS Code 在停用扩展时逐一调用它们的 <code>dispose()</code>。<strong>push 是手动的——VS Code 刻意不自动帮你做</strong>，这样你才能选择把某个资源中途 dispose 还是随扩展一起消亡。<br>
+      <p class="see">参见 <a href="#disposable">Disposable</a>、<a href="../lessons/0002-activation-lifecycle.html">Lesson 0002 §1.1</a></p>
+    </td>
+    <td>Lesson 0002</td>
+  </tr>
+
+  <tr>
+    <td>StatusBarItem</td>
+    <td>
+      VS Code 窗口底部状态栏上的一个<strong>可自定义条目</strong>。通过 <code>vscode.window.createStatusBarItem(alignment, priority)</code> 创建。属性包括 <code>text</code>（显示文字）、<code>tooltip</code>（悬停提示）、<code>command</code>（点击行为）、<code>backgroundColor</code>（背景色）等。修改属性即自动重绘——声明式 UI 模式。<br>
+      <p class="see">参见 <a href="../lessons/0003-statusbar-api.html">Lesson 0003</a>、<a href="#theme-color">ThemeColor</a>、<a href="#command">Command</a></p>
+    </td>
+    <td>Lesson 0003</td>
+  </tr>
+
+  <tr id="theme-color">
+    <td>ThemeColor</td>
+    <td>
+      VS Code 的<strong>语义化颜色引用</strong>，而非具体色值。<code>new vscode.ThemeColor('statusBarItem.errorBackground')</code> 在深色主题下解析为暗红，浅色主题下为浅红。类似 Android 的 <code>?attr/colorError</code>。<strong>永远不要在 VS Code 扩展中硬编码 UI 颜色</strong>。<br>
+      <p class="see">参见 <a href="../lessons/0003-statusbar-api.html">Lesson 0003 §5</a></p>
+    </td>
+    <td>Lesson 0003</td>
+  </tr>
+
+  <tr id="command">
+    <td>Command</td>
+    <td>
+      VS Code 的<strong>行为调度单元</strong>。分两类：(1) <strong>用户命令</strong>——在 <code>package.json</code> 的 <code>contributes.commands</code> 中声明，出现在命令面板（<code>Ctrl+Shift+P</code>），可绑定快捷键；(2) <strong>内部命令</strong>——仅通过 <code>registerCommand()</code> 在代码中注册，作为 UI 组件的点击回调或程序间通信使用。claude-context-bar 的 <code>hideSession</code> 是内部命令。<br>
+      <p class="see">参见 <a href="../lessons/0002-activation-lifecycle.html">Lesson 0002 §2.1 callout</a></p>
+    </td>
+    <td>Lesson 0002</td>
+  </tr>
+
+  <tr>
+    <td>Memento</td>
+    <td>
+      VS Code 的键值持久化存储接口。<code>globalState</code> 全局共享（所有工作区），<code>workspaceState</code> 每工作区独立。数据在 VS Code 重启后仍然存在。类比：扩展的"硬盘"。底层是 GoF 的 Memento 模式——不暴露内部结构，只暴露 save/restore。
+    </td>
+    <td>Lesson 0002</td>
+  </tr>
+
+  <tr>
+    <td>SecretStorage</td>
+    <td>
+      VS Code 的<strong>安全</strong>存储接口，专门存放 API key、token 等敏感信息。底层调用操作系统的密钥管理（macOS Keychain / Windows Credential Store / Linux libsecret）。类比：扩展的"保险柜"，不是什么东西都塞这里，但密码必须放这里。
+    </td>
+    <td>Lesson 0002</td>
+  </tr>
+
+  <tr>
+    <td>activationEvents</td>
+    <td>
+      <code>package.json</code> 中声明的一组<strong>触发条件</strong>，告诉 VS Code "什么时候加载我的扩展"。常见值：<code>onStartupFinished</code>（启动完成后）、<code>onCommand:xxx</code>（用户首次执行某命令时）。claude-context-bar 使用 <code>onStartupFinished</code>——它需要在状态栏中始终可见。<br>
+      <p class="see">参见 <a href="../lessons/0001-extension-anatomy.html">Lesson 0001 §2.2</a></p>
+    </td>
+    <td>Lesson 0001</td>
+  </tr>
+</table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="gloss-group">
+<h2>二、资源管理：创建了就要清理</h2>
+<p class="group-intro">
+  这组概念围绕一个核心问题：<strong>扩展创建的资源（命令、监听器、定时器、文件监听……）由谁、在什么时候、以什么方式销毁？</strong>VS Code 的答案全在这里。
+</p>
+
+<table>
+  <tr><th>概念</th><th>一句话解释</th><th>首次出现</th></tr>
+
+  <tr id="disposable">
+    <td>Disposable</td>
+    <td>
+      VS Code 的<strong>统一清理合约</strong>：任何需要释放资源的东西，都实现一个 <code>{ dispose(): void }</code> 接口。调用 <code>dispose()</code> 后对象释放所有持有的资源，此后不应再使用。VS Code API 中几乎所有 <code>registerXxx()</code> 和 <code>onDidXxx()</code> 方法都返回 <code>Disposable</code>。<br>
+      <p class="see">参见 <a href="#dispose-pattern">Dispose Pattern</a>、<a href="../lessons/0002-activation-lifecycle.html">Lesson 0002 §1.2</a></p>
+    </td>
+    <td>Lesson 0002</td>
+  </tr>
+
+  <tr id="dispose-pattern">
+    <td>Dispose Pattern</td>
+    <td>
+      源自 .NET / RxJS 社区的编程原则：<strong>创建资源的人负责销毁它</strong>。<code>registerCommand()</code> 创建了命令注册，返回的 <code>Disposable</code> 就是"所有权转移凭证"。你可以：(1) push 到 <code>subscriptions</code>——委托 VS Code 在停用时清理；(2) 自己持有引用，在中途合适的时机调用 <code>.dispose()</code>。VS Code 不自动 push 不是因为"做不到"——而是<strong>把控制权交给你</strong>。<br>
+      <p class="see">参见 <a href="#disposable">Disposable</a>、<a href="#subscriptions">context.subscriptions</a>、<a href="#adapter">适配器模式</a></p>
+    </td>
+    <td>Lesson 0002</td>
+  </tr>
+
+  <tr id="lifecycle">
+    <td>生命周期</td>
+    <td>
+      扩展从<strong>激活 → 运行 → 停用</strong>的完整过程。端点：<code>activate()</code>（出生——注册命令、创建 UI、设置监听）和 <code>deactivate()</code> / <code>subscriptions dispose</code>（死亡——清理所有资源）。生命周期管理是 VS Code 扩展编程中<strong>最容易出错的环节</strong>——创建了没清理 → 内存泄漏；销毁了还持有引用 → 崩溃。<br>
+      <p class="see">参见 <a href="../lessons/0002-activation-lifecycle.html">Lesson 0002 §4–5</a></p>
+    </td>
+    <td>Lesson 0002</td>
+  </tr>
+
+  <tr id="adapter">
+    <td>适配器模式</td>
+    <td>
+      GoF 经典设计模式。在 VS Code 扩展中的标准用法：<strong>把非 VS Code 资源包装成符合 Disposable 契约的对象</strong>。例如 Node.js 的 <code>fs.watch()</code> 返回 <code>FSWatcher</code>（没有 <code>dispose()</code> 方法），包装成 <code>{ dispose: () => watcher.close() }</code> 后就能 push 到 <code>subscriptions</code>，享受和 VS Code 资源相同的自动清理待遇。<br>
+      <p class="see">参见 <a href="../lessons/0002-activation-lifecycle.html">Lesson 0002 §3</a>、<a href="#disposable">Disposable</a></p>
+    </td>
+    <td>Lesson 0002</td>
+  </tr>
+
+  <tr id="mark-sweep">
+    <td>标记-清除</td>
+    <td>
+      一种两阶段算法：(1) <strong>标记</strong>所有"活着"的对象；(2) <strong>清除</strong>所有没被标记的。在 claude-context-bar 中，<code>seenPaths</code> 是标记阶段的产物——每次 <code>refreshAllSessions()</code> 遍历活跃会话时，把它们的 <code>sessionFile</code> 加入 Set（标记）。之后遍历 <code>statusBarItems</code> Map，不在 Set 中的条目被 dispose+delete（清除）。<br>
+      <p class="see">参见 <a href="../lessons/0003-statusbar-api.html">Lesson 0003 §5.3</a></p>
+    </td>
+    <td>Lesson 0003</td>
+  </tr>
+</table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="gloss-group">
+<h2>三、架构概念：理解系统怎么搭的</h2>
+<p class="group-intro">
+  这些词不直接对应一个可以 import 的类或一个可以实例化的对象。它们描述的是<strong>系统的层次结构和设计哲学</strong>。
+</p>
+
+<table>
+  <tr><th>概念</th><th>一句话解释</th><th>首次出现</th></tr>
+
+  <tr>
+    <td>原语（Primitive）</td>
+    <td>
+      系统提供的<strong>最小、不可再拆的基本操作/构件</strong>。你不能用更底层的 VS Code API 来实现 <code>registerCommand()</code>——它就是 VS Code 给你的"原子"。所有扩展的功能都是通过对这些原语进行组合来构建的。<br>
+      <strong>类比：</strong>乐高基础砖块——可以搭出任何东西，但无法用更小的乐高零件造出这块砖。<br>
+      <strong>这个词为什么让人困惑：</strong>它描述的是"这个东西在系统里的层级"而非"这个东西能做什么"。就像"原子"——它告诉你这是物质的最小单位，但不描述某个具体原子的样子。<br>
+      <strong>本课程中的实例：</strong><code>StatusBarItem</code> 是状态栏的 UI 原语、<code>registerCommand()</code> 是命令注册的原语、<code>onDidChangeConfiguration()</code> 是配置监听的原语、<code>Disposable</code> 是资源管理的原语合约。
+    </td>
+    <td>Lesson 0003</td>
+  </tr>
+
+  <tr>
+    <td>声明式 vs 命令式</td>
+    <td>
+      <strong>声明式：</strong>你描述目标状态，系统负责达到它。例如 <code>item.text = "72%"</code>——你声明了 text 应该是 72%，VS Code 负责重绘。你不需要调用 <code>item.render()</code>。<br>
+      <strong>命令式：</strong>你写清楚每一步怎么做。例如 <code>fs.watch(path, callback)</code>——你告诉 Node.js 精确的执行步骤。<br>
+      VS Code 的 UI API 全部采用声明式：属性即 UI，修改即重绘。
+    </td>
+    <td>Lesson 0003</td>
+  </tr>
+
+  <tr>
+    <td>数据管线（Data Pipeline）</td>
+    <td>
+      一种将原始数据经过<strong>多个串联步骤</strong>逐步加工成目标数据结构的架构模式。每一步只做一种转换：扫描 → 解码 → 解析 → 过滤 → 分组 → 编号 → 输出。优点：(1) 每一步职责单一，易于理解和测试；(2) 在尽量早的阶段丢弃不需要的数据，减少后续步骤的工作量。<br>
+      <p class="see">参见 <a href="../lessons/0004-find-active-sessions.html">Lesson 0004 §2</a></p>
+    </td>
+    <td>Lesson 0004</td>
+  </tr>
+</table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="gloss-group">
+<h2>四、缩写速查</h2>
+<p class="group-intro">你在代码、日志和文档中会反复遇到的缩写。</p>
+
+<table>
+  <tr><th>缩写</th><th>全称</th><th>说明</th></tr>
+  <tr><td>SemVer</td><td>Semantic Versioning</td><td>语义化版本规范：major.minor.patch（如 1.74.0）</td></tr>
+  <tr><td>GoF</td><td>Gang of Four</td><td>《设计模式》的四位作者，泛指书中 23 种经典模式</td></tr>
+  <tr><td>JSONL</td><td>JSON Lines</td><td>每行一个独立 JSON 对象的文本格式（Claude Code 会话文件格式）</td></tr>
+  <tr><td>mtime</td><td>modification time</td><td>文件的最后修改时间戳。在 <code>fs.statSync()</code> 返回的 <code>Stats</code> 对象上以 <code>.mtime</code> 属性暴露。findActiveSessions 用它来判断会话是否仍在活跃</td></tr>
+  <tr><td>no-op</td><td>no operation</td><td>重复调用不会产生任何效果，也不会报错。例如对已关闭的 watcher 再次 <code>.close()</code></td></tr>
+</table>
+</div>
+
+<div class="nav">
+  <a href="../lessons/0003-statusbar-api.html">← Lesson 0003：状态栏 UI 原语</a>
+  <a href="vscode-extension-api-basics.html">📋 参考：VS Code 扩展 API 基础</a>
+</div>
+
+</body>
+</html>

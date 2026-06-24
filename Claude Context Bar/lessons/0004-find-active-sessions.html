@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0004 — findActiveSessions：数据引擎</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<h1>
+  <span class="lesson-num">Lesson 0004</span>
+  findActiveSessions：数据引擎
+</h1>
+
+<p class="lede">
+  前三课我们学会了扩展<strong>怎么说</strong>（<a href="0001-extension-anatomy.html">package.json</a>）、<strong>怎么活</strong>（<a href="0002-activation-lifecycle.html">生命周期</a>）、<strong>怎么画</strong>（<a href="0003-statusbar-api.html">StatusBarItem</a>）。这一课深入扩展的<strong>数据心脏</strong>——<code>findActiveSessions()</code>。它回答了扩展存在的最核心问题：<em>"现在有哪些活跃的 Claude Code 会话？"</em>
+</p>
+
+<div class="callout">
+  <strong>📌 本节课对应代码：</strong><code><a href="../temp_repo/src/extension.ts">extension.ts</a></code> 第 293–578 行。包含 <code>getLatestTokenCount()</code>、<code>getContextLimitForModel()</code>、<code>findActiveSessions()</code> 及其内部的稳定编号和手动隐藏逻辑。
+</div>
+
+<h2>1. 它在整个扩展中的位置</h2>
+
+<pre><span class="cmt">         文件系统 (~/.claude/projects/)
+                      │
+                      ▼
+           findActiveSessions()   ← 本课
+                      │
+                      ▼
+              SessionInfo[]       ← 结构化数据
+                      │
+                      ▼
+           refreshAllSessions()   ← Lesson 0003
+                      │
+                      ▼
+             StatusBarItem[]      ← 状态栏 UI</pre>
+
+<p>
+  <code>findActiveSessions()</code> 是纯粹的<strong>数据函数</strong>——它不操作任何 UI，只做一件事：从文件系统中提取结构化数据。它返回的 <code>SessionInfo[]</code> 是 <code>refreshAllSessions()</code> 的唯一输入。
+</p>
+
+<h2>2. 八步数据管线</h2>
+
+<p>一次 <code>findActiveSessions()</code> 调用经过八个步骤，每一步将原始数据向前推进一层：</p>
+
+<pre><span class="cmt">Step 1: 扫描</span>     ~/.claude/projects/ 下的目录和 .jsonl 文件
+<span class="cmt">Step 2: 解码</span>     将编码后的目录名还原为项目路径和名称
+<span class="cmt">Step 3: 解析</span>     逐行读取 JSONL，提取最新的 token 用量和元数据
+<span class="cmt">Step 4: 定限</span>     根据模型类型确定上下文窗口大小
+<span class="cmt">Step 5: 过滤</span>     剔除超时、已清除、被覆盖的会话
+<span class="cmt">Step 6: 编号</span>     同项目多会话分配稳定编号（webapp, webapp-2, …）
+<span class="cmt">Step 7: 隐藏</span>     处理用户手动隐藏的会话，检测是否有新活动需重新显示
+<span class="cmt">Step 8: 截断</span>     最多返回 5 条，防止状态栏被海量会话淹没</pre>
+
+<h2>3. Step 1：扫描文件系统</h2>
+
+<pre><span class="kw">const</span> claudeDir = getClaudeProjectsDir();
+<span class="cmt">// → ~/.claude/projects/</span>
+
+<span class="kw">const</span> cutoffTime = Date.now() - (idleTimeout * 1000);
+<span class="cmt">// idleTimeout 默认 180 秒——只关心最近 3 分钟内有活动的会话</span></pre>
+
+<p>扫描逻辑遍历 <code>~/.claude/projects/</code> 下的每个子目录：</p>
+
+<ol>
+  <li>跳过不是目录的条目</li>
+  <li>跳过 <code>claude-plugins</code> 和 <code>claude-mem</code>（后台进程，不是交互会话）</li>
+  <li>找目录下以 <code>.jsonl</code> 结尾的文件</li>
+  <li>跳过 <code>agent-</code> 前缀的文件（后台 agent）</li>
+  <li>只保留 <code>mtime</code> 在 <code>cutoffTime</code> 内的文件</li>
+  <li>按最后修改时间从新到老排序</li>
+</ol>
+
+<div class="callout">
+  <strong>🎯 为什么在文件系统层就做时间过滤？</strong>如果不过滤，每次刷新都要解析所有历史会话文件——包括几个月前的。早期过滤大幅减少解析工作量。这是数据管线设计的一条通用原则：<strong>在尽量早的阶段丢弃不需要的数据</strong>。
+</div>
+
+<h2>4. Step 2：解码项目路径</h2>
+
+<p>
+  Claude Code 把项目路径编码进了目录名。规则是：路径分隔符变成单横线，Windows 盘符的冒号变成双横线。
+</p>
+
+<pre><span class="cmt">编码规则                             解码结果</span>
+C--dev-webapp             →    C:\dev\webapp
+C--dev-tools-my-plugin    →    C:\dev\tools\my-plugin
+-Users-ed-work-api        →    /Users/ed/work/api
+</pre>
+
+<p><code>decodeProjectPath()</code> 的工作分两步：</p>
+
+<ol>
+  <li><strong>检测操作系统：</strong>第一个分段是单个字母（如 <code>C</code>）→ Windows 路径；否则 → Unix 路径</li>
+  <li><strong>提取项目名：</strong>取路径的<strong>最后 2–3 段</strong>（跳过盘符和顶层目录如 Users），用横线连接</li>
+</ol>
+
+<pre><span class="cmt">C:\dev\my-cool-project   →  parts = ['C', 'dev', 'my-cool-project']
+                          →  取后 3 段 → 'dev', 'my-cool-project'
+                          →  projectName = 'dev-my-cool-project'
+
+/Users/ed/work/api        →  parts = ['Users', 'ed', 'work', 'api']
+                          →  取后 3 段 → 'ed', 'work', 'api'
+                          →  projectName = 'ed-work-api'</span></pre>
+
+<div class="callout warn">
+  <strong>⚠️ 限制：</strong><code>decodeProjectPath()</code> 使用启发式算法——它不能 100% 区分"路径中的横线"和"项目名中的横线"（如 <code>my-cool-project</code> 中的横线）。最终的项目名是近似值，而非精确路径重建。
+</div>
+
+<h2>5. Step 3：解析 token 数据</h2>
+
+<p>
+  对每个入选的 <code>.jsonl</code> 文件，调用 <code>getLatestTokenCount()</code>。这是整个管线中<strong>最耗时的步骤</strong>——它把整个文件读进内存并逐行解析 JSON。
+</p>
+
+<h3>5.1 JSONL 格式</h3>
+
+<pre><span class="cmt">每行一个独立的 JSON 对象，Claude Code 的完整消息流：</span>
+{"type":"user","message":{"content":"帮我写一个函数","timestamp":"..."}}
+{"type":"assistant","message":{"content":"好的……","model":"claude-sonnet-4-6","usage":{"input_tokens":42,…}}}
+{"type":"user","message":{"content":"<command-name>/clear</command-name>","timestamp":"..."}}
+{"type":"user","message":{"content":"现在重新开始……","timestamp":"..."}}
+<span class="cmt">... 更多行 ...</span></pre>
+
+<h3>5.2 从后往前扫描：检测 /clear</h3>
+
+<p>
+  关键设计：解析器从文件<strong>最后一行往前扫</strong>，找最近一次 <code>/clear</code> 命令。判断一个会话是否"已清除"需要同时满足两个条件：
+</p>
+
+<ol>
+  <li>文件中存在 <code>/clear</code> 命令<br>
+    <span class="cmt">（检测：<code>msgContent.includes('&lt;command-name&gt;/clear&lt;/command-name&gt;')</code>）</span>
+  </li>
+  <li><code>/clear</code> 之后<strong>没有任何</strong>用户消息<br>
+    <span class="cmt">（意味着用户清了上下文但还没继续用这个会话）</span>
+  </li>
+</ol>
+
+<pre><span class="cmt">// 扫描逻辑：从最后一行往前扫</span>
+<span class="kw">let</span> lastClearIndex = -1;
+<span class="kw">let</span> userMessagesAfterClear = 0;
+
+<span class="kw">for</span> (i = lastLine → firstLine) {
+    <span class="kw">if</span> (是 /clear) { lastClearIndex = i; <span class="kw">break</span>; }
+    <span class="kw">if</span> (是用户消息) { userMessagesAfterClear++; }
+}
+<span class="cmt">// wasCleared = (找到了 /clear) && (clear 之后没有用户消息)</span></pre>
+
+<h3>5.3 从前向后扫描：提取元数据</h3>
+
+<p>
+  确定 <code>/clear</code> 位置后，从该位置<strong>往后</strong>扫描，收集四项信息：
+</p>
+
+<table>
+  <tr><th>字段</th><th>提取逻辑</th><th>用途</th></tr>
+  <tr><td>sessionCreated</td><td>第一条有效记录的 timestamp</td><td>判断会话创建时间，用于稳定编号</td></tr>
+  <tr><td>firstMessage</td><td>第一条用户消息的前 60 个字符（跳过命令）</td><td>在 tooltip 中显示，帮助用户识别会话</td></tr>
+  <tr><td>model</td><td>最后一条包含 model 字段的记录</td><td>显示在 tooltip 中，也用于确定上下文限制</td></tr>
+  <tr><td>totalTokens</td><td>最后一条包含 usage 的记录</td><td>计算百分比、背景色</td></tr>
+</table>
+
+<pre><span class="cmt">// token 用量的计算（第 384 行）</span>
+totalTokens = input_tokens + cache_read_input_tokens + cache_creation_input_tokens
+<span class="cmt">// 三项都是"输入 token"——Claude Code 的上下文用量就是已消耗的输入 token</span></pre>
+
+<div class="callout">
+  <strong>🔑 为什么要从后往前扫 /clear，再从前扫数据？</strong>两次扫描的原因不同：<br>
+  — <strong>反向扫描</strong>：找到<em>最近的</em> /clear。从后往前扫，遇到的第一个 /clear 就是最近的。<br>
+  — <strong>正向扫描</strong>：从 /clear 之后开始，按时间顺序收集 sessionCreated（取最早）、firstMessage（取最早）、totalTokens（取最新）。
+</div>
+
+<h2>6. Step 4：确定上下文限制</h2>
+
+<p>
+  一个会话的百分比 = <code>totalTokens / contextLimit × 100%</code>。上下文限制取决于模型：
+</p>
+
+<pre><span class="kw">function</span> <span class="fn">getContextLimitForModel</span>(model, userLimit) {
+    <span class="kw">if</span> (model 包含 <span class="str">'sonnet'</span> 且 包含 <span class="str">'1m'</span>) → <span class="num">1,000,000</span>
+    其他所有模型                        → userLimit（默认 200,000）
+}</pre>
+
+<p>
+  目前只有 Sonnet 4.5 1M 模型有 100 万 token 的上下文窗口，其他模型（Opus、Haiku、Sonnet 标准版）都走用户配置的默认值。
+</p>
+
+<h2>7. Step 5：过滤淘汰的会话</h2>
+
+<p>这是管线中<strong>逻辑最复杂的步骤</strong>。同一项目的会话被分组，组内按创建时间从新到老排序，然后逐一判断是否淘汰：</p>
+
+<h3>7.1 已清除的会话</h3>
+
+<pre><span class="kw">if</span> (session.wasCleared) → <span class="kw">continue</span>;  <span class="cmt">// 直接跳过</span></pre>
+
+<h3>7.2 被新会话覆盖的会话</h3>
+
+<p>
+  判断一个旧会话是否被<strong>淘汰</strong>的标准：<strong>存在一个更新的会话，其创建时间晚于该旧会话的最后更新时间</strong>。
+</p>
+
+<pre><span class="cmt">// 组内按创建时间从新到老排列</span>
+sessionX (最新创建)  → created: 14:30
+sessionY             → created: 13:00, lastUpdated: 13:45
+sessionZ (最老)      → created: 10:00, lastUpdated: 14:20
+
+<span class="cmt">// sessionZ 的判定：</span>
+sessionX 的 created (14:30) &gt; sessionZ 的 lastUpdated (14:20) → 否，不淘汰
+<span class="cmt">// sessionZ 在 14:20 还有活动，说明用户还在用</span>
+
+<span class="cmt">// sessionY 的判定：</span>
+sessionX 的 created (14:30) &gt; sessionY 的 lastUpdated (13:45) → 是，淘汰
+<span class="cmt">// 用户开了 sessionX 之后就没再碰过 sessionY——被放弃了</span></pre>
+
+<blockquote>
+  <strong>核心洞察：</strong>淘汰逻辑不只看"有没有更新的会话"，而是看"更新的会话是否<strong>在那之后</strong>创建的"。如果旧会话在更新会话创建后仍然有活动，说明用户在并行使用两个会话——不应淘汰。
+</blockquote>
+
+<h2>8. Step 6：稳定编号</h2>
+
+<p>
+  过滤后，组内的<strong>活跃</strong>会话按创建时间<strong>从老到新</strong>排序。最老的会话保留原名，后续的加数字后缀：
+</p>
+
+<pre><span class="cmt">活跃会话（按创建时间排序）：</span>
+sessionA (最老) → projectName = <span class="str">'webapp'</span>
+sessionB        → projectName = <span class="str">'webapp-2'</span>
+sessionC (最新) → projectName = <span class="str">'webapp-3'</span></pre>
+
+<p>
+  编号是<strong>稳定的</strong>——基于 <code>sessionCreated</code> 时间戳，不会随刷新顺序变化。最老的永远是原始名。
+</p>
+
+<h2>9. Step 7：手动隐藏与自动取消隐藏</h2>
+
+<p>
+  用户点击状态栏条目时，<code>hideSession</code> 命令将 <code>sessionFile</code> 和时间戳存入 <code>hiddenSessions</code> Map。每次刷新时，<code>findActiveSessions()</code> 检查：
+</p>
+
+<pre><span class="kw">const</span> hiddenAt = hiddenSessions.get(session.sessionFile);
+<span class="kw">if</span> (hiddenAt) {
+    <span class="kw">if</span> (session.lastUpdated > hiddenAt) {
+        <span class="cmt">// 隐藏后又有新活动 → 自动取消隐藏</span>
+        hiddenSessions.delete(session.sessionFile);
+        <span class="kw">return true</span>;
+    }
+    <span class="kw">return false</span>;  <span class="cmt">// 仍然隐藏</span>
+}</pre>
+
+<p>
+  这个逻辑确保了一个合理的行为：<strong>用户隐藏了一个会话，但如果它后来又有活动了（用户可能又用起了这个项目），就自动重新显示</strong>。如果用户只是点了一下隐藏但没再使用那个会话，它就一直不出现。
+</p>
+
+<h2>10. Step 8：5 条上限</h2>
+
+<pre><span class="kw">return</span> visibleSessions.slice(0, 5);</pre>
+
+<p>
+  最终返回<strong>最多 5 条</strong>。这是硬编码的——防止用户同时开了几十个会话把状态栏塞满。配合排序（按 lastUpdated 从新到老），这意味着<strong>最近活跃的 5 个会话</strong>会显示在状态栏中。
+</p>
+
+<div class="callout">
+  <strong>🎯 设计权衡：</strong>5 条不是可配置的——代码中没有对应的 settings 项。这是"有意的限制"：状态栏不是仪表盘，5 条以上就开始抢占注意力。如果需要看所有会话，那是 TreeView 或 WebviewPanel 的功能范围。
+</div>
+
+<h2>11. 完整数据流图</h2>
+
+<pre><span class="cmt">~/.claude/projects/
+│
+├─ C--dev-webapp/
+│   ├─ abc123.jsonl  ──→  getLatestTokenCount()  ──→  {totalTokens:144K, model:'sonnet-4.6', …}
+│   └─ def456.jsonl  ──→  …                      ──→  {totalTokens:86K, …}
+│
+├─ -Users-ed-api/
+│   └─ ghi789.jsonl  ──→  …                      ──→  {totalTokens:200K, …}
+│
+└─ C--dev-docs/
+    └─ jkl012.jsonl  ──→  … (mtime 超时 → 跳过)
+
+            │
+            ▼
+    ┌───────────────────┐
+    │ 按 projectName 分组 │
+    │ "webapp" → [A, B]  │
+    │ "api"    → [C]     │
+    └──────┬────────────┘
+           │
+           ▼
+    ┌───────────────────┐
+    │ 组内过滤           │
+    │ · wasCleared? 跳过 │
+    │ · 被覆盖? 淘汰     │
+    └──────┬────────────┘
+           │
+           ▼
+    ┌───────────────────┐
+    │ 稳定编号           │
+    │ A → "webapp"       │
+    │ B → "webapp-2"     │
+    │ C → "api"          │
+    └──────┬────────────┘
+           │
+           ▼
+    ┌───────────────────┐
+    │ 手动隐藏过滤        │
+    │ + auto-unhide      │
+    └──────┬────────────┘
+           │
+           ▼
+    ┌───────────────────┐
+    │ slice(0, 5)        │
+    │ 按 lastUpdated 排序 │
+    └──────┬────────────┘
+           │
+           ▼
+    SessionInfo[]  ──→  refreshAllSessions()</pre>
+
+<h2>12. 练习：追踪一个会话的数据旅程</h2>
+
+<ol>
+  <li>打开 <a href="../temp_repo/src/extension.ts">extension.ts</a>，找到 <code>findActiveSessions()</code>（第 409 行）</li>
+  <li>在纸上画出这八个步骤的流程图——不看书，凭记忆</li>
+  <li>找到 <code>getLatestTokenCount()</code>（第 293 行），理解"从后往前扫 /clear → 从前往后扫数据"的双向扫描</li>
+  <li>在第 521–533 行找到淘汰逻辑——用一个你自己编的例子验证：三个会话 A(老)、B(中)、C(新)，什么样的时间关系下 B 会被淘汰？</li>
+  <li>找到第 578 行的 <code>slice(0, 5)</code>——思考：为什么这里不写成可配置的？把这个限制放在数据层（而非 UI 层）有什么优缺点？</li>
+</ol>
+
+<h2>13. 知识检查</h2>
+
+<div class="quiz" id="q1">
+  <h3>问题 1</h3>
+  <p><code>findActiveSessions()</code> 在文件系统层就做 mtime 过滤，而不是读取所有文件后再过滤。这体现了什么设计原则？</p>
+  <label><input type="radio" name="q1" value="a"> 关注点分离——把文件 I/O 和数据解析分开</label>
+  <label><input type="radio" name="q1" value="b"> 尽早丢弃不需要的数据——在管线最早阶段减少后续步骤的工作量</label>
+  <label><input type="radio" name="q1" value="c"> 性能优化——内存中过滤比磁盘 I/O 更快</label>
+  <label><input type="radio" name="q1" value="d"> 防御性编程——防止解析逻辑遇到过期文件时崩溃</label>
+  <button onclick="checkQuiz('q1','b','在最早可能的阶段丢弃不需要的数据，可以大幅减少后续解析步骤的工作量。这是数据管线设计的通用原则。')">检查答案</button>
+  <div class="feedback" id="q1-fb"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>问题 2</h3>
+  <p><code>getLatestTokenCount()</code> 为什么要<strong>从后往前</strong>扫描找 /clear？</p>
+  <label><input type="radio" name="q2" value="a"> 性能优化——从后往前扫描比从前往后快</label>
+  <label><input type="radio" name="q2" value="b"> 文件末尾的 JSON 行比开头的更短，解析更快</label>
+  <label><input type="radio" name="q2" value="c"> 需要找到<strong>最近的</strong> /clear——从后往前遇到的第一个 /clear 就是最近的</label>
+  <label><input type="radio" name="q2" value="d"> JSONL 格式要求逆向解析，正向遍历会出错</label>
+  <button onclick="checkQuiz('q2','c','从后往前扫描可以在遇到第一个 /clear 时就停止——这个就是最近的。从前往后则需要扫描完整文件才能确定。')">检查答案</button>
+  <div class="feedback" id="q2-fb"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>问题 3</h3>
+  <p>一个会话被判定为 <code>wasCleared=true</code> 的条件是什么？</p>
+  <label><input type="radio" name="q3" value="a"> 文件中存在 /clear 命令</label>
+  <label><input type="radio" name="q3" value="b"> 文件中存在 /clear 命令 AND /clear 之后没有用户消息</label>
+  <label><input type="radio" name="q3" value="c"> 文件中存在 /clear 命令，无论之后是否有用户消息</label>
+  <label><input type="radio" name="q3" value="d"> token 用量在 /clear 命令后降至零</label>
+  <button onclick="checkQuiz('q3','b','需要同时满足：(1)存在 /clear；(2)/clear 之后没有用户消息。如果用户在 /clear 后又发了消息，说明会话被重新使用了——wasCleared=false。')">检查答案</button>
+  <div class="feedback" id="q3-fb"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>问题 4</h3>
+  <p>以下哪个场景下，旧会话<strong>不会</strong>被判定为"被新会话覆盖"？</p>
+  <label><input type="radio" name="q4" value="a"> 旧会话 lastUpdated=13:00，新会话 created=13:30 → 淘汰</label>
+  <label><input type="radio" name="q4" value="b"> 旧会话 lastUpdated=13:45，新会话 created=13:30 → 不淘汰</label>
+  <label><input type="radio" name="q4" value="c"> 旧会话 lastUpdated=12:00，新会话 created=12:05 → 淘汰</label>
+  <label><input type="radio" name="q4" value="d"> 旧会话 lastUpdated=14:00，新会话 created=15:00 → 淘汰</label>
+  <button onclick="checkQuiz('q4','b','新会话的创建时间(13:30)早于旧会话的最后更新时间(13:45)——旧会话在新会话创建后仍然有活动，说明用户在并行使用。不淘汰。')">检查答案</button>
+  <div class="feedback" id="q4-fb"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>问题 5</h3>
+  <p>稳定编号（webapp, webapp-2, webapp-3）的排序依据是什么？</p>
+  <label><input type="radio" name="q5" value="a"> lastUpdated——最近活跃的用原名</label>
+  <label><input type="radio" name="q5" value="b"> sessionCreated——最老的会话保留原名</label>
+  <label><input type="radio" name="q5" value="c"> totalTokens——token 最多的用原名</label>
+  <label><input type="radio" name="q5" value="d"> 文件名——字典序最靠前的用原名</label>
+  <button onclick="checkQuiz('q5','b','活跃会话按 sessionCreated 从老到新排序。最老的保留原名（webapp），后来的依次加 -2、-3。排序依据是创建时间，不是最后更新时间或 token 量。')">检查答案</button>
+  <div class="feedback" id="q5-fb"></div>
+</div>
+
+<div class="quiz" id="q6">
+  <h3>问题 6</h3>
+  <p>用户点击隐藏了一个会话，之后该会话又有新活动了（用户又用起了那个项目）。下次刷新时会发生什么？</p>
+  <label><input type="radio" name="q6" value="a"> 不会显示——一旦隐藏就永久隐藏</label>
+  <label><input type="radio" name="q6" value="b"> 自动重新显示——因为 lastUpdated > hiddenAt，扩展会从 hiddenSessions 中删除记录</label>
+  <label><input type="radio" name="q6" value="c"> 在下次 VS Code 重启后重新显示</label>
+  <label><input type="radio" name="q6" value="d"> 显示但颜色变灰表示"曾被隐藏"</label>
+  <button onclick="checkQuiz('q6','b','如果会话在隐藏后又有新活动（lastUpdated > hiddenAt），扩展会自动从 hiddenSessions 中删除该会话——"既然还在用，就别藏了"。这是合理的用户体验设计。')">检查答案</button>
+  <div class="feedback" id="q6-fb"></div>
+</div>
+
+<h2>14. 推荐深入阅读</h2>
+<ul>
+  <li><a href="https://nodejs.org/api/fs.html#fsreaddirsyncpath-options">Node.js：fs.readdirSync()</a> — 同步目录读取</li>
+  <li><a href="https://nodejs.org/api/fs.html#fsstatsyncpath-options">Node.js：fs.statSync()</a> — 获取文件 mtime</li>
+  <li><a href="https://nodejs.org/api/fs.html#fsreadfilesyncpath-options">Node.js：fs.readFileSync()</a> — 同步文件读取</li>
+  <li><a href="https://jsonlines.org/">JSON Lines 格式规范</a> — JSONL 的官方文档</li>
+  <li><a href="https://docs.anthropic.com/en/docs/build-with-claude/context-windows">Anthropic：Context Windows</a> — 不同模型的上下文窗口大小</li>
+</ul>
+
+<div class="callout">
+  <strong>💡 提问提示：</strong>如果你对 JSONL 解析、淘汰逻辑、或者数据管线中的任何一个步骤有疑问，直接在这个对话中提问。下一课将回到 UI 层——探索 <code>refreshAllSessions()</code> 的完整实现细节。
+</div>
+
+<div class="nav">
+  <a href="0003-statusbar-api.html">← Lesson 0003：状态栏 UI 原语</a>
+  <a href="../reference/vscode-extension-api-basics.html">📋 参考：VS Code 扩展 API 基础</a>
+  <a href="../reference/glossary.html">📖 术语表</a>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+</body>
+</html>

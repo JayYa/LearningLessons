@@ -1,6 +1,6 @@
 # Learning Lessons
 
-这套课程沿三条并行轨道展开：核心轨道是现代 .NET 技术纵深，从 C# 8 可空引用类型与模式匹配起步，历经 yield return 迭代器与 IAsyncEnumerable 异步流的编译器状态机拆解，深入 SynchronizationContext 的 await 续延调度核心，随后贯穿 C# 9 records 不可变类型、C# 10 记录结构体、C# 11 原始字符串字面量与列表模式、C# 12 主构造函数与集合表达式、C# 13 的 params 集合增强、新型 Lock 对象与 ref struct 三部曲，最终抵达 C# 14 的 field 关键字，构成从 Framework 4.8 到最新 .NET 的完整演进全景。工具轨道聚焦 VS Code 扩展开发底层——从扩展的 manifest 解剖与激活生命周期，到 StatusBarItem 状态栏 UI 原语，揭示扩展宿主与 API 体系的设计原理。历史轨道以《冰海战纪》为锚点，从维京时代概览、角色原型史实对照，到丹麦征服英格兰、克努特北海帝国、维京东线与瓦良格卫队，进而探索文兰——北欧人发现北美与定居失败的考古证据，最终落脚于维京社会层级结构——Jarl、Karl 与奴隶的三级秩序，为漫画叙事提供可验证的史实坐标。三条线索共同织成一张从语法表层下沉到编译器内部、从工具底层上升到历史语境的知识网络。
+这套课程沿三条独立轨道展开，各自深入一个专门领域：现代 .NET 技术纵深从 C# 8 一路推进到 C# 14，覆盖可空引用类型、异步流、records、主构造函数、集合表达式、ref struct 接口与泛型反变、field 关键字及扩展成员，构建从 Framework 4.8 到最新 .NET 的完整语言演进地图；历史轨道以《冰海战纪》为叙事锚点，从维京时代社会概览延伸到丹麦征服英格兰、北海帝国、维京东线、文兰探险、社会层级结构与基督教化；工具轨道聚焦 VS Code 扩展开发底层，从扩展解剖、激活生命周期到 StatusBarItem API 与 findActiveSessions 数据引擎。三条轨道虽主题各异，却共享同一方法论——从表层 API 下沉到内部机制，从孤立知识点串成系统认知。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
@@ -29,6 +29,7 @@
 | 19 | [Lesson 19: C# 13 — ref struct 三部曲](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/19-csharp13-ref-struct-trilogy.html) | 深入 C# 13 ref struct 接口约束与泛型反变等三部曲，解锁高性能场景新可能 |
 | 20 | [Lesson 20: C# 13 — 小特性合集](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/20-csharp13-small-features.html) | 速览 C# 13 中多项实用小特性，收尾现代 .NET 语言演进全景 |
 | 21 | [Lesson 21: C# 14 — field 关键字](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/21-csharp14-field-keyword.html) | 探索 C# 14 field 关键字，简化属性访问器的自定义逻辑编写 |
+| 22 | [Lesson 22: C# 14 — 扩展成员](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/22-csharp14-extension-members.html) | 解析 C# 14 扩展成员语法，以更自然的方式为已有类型添加方法与属性 |
 
 **参考资料：**
 - [异步流速查 · Async Streams · C# 8](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/async-streams-cheatsheet.html) — IAsyncEnumerable 消费、取消与配置速查
@@ -54,6 +55,7 @@
 | 5 | [Lesson 0005 — 维京东线与瓦良格卫队](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0005-varangian-east.html) | 探索维京人的东进之路，讲述瓦良格卫队在拜占庭帝国的传奇与历史影响 |
 | 6 | [Lesson 0006 — 文兰：北欧人发现北美与定居失败](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0006-vinland-norse-in-north-america.html) | 追寻北欧人向西探索文兰的航海壮举，解析北美定居尝试的成败与考古证据 |
 | 7 | [Lesson 0007 — 维京人的社会结构：Jarl、Karl 与奴隶](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0007-viking-social-hierarchy.html) | 拆解维京社会的三层等级体系，从贵族 Jarl、自由民 Karl 到奴隶，揭示《冰海战纪》角色的社会身份根源 |
+| 8 | [Lesson 0008 — 北欧的基督教化：从奥丁到基督](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0008-viking-christianization.html) | 追溯北欧从多神信仰到基督教化的漫长转变，理解《冰海战纪》中信仰冲突的历史根源 |
 
 **参考资料：**
 - [🗺 东部地理术语指南](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/eastern-geography-guide.html) — 拜占庭 · 罗斯 · 基辅 · 君士坦丁堡地理术语速查
@@ -72,8 +74,10 @@
 | 1 | [Lesson 0001 — VS Code 扩展的解剖结构](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0001-extension-anatomy.html) | 拆解 VS Code 扩展的 manifest、激活事件与代码骨架，理解扩展生命周期 |
 | 2 | [Lesson 0002 — 激活与生命周期](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0002-activation-lifecycle.html) | 深入 VS Code 扩展的激活事件类型与生命周期管理机制 |
 | 3 | [Lesson 0003 — StatusBarItem：状态栏 UI 原语](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0003-statusbar-api.html) | 解析 StatusBarItem API 的设计与用法，掌握状态栏 UI 元素的创建与控制 |
+| 4 | [Lesson 0004 — findActiveSessions：数据引擎](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0004-find-active-sessions.html) | 揭示 findActiveSessions 数据引擎如何驱动上下文感知，串联扩展的实时状态信息 |
 
 **参考资料：**
+- [参考：术语表](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/glossary.html) — VS Code 扩展开发核心术语速查
 - [参考：npm 包命名规则](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/npm-package-naming-rules.html) — npm 包名称约束、作用域包与命名最佳实践
 - [参考：VS Code 扩展 API 基础](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/vscode-extension-api-basics.html) — 扩展清单、贡献点与核心 API 速查
 

@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 22: C# 14 — 扩展成员</title>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
+</head>
+<body>
+
+<h1>Lesson 22: C# 14 — 扩展成员 <span class="en">Extension Members</span></h1>
+<p class="subtitle">.NET 10 LTS（2025.11）· C# 3 以来对扩展机制的最大升级 · 属性、静态扩展、运算符</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="21-csharp14-field-keyword.html">Lesson 21（field 关键字）</a>。本课是 C# 14 最大的新特性——从只能扩展方法，到可以扩展属性、静态成员、运算符。<br>
+<strong>阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/whats-new/csharp-14">Microsoft Learn: C# 14 新增功能</a> ·
+<a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/programming-guide/classes-and-structs/extension-methods">扩展成员编程指南</a> ·
+<a href="https://github.com/dotnet/csharplang/blob/main/proposals/csharp-14.0/extensions.md">C# 14 扩展成员设计提案</a>
+</div>
+
+<!-- ========================== 1. HOOK ========================== -->
+
+<h2>一、C# 3 的遗产：你只能扩展方法 <span class="en">The Limitation</span></h2>
+
+<h3>1.1 17 年了——只有一个语法</h3>
+
+<p>2007 年 C# 3 引入扩展方法。语法一直没变：<code>static</code> 方法 + <code>this</code> 修饰第一个参数。它能做的事仅限于<strong>方法调用</strong>：</p>
+
+<pre><code><span class="cmt">// C# 3~13 的扩展方法——17 年不变的语法</span>
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> EnumerableExtensions
+{
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">bool</span> IsEmpty&lt;T&gt;(<span class="kw">this</span> IEnumerable&lt;T&gt; source)
+        => !source.Any();
+}
+
+<span class="cmt">// 使用：方法调用——还行</span>
+<span class="kw">if</span> (items.IsEmpty()) { ... }
+
+<span class="cmt">// 但你<strong>不能</strong>写：</span>
+<span class="cmt">// if (items.IsEmpty) { ... }        ← 属性！不支持</span>
+<span class="cmt">// var combined = list1 + list2;     ← 运算符！不支持</span>
+<span class="cmt">// var identity = IEnumerable&lt;int&gt;.Empty;  ← 静态扩展！不支持</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>本质限制：</strong>扩展方法只能给实例"加方法"。不能加属性（<code>items.IsEmpty</code>）、不能加静态成员、不能加运算符。<code>LINQ</code> 的设计者想要这些——但没有语法支持。
+</div>
+
+<h3>1.2 C# 14 的答案：extension 块</h3>
+
+<pre><code><span class="cmt">// C# 14：一个 extension 块 = 一组扩展成员</span>
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> MyExtensions
+{
+    <span class="kw">extension</span>&lt;T&gt;(IEnumerable&lt;T&gt; source)          <span class="cmt">// ← 实例扩展块</span>
+    {
+        <span class="kw">public</span> <span class="kw">bool</span> IsEmpty => !source.Any();       <span class="cmt">// 扩展属性！</span>
+        <span class="kw">public</span> T FirstOr(T fallback)              <span class="cmt">// 扩展方法（无 this）</span>
+            => source.FirstOrDefault() ?? fallback;
+    }
+
+    <span class="kw">extension</span>&lt;T&gt;(IEnumerable&lt;T&gt;)                <span class="cmt">// ← 静态扩展块（无参数名）</span>
+    {
+        <span class="kw">public</span> <span class="kw">static</span> IEnumerable&lt;T&gt; Empty          <span class="cmt">// 静态扩展属性！</span>
+            => Enumerable.Empty&lt;T&gt;();
+
+        <span class="kw">public</span> <span class="kw">static</span> IEnumerable&lt;T&gt; <span class="kw">operator</span> +    <span class="cmt">// 扩展运算符！</span>
+            (IEnumerable&lt;T&gt; left, IEnumerable&lt;T&gt; right)
+            => left.Concat(right);
+    }
+}</code></pre>
+
+<p>三个新能力一次解锁：<strong>扩展属性</strong>、<strong>静态扩展</strong>、<strong>扩展运算符</strong>。</p>
+
+<div class="comparison">
+  <div class="old"><h4>😣 C# 3~13 — 只能加方法</h4>
+<pre><code><span class="cmt">// 每个扩展独立声明</span>
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">bool</span> IsEmpty&lt;T&gt;(
+    <span class="kw">this</span> IEnumerable&lt;T&gt; source) { }
+
+<span class="kw">public</span> <span class="kw">static</span> T FirstOr&lt;T&gt;(
+    <span class="kw">this</span> IEnumerable&lt;T&gt; source,
+    T fallback) { }
+
+<span class="cmt">// 无法表达：属性、静态、运算符</span></code></pre>
+  </div>
+  <div class="new"><h4>😎 C# 14 — 扩展块</h4>
+<pre><code><span class="kw">extension</span>&lt;T&gt;(IEnumerable&lt;T&gt; source)
+{
+    <span class="kw">public</span> <span class="kw">bool</span> IsEmpty => ...   <span class="cmt">// 属性</span>
+    <span class="kw">public</span> T FirstOr(T fb) => ... <span class="cmt">// 方法</span>
+}
+<span class="kw">extension</span>&lt;T&gt;(IEnumerable&lt;T&gt;)
+{
+    <span class="kw">public</span> <span class="kw">static</span> ... Empty => ... <span class="cmt">// 静态属性</span>
+    <span class="kw">public</span> <span class="kw">static</span> ... <span class="kw">operator</span> + <span class="cmt">// 运算符</span>
+}</code></pre>
+  </div>
+</div>
+
+<!-- ========================== 2. SYNTAX ========================== -->
+
+<h2>二、语法解剖 <span class="en">Syntax Anatomy</span></h2>
+
+<h3>2.1 extension 块的结构</h3>
+
+<div class="diagram">
+extension&lt;<span class="label">类型参数</span>&gt;(<span class="label">接收者类型</span> <span class="label">参数名</span>) <span class="label">约束</span>
+{
+    <span class="label">扩展方法</span>    public T Foo(int x) => ...;
+    <span class="label">扩展属性</span>    public bool IsReady => ...;
+    <span class="label">扩展运算符</span>  public static T operator +(T a, T b) => ...;
+}
+</div>
+
+<table>
+<tr><th>要素</th><th>必填？</th><th>说明</th></tr>
+<tr><td>类型参数 <code>&lt;T&gt;</code></td><td>可选</td><td>可带约束 <code>where T : IEquatable&lt;T&gt;</code></td></tr>
+<tr><td>接收者类型</td><td>必填</td><td>被扩展的类型，如 <code>IEnumerable&lt;T&gt;</code></td></tr>
+<tr><td>参数名</td><td>可选</td><td>有名字 → 实例扩展块（可声明属性和实例方法）。无名 → 静态扩展块（只能声明 static 成员）</td></tr>
+<tr><td>外层类</td><td>—</td><td>必须是非泛型、非嵌套的 static class</td></tr>
+</table>
+
+<h3>2.2 两种扩展块：实例 vs 静态</h3>
+
+<pre><code><span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> StringExtensions
+{
+    <span class="cmt">// ── 实例扩展块：有参数名 "text" ──</span>
+    <span class="kw">extension</span>(<span class="kw">string</span> text)                       <span class="cmt">// text 在块内可引用</span>
+    {
+        <span class="kw">public</span> <span class="kw">bool</span> IsNullOrEmpty                     <span class="cmt">// 实例属性</span>
+            => <span class="kw">string</span>.IsNullOrEmpty(text);           <span class="cmt">// ← text 被捕获引用</span>
+
+        <span class="kw">public</span> <span class="kw">string</span> Truncate(<span class="kw">int</span> max)               <span class="cmt">// 实例方法</span>
+            => text.Length <= max ? text : text[..max];
+    }
+
+    <span class="cmt">// ── 静态扩展块：无参数名 ──</span>
+    <span class="kw">extension</span>(<span class="kw">string</span>)                            <span class="cmt">// 只有类型，没有名字</span>
+    {
+        <span class="kw">public</span> <span class="kw">static</span> <span class="kw">string</span> Default => <span class="str">""</span>;          <span class="cmt">// 静态属性</span>
+
+        <span class="kw">public</span> <span class="kw">static</span> <span class="kw">string</span> <span class="kw">operator</span> *(<span class="kw">string</span> s, <span class="kw">int</span> n) <span class="cmt">// 静态运算符</span>
+            => <span class="kw">string</span>.Concat(Enumerable.Repeat(s, n));
+    }
+}
+
+<span class="cmt">// ── 调用 ──</span>
+<span class="kw">var</span> s = <span class="str">"Hello World"</span>;
+Console.WriteLine(s.IsNullOrEmpty);     <span class="cmt">// False — 实例扩展属性</span>
+Console.WriteLine(s.Truncate(<span class="num">5</span>));      <span class="cmt">// "Hello" — 实例扩展方法</span>
+Console.WriteLine(<span class="kw">string</span>.Default);      <span class="cmt">// "" — 静态扩展属性</span>
+Console.WriteLine(<span class="str">"ab"</span> * <span class="num">3</span>);             <span class="cmt">// "ababab" — 扩展运算符</span></code></pre>
+
+<div class="callout callout--info">
+<strong>关键区别：</strong>有参数名 → 实例成员（可声明属性和方法）；无参数名 → 静态成员（可声明 static 方法、static 属性、运算符）。实例块<strong>不能</strong>声明 static 成员——反之亦然。
+</div>
+
+<!-- ========================== 3. COMPILER ========================== -->
+
+<h2>三、编译器生成了什么？<span class="en">Lowering Deep Dive</span></h2>
+
+<h3>3.1 降低概览</h3>
+
+<p>extension 块被编译成多个合成类型。以这个简单的扩展属性为例：</p>
+
+<pre><code><span class="cmt">// ──── 你写的代码 ────</span>
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> E
+{
+    <span class="kw">extension</span>&lt;T&gt;(IEnumerable&lt;T&gt; source)
+    {
+        <span class="kw">public</span> <span class="kw">bool</span> IsEmpty => !source.Any();
+    }
+}
+
+<span class="cmt">// ──── 编译器生成的等效结构（简化） ────</span>
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> E
+{
+    <span class="cmt">// ① 分组类型——按 CLR 签名分组</span>
+    <span class="pnk">[CompilerGenerated]</span>
+    <span class="kw">sealed</span> <span class="kw">class</span> &lt;&gt;GroupingType_1&lt;T&gt;
+    {
+        <span class="cmt">// ② 标记类型——保留完整的 C# 级签名</span>
+        <span class="pnk">[CompilerGenerated]</span>
+        <span class="kw">static</span> <span class="kw">class</span> &lt;&gt;MarkerType
+        {
+            <span class="pnk">[CompilerGenerated]</span>
+            <span class="kw">static</span> <span class="kw">void</span> &lt;Extension&gt;$(IEnumerable&lt;T&gt; source) { }
+        }
+
+        <span class="cmt">// ③ 骨架成员——保留原始签名，体为 throw null</span>
+        <span class="pnk">[ExtensionMarkerName("&lt;&gt;MarkerType")]</span>
+        <span class="kw">public</span> <span class="kw">bool</span> IsEmpty => <span class="kw">throw</span> <span class="kw">null</span>;
+    }
+
+    <span class="cmt">// ④ 实际实现方法——在顶层 static class 中</span>
+    <span class="pnk">[Extension]</span>
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">bool</span> IsEmpty&lt;T&gt;(IEnumerable&lt;T&gt; source)
+        => !source.Any();
+}
+
+<span class="cmt">// ──── 调用 items.IsEmpty 被编译为 ────</span>
+<span class="cmt">// E.IsEmpty(items)  ← 普通的静态方法调用</span></code></pre>
+
+<div class="callout callout--info">
+<strong>核心结论：</strong>和经典扩展方法一样，extension 块<strong>不引入任何新的运行时概念</strong>。最终产物是带有 <code>[Extension]</code> 特性的普通静态方法。合成类型（分组类型、标记类型）只存在于元数据中，用于 IDE 导航和重载决议。
+</div>
+
+<h3>3.2 为什么需要标记类型？</h3>
+
+<p>经典扩展方法的一个问题是——<strong>重载决议只看 CLR 签名</strong>。C# 的 null 可空注解、ref 修饰符等在 CLR 层面被擦除。标记类型保留了<strong>完整的 C# 级签名</strong>（含参数名、refness、nullable），使编译器能在调用点精确匹配。</p>
+
+<pre><code><span class="cmt">// 两个扩展块——CLR 层面可能"看起来一样"</span>
+<span class="kw">extension</span>(<span class="kw">string</span>? text)    { <span class="cmt">/* nullable string */</span> }
+<span class="kw">extension</span>(<span class="kw">string</span> text)     { <span class="cmt">/* non-null string  */</span> }
+
+<span class="cmt">// ↑ 标记类型保留了 C# 级的 ? 差异，编译器能正确分辨</span></code></pre>
+
+<!-- ========================== 4. SCENARIOS ========================== -->
+
+<h2>四、实战场景 <span class="en">Real-World Scenarios</span></h2>
+
+<h3>4.1 LINQ 风格的流畅 API <span class="badge badge--daily">日常</span></h3>
+
+<p>最自然的应用——给集合类型加属性和运算符：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> CollectionExtensions
+{
+    <span class="kw">extension</span>&lt;T&gt;(IEnumerable&lt;T&gt; source)
+    {
+        <span class="kw">public</span> <span class="kw">bool</span> IsEmpty => !source.Any();
+        <span class="kw">public</span> <span class="kw">bool</span> IsNotEmpty => source.Any();
+        <span class="kw">public</span> T? FirstOrNull => source.FirstOrDefault();  <span class="cmt">// 属性！</span>
+        <span class="kw">public</span> <span class="kw">int</span> Count => source.Count();                  <span class="cmt">// 属性！</span>
+    }
+
+    <span class="kw">extension</span>&lt;T&gt;(IEnumerable&lt;T&gt;)
+    {
+        <span class="kw">public</span> <span class="kw">static</span> IEnumerable&lt;T&gt; <span class="kw">operator</span> +
+            (IEnumerable&lt;T&gt; left, IEnumerable&lt;T&gt; right)
+            => left.Concat(right);
+    }
+}
+
+<span class="cmt">// 使用——像操作一等公民一样操作集合：</span>
+<span class="kw">if</span> (orders.IsNotEmpty)                    <span class="cmt">// 属性读起来比 IsNotEmpty() 自然</span>
+{
+    <span class="kw">var</span> all = activeOrders + archivedOrders; <span class="cmt">// 运算符！</span>
+    Console.WriteLine(<span class="str">$"共 {all.Count} 条"</span>); <span class="cmt">// 属性！</span>
+}</code></pre>
+
+<div class="callout callout--good">
+<strong>可读性飞跃：</strong><code>items.IsEmpty</code>（属性）比 <code>items.IsEmpty()</code>（方法）更自然——语义上"是否为空"是一个<strong>状态查询</strong>，不是动作。属性正是为状态查询设计的。
+</div>
+
+<h3>4.2 分层架构——按层扩展 DTO <span class="badge badge--daily">日常</span></h3>
+
+<pre><code><span class="cmt">// Domain 层——纯净的 DTO</span>
+<span class="kw">public</span> <span class="kw">class</span> OrderDto
+{
+    <span class="kw">public</span> <span class="kw">int</span> Id { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">decimal</span> Amount { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> DateTime CreatedAt { <span class="kw">get</span>; <span class="kw">set</span>; }
+}
+
+<span class="cmt">// UI 层——显示逻辑（扩展属性）</span>
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> OrderPresentationExtensions
+{
+    <span class="kw">extension</span>(OrderDto order)
+    {
+        <span class="kw">public</span> <span class="kw">string</span> DisplayAmount => <span class="str">$"¥{order.Amount:N2}"</span>;
+        <span class="kw">public</span> <span class="kw">string</span> TimeAgo => (DateTime.Now - order.CreatedAt) switch
+        {
+            { TotalHours: < <span class="num">1</span> } => <span class="str">"刚刚"</span>,
+            { TotalHours: < <span class="num">24</span> } => <span class="str">$"{(int)(DateTime.Now - order.CreatedAt).TotalHours}小时前"</span>,
+            <span class="kw">var</span> d => <span class="str">$"{d.Days}天前"</span>
+        };
+    }
+}
+
+<span class="cmt">// 使用：DTO 保持纯净，展示逻辑在扩展中</span>
+&lt;div&gt;@order.DisplayAmount · @order.TimeAgo&lt;/div&gt;</code></pre>
+
+<h3>4.3 ref 扩展——直接修改 struct <span class="badge badge--rare">进阶</span></h3>
+
+<pre><code><span class="kw">public</span> <span class="kw">struct</span> Counter { <span class="kw">public</span> <span class="kw">int</span> Value; }
+
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> CounterExtensions
+{
+    <span class="kw">extension</span>(<span class="kw">ref</span> Counter c)             <span class="cmt">// ← ref 修饰——按引用传递</span>
+    {
+        <span class="kw">public</span> <span class="kw">void</span> Increment() => c.Value++;
+        <span class="kw">public</span> <span class="kw">void</span> Reset() => c.Value = <span class="num">0</span>;
+    }
+}
+
+<span class="kw">var</span> c = <span class="kw">new</span> Counter { Value = <span class="num">1</span> };
+c.Increment();
+Console.WriteLine(c.Value);             <span class="cmt">// 2——直接修改了原 struct</span>
+c.Reset();
+Console.WriteLine(c.Value);             <span class="cmt">// 0</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>注意：</strong>ref 扩展和 by-value 扩展<strong>必须用不同的 extension 块</strong>——ref 块和普通块不能混合。<code>private</code> 成员仍然不可访问。
+</div>
+
+<!-- ========================== 5. RULES ========================== -->
+
+<h2>五、规则与限制 <span class="en">Rules &amp; Constraints</span></h2>
+
+<h3>5.1 解析优先级——实例成员始终优先</h3>
+
+<p>这是最重要的规则：<strong>类型自身的成员永远优先于扩展成员。</strong>扩展成员只是"候补"——只有类型自身没有匹配成员时才会被选中。</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">class</span> Person
+{
+    <span class="kw">public</span> <span class="kw">string</span> FullName => <span class="str">$"{First} {Last}"</span>;  <span class="cmt">// ← 自身有 FullName</span>
+    <span class="kw">public</span> <span class="kw">string</span> First { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="kw">string</span> Last { <span class="kw">get</span>; <span class="kw">set</span>; }
+}
+
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> Ext
+{
+    <span class="kw">extension</span>(Person p)
+    {
+        <span class="kw">public</span> <span class="kw">string</span> FullName => <span class="str">"from extension"</span>;  <span class="cmt">// 永远不会被调用！</span>
+    }
+}
+
+<span class="kw">var</span> p = <span class="kw">new</span> Person { First = <span class="str">"Alice"</span>, Last = <span class="str">"Smith"</span> };
+Console.WriteLine(p.FullName);  <span class="cmt">// "Alice Smith"——类自身的 FullName 胜出</span></code></pre>
+
+<h3>5.2 完整限制清单</h3>
+
+<table>
+<tr><th>类别</th><th>限制</th></tr>
+<tr><td>禁止的修饰符</td><td><code>abstract</code>、<code>virtual</code>、<code>override</code>、<code>new</code>、<code>sealed</code>、<code>partial</code>、<code>protected</code> 系列</td></tr>
+<tr><td>属性限制</td><td>不能有 <code>init</code> 访问器（只能 get/set）</td></tr>
+<tr><td>外层类</td><td>必须是 non-generic、non-nested、static class</td></tr>
+<tr><td>作用域</td><td>通过 <code>using</code> 命名空间引入——与经典扩展方法相同</td></tr>
+<tr><td>命名冲突</td><td>成员名不能与外层静态类名或扩展类型名相同</td></tr>
+<tr><td>保留字</td><td><code>extension</code> 成为新关键字——类型和别名不能再叫 extension</td></tr>
+<tr><td>入口点</td><td>extension 块中的方法不能作为程序入口点（Main）</td></tr>
+<tr><td>可见性</td><td>遵守被扩展类型的成员可见性——不能访问 private 成员</td></tr>
+</table>
+
+<h3>5.3 作用域——using 决定一切</h3>
+
+<pre><code><span class="cmt">// Extensions.cs —— 在 MyApp.Extensions 命名空间中</span>
+<span class="kw">namespace</span> MyApp.Extensions;
+
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> StringExt
+{
+    <span class="kw">extension</span>(<span class="kw">string</span> s)
+    {
+        <span class="kw">public</span> <span class="kw">bool</span> IsUrl => Uri.TryCreate(s, UriKind.Absolute, <span class="kw">out</span> _);
+    }
+}
+
+<span class="cmt">// ──── 另一个文件 ────</span>
+<span class="kw">using</span> MyApp.Extensions;  <span class="cmt">// ← 必须显式导入！否则 IsUrl 不可见</span>
+
+<span class="kw">var</span> url = <span class="str">"https://example.com"</span>;
+Console.WriteLine(url.IsUrl);  <span class="cmt">// True——using 引入后才可见</span></code></pre>
+
+<!-- ========================== 6. COMPARISON ========================== -->
+
+<h2>六、经典扩展方法 vs extension 块 <span class="en">Old vs New</span></h2>
+
+<table>
+<tr><th>场景</th><th>C# 3~13 经典写法</th><th>C# 14 extension 块</th></tr>
+<tr>
+  <td>实例方法</td>
+  <td><code>public static bool Foo(this T x, int y)</code></td>
+  <td><code>extension(T x) { public bool Foo(int y) => ...; }</code></td>
+</tr>
+<tr>
+  <td>实例属性</td>
+  <td>❌ 不支持</td>
+  <td><code>extension(T x) { public bool P => ...; }</code></td>
+</tr>
+<tr>
+  <td>静态方法</td>
+  <td>❌ 不支持（只能用普通 static 方法）</td>
+  <td><code>extension(T) { public static T Foo() => ...; }</code></td>
+</tr>
+<tr>
+  <td>静态属性</td>
+  <td>❌ 不支持</td>
+  <td><code>extension(T) { public static T Default => ...; }</code></td>
+</tr>
+<tr>
+  <td>运算符</td>
+  <td>❌ 不支持</td>
+  <td><code>extension(T) { public static T operator +(T a, T b) => ...; }</code></td>
+</tr>
+<tr>
+  <td>ref 扩展</td>
+  <td><code>public static void Foo(this ref T x)</code></td>
+  <td><code>extension(ref T x) { public void Foo() => ...; }</code></td>
+</tr>
+<tr>
+  <td>编译产物</td>
+  <td>static 方法 + [Extension]</td>
+  <td>同左——完全兼容</td>
+</tr>
+</table>
+
+<div class="callout callout--info">
+<strong>兼容性：</strong>两种语法可以共存于同一个 static class 中。经典语法的实例扩展方法和 extension 块的实例扩展成员在同一个声明空间内——<strong>不能有签名冲突</strong>。对调用方而言，完全透明——两种语法产出的 IL 相同。
+</div>
+
+<!-- ========================== 7. QUIZ ========================== -->
+
+<h2>七、测验 <span class="en">Quiz</span></h2>
+
+<div class="quiz" id="q1">
+  <h3>1/5 · 语法基础</h3>
+  <p class="question">以下哪个 extension 块声明<strong>有语法错误</strong>？</p>
+  <label><input type="radio" name="q1" value="a">A. <code>extension(string s) { public int Len => s.Length; }</code></label>
+  <label><input type="radio" name="q1" value="b">B. <code>extension(string) { public static string Empty => ""; }</code></label>
+  <label><input type="radio" name="q1" value="c">C. <code>extension(string s) { public static int Len => s.Length; }</code></label>
+  <label><input type="radio" name="q1" value="d">D. <code>extension(ref int x) { public void Inc() => x++; }</code></label>
+  <div class="feedback" id="f_q1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>2/5 · 解析优先级</h3>
+  <p class="question">以下代码输出什么？</p>
+  <pre><code><span class="kw">public</span> <span class="kw">class</span> Box
+{
+    <span class="kw">public</span> <span class="kw">string</span> Label => <span class="str">"instance"</span>;
+}
+
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> Ext
+{
+    <span class="kw">extension</span>(Box b)
+    {
+        <span class="kw">public</span> <span class="kw">string</span> Label => <span class="str">"extension"</span>;
+        <span class="kw">public</span> <span class="kw">string</span> Tag => <span class="str">"extension-tag"</span>;
+    }
+}
+
+<span class="kw">var</span> box = <span class="kw">new</span> Box();
+Console.WriteLine(<span class="str">$"{box.Label}/{box.Tag}"</span>);</code></pre>
+  <label><input type="radio" name="q2" value="a">A. extension/extension-tag</label>
+  <label><input type="radio" name="q2" value="b">B. instance/extension-tag</label>
+  <label><input type="radio" name="q2" value="c">C. instance/编译错误</label>
+  <label><input type="radio" name="q2" value="d">D. extension/编译错误</label>
+  <div class="feedback" id="f_q2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>3/5 · ref 扩展</h3>
+  <p class="question">以下代码输出什么？</p>
+  <pre><code><span class="kw">public</span> <span class="kw">struct</span> Num { <span class="kw">public</span> <span class="kw">int</span> V; }
+
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> Ext
+{
+    <span class="kw">extension</span>(Num n)      { <span class="kw">public</span> <span class="kw">void</span> ByVal()  => n.V = <span class="num">99</span>; }
+    <span class="kw">extension</span>(<span class="kw">ref</span> Num n)  { <span class="kw">public</span> <span class="kw">void</span> ByRef()  => n.V = <span class="num">99</span>; }
+}
+
+<span class="kw">var</span> x = <span class="kw">new</span> Num { V = <span class="num">1</span> };
+x.ByVal();
+Console.Write(x.V + <span class="str">" "</span>);
+x.ByRef();
+Console.Write(x.V);</code></pre>
+  <label><input type="radio" name="q3" value="a">A. 1 99</label>
+  <label><input type="radio" name="q3" value="b">B. 99 99</label>
+  <label><input type="radio" name="q3" value="c">C. 1 1</label>
+  <label><input type="radio" name="q3" value="d">D. 99 1</label>
+  <div class="feedback" id="f_q3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>4/5 · 编译器产物</h3>
+  <p class="question">以下关于 extension 块编译产物的描述，哪个是<strong>正确</strong>的？</p>
+  <label><input type="radio" name="q4" value="a">A. extension 块在运行时创建动态代理对象，有微小性能开销</label>
+  <label><input type="radio" name="q4" value="b">B. extension 块编译为带有 <code>[Extension]</code> 特性的普通静态方法，零运行时开销</label>
+  <label><input type="radio" name="q4" value="c">C. 每个 extension 块生成一个新的运行时类型包装原始对象</label>
+  <label><input type="radio" name="q4" value="d">D. extension 块编译为 DLR（动态语言运行时）调用</label>
+  <div class="feedback" id="f_q4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>5/5 · 实战判断</h3>
+  <p class="question">以下哪个场景<strong>最适合</strong>用 extension 块（而非其他方案）？</p>
+  <label><input type="radio" name="q5" value="a">A. 给一个 sealed 第三方类型添加一个计算属性</label>
+  <label><input type="radio" name="q5" value="b">B. 给自定义类添加一个依赖私有字段的复杂方法</label>
+  <label><input type="radio" name="q5" value="c">C. 覆盖第三方类型的现有虚方法行为</label>
+  <label><input type="radio" name="q5" value="d">D. 给所有类型添加一个序列化方法</label>
+  <div class="feedback" id="f_q5"></div>
+
+  <button onclick="checkAll()">提交全部答案</button>
+  <div class="score" id="score" style="display:none"></div>
+</div>
+
+<!-- ========================== 8. NEXT ========================== -->
+
+<h2>八、extension 块之后是什么？<span class="en">What's Next</span></h2>
+
+<p>extension 块是 C# 14 的旗舰特性——它从根本上改变了扩展的叙事。但 C# 14 还有很多好东西：Lambda 参数修饰符的无类型简化、Null 条件赋值、nameof 支持未绑定泛型。</p>
+
+<div class="timeline">
+  <div class="timeline-item"><div class="year">C# 3</div><div class="plat">.NET 3.5</div><div class="lang">扩展方法</div></div>
+  <div class="timeline-item"><div class="year">C# 13</div><div class="plat">.NET 9</div><div class="lang">field 预览</div></div>
+  <div class="timeline-item current"><div class="year">C# 14</div><div class="plat">.NET 10 LTS</div><div class="lang">扩展成员 ✅</div></div>
+  <div class="timeline-item"><div class="year">→ Next</div><div class="plat">C# 14</div><div class="lang">修饰符+赋值+泛型</div></div>
+</div>
+
+<p class="mild"><a href="../reference/nrt-cheatsheet.html">📖 NRT 速查</a> · <a href="21-csharp14-field-keyword.html">← L21: field 关键字</a> · <a href="23-csharp14-mid-features.html">L23: Lambda 修饰符 + Null 赋值 + nameof 泛型 →</a></p>
+
+<hr class="section-divider">
+
+<div class="lesson-footer">
+<p><strong>推荐阅读：</strong><a href="https://github.com/dotnet/csharplang/blob/main/proposals/csharp-14.0/extensions.md">C# 14 扩展成员设计提案</a> —— 完整的语言规范，含降低策略、标记类型设计、作用域规则。</p>
+<p><strong>课后实操：</strong>找到现有项目中 <code>IsNullOrEmpty</code>、<code>HasItems</code> 等扩展方法——将它们迁移到扩展属性。给一个集合类型添加 <code>+</code> 运算符扩展。</p>
+<p><strong>有问题？</strong>追问编译器降低细节、与经典扩展方法的互操作、或特定场景的设计最佳实践——你的教师（Claude）随时在。</p>
+</div>
+
+<script src="../assets/scripts/quiz.js"></script>
+<script>
+const answers = { q1: 'c', q2: 'b', q3: 'a', q4: 'b', q5: 'a' };
+const explanations = {
+  q1: { correct: '✅ 正确！C——实例扩展块（有参数名 s）只能声明实例成员，不能声明 static 成员。去掉 static 就合法了。', wrong: '❌ 答案是 C。实例扩展块（有参数名）不能声明 static 成员——静态成员只能在无参数名的静态扩展块中声明。A/B/D 均合法。' },
+  q2: { correct: '✅ 正确！Label 在 Box 类自身存在 → 实例成员优先，输出 "instance"。Tag 只在 extension 中存在 → 扩展生效，输出 "extension-tag"。', wrong: '❌ 答案是 B。box.Label 绑定到类自身的 Label（"instance"——实例始终优先），box.Tag 只有扩展提供 → "extension-tag"。' },
+  q3: { correct: '✅ 正确！ByVal() 修改的是 struct 的副本（by-value），x.V 不变=1。ByRef() 修改的是原 struct（ref），x.V 变为 99。输出 "1 99"。', wrong: '❌ 答案是 A。ByVal() 操作 struct 副本——原 x.V 保持 1。ByRef() 操作原值——x.V 变为 99。关键：ref 扩展对 struct 至关重要。' },
+  q4: { correct: '✅ 正确！和经典扩展方法完全一样——extension 块编译为带有 [Extension] 特性的普通 static 方法。合成类型只存在于元数据中，不参与运行时。', wrong: '❌ 答案是 B。extension 块是纯编译时概念——产物是普通 static 方法 + [Extension] 特性，调用被编译为静态方法调用，零运行时开销。' },
+  q5: { correct: '✅ 正确！A 是扩展成员的经典场景——类型不在你控制下（sealed/第三方），你需要添加计算属性。B 应直接在类中实现，C 不可能（扩展不能覆盖），D 用泛型约束即可。', wrong: '❌ 答案是 A。sealed 类型无法继承——扩展是唯一选择。B 应直接写在类中（访问 private 字段），C 不可能（扩展不能覆盖），D 用接口+泛型约束更合适。' },
+};
+function checkAll() { Quiz.checkAll(answers, explanations); }
+</script>
+</body>
+</html>

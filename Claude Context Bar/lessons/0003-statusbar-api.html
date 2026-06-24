@@ -33,6 +33,11 @@
   点击任意条目可以隐藏它，悬停可以看到详细的 token 用量分解。这些条目在会话文件变化时<strong>实时更新</strong>。
 </div>
 
+<div class="callout">
+  <strong>🤔 为什么偏偏是状态栏？</strong>VS Code 给了扩展很多显示位置——侧边栏 TreeView、独立标签页 WebviewPanel、悬停卡片 HoverProvider、右上角通知……但 Context 用量是一个<strong>状态指标</strong>（类似行号、编码），需要<strong>始终可见但不抢占注意力</strong>。状态栏是这个场景的天然匹配。侧边栏 TreeView 可以展示更丰富的结构（每个会话展开看 token 分解），代价是需要用户主动打开侧边栏。<br><br>
+  本课程聚焦于 claude-context-bar 的实际选择。其他显示位置的概念会在后续课程中作为扩展视野介绍。
+</div>
+
 <h2>2. 创建 StatusBarItem</h2>
 
 <p>VS Code 提供两个创建方法，用于不同的<strong>对齐方向</strong>：</p>
@@ -87,6 +92,29 @@
 <div class="callout">
   <strong>📐 优先级数值经验法则：</strong>VS Code 原生条目通常占据 0–800 的范围。如果你想确保自己的条目比原生条目更靠左，使用 <strong>900+</strong> 的优先级。claude-context-bar 用 900 就是这个原因。
 </div>
+
+<div class="callout">
+  <strong>🎯 一句话记住优先级：</strong><br><br>
+  不管是 Left 还是 Right 对齐，<strong>优先级数字越大，条目越靠左</strong>。别管方向——记住"大数字 = 靠左"就够了。<br><br>
+  原因是 Left 区和 Right 区的渲染方向不同，但结果一样：Left 区从左往右填（大号先占位），Right 区"大号更稳固所以放安全位置（靠左）"。视觉效果是一致的。
+</div>
+
+<h3>2.3 状态栏渲染示意图</h3>
+
+<pre><span class="cmt">状态栏全长：</span>
+┌─────────────────────────────────────────────────────────────┐
+│ [Left 区]               [弹性空白]            [Right 区]     │
+│                                                             │
+│ Priority:  1000 ──→ 500                1000 ──→ 500         │
+│ Preview:   [A][B]    [C]     ...       [X][Y]    [Z]       │
+│            左 ──→ 右                     左 ──→ 右           │
+│                                                             │
+│ 渲染方向:   → 从左往右填                  ← 从右往左填        │
+│ 大数字:     先抢到左边的好位置              更稳固，放在左边    │
+└─────────────────────────────────────────────────────────────┘
+
+<span class="cmt">结论：不管你用 Left 还是 Right，数字大的永远在左边。</span>
+<span class="cmt">区别只在于 Left 区从窗口左边缘开始排队，Right 区从窗口右边缘开始排队。</span></pre>
 
 <h2>3. StatusBarItem 的属性与方法</h2>
 
@@ -227,7 +255,90 @@ vscode.workspace.onDidChangeConfiguration(e => {
   <strong>⚠️ 常见错误：</strong>只 <code>dispose()</code> 不 <code>delete</code>。已 dispose 的 StatusBarItem 对象仍然占据 Map 的键，下次遍历时可能尝试访问它的属性——VS Code 会抛出异常提示"对象已 disposed"。反过来，只 <code>delete</code> 不 <code>dispose</code> 会导致状态栏条目一直显示（僵尸条目）。
 </div>
 
-<h2>5. ThemeColor：自适应主题的颜色系统</h2>
+<h2>5. 数据模型：sessionFile 作为主键</h2>
+
+<p>
+  状态栏 UI 的背后是一个<strong>以 <code>sessionFile</code> 为索引的数据模型</strong>。理解它是理解整个扩展数据流的关键。
+</p>
+
+<h3>5.1 sessionFile 是什么</h3>
+
+<p>
+  <code>sessionFile</code> 就是 Claude Code 会话 JSONL 文件的<strong>磁盘完整路径</strong>：
+</p>
+
+<pre><span class="cmt">C:\Users\xiaos\.claude\projects\C--dev-webapp\a1b2c3d4.jsonl
+                                        \e5f6g7h8.jsonl</span></pre>
+
+<p>
+  一个 session 有 <code>projectName</code>（显示名，可能重复）、<code>sessionId</code>（文件名的前 8 位），但只有 <code>sessionFile</code> 是<strong>绝对唯一</strong>的——磁盘上不可能有两个同路径的文件。因此它充当了整个扩展的<strong>主键</strong>：
+</p>
+
+<pre><span class="cmt">// sessionFile 在代码中扮演的所有"索引"角色</span>
+statusBarItems.get(session.sessionFile)       <span class="cmt">// Map 的 key</span>
+hiddenSessions.set(sessionFile, Date.now())   <span class="cmt">// 隐藏列表的 key</span>
+seenPaths.add(session.sessionFile)            <span class="cmt">// Set 的成员</span>
+arguments: [session.sessionFile]              <span class="cmt">// 命令参数——点击时传递给 hideSession 回调</span></pre>
+
+<div class="callout">
+  <strong>🔑 一句话：</strong><code>sessionFile</code> 就是会话的"身份证号"。整个扩展中所有需要"找某个会话"的地方，都用它当索引。
+</div>
+
+<h3>5.2 全局注册表：statusBarItems Map</h3>
+
+<p>
+  <code>statusBarItems</code> 是一个 <code>Map&lt;string, StatusBarEntry&gt;</code>——它是扩展的"条目注册表"，在 <code>refreshAllSessions()</code> 调用之间<strong>持续存在</strong>（定义在模块顶层，不是函数内的局部变量）。
+</p>
+
+<pre><span class="cmt">// 每次 refreshAllSessions() 中的查找逻辑</span>
+<span class="kw">let</span> entry = statusBarItems.get(session.sessionFile);  <span class="cmt">// 先查 Map：这个会话已经有条目了吗？</span>
+<span class="kw">if</span> (!entry) {
+    <span class="cmt">// 没有——创建一个新条目，登记到 Map</span>
+    entry = { item, sessionFile: session.sessionFile };
+    statusBarItems.set(session.sessionFile, entry);
+}
+<span class="cmt">// 有——复用现有条目，更新属性即可</span></pre>
+
+<p>
+  这个设计保证了<strong>同一个会话在多次刷新之间复用同一个 StatusBarItem 对象</strong>——不会因为刷新而闪烁或重新排列。
+</p>
+
+<h3>5.3 清理机制：seenPaths 的标记-清除模式</h3>
+
+<p>
+  <code>seenPaths</code> 是 <code>refreshAllSessions()</code> 内部的一个局部 <code>Set</code>，用于实现经典的<strong>标记-清除（mark-and-sweep）</strong>算法：
+</p>
+
+<pre><span class="cmt">// refreshAllSessions() 中 seenPaths 的完整生命周期</span>
+<span class="cmt">// ═══ 阶段一：标记 ═══</span>
+<span class="kw">const</span> seenPaths = <span class="kw">new</span> Set&lt;<span class="kw">string</span>&gt;();         <span class="cmt">// 每次刷新从零开始</span>
+
+<span class="kw">for</span> (<span class="kw">const</span> session <span class="kw">of</span> sessions) {
+    seenPaths.add(session.sessionFile);       <span class="cmt">// "这个会话我这次看到了"</span>
+    <span class="cmt">// ... 创建或更新 StatusBarItem ...</span>
+}
+
+<span class="cmt">// ═══ 阶段二：清除 ═══</span>
+<span class="kw">for</span> (<span class="kw">const</span> [sessionFile, entry] <span class="kw">of</span> statusBarItems) {
+    <span class="kw">if</span> (!seenPaths.has(sessionFile)) {      <span class="cmt">// "在 statusBarItems 中，但这次没看到"</span>
+        entry.item.dispose();                 <span class="cmt">// → 不活跃了，干掉</span>
+        statusBarItems.delete(sessionFile);
+    }
+}
+<span class="cmt">// seenPaths 随函数返回销毁——不保留任何状态</span></pre>
+
+<table>
+  <tr><th>数据结构</th><th>作用域</th><th>作用</th></tr>
+  <tr><td><code>statusBarItems</code>（Map）</td><td>模块全局</td><td>长期记忆——"当前有哪些条目"</td></tr>
+  <tr><td><code>seenPaths</code>（Set）</td><td><code>refreshAllSessions()</code> 局部</td><td>一次性快照——"本次扫描看到了哪些会话"</td></tr>
+  <tr><td><code>hiddenSessions</code>（Map）</td><td>模块全局</td><td>用户手动隐藏的会话及其时间戳</td></tr>
+</table>
+
+<p>
+  <strong>判断标准极其简单：</strong>一个会话不在此次 <code>findActiveSessions()</code> 的返回结果中 → 它的 <code>sessionFile</code> 不在 <code>seenPaths</code> 中 → 不活跃 → 清理。
+</p>
+
+<h2>6. ThemeColor：自适应主题的颜色系统</h2>
 
 <p>
   claude-context-bar 没有硬编码颜色值（如 <code>#ff0000</code>），而是使用了 VS Code 的 <code>ThemeColor</code>：
@@ -250,7 +361,7 @@ vscode.workspace.onDidChangeConfiguration(e => {
   <strong>🆕 对你来说：</strong>如果你来自桌面/移动开发背景，<code>ThemeColor</code> 类似于 Android 的 <code>?attr/colorError</code> 或 iOS 的 <code>UIColor.systemRed</code>——都是"让系统根据上下文决定具体颜色"的间接引用。<strong>永远不要</strong>在 VS Code 扩展中硬编码 UI 颜色，除非你确定用户永远用同一款主题。
 </div>
 
-<h2>6. refreshAllSessions() 的整体结构</h2>
+<h2>7. refreshAllSessions() 的整体结构</h2>
 
 <p>现在你已经有足够的知识来理解 <code>refreshAllSessions()</code> 的完整结构。打开 <a href="../temp_repo/src/extension.ts">extension.ts</a> 第 590 行，它的逻辑框架如下：</p>
 
@@ -266,7 +377,51 @@ vscode.workspace.onDidChangeConfiguration(e => {
   这个五步循环在文件变化、定时器到期、配置修改时<strong>反复执行</strong>。StatusBarItem 是这个循环的"输出端"——所有数据收集和处理最终都投射到这几个状态栏条目上。
 </p>
 
-<h2>7. 练习：追踪一个条目的完整生命周期</h2>
+<h2>8. 同项目多会话的命名</h2>
+
+<p>
+  如果你在同一个项目（如 <code>C:\dev\webapp</code>）中同时开了多个 Claude Code 会话，<code>findActiveSessions()</code> 会自动给它们分配<strong>稳定编号</strong>：
+</p>
+
+<pre><span class="cmt">同一个 projectName 的所有会话被放入一个 projectGroups Map</span>
+<span class="cmt">  ↓</span>
+<span class="cmt">组内按创建时间排序，过滤掉被淘汰的（/clear 的、被新会话覆盖的）</span>
+<span class="cmt">  ↓</span>
+<span class="cmt">按创建时间从老到新排序</span>
+<span class="cmt">  ↓</span>
+最老的 → 保留原名  <span class="str">'webapp'</span>
+第二个 → <span class="str">'webapp-2'</span>
+第三个 → <span class="str">'webapp-3'</span>
+<span class="cmt">  ... 以此类推</span></pre>
+
+<p>
+  编号是<strong>稳定的</strong>——排序依据是 <code>sessionCreated</code> 时间戳，最老的永远是原始名，后来的按时间顺序递增。不会因为某次刷新顺序变了就让 <code>webapp-2</code> 突然变成 <code>webapp</code>。
+</p>
+
+<h3>8.1 compact 模式下的显示</h3>
+
+<p>
+  当用户开启 <code>compactMode</code> 后，<code>getShortName()</code> 会把项目名缩写，但<strong>会话编号后缀会被保留</strong>：
+</p>
+
+<pre><span class="cmt">normal 模式：  </span>webapp-2: 72%
+<span class="cmt">compact 模式： </span>W-2: 72%
+
+<span class="cmt">// getShortName 的缩写逻辑（extension.ts 第 256 行）：</span>
+<span class="cmt">// 多单词 → 首字母缩写：my-cool-project → MCP</span>
+<span class="cmt">// 单单词 → 首字母 + 尾音节：typescript → Tscript</span>
+<span class="cmt">// 短名（≤5 字符）→ 保持不变</span>
+<span class="cmt">// 会话编号（-2, -3）→ 始终保留</span></pre>
+
+<p>
+  用户还可以在 <code>settings.json</code> 中通过 <code>claudeContextBar.shortNames</code> 给特定项目自定义显示名，完全覆盖自动缩写。
+</p>
+
+<div class="callout">
+  <strong>📌 下一课预告：</strong><code>findActiveSessions()</code> 是这一切的数据来源——它负责扫描文件系统、解析 JSONL、过滤淘汰的会话、分配编号。Lesson 0004 将完整剖析它。
+</div>
+
+<h2>9. 练习：追踪一个条目的完整生命周期</h2>
 
 <ol>
   <li>打开 <a href="../temp_repo/src/extension.ts">extension.ts</a>，在第 662 行找到 <code>createStatusBarItem</code> 调用</li>
@@ -275,7 +430,7 @@ vscode.workspace.onDidChangeConfiguration(e => {
   <li>回到 <code>activate()</code> 函数（第 36 行），画出三条触发 <code>refreshAllSessions()</code> 的路径</li>
 </ol>
 
-<h2>8. 知识检查</h2>
+<h2>10. 知识检查</h2>
 
 <div class="quiz" id="q1">
   <h3>问题 1</h3>
@@ -321,7 +476,29 @@ vscode.workspace.onDidChangeConfiguration(e => {
   <div class="feedback" id="q4-fb"></div>
 </div>
 
-<h2>9. 推荐深入阅读</h2>
+<div class="quiz" id="q5">
+  <h3>问题 5</h3>
+  <p>对于 <strong>Left</strong> 对齐的 StatusBarItem，优先级 1000 和优先级 100 哪个更靠左？</p>
+  <label><input type="radio" name="q5" value="a"> 优先级 100——Left 对齐下数字越小越靠左</label>
+  <label><input type="radio" name="q5" value="b"> 优先级 1000——不管 Left 还是 Right，数字越大越靠左</label>
+  <label><input type="radio" name="q5" value="c"> Left 对齐下两者位置相同，因为 Left 区不比较优先级</label>
+  <label><input type="radio" name="q5" value="d"> 优先级 1000 靠右——Left 对齐的逻辑和 Right 相反</label>
+  <button onclick="checkQuiz('q5','b','优先级规则和左右无关——数字越大的条目越靠左。Left 区的逻辑是"大号先占位"，Right 区的逻辑是"大号更稳固所以放左边"。原因不同，结果一样。')">检查答案</button>
+  <div class="feedback" id="q5-fb"></div>
+</div>
+
+<div class="quiz" id="q6">
+  <h3>问题 6</h3>
+  <p>在 claude-context-bar 中，<code>sessionFile</code> 充当什么角色？</p>
+  <label><input type="radio" name="q6" value="a"> 仅用于显示——是状态栏条目上展示的文件名</label>
+  <label><input type="radio" name="q6" value="b"> 会话的主键——作为 statusBarItems Map 的 key、hiddenSessions 的 key、seenPaths Set 的成员、命令参数</label>
+  <label><input type="radio" name="q6" value="c"> 是 sessionId 的别名——两者完全等价，可以互换使用</label>
+  <label><input type="radio" name="q6" value="d"> 仅在 dispose 清理阶段使用——用于找到需要销毁的条目</label>
+  <button onclick="checkQuiz('q6','b','sessionFile 是会话JSONL文件的磁盘完整路径，是整个扩展中唯一绝对不重复的标识符。它在 Map、Set、命令参数等多种场景中充当索引——是贯穿全代码的主键。')">检查答案</button>
+  <div class="feedback" id="q6-fb"></div>
+</div>
+
+<h2>11. 推荐深入阅读</h2>
 <ul>
   <li><a href="https://code.visualstudio.com/api/references/vscode-api#StatusBarItem">VS Code API：StatusBarItem</a> — 完整的属性和方法文档</li>
   <li><a href="https://code.visualstudio.com/api/references/vscode-api#window.createStatusBarItem">VS Code API：window.createStatusBarItem</a> — 创建方法的签名和参数</li>
@@ -331,12 +508,15 @@ vscode.workspace.onDidChangeConfiguration(e => {
 </ul>
 
 <div class="callout">
-  <strong>💡 提问提示：</strong>如果你对 StatusBarItem 的优先级规则、ThemeColor 的工作原理、或者 refreshAllSessions 中任何一段代码有疑问，直接在这个对话中提问。下一课将深入 <code>findActiveSessions()</code>——文件系统扫描和 JSONL 数据解析。
+  <strong>💡 提问提示：</strong>如果你对 StatusBarItem 的优先级规则、ThemeColor 的工作原理、或者 refreshAllSessions 中任何一段代码有疑问，直接在这个对话中提问。<br><br>
+  <strong>📌 下一课（Lesson 0004）</strong>将深入 <code>findActiveSessions()</code>——文件系统扫描、JSONL 数据解析、会话淘汰逻辑、token 计数算法。那是本课第 7 节第一步"收集数据"的完整展开。
 </div>
 
 <div class="nav">
   <a href="0002-activation-lifecycle.html">← Lesson 0002：激活与生命周期</a>
+  <a href="0004-find-active-sessions.html">下一课：数据引擎 →</a>
   <a href="../reference/vscode-extension-api-basics.html">📋 参考：VS Code 扩展 API 基础</a>
+  <a href="../reference/glossary.html">📖 术语表</a>
 </div>
 
 <script src="../assets/quiz.js"></script>
