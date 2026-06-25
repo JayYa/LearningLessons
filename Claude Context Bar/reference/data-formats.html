@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参考：数据格式速查</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="ref">
+
+<h1>数据格式速查</h1>
+
+<p style="color:#888; font-size:.9rem; margin-bottom:2rem;">
+  本课程涉及的核心数据格式对比。快速参考——详细讨论见各课程。
+</p>
+
+<h2>一、JSON</h2>
+
+<table>
+  <tr><th>属性</th><th>值</th></tr>
+  <tr><td>全称</td><td>JavaScript Object Notation</td></tr>
+  <tr><td>RFC</td><td><a href="https://datatracker.ietf.org/doc/html/rfc8259">RFC 8259</a></td></tr>
+  <tr><td>MIME 类型</td><td><code>application/json</code></td></tr>
+  <tr><td>文件后缀</td><td><code>.json</code></td></tr>
+  <tr><td>结构</td><td>一个完整的 JSON 值：对象 <code>{}</code>、数组 <code>[]</code>、字符串、数字、布尔、null</td></tr>
+  <tr><td>解析</td><td>整个文件 → <code>JSON.parse()</code></td></tr>
+  <tr><td>修改</td><td>读 → 改 → 写（三次 I/O）</td></tr>
+  <tr><td>适合场景</td><td>配置、API 响应、数据交换、需要随机访问任意字段</td></tr>
+</table>
+
+<h3>解析代码</h3>
+<pre><span class="kw">const</span> data = JSON.parse(readFileSync(<span class="str">'file.json'</span>, <span class="str">'utf-8'</span>));
+console.log(data.key);</pre>
+
+<h2>二、JSONL（JSON Lines）</h2>
+
+<table>
+  <tr><th>属性</th><th>值</th></tr>
+  <tr><td>全称</td><td>JSON Lines</td></tr>
+  <tr><td>别名</td><td>NDJSON、LDJSON</td></tr>
+  <tr><td>规范</td><td><a href="https://jsonlines.org/">jsonlines.org</a></td></tr>
+  <tr><td>文件后缀</td><td><code>.jsonl</code></td></tr>
+  <tr><td>结构</td><td>每行一个独立完整的 JSON 值，无最外层包裹</td></tr>
+  <tr><td>行分隔符</td><td><code>\n</code>（LF，Unix 风格）</td></tr>
+  <tr><td>解析</td><td>按行拆分 → 逐行 <code>JSON.parse()</code></td></tr>
+  <tr><td>修改</td><td>追加一行即可（一次 I/O）</td></tr>
+  <tr><td>适合场景</td><td>日志、消息流、会话记录、事件溯源——持续追加、永不修改历史</td></tr>
+</table>
+
+<h3>核心规则</h3>
+<ol>
+  <li>每行一个完整 JSON 值</li>
+  <li>行内换行符必须转义（<code>\n</code> → <code>\\n</code>）</li>
+  <li>文件编码为 UTF-8</li>
+  <li>建议行末不加逗号（它不是 JSON 数组）</li>
+</ol>
+
+<h3>解析代码</h3>
+<pre><span class="kw">const</span> lines = readFileSync(<span class="str">'file.jsonl'</span>, <span class="str">'utf-8'</span>).trim().split(<span class="str">'\n'</span>);
+<span class="kw">const</span> records = lines.filter(l => l.trim()).map(JSON.parse);
+console.log(records[0].type);</pre>
+
+<h3>追加代码</h3>
+<pre><span class="kw">const</span> entry = { type: <span class="str">'user'</span>, content: <span class="str">'hello'</span> };
+appendFileSync(<span class="str">'file.jsonl'</span>, JSON.stringify(entry) + <span class="str">'\n'</span>);</pre>
+
+<h3>常见陷阱</h3>
+<table>
+  <tr><th>陷阱</th><th>错误</th><th>正确做法</th></tr>
+  <tr><td>空行</td><td><code>JSON.parse('')</code> → SyntaxError</td><td><code>.filter(l => l.trim())</code></td></tr>
+  <tr><td>整体解析</td><td><code>JSON.parse(整个文件)</code> → SyntaxError</td><td>必须逐行 parse</td></tr>
+  <tr><td>行内换行</td><td>content 字段含未转义的 \n</td><td>始终用 <code>JSON.stringify()</code> 序列化</td></tr>
+</table>
+
+<h2>三、JSONL 在本项目中的使用</h2>
+
+<p>Claude Code 将每个对话会话存储为 <code>~/.claude/projects/&lt;encoded-path&gt;/&lt;session-id&gt;.jsonl</code>。</p>
+
+<h3>消息行示例</h3>
+<pre><span class="cmt">用户消息行：</span>
+{"type":"user","message":{"content":"帮我写一个函数","timestamp":"..."}}
+
+<span class="cmt">AI 响应行（含 token 用量）：</span>
+{"type":"assistant","message":{"content":"好的……","model":"claude-sonnet-4-6","usage":{"input_tokens":42,...}}}
+
+<span class="cmt">系统命令行：</span>
+{"type":"user","message":{"content":"&lt;command-name&gt;/clear&lt;/command-name&gt;","timestamp":"..."}}</pre>
+
+<h3>claude-context-bar 的读取策略</h3>
+<ol>
+  <li><strong>反向扫描：</strong>从最后一行往前找最近的 <code>/clear</code> 命令</li>
+  <li><strong>正向扫描：</strong>从 <code>/clear</code> 位置往后收集 sessionCreated、firstMessage、model、totalTokens</li>
+  <li><strong>关键点：</strong>利用 JSONL 的行结构实现"部分读取"——不需要解析整个文件</li>
+</ol>
+
+<h2>四、何时用哪种格式</h2>
+
+<pre><span class="cmt">决策流程：</span>
+
+数据是否需要<strong>持续追加</strong>？
+  ├─ 是 → JSONL
+  └─ 否 → 是否需要<strong>随机访问</strong>任意字段？
+            ├─ 是 → JSON
+            └─ 否 → 数据量是否<strong>非常大</strong>（>10MB）？
+                      ├─ 是 → JSONL（支持流式读取）
+                      └─ 否 → JSON（更简单的工具链）</pre>
+
+<div class="nav">
+  <a href="glossary.html">📖 术语表</a>
+  <a href="../lessons/0005-jsonl-vs-json.html">📘 Lesson 0005：JSONL vs JSON</a>
+  <a href="../lessons/0004-find-active-sessions.html">📘 Lesson 0004：findActiveSessions</a>
+</div>
+
+</body>
+</html>

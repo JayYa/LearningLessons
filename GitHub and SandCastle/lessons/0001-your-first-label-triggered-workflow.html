@@ -123,6 +123,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write          # 允许评论和操作标签
+    env:
+      GH_REPO: ${{ github.repository }}  # 让 gh CLI 知道是哪个仓库
     steps:
       - name: "移除触发标签，防止重复触发"
         run: |
@@ -146,6 +148,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}</code></pre>
 </div>
 
+<div class="callout">
+  <strong>📝 YAML 速查：<code>[]</code> 是语法，不是装饰</strong><br>
+  <code>types: [labeled]</code> 中的方括号是 YAML <strong>内联数组</strong>写法。下面的写法完全等价：
+  <pre><code>types: [labeled]       # 内联数组 — 紧凑
+types:                # 块级数组 — 多类型时更清晰
+  - labeled</code></pre>
+  如果误写成 <code>types: labeled</code>（去掉了 <code>[]</code> 或 <code>-</code>），YAML 会把它当成<strong>字符串</strong>而不是数组，GitHub Actions 将无法正确触发工作流。
+</div>
+
 <h3>逐步解析</h3>
 
 <table>
@@ -163,10 +174,18 @@ jobs:
     <td>触发此工作流的 Issue 编号。来自 GitHub 的 <a href="https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/accessing-contextual-information-about-workflow-runs#github-context">事件上下文</a></td>
   </tr>
   <tr>
+    <td><code>env: GH_REPO: ${{ github.repository }}</code></td>
+    <td>⚠️ <strong>容易遗漏</strong>：告诉 <code>gh</code> CLI 当前仓库是哪个。没有这行且未 checkout 代码时，<code>gh</code> 会因为找不到 <code>.git</code> 目录而报错</td>
+  </tr>
+  <tr>
     <td><code>secrets.GITHUB_TOKEN</code></td>
     <td>GitHub 自动提供的令牌（无需手动创建）。权限在 <code>permissions:</code> 块中声明</td>
   </tr>
 </table>
+
+<div class="callout">
+  <strong>🔑 自动 vs 手动：</strong><code>GITHUB_TOKEN</code> 是<strong>唯一</strong>自动注入的 secret——每次运行由 GitHub 当场生成，结束后立即作废，不需要你去 Settings 创建。但其他任何 secret（如 <code>OPENAI_API_KEY</code>、<code>DEPLOY_KEY</code>）都必须去仓库 <strong>Settings → Secrets and variables → Actions</strong> 手动添加。
+</div>
 
 <h2>标签生命周期模式</h2>
 
@@ -219,6 +238,15 @@ jobs:
   <div class="quiz-option" onclick="selectQuiz(this, 'q3', true)">C. GitHub 自动从触发事件的 Issue 中提取</div>
   <div class="quiz-option" onclick="selectQuiz(this, 'q3', false)">D. 通过 <code>gh issue list</code> 命令获取</div>
   <p class="quiz-feedback" id="q3-feedback"></p>
+</div>
+
+<div class="quiz" id="q4">
+  <p class="quiz-question">4. 关于 <code>secrets.GITHUB_TOKEN</code>，以下哪项是正确的？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q4', false)">A. 需要去 Settings → Secrets 手动创建</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q4', true)">B. 每次运行自动生成，结束后立即作废</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q4', false)">C. 只有 GitHub 付费计划用户才能使用</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q4', false)">D. 只有在使用了 actions/checkout 的工作流中才存在</div>
+  <p class="quiz-feedback" id="q4-feedback"></p>
 </div>
 
 <script>

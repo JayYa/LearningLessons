@@ -328,6 +328,16 @@ Console.WriteLine(c.Value);             <span class="cmt">// 0</span></code></pr
 <span class="kw">var</span> p = <span class="kw">new</span> Person { First = <span class="str">"Alice"</span>, Last = <span class="str">"Smith"</span> };
 Console.WriteLine(p.FullName);  <span class="cmt">// "Alice Smith"——类自身的 FullName 胜出</span></code></pre>
 
+<div class="callout callout--info">
+<strong>🤔 为什么不直接报错？</strong>这可能是你读完上面代码的第一反应——既然实例成员始终优先，同名还有什么意义？为什么不给一个编译错误（或至少警告）？
+<br><br>
+答案是<strong>向前兼容</strong>。假设同名报错：你引用了第三方 NuGet 包 v1，它的扩展成员提供了 <code>IsReady</code> 属性。你的代码 <code>obj.IsReady</code> 编译通过。然后你升级到 v2——包的作者决定把 <code>IsReady</code> 提升为类型自身的实例属性。如果同名报错：<strong>你的项目炸了</strong>。一行代码没改，升级依赖就编译不过。
+<br><br>
+这是 C# 3 就定下的设计：扩展成员是 <strong>"候补队员"</strong>——主力上场了，候补就坐下，不需要裁判叫停比赛。<code>using</code> 引入的是"可选能力"，不是"潜在地雷"。如果导入某个命名空间会导致编译错误，开发者会犹豫要不要写 <code>using</code>——这违背了扩展机制的初衷。17 年来 LINQ 能安全运行，正是依赖这个语义：哪天 <code>List&lt;T&gt;</code> 加了 <code>Where()</code> 实例方法，所有 LINQ 代码也不能挂。
+<br><br>
+至于<strong>警告</strong>——理论上可以，但 C# 团队选择不发。LINQ 场景会产生海量噪音（每个集合类型都可能"隐藏"若干 LINQ 扩展成员），且"实例优先"是确定性行为，不需要提醒。
+</div>
+
 <h3>5.2 完整限制清单</h3>
 
 <table>

@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 23: C# 14 — 中等特性合集</title>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
+</head>
+<body>
+
+<h1>Lesson 23: C# 14 — 中等特性合集 <span class="en">Mid-Tier Features</span></h1>
+<p class="subtitle">Null 条件赋值 · Lambda 修饰符无类型 · nameof 未绑定泛型 · 三个小痛点，三块创可贴</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="22-csharp14-extension-members.html">Lesson 22（扩展成员）</a>。本课覆盖 C# 14 中三个不是旗舰、但每天都在救你的特性——它们解决的都是"写起来啰嗦但编译器明明应该能自己搞定"的问题。<br>
+<strong>阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/whats-new/csharp-14">Microsoft Learn: C# 14 新增功能</a> ·
+<a href="https://github.com/dotnet/csharplang/blob/main/proposals/csharp-14.0/null-conditional-assignment.md">Null 条件赋值提案</a> ·
+<a href="https://github.com/dotnet/csharplang/blob/main/proposals/csharp-14.0/simple-lambda-parameters-with-modifiers.md">Lambda 修饰符提案</a>
+</div>
+
+<!-- ========================== 1. HOOK ========================== -->
+
+<h2>〇、三个小痛点 <span class="en">Three Papercuts</span></h2>
+
+<p>看看下面三段代码——它们有什么共同点？</p>
+
+<pre><code><span class="cmt">// 痛点 ①：null 检查后才敢赋值</span>
+<span class="kw">if</span> (customer != <span class="kw">null</span>)
+    customer.Order = GetCurrentOrder();     <span class="cmt">// 三行就为了一个赋值</span>
+
+<span class="cmt">// 痛点 ②：out 参数被迫显式写类型</span>
+TryParse&lt;<span class="kw">int</span>&gt; parse = (<span class="kw">string</span> text, <span class="kw">out</span> <span class="kw">int</span> result) =>
+    Int32.TryParse(text, <span class="kw">out</span> result);      <span class="cmt">// 类型声明全是噪音</span>
+
+<span class="cmt">// 痛点 ③：想用 nameof 获取泛型名——做不到</span>
+<span class="kw">var</span> name = <span class="kw">nameof</span>(List&lt;<span class="kw">int</span>&gt;);              <span class="cmt">// "List" ✅</span>
+<span class="kw">var</span> name2 = <span class="kw">nameof</span>(List&lt;&gt;);              <span class="cmt">// ❌ C# 13: 编译错误！</span></code></pre>
+
+<p>三个场景的共同点：<strong>编译器明明有足够信息，但语法不允许你省略</strong>。C# 14 解决了这三个问题——不需要新关键字，不需要新语法块，只是让已有语法更聪明。</p>
+
+<!-- ========================== 1. NULL CONDITIONAL ASSIGNMENT ========================== -->
+
+<h2>一、Null 条件赋值 <span class="en">Null-Conditional Assignment</span></h2>
+
+<h3>1.1 问题：null 检查 → 赋值，每次都是三行</h3>
+
+<p>C# 6 带来了 <code>?.</code> 用于<strong>读</strong>——<code>var name = customer?.Name;</code> 优雅地处理了 null。但 <strong>写</strong> 一直没有对应的语法。你只能这样：</p>
+
+<pre><code><span class="cmt">// C# 6~13：?. 只能读，不能写</span>
+<span class="kw">if</span> (customer != <span class="kw">null</span>)
+{
+    customer.Order = GetCurrentOrder();    <span class="cmt">// 三行样板，只为赋一个值</span>
+}
+
+<span class="cmt">// 更糟的——链式属性：</span>
+<span class="kw">if</span> (customer?.Address != <span class="kw">null</span>)
+{
+    customer.Address.City = <span class="str">"Beijing"</span>;   <span class="cmt">// 先读才能判 null，再写</span>
+}
+
+<span class="cmt">// 事件处理——最啰嗦的场景：</span>
+<span class="kw">if</span> (OnDataReceived != <span class="kw">null</span>)
+{
+    OnDataReceived(data);                 <span class="cmt">// C# 6 前的事件调用样板</span>
+}</code></pre>
+
+<h3>1.2 C# 14：?. 可以站在赋值左边了</h3>
+
+<pre><code><span class="cmt">// C# 14：?. 和 ?[] 出现在赋值号左边</span>
+customer?.Order = GetCurrentOrder();       <span class="cmt">// 一行。null 时什么都不做</span>
+customers?[<span class="num">0</span>] = newCustomer;              <span class="cmt">// ?[] 也可以</span>
+customer?.Address?.City = <span class="str">"Beijing"</span>;       <span class="cmt">// 链式——任何一环 null 就短路</span>
+OnDataReceived?.Invoke(data);             <span class="cmt">// 事件调用一行搞定</span></code></pre>
+
+<div class="callout callout--good">
+<strong>关键语义：</strong>右边只在左边非 null 时求值。如果 <code>customer</code> 是 null，<code>GetCurrentOrder()</code> <strong>不会被调用</strong>——不是赋值 null，是根本不执行赋值。这和 <code>??=</code>（左边 null 才赋值）语义完全不同。
+</div>
+
+<h3>1.3 复合赋值也支持</h3>
+
+<pre><code><span class="cmt">// 所有复合赋值运算符都可用</span>
+account?.Balance += deposit;              <span class="cmt">// null 时跳过——不会炸</span>
+cart?.Subtotal -= discount;
+context?.Counter *= <span class="num">2</span>;
+</code></pre>
+
+<h3>1.4 不支持的操作</h3>
+
+<table>
+<tr><th>操作</th><th>是否支持</th><th>原因</th></tr>
+<tr><td><code>obj?.Prop = value</code></td><td>✅</td><td>简单赋值</td></tr>
+<tr><td><code>obj?.Prop += value</code></td><td>✅</td><td>复合赋值</td></tr>
+<tr><td><code>obj?.Prop ??= value</code></td><td>✅</td><td>Null 合并赋值（嵌套语义）</td></tr>
+<tr><td><code>obj?.Prop++</code></td><td>❌</td><td><code>++</code>/<code>--</code> 不是赋值运算符——是增减运算符</td></tr>
+<tr><td><code>ref x = ref obj?.Field</code></td><td>❌</td><td>ref 赋值需要确定的内存位置</td></tr>
+<tr><td><code>(a?.B, c?.D) = (x, y)</code></td><td>❌</td><td>解构赋值不支持 null 条件</td></tr>
+</table>
+
+<h3>1.5 与 ??= 的区别——容易混淆的兄弟</h3>
+
+<pre><code><span class="cmt">// ??= —— 左边为 null <strong>时</strong>才赋值（C# 8）</span>
+customer ??= <span class="kw">new</span> Customer();              <span class="cmt">// "如果客人不存在，创建一个"</span>
+
+<span class="cmt">// ?. —— 左边为 null <strong>就不</strong>赋值（C# 14）</span>
+customer?.Order = GetOrder();             <span class="cmt">// "如果客人在，给他订单"</span>
+
+<span class="cmt">// 两者可以组合：</span>
+(customer?.Cart) ??= <span class="kw">new</span> Cart();          <span class="cmt">// 先试试获取 Cart（null 短路），</span>
+                                            <span class="cmt">// 如果取到的 Cart 是 null，创建新的</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>易错点：</strong><code>customer?.Order = x</code> <strong>不会初始化 customer</strong>。如果 customer 是 null，什么都不会发生——customer 仍然是 null。这和 <code>??=</code> 完全相反。选谁取决于你的<strong>意图</strong>：是"确保有值"还是"如果存在就改它"。
+</div>
+
+<!-- ========================== 2. LAMBDA MODIFIERS ========================== -->
+
+<h2>二、Lambda 修饰符——参数类型可省略 <span class="en">Simple Lambda Parameters with Modifiers</span></h2>
+
+<h3>2.1 问题：加了修饰符就得写全部类型</h3>
+
+<p>C# 10（2021）让 lambda 有了自然类型——你可以写 <code>var f = (int x) => x + 1;</code>。C# 12（2023）允许 lambda 参数带 <code>ref</code>/<code>out</code>/<code>in</code>/<code>scoped</code> 修饰符。但两者结合时出了个裂缝：</p>
+
+<pre><code><span class="cmt">// C# 10~13：有修饰符 = 必须显式类型——全部参数都写</span>
+<span class="kw">delegate</span> <span class="kw">bool</span> TryParse&lt;T&gt;(<span class="kw">string</span> text, <span class="kw">out</span> T result);
+
+<span class="cmt">// C# 12~13：out 参数必须显式写出类型</span>
+TryParse&lt;<span class="kw">int</span>&gt; parse = (<span class="kw">string</span> text, <span class="kw">out</span> <span class="kw">int</span> result) =>   <span class="cmt">// 啰嗦</span>
+    Int32.TryParse(text, <span class="kw">out</span> result);
+
+<span class="cmt">// 你<strong>想</strong>写的——类型让编译器去推断：</span>
+TryParse&lt;<span class="kw">int</span>&gt; parse = (text, <span class="kw">out</span> result) =>              <span class="cmt">// C# 13: ❌ 编译错误</span>
+    Int32.TryParse(text, <span class="kw">out</span> result);</code></pre>
+
+<p>这是因为 C# 语法规定：一旦参数列表中出现修饰符，<strong>所有参数</strong>都必须显式声明类型——"全有或全无"规则。</p>
+
+<h3>2.2 C# 14：修饰符和类型推断可以共存</h3>
+
+<p>C# 14 放宽了这个限制——修饰符可以和隐式类型参数共存，类型从委托签名推断：</p>
+
+<pre><code><span class="cmt">// C# 14：修饰符保留，类型靠推断——和你想的一样</span>
+TryParse&lt;<span class="kw">int</span>&gt; parse = (text, <span class="kw">out</span> result) =>           <span class="cmt">// ✅ 简洁</span>
+    Int32.TryParse(text, <span class="kw">out</span> result);
+
+<span class="cmt">// 所有修饰符都支持</span>
+<span class="kw">delegate</span> <span class="kw">void</span> Apply(<span class="kw">ref</span> <span class="kw">int</span> n);
+Apply doubleIt = (<span class="kw">ref</span> n) => n *= <span class="num">2</span>;               <span class="cmt">// ref + 推断</span>
+
+<span class="kw">delegate</span> <span class="kw">int</span> Square(<span class="kw">in</span> <span class="kw">int</span> value);
+Square sq = (<span class="kw">in</span> v) => v * v;                     <span class="cmt">// in + 推断</span>
+
+<span class="kw">delegate</span> <span class="kw">void</span> Capture(<span class="kw">scoped</span> <span class="kw">ref</span> <span class="kw">int</span> x);
+Capture c = (<span class="kw">scoped</span> <span class="kw">ref</span> n) => Console.WriteLine(n); <span class="cmt">// scoped ref + 推断</span>
+
+<span class="kw">delegate</span> <span class="kw">void</span> Swap&lt;T&gt;(<span class="kw">ref readonly</span> T a, <span class="kw">ref</span> T b);
+Swap&lt;<span class="kw">int</span>&gt; s = (<span class="kw">ref readonly</span> a, <span class="kw">ref</span> b) => {};    <span class="cmt">// ref readonly + 推断</span></code></pre>
+
+<div class="callout callout--info">
+<strong>核心规则：</strong>修饰符<strong>必须显式写出</strong>——编译器只推断类型，不推断修饰符。这是故意的：C# 团队认为调用约定变更（ref/out/in）应该在调用点可见，不能藏在类型推断后面。
+</div>
+
+<h3>2.3 不支持的情况</h3>
+
+<table>
+<tr><th>情况</th><th>C# 14</th><th>说明</th></tr>
+<tr><td><code>out</code> / <code>ref</code> / <code>in</code> 无类型</td><td>✅</td><td>从委托签名推断类型</td></tr>
+<tr><td><code>scoped</code> / <code>ref readonly</code> 无类型</td><td>✅</td><td>同上</td></tr>
+<tr><td><code>params</code> 无类型</td><td>❌</td><td>params 仍要求显式类型——因为它改变整个参数列表结构</td></tr>
+<tr><td>混合显式/隐式类型</td><td>❌</td><td>要么全写类型，要么全不写——和 C# 10 规则一致</td></tr>
+<tr><td>参数默认值</td><td>❌</td><td>隐式类型参数不能有默认值——没有类型就没法推断默认值语义</td></tr>
+<tr><td>参数特性（attribute）</td><td>❌</td><td>隐式类型参数不能标注特性</td></tr>
+</table>
+
+<h3>2.4 完整演进路线</h3>
+
+<div class="timeline">
+  <div class="timeline-item"><div class="year">C# 3</div><div class="lang">Lambda 诞生</div></div>
+  <div class="timeline-item"><div class="year">C# 10</div><div class="lang">自然类型/var 推断</div></div>
+  <div class="timeline-item"><div class="year">C# 12</div><div class="lang">ref/out/in 参数</div></div>
+  <div class="timeline-item current"><div class="year">C# 14</div><div class="lang">修饰符 + 无类型 ✅</div></div>
+</div>
+
+<p>C# 14 补齐了最后一块拼图——修饰符和类型推断不再是互斥的。17 年来 lambda 终于完全自由了。</p>
+
+<!-- ========================== 3. NAMEOF ========================== -->
+
+<h2>三、nameof 支持未绑定泛型 <span class="en">nameof with Unbound Generics</span></h2>
+
+<h3>3.1 问题：知道类型名，但就是写不出来</h3>
+
+<p>这是一个经典小痛点——你想在错误消息、日志或特性中引用泛型类型的<strong>名字</strong>：</p>
+
+<pre><code><span class="cmt">// 场景：特性中引用类型名</span>
+[TypeConverter(<span class="kw">typeof</span>(ListConverter&lt;<span class="kw">int</span>&gt;))]   <span class="cmt">// 绑定了 int——不够通用</span>
+
+<span class="cmt">// 想写 List<> 的 nameof——C# 13 不让：</span>
+<span class="kw">var</span> name = <span class="kw">nameof</span>(List&lt;&gt;);              <span class="cmt">// ❌ C# 13: 未绑定泛型不能用于 nameof</span>
+<span class="kw">var</span> dic = <span class="kw">nameof</span>(Dictionary&lt;,&gt;);         <span class="cmt">// ❌ 同样的错误</span>
+
+<span class="cmt">// 只能绕路：</span>
+<span class="kw">var</span> name = <span class="kw">nameof</span>(List&lt;<span class="kw">int</span>&gt;);            <span class="cmt">// "List"——但必须绑定一个具体类型参数</span>
+<span class="kw">var</span> dic = <span class="kw">nameof</span>(Dictionary&lt;<span class="kw">int</span>, <span class="kw">string</span>&gt;); <span class="cmt">// "Dictionary"——任意类型都行但不能空着</span></code></pre>
+
+<p>强迫你指定一个<strong>毫无意义的类型参数</strong>——破坏了语义。你关心的只是类型名 <code>List</code>，不是 <code>List&lt;<em>某个</em>&gt;</code>。</p>
+
+<h3>3.2 C# 14：未绑定泛型直接用于 nameof</h3>
+
+<pre><code><span class="cmt">// C# 14：把类型参数留空——像 typeof 一样</span>
+Console.WriteLine(<span class="kw">nameof</span>(List&lt;&gt;));             <span class="cmt">// "List"</span>
+Console.WriteLine(<span class="kw">nameof</span>(Dictionary&lt;,&gt;));        <span class="cmt">// "Dictionary"</span>
+Console.WriteLine(<span class="kw">nameof</span>(Nullable&lt;&gt;));           <span class="cmt">// "Nullable"</span>
+Console.WriteLine(<span class="kw">nameof</span>(IEnumerable&lt;&gt;));        <span class="cmt">// "IEnumerable"</span>
+
+<span class="cmt">// 实用场景 ①——泛型特性中引用类型名</span>
+<span class="kw">public</span> <span class="kw">class</span> TypeConverterAttribute : Attribute
+{
+    <span class="kw">public</span> TypeConverterAttribute(<span class="kw">string</span> converterTypeName) { }
+}
+[TypeConverter(<span class="kw">nameof</span>(ListConverter&lt;&gt;))]     <span class="cmt">// 不绑定任何具体类型——最通用</span>
+
+<span class="cmt">// 实用场景 ②——异常消息中引用泛型类型</span>
+<span class="kw">throw</span> <span class="kw">new</span> InvalidOperationException(
+    <span class="str">$"{nameof(List&lt;&gt;)} requires a non-null comparer."</span>);
+
+<span class="cmt">// 实用场景 ③——日志/诊断</span>
+_logger.LogWarning(<span class="str">"Resolving {TypeName} failed"</span>, <span class="kw">nameof</span>(Dictionary&lt;,&gt;));</code></pre>
+
+<div class="callout callout--info">
+<strong>和 typeof 一致了：</strong><code>typeof(List&lt;&gt;)</code> 返回未绑定泛型的 <code>Type</code> 对象——这个一直合法。但 <code>nameof(List&lt;&gt;)</code> 之前却不行。C# 14 让 nameof 的泛型参数规则和 typeof 对齐。
+</div>
+
+<h3>3.3 对比一览</h3>
+
+<table>
+<tr><th>写法</th><th>C# 13</th><th>C# 14</th><th>结果</th></tr>
+<tr><td><code>nameof(List&lt;int&gt;)</code></td><td>✅</td><td>✅</td><td><code>"List"</code></td></tr>
+<tr><td><code>nameof(List&lt;&gt;)</code></td><td>❌</td><td>✅</td><td><code>"List"</code></td></tr>
+<tr><td><code>nameof(Dictionary&lt;,&gt;)</code></td><td>❌</td><td>✅</td><td><code>"Dictionary"</code></td></tr>
+<tr><td><code>nameof(Nullable&lt;&gt;)</code></td><td>❌</td><td>✅</td><td><code>"Nullable"</code></td></tr>
+<tr><td><code>typeof(List&lt;&gt;)</code></td><td>✅</td><td>✅</td><td><code>System.Collections.Generic.List`1[T]</code></td></tr>
+</table>
+
+<p class="mild">这可能是 C# 14 中<strong>最小的特性</strong>——一句话就能说清楚。但它消除了一个设计不一致：为什么 typeof 可以接受未绑定泛型而 nameof 不行？现在没有理由了。</p>
+
+<!-- ========================== 4. COMPARISON ========================== -->
+
+<h2>四、三个特性的共同主题 <span class="en">The Common Thread</span></h2>
+
+<p>这三个特性没有 extension 块那么宏大，没有 field 关键字那么万众期待——但它们共享一个设计哲学：</p>
+
+<div class="triad">
+  <div>
+    <h4>🪞 消除不对称</h4>
+    <p><code>?.</code> 能读不能写是一个语言不对称。<br>C# 14 把左右两边补全了。</p>
+  </div>
+  <div>
+    <h4>🧠 编译器已有信息</h4>
+    <p>委托签名已经有了完整类型——<br>为什么还逼人把类型再抄一遍？</p>
+  </div>
+  <div>
+    <h4>🧩 API 表里如一</h4>
+    <p><code>typeof</code> 能接受未绑定泛型，<br><code>nameof</code> 不能——没道理的断层。</p>
+  </div>
+</div>
+
+<p>三个特性的共同逻辑：<strong>编译器已经知道答案——别让我再敲一遍。</strong></p>
+
+<!-- ========================== 5. QUIZ ========================== -->
+
+<h2>五、测验 <span class="en">Quiz</span></h2>
+
+<div class="quiz" id="q1">
+  <h3>1/5 · Null 条件赋值语义</h3>
+  <p class="question">以下代码中，<code>GetOrder()</code> 会被调用吗？</p>
+  <pre><code>Customer customer = null;
+customer?.Order = GetOrder();</code></pre>
+  <label><input type="radio" name="q1" value="a">A. 会调用——但返回值被丢弃</label>
+  <label><input type="radio" name="q1" value="b">B. 不会调用——左边 null 时右边不执行</label>
+  <label><input type="radio" name="q1" value="c">C. 会调用——然后赋值给 null 对象的 Order</label>
+  <label><input type="radio" name="q1" value="d">D. 编译错误——null 字面量不能用 ?.</label>
+  <div class="feedback" id="f_q1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>2/5 · Lambda 修饰符语法</h3>
+  <p class="question">以下哪个 lambda 声明是 C# 13 会报错但 C# 14 合法的？</p>
+  <pre><code>delegate bool TryParse&lt;T&gt;(string text, out T result);
+delegate void Apply(ref int n);</code></pre>
+  <label><input type="radio" name="q2" value="a">A. <code>TryParse&lt;int&gt; p = (string text, out int result) => int.TryParse(text, out result);</code></label>
+  <label><input type="radio" name="q2" value="b">B. <code>TryParse&lt;int&gt; p = (text, out result) => int.TryParse(text, out result);</code></label>
+  <label><input type="radio" name="q2" value="c">C. <code>Apply a = (ref int n) => n *= 2;</code></label>
+  <label><input type="radio" name="q2" value="d">D. <code>TryParse&lt;int&gt; p = (text, out var result) => int.TryParse(text, out result);</code></label>
+  <div class="feedback" id="f_q2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>3/5 · nameof 未绑定泛型</h3>
+  <p class="question">以下代码输出什么？</p>
+  <pre><code>Console.WriteLine(nameof(Dictionary&lt;,&gt;));</code></pre>
+  <label><input type="radio" name="q3" value="a">A. <code>Dictionary&lt;,&gt;</code></label>
+  <label><input type="radio" name="q3" value="b">B. <code>Dictionary`2</code></label>
+  <label><input type="radio" name="q3" value="c">C. <code>Dictionary</code></label>
+  <label><input type="radio" name="q3" value="d">D. 编译错误</label>
+  <div class="feedback" id="f_q3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>4/5 · null 条件赋值限制</h3>
+  <p class="question">以下哪个操作在 C# 14 中<strong>不合法</strong>？</p>
+  <label><input type="radio" name="q4" value="a">A. <code>obj?.Prop += 5;</code></label>
+  <label><input type="radio" name="q4" value="b">B. <code>obj?.Prop ??= "default";</code></label>
+  <label><input type="radio" name="q4" value="c">C. <code>obj?.Prop++;</code></label>
+  <label><input type="radio" name="q4" value="d">D. <code>arr?[0] = value;</code></label>
+  <div class="feedback" id="f_q4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>5/5 · 综合判断</h3>
+  <p class="question">关于 C# 14 这三个特性，以下哪个说法<strong>正确</strong>？</p>
+  <label><input type="radio" name="q5" value="a">A. null 条件赋值 <code>customer?.Order = x</code> 在 customer 为 null 时会初始化 customer</label>
+  <label><input type="radio" name="q5" value="b">B. Lambda 参数带 <code>out</code> 修饰符时，C# 14 可以同时推断类型和修饰符——你连 <code>out</code> 都不用写</label>
+  <label><input type="radio" name="q5" value="c">C. <code>nameof(Dictionary&lt;,&gt;)</code> 在 C# 14 中合法，输出 <code>"Dictionary"</code>——与 <code>typeof</code> 的行为对齐</label>
+  <label><input type="radio" name="q5" value="d">D. 这三个特性都需要引入新的 C# 关键字</label>
+  <div class="feedback" id="f_q5"></div>
+
+  <button onclick="checkAll()">提交全部答案</button>
+  <div class="score" id="score" style="display:none"></div>
+</div>
+
+<!-- ========================== 6. NEXT ========================== -->
+
+<h2>六、接下来是什么？<span class="en">What's Next</span></h2>
+
+<p>C# 14 还剩最后一课——小特性合集。包括 partial 构造和事件（源生成器新玩具）、Span 隐式转换（性能代码更自然）、自定义复合赋值、以及文件级应用的预处理器指令。</p>
+
+<div class="timeline">
+  <div class="timeline-item"><div class="year">L21</div><div class="lang">field 关键字</div></div>
+  <div class="timeline-item"><div class="year">L22</div><div class="lang">扩展成员</div></div>
+  <div class="timeline-item current"><div class="year">L23</div><div class="lang">中等特性 ✅</div></div>
+  <div class="timeline-item"><div class="year">→ L24</div><div class="lang">小特性合集</div></div>
+</div>
+
+<p class="mild"><a href="../reference/nrt-cheatsheet.html">📖 NRT 速查</a> · <a href="22-csharp14-extension-members.html">← L22: 扩展成员</a> · <a href="24-csharp14-small-features.html">L24: 小特性合集 →</a></p>
+
+<hr class="section-divider">
+
+<div class="lesson-footer">
+<p><strong>推荐阅读：</strong><a href="https://github.com/dotnet/csharplang/blob/main/proposals/csharp-14.0/null-conditional-assignment.md">Null 条件赋值提案</a> · <a href="https://dev.to/cristiansifuentes/lambda-parameter-modifiers-without-types-modern-c-14-syntax-4hco">Lambda 修饰符详解</a> —— 前者的完整规范，后者的实战教程。</p>
+<p><strong>课后实操：</strong>找到项目中所有 <code>if (x != null) { x.Prop = y; }</code> 模式——用 <code>?. </code>赋值替换。找到所有带 <code>out</code>/<code>ref</code> 的 lambda——删掉多余的显式类型。</p>
+<p><strong>有问题？</strong>追问 null 条件赋值的短路语义、lambda 修饰符的推断规则、或任何不清楚的地方——你的教师（Claude）随时在。</p>
+</div>
+
+<script src="../assets/scripts/quiz.js"></script>
+<script>
+const answers = { q1: 'b', q2: 'b', q3: 'c', q4: 'c', q5: 'c' };
+const explanations = {
+  q1: { correct: '✅ 正确！左边为 null 时右边不会被求值——这是 null 条件赋值的核心语义。GetOrder() 不会执行，不会产生任何副作用。', wrong: '❌ 答案是 B。?. 赋值的核心语义：左边 null → 右边不执行。这和 ??= 恰好相反——??= 是左边 null 才执行右边。' },
+  q2: { correct: '✅ 正确！B 在 C# 13 会报错——因为参数带 out 修饰符后，所有参数必须显式写类型。C# 14 允许从委托签名推断，所以 (text, out result) 合法。', wrong: '❌ 答案是 B。A 在 C# 12+ 就合法（全部显式类型），B 是 C# 14 新能力（修饰符 + 推断）。C 一直合法（全显式），D 中的 out var 在 lambda 参数中不合法。' },
+  q3: { correct: '✅ 正确！nameof 返回的是类型的简单名称——"Dictionary"。尖括号里的东西不被包含。和 nameof(List<int>) 一样只返回 "List"。', wrong: '❌ 答案是 C。nameof 始终返回简单名称——不含类型参数。Dictionary`2 是 CLR 内部名称（typeof 返回的 Type.Name）。D 在 C# 13 成立但在 C# 14 不成立——因为 C# 14 允许了这个写法。' },
+  q4: { correct: '✅ 正确！C——++ 和 -- 不是赋值运算符，不能和 ?. 组合。A（+=）、B（??=）、D（?[]）都是合法的。', wrong: '❌ 答案是 C。++/-- 是增减运算符而非赋值运算符——?. 赋值不支持它们。A（复合赋值）、B（null 合并赋值）、D（索引器赋值）都合法。' },
+  q5: { correct: '✅ 正确！C 准确描述了 nameof 未绑定泛型的行为——输出简单名称，与 typeof 的设计对齐。A 混淆了 ?. 和 ??= 语义；B 错误——修饰符仍需显式写；D 错误——三个特性都没引入新关键字。', wrong: '❌ 答案是 C。A 错——?. 不会初始化（那是 ??=）；B 错——修饰符仍需显式写出（只推断类型）；D 错——没有一个需要新关键字。' },
+};
+function checkAll() { Quiz.checkAll(answers, explanations); }
+</script>
+</body>
+</html>

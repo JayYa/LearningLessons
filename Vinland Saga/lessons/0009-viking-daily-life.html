@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0009 — 维京人的日常生活：长屋、食物与衣装</title>
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/compare.css">
+<link rel="stylesheet" href="../assets/tags.css">
+<link rel="stylesheet" href="../assets/reminder.css">
+<style>
+  :root {
+    --bg: #fdfaf6;
+    --text: #2c2416;
+    --accent: #7a5230;
+    --muted: #6b5e4a;
+    --card-bg: #fffdf8;
+    --border: #c4a882;
+    --highlight: #faf3e6;
+  }
+
+  h3 { color: #5a3a1e; }
+
+  /* --- longhouse diagram --- */
+  .lh-diagram {
+    background: var(--card-bg);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem 1rem 0.8rem;
+    margin: 1.2rem 0;
+    font-family: system-ui, sans-serif;
+    font-size: 0.82rem;
+    text-align: center;
+  }
+  .lh-diagram .lh-shell {
+    border: 3px solid #5a3a1e;
+    border-radius: 40% / 60%;
+    padding: 1rem 1.4rem;
+    display: inline-block;
+    min-width: 320px;
+    background: linear-gradient(180deg, #f5efe0 0%, #e8dcc8 100%);
+  }
+  .lh-diagram .lh-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.3rem 0;
+  }
+  .lh-diagram .lh-section {
+    border: 1px dashed #7a5230;
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.6);
+  }
+  .lh-diagram .lh-bench {
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+  .lh-diagram .lh-hearth {
+    background: #f0c060;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #5a3a1e;
+    margin: 0 auto;
+  }
+  .lh-diagram .lh-label {
+    font-size: 0.65rem;
+    color: var(--muted);
+  }
+
+  /* --- food table --- */
+  .food-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 500px) { .food-grid { grid-template-columns: 1fr; } }
+
+  /* --- clothing layers --- */
+  .clothing-layer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  .clothing-card {
+    flex: 1;
+    min-width: 180px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.8rem;
+    font-size: 0.88rem;
+  }
+  .clothing-card h4 {
+    font-size: 0.92rem;
+    margin-bottom: 0.3rem;
+    color: var(--accent);
+  }
+  .clothing-card ul { padding-left: 1.2rem; margin: 0; }
+  .clothing-card li { margin: 0.2rem 0; }
+
+  /* --- myth-bust --- */
+  .myth-row { display: flex; gap: 0.8rem; align-items: flex-start; margin: 0.6rem 0; font-size: 0.92rem; }
+  .myth-row .myth-icon { font-size: 1.4rem; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<h1>🏠 维京人的日常生活：长屋、食物与衣装</h1>
+<p class="subtitle">Lesson 0009 — 当维京人不在劫掠时，他们怎么生活？</p>
+
+<p class="lead">
+  我们对维京人的印象几乎全是关于劫掠——龙头战船、斧头、修道院燃烧。但一个维京人一生中<strong>95% 以上</strong>的时间不是在杀人，而是在种地、做饭、纺线、吃饭、睡觉。如果你只看劫掠，你看到的是维京人的<strong>周末兼职</strong>——不是他们的生活本身。《冰海战纪》的奴隶篇在凯蒂尔农场上花了四十多话的篇幅，描绘的正是被大多数维京题材作品忽略的<strong>日常</strong>。
+</p>
+
+<!-- ====== 1: THE LONGHOUSE ====== -->
+<h2>一、长屋（langhús）——一切的中心</h2>
+
+<p>
+  维京时代（8–11 世纪）的斯堪的纳维亚，绝大多数人住在一种叫做<strong>长屋（langhús）</strong>的建筑里。这不是"一座房子"——它是住宅、车间、谷仓、宴会厅的四合一。一家人全部的生活，都在同一个屋顶下发生。
+</p>
+
+<div class="card">
+<h3>📐 标准长屋解剖</h3>
+
+<div class="lh-diagram">
+  <div class="lh-shell">
+    <div style="font-weight:700;margin-bottom:0.3rem;">典型农家 langhús（15–22 × 5–7m）</div>
+    <div class="lh-row">
+      <div class="lh-section"><strong>储藏/畜栏</strong></div>
+      <span style="color:var(--muted);">← 隔墙 →</span>
+      <div class="lh-section" style="flex:1;">
+        <strong>中央生活大厅</strong><br>
+        <div style="display:flex;justify-content:space-between;margin:0.4rem 0;">
+          <span class="lh-bench">← 木板长凳<br>(白天坐·晚上睡)</span>
+          <span class="lh-bench">木板长凳 →<br>(白天坐·晚上睡)</span>
+        </div>
+        <div class="lh-hearth" style="margin:0 auto 0.2rem;">🔥 灶</div>
+        <div class="lh-label">夯土地面（铺草木灰吸潮）</div>
+      </div>
+      <span style="color:var(--muted);">← 隔墙 →</span>
+      <div class="lh-section"><strong>储藏/工坊</strong></div>
+    </div>
+    <div style="font-size:0.65rem;color:var(--muted);margin-top:0.4rem;">
+      墙：木板或草皮（冰岛/格陵兰草皮墙厚达 1.8m）&nbsp;|&nbsp;屋顶：茅草或草皮&nbsp;|&nbsp;无烟囱，烟从屋顶开口排出
+    </div>
+  </div>
+</div>
+
+<table style="margin-top:1rem;">
+  <tr><th></th><th>标准农家</th><th>酋长大厅</th></tr>
+  <tr><td>长度</td><td>15–22 m</td><td>30–80 m</td></tr>
+  <tr><td>宽度</td><td>5–7 m</td><td>7.5–10 m</td></tr>
+  <tr><td>墙壁</td><td>木板 / 编条抹泥 / 草皮</td><td>木板 + 外部扶壁</td></tr>
+  <tr><td>房间</td><td>2–3 间（中央厅 + 两端侧房）</td><td>4–6 间（含专用畜栏、宴会厅、工坊）</td></tr>
+  <tr><td>已知最大</td><td colspan="2">Borg（挪威罗弗敦群岛）：长 <strong>80 m</strong>，5 个房间，5 个入口，使用于 7–10 世纪</td></tr>
+</table>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+<h3>🔑 三个关键理解</h3>
+
+<p><strong>1. 灶是绝对的中心。</strong>长屋里没有"厨房"——灶就在中央大厅的正中间。它同时是光源、热源、烹饪台。灰烬铺在夯土地面上吸收湿气。全家人围着灶吃饭、做手工、入睡。灶定义了"在家"的感觉。</p>
+
+<p><strong>2. 没有隐私。</strong>整个扩展家庭——夫妇、孩子、老人、奴隶、有时还有牲畜——在同一个空间里生活。萨迦文学里洗澡、做饭、吵架、性交都发生在同一个大厅。唯一的"私人空间"可能是一个封闭的木箱床（只有主人夫妇能用），其余人睡在墙边的长凳上，可能<strong>半坐着睡</strong>（考古发现床凳极窄，根本不能平躺）。</p>
+
+<p style="margin-bottom:0;"><strong>3. 人与牲畜同住——但逐渐分离。</strong>最早的长屋一端是畜栏（byre），牛和人共用同一个屋顶。牛的身体热在冬天是宝贵的暖气。到了维京时代中后期，牲畜被逐步移到独立的附属建筑中——这是生活舒适度提高的标志。</p>
+</div>
+
+<!-- ====== 2: FOOD ====== -->
+<h2>二、吃什么？喝什么？</h2>
+
+<p>
+  维京饮食以<strong>自给自足</strong>为核心。每户农家都是一座近乎闭环的食物工厂——种植、养殖、采集、保存，全在一个院子里完成。阿拉伯旅行者 al-Tartushi 在 10 世纪访问了海泽比（Hedeby），注意到当地居民严重依赖鱼类——他记录了<strong>26 种</strong>不同的鱼。
+</p>
+
+<div class="food-grid">
+<div class="card">
+<h3>🌾 主食（每天的基础）</h3>
+<table>
+  <tr><th>食物</th><th>形式</th></tr>
+  <tr><td><strong>大麦</strong></td><td>粥、面包、啤酒</td></tr>
+  <tr><td><strong>燕麦</strong></td><td>粥（最日常）</td></tr>
+  <tr><td><strong>黑麦</strong></td><td>酸面包（类似现代丹麦黑面包）</td></tr>
+  <tr><td><strong>小麦</strong></td><td>富人的奢侈品</td></tr>
+</table>
+<p style="font-size:0.8rem;color:var(--muted);margin:0.4rem 0 0;">面包是扁平的无酵饼，在铁板上烙——烤箱到维京时代晚期才出现。</p>
+</div>
+
+<div class="card">
+<h3>🥩 蛋白质（季节性的）</h3>
+<table>
+  <tr><th>来源</th><th>说明</th></tr>
+  <tr><td><strong>猪</strong></td><td>唯一专为肉食饲养的动物</td></tr>
+  <tr><td><strong>羊/山羊</strong></td><td>肉 + 奶 + 羊毛（三重用途）</td></tr>
+  <tr><td><strong>牛</strong></td><td>主要是畜力+奶，老了才宰</td></tr>
+  <tr><td><strong>鱼</strong></td><td>鲱鱼、鳕鱼、鲑鱼——晒干或盐腌</td></tr>
+  <tr><td><strong>海豹/鲸</strong></td><td>沿海和北大西洋殖民地</td></tr>
+  <tr><td><strong>马</strong></td><td>仅用于盛宴/仪式场合</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3>🥬 蔬果与野生植物</h3>
+<table>
+  <tr><th>种类</th><th>例子</th></tr>
+  <tr><td><strong>蔬菜</strong></td><td>卷心菜、洋葱、大蒜、韭菜、芜菁、豌豆、蚕豆</td></tr>
+  <tr><td><strong>野生</strong></td><td>当归（Angelica——极为重要，根茎叶全用）、浆果、榛子</td></tr>
+  <tr><td><strong>水果</strong></td><td>苹果等（有限）</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3>🧈 乳制品 &amp; 🍺 饮品</h3>
+<table>
+  <tr><th>品类</th><th>说明</th></tr>
+  <tr><td><strong>黄油</strong></td><td>重盐腌制，可存放很久</td></tr>
+  <tr><td><strong>奶酪</strong></td><td>多种类型</td></tr>
+  <tr><td><strong>skyr</strong></td><td>冰岛式发酵奶——不腐坏，航海中携带</td></tr>
+  <tr><td><strong>乳清</strong></td><td>每日饮品（酸性，导致冰岛骨骼的牙齿侵蚀）</td></tr>
+  <tr><td><strong>啤酒/麦酒</strong></td><td>大麦酿造，日常大量饮用</td></tr>
+  <tr><td><strong>蜂蜜酒</strong></td><td>尊贵饮品，宴会用</td></tr>
+  <tr><td><strong>葡萄酒</strong></td><td>进口，仅富人能享用</td></tr>
+</table>
+</div>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+<h3>🔄 保存技术 = 生存技术</h3>
+<p>北欧的冬天长达 5–6 个月。能否撑过冬天完全取决于秋天能把多少食物保存下来：</p>
+<ul style="margin-bottom:0;">
+  <li><strong>肉类：</strong>风干、烟熏、盐腌。秋天屠宰季也做血肠和内脏香肠</li>
+  <li><strong>鱼类：</strong>晒干（鳕鱼干硬如木板，吃之前要敲碎或泡软）或盐腌（鲱鱼）</li>
+  <li><strong>谷物：</strong>储藏在封闭的坑或木箱中</li>
+  <li><strong>乳制品：</strong>黄油重盐 + skyr（天然耐储存）</li>
+  <li><strong>节奏：</strong>一天两顿——<strong>dagverðr（日餐）</strong>早晨，<strong>náttverðr（夜餐）</strong>傍晚。全家围灶而食</li>
+</ul>
+</div>
+
+<!-- ====== 3: CLOTHING ====== -->
+<h2>三、穿什么？怎么打扮？</h2>
+
+<p>
+  流行文化中的维京人往往是穿粗糙皮草的邋遢形象。考古学说的恰恰相反：维京人是<strong>精致、爱干净、赶时髦</strong>的。阿拉伯人伊本·法德兰（10世纪）说罗斯人"每天从起床就开始梳头洗脸"，英格兰编年史家抱怨维京男人每周洗澡换衣服"对英格兰女人有不当的吸引力"。
+</p>
+
+<div class="clothing-layer">
+<div class="clothing-card">
+  <h4>👨 维京男性着装（从内到外）</h4>
+  <ul>
+    <li><strong>亚麻内衣</strong>——贴身穿，舒适吸汗</li>
+    <li><strong>羊毛长袍</strong>——及膝长袖，可宽松可紧身。富人加丝绸滚边和金线刺绣</li>
+    <li><strong>裤子</strong>——两种：紧身长裤 或 膝盖处收拢的宽松"灯笼裤"（Gotland 画像石可见）</li>
+    <li><strong>皮带</strong>——带青铜/银扣，挂刀和皮囊（装火镰、梳子、钱币）</li>
+    <li><strong>斗篷</strong>——矩形羊毛布，用大号环状胸针固定在<strong>右</strong>肩（空出剑臂）</li>
+    <li><strong>帽子</strong>——尖顶羊毛帽或皮帽（寒冷天气）</li>
+    <li><strong>鞋子</strong>——软皮鞋，脚踝系带</li>
+  </ul>
+</div>
+
+<div class="clothing-card">
+  <h4>👩 维京女性着装（从内到外）</h4>
+  <ul>
+    <li><strong>亚麻衬裙</strong>——长袖，有时打褶</li>
+    <li><strong>羊毛围裙裙（hangerock）</strong>——无袖筒形外裙，由两条肩带吊起，肩带下方用<strong>一对椭圆形"龟甲"胸针</strong>固定——这是维京女性最标志性的装束</li>
+    <li><strong>第三枚胸针</strong>——三叶形或圆盘形，在胸前</li>
+    <li><strong>珠串</strong>——玻璃、琥珀、银珠挂于两枚胸针之间，有时坠有护身符</li>
+    <li><strong>皮带</strong>——挂刀、皮囊，已婚女性挂<strong>钥匙</strong>（家庭权力的象征）</li>
+    <li><strong>小工具</strong>——剪刀、针盒、镊子挂在胸针的链子上</li>
+    <li><strong>头饰</strong>——头发在脑后打结，系发带或发网；基督教化后加丝绸帽</li>
+  </ul>
+</div>
+</div>
+
+<div class="card">
+<h3>🎨 颜色、布料与社会阶层</h3>
+<table>
+  <tr><th>阶层</th><th>典型穿着</th></tr>
+  <tr>
+    <td><strong>Jarl（贵族）</strong></td>
+    <td>丝绸（中国唐/拜占庭进口）、金银线刺绣、皮毛镶边斗篷（海狸/貂）、多套换装、精工胸针</td>
+  </tr>
+  <tr>
+    <td><strong>Karl（自由民）</strong></td>
+    <td>羊毛 + 亚麻、较简朴的青铜/镀金胸针、结实耐用的日常衣物——从贵族那里传下来的旧衣服</td>
+  </tr>
+  <tr>
+    <td><strong>Þræll（奴隶）</strong></td>
+    <td>粗未染色羊毛袍、绳子或简易腰带、基本没有首饰</td>
+  </tr>
+</table>
+<p style="margin-top:0.6rem;">维京人爱<strong>鲜艳颜色</strong>——红（茜草根）、蓝（菘蓝——斯堪的纳维亚尤流行）、黄（洋葱皮）、绿（蓝+黄混合）、紫（地衣/接骨木）。衣服边缘有平板编织的彩色饰带。染料虽会褪色，但新鲜时极其抢眼。丹麦国家博物馆的 Ulla Mannering 博士说维京人"追随时尚"——颜色、装饰和衣型都随时间和地区变化。</p>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+<h3>🪞 卫生与修饰——颠覆刻板印象</h3>
+<div class="myth-row"><span class="myth-icon">🧹</span><span><strong>每周六是洗澡日。</strong>维京人每周六沐浴、换洗衣服。撒克逊编年史家对此感到"怪异且反感"——因为盎格鲁-撒克逊人洗澡频率要低得多。</span></div>
+<div class="myth-row"><span class="myth-icon">🪮</span><span><strong>梳子是出土最多的维京文物之一。</strong>用鹿角、骨头、象牙或木头制成，许多人随身携带带保护盒的梳子。</span></div>
+<div class="myth-row"><span class="myth-icon">✂️</span><span><strong>坟墓里有镊子、剃刀和"耳勺"</strong>（清理耳垢用）。有证据表明男女都可能使用眼线（kohl）。</span></div>
+<div class="myth-row"><span class="myth-icon">💇</span><span><strong>男性发型：</strong>"丹麦式"=头顶长发、脑后短发（类似反莫西干）。蓄须。著名绰号有"八字胡"斯文（Sweyn Forkbeard）、"金发"哈拉尔（Harald Fairhair）。<strong>女性发型：</strong>长发，脑后打结垂马尾，配发带和丝带。</span></div>
+</div>
+
+<!-- ====== 4: ARCHAEOLOGY ====== -->
+<h2>四、我们怎么知道这些？</h2>
+
+<table>
+  <tr><th>证据类型</th><th>告诉我们什么</th></tr>
+  <tr>
+    <td><strong>垃圾堆（midden）</strong></td>
+    <td>动物骨骼、鱼骨、榛子壳、植物残余 → 直接证据：吃了什么</td>
+  </tr>
+  <tr>
+    <td><strong>柱洞和墙基</strong></td>
+    <td>长屋的结构框架、房间划分。冰岛的火山灰层（如 871 年 Landnám 层和 1104 年 Hekla 层）提供了精确的年代标记</td>
+  </tr>
+  <tr>
+    <td><strong>骨骼分析</strong></td>
+    <td>维京人营养良好（少有龋齿和佝偻病），但牙齿磨损严重（粗粮+酸性乳清）。冰岛人的牙齿侵蚀尤其明显</td>
+  </tr>
+  <tr>
+    <td><strong>纺织品残留</strong></td>
+    <td>胸针的金属盐在羊毛/亚麻上留下印记，保存了织物纹理。Birka（瑞典）约 60 个墓中保存了织物痕迹——包括中国丝绸</td>
+  </tr>
+  <tr>
+    <td><strong>土壤化学分析</strong></td>
+    <td>高磷 → 烹饪/食物垃圾/人畜排泄；高钙镁钾钠 → 羊毛洗涤/染色；高铜锌铅 → 金属加工</td>
+  </tr>
+  <tr>
+    <td><strong>文献</strong></td>
+    <td>萨迦文学（需小心使用，因为它们写于基督教时期）、阿拉伯旅行者记录（al-Tartushi、伊本·法德兰）</td>
+  </tr>
+</table>
+
+<!-- ====== 5: MANGA ====== -->
+<h2>五、漫画中的维京日常——凯蒂尔农场</h2>
+
+<p>
+  《冰海战纪》对维京日常最集中的呈现是<strong>奴隶篇</strong>（第 55–99 话，漫画第 8–14 卷，动画第二季）。托尔芬在凯蒂尔农场上从一个复仇驱动的战士蜕变为一个和平主义者——而这一蜕变完全是在<strong>农耕的日常节奏</strong>中发生的。
+</p>
+
+<div class="card">
+<h3>漫画对维京农庄生活的还原</h3>
+<table>
+  <tr><th>漫画描绘</th><th>历史对应</th><th>具体章节</th></tr>
+  <tr>
+    <td>托尔芬和埃纳尔砍伐森林、挖树根以开出麦田</td>
+    <td>真实反映了北欧开垦新农地的方式——斧头是最基本工具，整个村庄共用一张犁</td>
+    <td>第 56–71 话</td>
+  </tr>
+  <tr>
+    <td>托尔芬从未见过犁——在战团长大的他只懂斧头和剑</td>
+    <td>精准反映了维京战士文化与农业文化的分裂。许多年轻人在劫掠中长大，对农活完全陌生</td>
+    <td>第 56 话</td>
+  </tr>
+  <tr>
+    <td>奴隶的食物（粗面包+奶酪）vs 自由民的食物（更丰盛）</td>
+    <td>准确反映了社会分层在饮食上的体现</td>
+    <td>第 65 话</td>
+  </tr>
+  <tr>
+    <td>斯韦克尔老人关于"无止境扩张财富"的哲学思考</td>
+    <td>虚构的哲学对话，但准确捕捉了维京转型期的焦虑——从"够用就好"到"永不够"的农耕心态</td>
+    <td>第 65 话</td>
+  </tr>
+  <tr>
+    <td>凯蒂尔的"护卫"夜间巡逻防止偷畜贼</td>
+    <td>牲畜盗窃是维京时代最常见的犯罪之一——牛羊就是移动的财富</td>
+    <td>多话</td>
+  </tr>
+  <tr>
+    <td>奴隶可以通过劳动赎身——约 3 年艰苦工作</td>
+    <td>符合 <a href="0007-viking-social-hierarchy.html">Lesson 0007</a> 中讨论的 frelsi（赎身）制度。托尔芬的弧线——从奴隶到自由人到文兰创始人——在维京社会是可行的</td>
+    <td>第 56、99 话</td>
+  </tr>
+</table>
+</div>
+
+<p>
+  奴隶篇被广泛认为是《冰海战纪》的<strong>主题核心</strong>。作者幸村诚把维京和平主义（托尔芬"不杀"的誓言）放在最平凡的农耕劳动中生长——砍树、犁地、播种、收获——而不是在战场上。这个选择本身就是对维京日常生活的深刻理解：<strong>真正的维京时代不是在战船上度过的，是在长屋的灶火旁度过的。</strong>
+</p>
+
+<!-- ====== QUIZ ====== -->
+<h2>📝 自我检测</h2>
+
+<div class="quiz">
+  <p><strong>Q1.</strong> 标准维京农家长屋的长度大约是多少？</p>
+  <label><input type="radio" name="q1" value="a"> A. 5–10 米</label>
+  <label><input type="radio" name="q1" value="b"> B. 15–22 米</label>
+  <label><input type="radio" name="q1" value="c"> C. 50–80 米</label>
+  <label><input type="radio" name="q1" value="d"> D. 100 米以上</label>
+  <button onclick="checkQuiz(1,'b','✅ 正确！标准农家 langhús 长 15–22 米、宽 5–7 米。50–80 米是酋长大厅的规模（已知最大的是挪威 Borg 的 80 米厅）。','❌ 不对。正确答案是 B。标准农家 langhús 长 15–22 米、宽 5–7 米。50 米以上是酋长级别。')">检查答案</button>
+  <div id="f1" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q2.</strong> 维京女性着装最具标志性的特征是什么？</p>
+  <label><input type="radio" name="q2" value="a"> A. 头戴角盔</label>
+  <label><input type="radio" name="q2" value="b"> B. 腰挂长剑</label>
+  <label><input type="radio" name="q2" value="c"> C. 一对椭圆形"龟甲"胸针固定围裙裙</label>
+  <label><input type="radio" name="q2" value="d"> D. 全身皮草</label>
+  <button onclick="checkQuiz(2,'c','✅ 正确！维京女性穿无袖筒形围裙裙（hangerock），由两条肩带吊起，肩带下方用一对椭圆形青铜胸针固定——这是维京女性最标志性的装束。已婚女性还在腰间挂钥匙，象征家庭权力。','❌ 不对。正确答案是 C。维京女性不戴角盔（从来就没有维京角盔这种东西）、不佩长剑、不全穿皮草。最标志性的装束是一对椭圆形龟甲胸针固定的 hangerock 围裙裙。')">检查答案</button>
+  <div id="f2" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q3.</strong> 维京人平时喝什么饮品最多？</p>
+  <label><input type="radio" name="q3" value="a"> A. 蜂蜜酒（mead）——宴会必备</label>
+  <label><input type="radio" name="q3" value="b"> B. 葡萄酒——富人的日常饮品</label>
+  <label><input type="radio" name="q3" value="c"> C. 啤酒/麦酒（ale）——大麦酿造，日常大量饮用</label>
+  <label><input type="radio" name="q3" value="d"> D. 纯水——最安全的饮品</label>
+  <button onclick="checkQuiz(3,'c','✅ 正确！大麦酿造的啤酒/麦酒是维京人每日大量饮用的饮品。蜂蜜酒是宴会和尊贵场合用的；葡萄酒纯进口，仅富人能喝。','❌ 不对。正确答案是 C。啤酒/麦酒是大麦酿造、每日大量饮用的日常饮品。蜂蜜酒是尊贵饮品（宴会用），葡萄酒全是进口的奢侈品。中世纪的人确实喝水，但发酵饮品因为更安全而更日常。')">检查答案</button>
+  <div id="f3" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q4.</strong> 关于维京人的卫生习惯，以下哪项是正确的？</p>
+  <label><input type="radio" name="q4" value="a"> A. 维京人被视为肮脏的野蛮人，很少洗澡</label>
+  <label><input type="radio" name="q4" value="b"> B. 维京人每周六洗澡，随身携带梳子，使用镊子和耳勺</label>
+  <label><input type="radio" name="q4" value="c"> C. 维京人每天都洗澡，一天三次</label>
+  <label><input type="radio" name="q4" value="d"> D. 维京人只在下水劫掠时才碰到水</label>
+  <button onclick="checkQuiz(4,'b','✅ 正确！考古证据确凿：维京人每周六是洗澡日（盎格鲁-撒克逊人觉得这很奇怪）、梳子是出土最多的文物之一、坟墓里有镊子/剃刀/耳勺。英格兰编年史家抱怨维京男人太爱干净对英格兰女人"有不正当吸引力"。','❌ 不对。正确答案是 B。维京人远非邋遢的野蛮人——他们有每周的洗澡日、随身携带梳子、使用镊子和耳勺。这个事实被考古学和同时代文字记录双重证实，颠覆了流行文化中的刻板印象。')">检查答案</button>
+  <div id="f4" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q5.</strong> （深度题）长屋里所有人睡在同一个大厅的墙边长凳上。以下哪项最有可能是这种"零隐私"生活方式的<em>真正原因</em>？</p>
+  <label><input type="radio" name="q5" value="a"> A. 维京人特别喜欢集体生活，不喜欢独处</label>
+  <label><input type="radio" name="q5" value="b"> B. 灶火是唯一的热源——在斯堪的纳维亚的冬天，远离灶火意味着冻死</label>
+  <label><input type="radio" name="q5" value="c"> C. 维京法律强制要求所有人睡在同一个房间</label>
+  <label><input type="radio" name="q5" value="d"> D. 建筑技术限制——维京人不知道怎么建隔墙</label>
+  <button onclick="checkQuiz(5,'b','✅ 正确！灶是长屋里唯一的热源。在斯堪的纳维亚持续 5–6 个月的冬天里，远离灶火意味着冻死。零隐私不是文化偏好——它是生存必需。人、牲畜、灶——在同一个屋檐下，因为离开彼此谁都活不过冬天。','❌ 不对。正确答案是 B。灶是长屋里唯一的持续热源。在北欧持续半年的冬天里，远离灶火意味着冻死。零隐私首先不是文化选择——它是生存必需。长屋里当然有隔墙（分隔畜栏和储藏室），但所有人都睡在灶的周围，因为那是唯一温暖的地方。')">检查答案</button>
+  <div id="f5" class="feedback"></div>
+</div>
+
+<!-- ====== LESSON NAV ====== -->
+<hr>
+
+<div class="card" style="text-align:center;">
+  <p style="margin-bottom:0.4rem;"><strong>📚 课程导航</strong></p>
+  <p style="font-size:0.88rem;color:var(--muted);margin-bottom:0;">
+    ← <a href="0008-viking-christianization.html">Lesson 0008：基督教化</a>
+    &nbsp;·&nbsp;
+    <a href="0007-viking-social-hierarchy.html">Lesson 0007：社会结构</a>
+    &nbsp;·&nbsp;
+    <a href="0006-vinland-norse-in-north-america.html">Lesson 0006：文兰</a>
+  </p>
+</div>
+
+<!-- ====== REMINDERS ====== -->
+<div class="reminder">
+  <strong>📖 建议阅读</strong><br>
+  Neil Price, <em>The Children of Ash and Elm</em> (2020), 第 5–7 章——涵盖长屋建筑、日常生活和物质文化，是本课的主要知识来源。<br>
+  Else Roesdahl, <em>The Vikings</em> (3rd ed., 2016), 第 4 章——维京日常生活与社会的经典概述。<br>
+  Danish National Museum, <em><a href="https://en.natmus.dk/historical-knowledge/denmark/prehistoric-period-until-1050-ad/the-viking-age/food/" target="_blank">Viking Food</a></em>——在线免费资源，覆盖食物与饮食的考古证据。
+</div>
+
+<div class="reminder-qa">
+  <strong>🤔 有疑问？</strong><br>
+  长屋的建筑细节、特定食物的考古证据、不同地区的服饰差异、《冰海战纪》其他章节对日常生活的描绘——任何不清楚的地方都可以直接问我。也可以回顾 <a href="0007-viking-social-hierarchy.html">Lesson 0007</a>（社会阶层如何体现在衣食住上）和 <a href="0008-viking-christianization.html">Lesson 0008</a>（基督教化如何改变了维京人的日常生活模式——从船葬到教堂墓地、从口头传统到成文法律）来建立连接。
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>
