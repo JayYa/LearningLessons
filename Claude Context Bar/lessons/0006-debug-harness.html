@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0006 — debug.ts：独立调试管线</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<h1>
+  <span class="lesson-num">Lesson 0006</span>
+  debug.ts：独立调试管线
+</h1>
+
+<p class="lede">
+  <a href="0005-refresh-all-sessions.html">Lesson 0005</a> 带你看完了整个"数据 → UI"的完整链路。但有一个问题：如果状态栏显示的结果不对——某个会话没出现、某个会话不该出现却出现了——你怎么<strong>调试</strong>？VS Code 扩展在 Extension Development Host 里运行，你没法在终端里 <code>console.log</code> 出来看。<code>debug.ts</code> 就是为了解决这个问题而存在的：它把核心逻辑<strong>复制出来</strong>，做成一个独立的 Node.js 脚本，让你在终端里看到扩展的完整决策过程。
+</p>
+
+<div class="callout">
+  <strong>📌 本节课对应代码：</strong><code><a href="../temp_repo/src/debug.ts">src/debug.ts</a></code>（273 行）、<code><a href="../temp_repo/tsconfig.json">tsconfig.json</a></code>（18 行）。
+</div>
+
+<h2>1. 为什么需要一个独立的调试脚本</h2>
+
+<p>VS Code 扩展的运行环境和普通 Node.js 脚本有一个根本区别：</p>
+
+<table>
+  <tr><th></th><th>extension.ts</th><th>debug.ts</th></tr>
+  <tr><td>运行环境</td><td>VS Code Extension Host</td><td>Node.js（终端直接跑）</td></tr>
+  <tr><td>入口</td><td><code>activate()</code> 函数</td><td>脚本顶层执行</td></tr>
+  <tr><td>输出</td><td>状态栏 UI + 隐式行为</td><td>终端文本 + 详细诊断</td></tr>
+  <tr><td>依赖</td><td><code>vscode</code> API（StatusBarItem 等）</td><td>纯 Node.js（<code>fs</code>、<code>path</code>、<code>os</code>）</td></tr>
+  <tr><td>使用场景</td><td>用户正常使用</td><td>开发者排查"为什么这个会话没显示"</td></tr>
+</table>
+
+<p>
+  扩展内你不能随意 <code>console.log</code>——日志输出在 Extension Host 的开发者控制台里，需要手动打开"帮助 → 切换开发人员工具"才能看到。而 <code>debug.ts</code> 在终端里直接跑，每一行决策都<strong>以人类可读的格式打印出来</strong>。
+</p>
+
+<div class="callout">
+  <strong>🎯 这不是测试——这是可观测性。</strong>测试验证"行为是否正确"，而 debug.ts 回答的是"行为<em>为什么</em>是这样"。它打印出超时会话的判定依据、每个会话被显示/隐藏的<strong>原因</strong>——这些信息在正常运行时被有意隐藏，但在调试时不可替代。
+</div>
+
+<h2>2. 架构：刻意为之的代码复制</h2>
+
+<p>
+  <code>debug.ts</code> 中最引人注目的不是它做了什么，而是它的结构——文件前半部分是<strong>从 extension.ts 复制过来的</strong>类型定义和核心逻辑：
+</p>
+
+<pre><span class="cmt">// debug.ts 文件结构</span>
+<span class="cmt">//</span>
+<span class="cmt">// ============================================</span>
+<span class="cmt">// 第 18-38 行 — TYPES（从 extension.ts 复制）</span>
+<span class="cmt">//     TokenUsage, SessionInfo 接口定义</span>
+<span class="cmt">//</span>
+<span class="cmt">// ============================================</span>
+<span class="cmt">// 第 44-138 行 — LOGIC（从 extension.ts 复制）</span>
+<span class="cmt">//     getClaudeProjectsDir()</span>
+<span class="cmt">//     getLatestTokenCount()  — 完全相同的 90 行双向扫描</span>
+<span class="cmt">//</span>
+<span class="cmt">// ============================================</span>
+<span class="cmt">// 第 144-268 行 — DEBUG RUNNER（debug.ts 独有的）</span>
+<span class="cmt">//     debugSessions()  — 终端输出 + 超时会话分析</span>
+<span class="cmt">//</span>
+<span class="cmt">// ============================================</span>
+<span class="cmt">// 第 271-272 行 — 入口</span>
+<span class="cmt">//     从 process.argv 读取可选的项目名过滤参数并发起调用</span></pre>
+
+<p>
+  一个显而易见的质疑是：为什么不把共享逻辑提取到一个 <code>shared.ts</code> 里，让两边都 import？答案是：
+</p>
+
+<pre><span class="cmt">// 如果提取共享模块……
+// shared.ts → extension.ts  ✅ 可以 import
+// shared.ts → debug.ts     ❌ 也可以 import，编译产物在 out/ 里</span>
+
+<span class="cmt">// 实际上是可以的——两者都被 tsc 编译到 out/</span>
+<span class="cmt">// 但复制有复制的好处：
+// 1. debug.ts 可以脱离 VS Code 运行——不需要任何 VS Code 依赖
+// 2. 调试逻辑和扩展逻辑可以独立演化
+// 3. 避免引入一个"只为两个文件服务"的模块——不值得的抽象</span></pre>
+
+<div class="callout">
+  <strong>🎯 代码复制不是绝对的恶——关键看上下文。</strong>当两个模块共享相同的生命周期（同一个 tsc 编译产物）且共享逻辑只有 ~150 行时，复制比提取更简单。提取共享模块会引入模块解析路径、循环依赖风险、以及"为修改一个模块而不得不动另一个模块"的心智负担。这条边界在 150 行复制 vs 50 行胶水代码（import/export/路径配置）时是划算的——超过 300 行就不一定了。
+</div>
+
+<h2>3. debug.ts 与 extension.ts 的关键差异</h2>
+
+<p>虽然核心管线相同，但 debug 版本有三处重要的行为差异：</p>
+
+<h3>3.1 过滤 <code>agent-*.jsonl</code></h3>
+
+<pre><span class="cmt">// debug.ts 第 171 行</span>
+<span class="kw">const</span> files = fs.readdirSync(projectPath)
+    .filter(f => f.endsWith(<span class="str">'.jsonl'</span>) && !f.startsWith(<span class="str">'agent-'</span>))
+    <span class="cmt">//                                   ↑ 跳过 agent- 开头的文件</span></pre>
+
+<p>
+  <code>agent-*.jsonl</code> 是 Claude Code 在某些场景下为<strong>子代理（sub-agent）创建的会话文件</strong>。它们和普通会话放在同一个目录下，但不是用户直接交互的会话——跳过它们是正确行为。
+</p>
+
+<div class="callout">
+  <strong>⚠️ 这与 Lesson 0005 的子代理盲区有关</strong>：这些 <code>agent-*.jsonl</code> 文件如果存在，它们包含子代理的 token usage。但目前 <code>extension.ts</code> 的 <code>findActiveSessions()</code> 没有过滤 <code>agent-</code> 前缀——它依赖 mtime 判断活跃性，可能误把 agent 会话文件当作普通会话处理。这是 debug.ts 比 extension.ts<strong>更正确</strong>的地方。
+</div>
+
+<h3>3.2 详细的诊断输出</h3>
+
+<p>extension.ts 的决策是<strong>沉默</strong>的——会话要么出现在状态栏，要么不出现。debug.ts 告诉你<strong>为什么</strong>：</p>
+
+<pre><span class="cmt">// debug.ts 的输出示例</span>
+========== CLAUDE CONTEXT BAR DEBUG ==========
+Time: 2026-06-26T14:30:00.000Z
+Claude dir: /Users/xiaos/.claude/projects
+
+--- Project: d--teach-Claude-Context-Bar ---
+Found 3 active session files
+
+  📄 6b4f4a7a...
+     Created: 2026-06-26T12:00:00.000Z
+     LastUpd: 2026-06-26T14:25:00.000Z
+     Tokens:  144000
+     Cleared: false
+     FirstMsg: "@lessons/0005-refresh-all-sessions.html..."
+
+========== SUPERSESSION ANALYSIS ==========
+
+Project: d--teach-Claude-Context-Bar
+  [✅ SHOW] 6b4f4a7a
+  [❌ HIDE] 729ca0cf
+      Reason: superseded by 6b4f4a7a (newer created after this one's last update)
+      Created: 2026-06-25T10:00:00.000Z
+      LastUpd: 2026-06-26T11:00:00.000Z</pre>
+
+<h3>3.3 支持项目名过滤参数</h3>
+
+<pre><span class="cmt">// debug.ts 第 271-272 行</span>
+<span class="kw">const</span> projectFilter = process.argv[2] || <span class="kw">undefined</span>;
+debugSessions(projectFilter);
+
+<span class="cmt">// 用法：</span>
+<span class="cmt">//   node out/debug.js                      → 分析所有项目</span>
+<span class="cmt">//   node out/debug.js Context-Bar          → 只看名称匹配 Context-Bar 的项目</span></pre>
+
+<h2>4. 运行方式</h2>
+
+<p>debug.ts 不是扩展的一部分——它是独立的 Node.js 脚本。需要两步：</p>
+
+<pre><span class="cmt"># 1. 编译 TypeScript → JavaScript（输出到 out/ 目录）</span>
+npm run compile
+
+<span class="cmt"># 2. 用 Node.js 运行编译后的脚本</span>
+node out/debug.js                    <span class="cmt"># 所有项目</span>
+node out/debug.js Context-Bar        <span class="cmt"># 只分析名称包含 "Context-Bar" 的项目</span></pre>
+
+<p>
+  <code>npm run compile</code> 执行的是 <code>tsc -p ./</code>——读取 <code>tsconfig.json</code>，把 <code>src/</code> 下的所有 <code>.ts</code> 文件编译为 <code>out/</code> 下的 <code>.js</code> 文件。编译完成后 <code>out/debug.js</code> 和 <code>out/extension.js</code> 都在同一个目录下。
+</p>
+
+<h2>5. 超时会话分析的完整逻辑</h2>
+
+<p>debug.ts 中的超时会话分析是 extension.ts 中同一逻辑的<strong>带注释版本</strong>——但它把决策过程展开为终端输出：</p>
+
+<pre><span class="cmt">// 第 211-261 行：超时会话分析</span>
+<span class="kw">const</span> projectGroups = <span class="kw">new</span> Map&lt;<span class="kw">string</span>, SessionInfo[]&gt;();
+<span class="kw">for</span> (<span class="kw">const</span> session <span class="kw">of</span> allSessions) {
+    <span class="kw">const</span> base = session.projectName;
+    <span class="kw">if</span> (!projectGroups.has(base)) projectGroups.set(base, []);
+    projectGroups.get(base)!.push(session);
+}
+
+<span class="kw">for</span> (<span class="kw">const</span> [baseName, group] <span class="kw">of</span> projectGroups) {
+    <span class="cmt">// 1. 按创建时间从新到老排序</span>
+    group.sort((a, b) => (b.sessionCreated?.getTime() || 0) - (a.sessionCreated?.getTime() || 0));
+
+    <span class="kw">for</span> (<span class="kw">let</span> i = 0; i < group.length; i++) {
+        <span class="kw">const</span> session = group[i];
+        <span class="kw">let</span> status = <span class="str">"✅ SHOW"</span>;
+        <span class="kw">let</span> reason = <span class="str">""</span>;
+
+        <span class="cmt">// 2. 规则 1：/clear 结束的会话 → 隐藏</span>
+        <span class="kw">if</span> (session.wasCleared) {
+            status = <span class="str">"❌ HIDE"</span>;
+            reason = <span class="str">"wasCleared=true (ended with /clear)"</span>;
+        } <span class="kw">else</span> {
+            <span class="cmt">// 3. 规则 2：如果任何更「新」创建的会话
+            //    的创建时间 > 当前会话的最后更新时间 → 当前会话被取代</span>
+            <span class="kw">for</span> (<span class="kw">let</span> j = 0; j < i; j++) {
+                <span class="kw">const</span> newerSession = group[j];
+                <span class="kw">const</span> newerCreated = newerSession.sessionCreated?.getTime() || 0;
+                <span class="kw">const</span> thisLastUpdated = session.lastUpdated.getTime();
+
+                <span class="kw">if</span> (newerCreated > thisLastUpdated) {
+                    status = <span class="str">"❌ HIDE"</span>;
+                    reason = `superseded by ${newerSession.sessionId} … `;
+                    <span class="kw">break</span>;
+                }
+            }
+        }
+
+        <span class="cmt">// 4. 输出：每条会话都打印判定结果和原因</span>
+        console.log(`  [${status}] ${session.sessionId}`);
+        <span class="kw">if</span> (reason) console.log(`      Reason: ${reason}`);
+    }
+}</pre>
+
+<p>
+  这个算法和 Lesson 0004 第 6 节完全一致——「如果老会话在新会话创建后没有再活动，就被淘汰」。区别只在于 debug.ts <strong>把判断过程打印出来</strong>。
+</p>
+
+<div class="callout">
+  <strong>🎯 调试脚本的价值不在"新逻辑"，而在"可见性"。</strong>同一个算法，在 extension.ts 中返回的是一个过滤后的 <code>SessionInfo[]</code>；在 debug.ts 中返回的是「每条会话 + 决策原因」的可读报告。当状态栏显示和预期不符时，debug.ts 就是你的第一站。
+</div>
+
+<h2>6. 完整数据流</h2>
+
+<pre><span class="cmt">                          debug.ts 数据流</span>
+<span class="cmt">                             </span>
+<span class="cmt">                    process.argv[2]（可选的项目过滤参数）</span>
+<span class="cmt">                             │</span>
+<span class="cmt">                             ▼</span>
+<span class="cmt">              getClaudeProjectsDir()</span>
+<span class="cmt">              ┌──────────────────┐</span>
+<span class="cmt">              │ os.homedir()     │</span>
+<span class="cmt">              │ + /.claude/      │</span>
+<span class="cmt">              │   projects/      │</span>
+<span class="cmt">              └──────┬───────────┘</span>
+<span class="cmt">                     │</span>
+<span class="cmt">                     ▼</span>
+<span class="cmt">              扫描项目目录</span>
+<span class="cmt">              ┌──────────────────┐</span>
+<span class="cmt">              │ 遍历 frojectDirs │</span>
+<span class="cmt">              │ 过滤：mtime >    │</span>
+<span class="cmt">              │   now - 5min     │</span>
+<span class="cmt">              │ 过滤：!agent-*   │  ← 只在这里有！</span>
+<span class="cmt">              │ 排序：新 → 老    │</span>
+<span class="cmt">              └──────┬───────────┘</span>
+<span class="cmt">                     │</span>
+<span class="cmt">                     ▼</span>
+<span class="cmt">              getLatestTokenCount()  ← 从 extension.ts 复制的 90 行</span>
+<span class="cmt">              ┌──────────────────┐</span>
+<span class="cmt">              │ readFileSync     │</span>
+<span class="cmt">              │ 反向扫 /clear    │</span>
+<span class="cmt">              │ 正向扫元数据     │</span>
+<span class="cmt">              └──────┬───────────┘</span>
+<span class="cmt">                     │</span>
+<span class="cmt">                     ▼  TokenUsage{}</span>
+<span class="cmt">                     │</span>
+<span class="cmt">                     ▼</span>
+<span class="cmt">              分组 + 超时会话分析</span>
+<span class="cmt">              ┌──────────────────┐</span>
+<span class="cmt">              │ 按 projectName   │</span>
+<span class="cmt">              │   分组            │</span>
+<span class="cmt">              │ 按 sessionCreated │</span>
+<span class="cmt">              │   从新到老排序    │</span>
+<span class="cmt">              │                   │</span>
+<span class="cmt">              │ for each session: │</span>
+<span class="cmt">              │   wasCleared?     │</span>
+<span class="cmt">              │   → ❌ HIDE       │</span>
+<span class="cmt">              │                   │</span>
+<span class="cmt">              │   新会话创建时间   │</span>
+<span class="cmt">              │   > 老会话        │</span>
+<span class="cmt">              │     最后更新时间？ │</span>
+<span class="cmt">              │   → ❌ HIDE       │</span>
+<span class="cmt">              │                   │</span>
+<span class="cmt">              │   否则 → ✅ SHOW  │</span>
+<span class="cmt">              └──────┬───────────┘</span>
+<span class="cmt">                     │</span>
+<span class="cmt">                     ▼</span>
+<span class="cmt">              ┌───────────────────────┐</span>
+<span class="cmt">              │ [✅ SHOW] 6b4f4a7a    │</span>
+<span class="cmt">              │ [❌ HIDE] 729ca0cf    │</span>
+<span class="cmt">              │   Reason: superseded  │</span>
+<span class="cmt">              │       by 6b4f4a7a... │</span>
+<span class="cmt">              └───────────────────────┘</span></pre>
+
+<h2>7. 练习</h2>
+
+<ol>
+  <li>运行 <code>npm run compile && node out/debug.js</code>，观察自己所有项目的诊断输出——是否有 <code>❌ HIDE</code> 的会话？原因是什么？</li>
+  <li>传入一个项目名过滤参数（如 <code>node out/debug.js teach</code>），对比全量输出——确认过滤逻辑生效</li>
+  <li>打开 <code>debug.ts</code>，对比 <code>getLatestTokenCount()</code> 和 <code>extension.ts</code> 中的同名函数——找出<strong>两处</strong>代码差异并推测原因</li>
+  <li>在 <code>debug.ts</code> 第 171 行把 <code>!f.startsWith('agent-')</code> 改成 <code>f.startsWith('agent-')</code>（即反过来只看 agent 文件），编译运行——你的项目中有 <code>agent-*.jsonl</code> 文件吗？</li>
+  <li>体会"为什么不做共享模块"——如果要把 <code>getLatestTokenCount()</code> 提取到 <code>shared.ts</code>，需要改哪些文件？修改量和复制 90 行相比如何？</li>
+</ol>
+
+<h2>8. 知识检查</h2>
+
+<div class="quiz" id="q1">
+  <h3>问题 1</h3>
+  <p><code>debug.ts</code> 和 <code>extension.ts</code> 共享相同的核心逻辑（getLatestTokenCount），但代码被<strong>复制</strong>而非提取为共享模块。主要权衡是什么？</p>
+  <label><input type="radio" name="q1" value="a"> 提取共享模块会导致循环依赖——extension.ts 和 debug.ts 互相 import</label>
+  <label><input type="radio" name="q1" value="b"> ~150 行复制 vs ~50 行胶水代码（import/export/路径）——在这么小的规模下，复制比引入模块边界更简单</label>
+  <label><input type="radio" name="q1" value="c"> TypeScript 不支持跨文件类型共享——必须复制</label>
+  <label><input type="radio" name="q1" value="d"> debug.ts 使用不同的 TypeScript 编译器配置，无法 import 共享模块</label>
+  <button class="quiz-btn" data-quiz="q1" data-answer="b" data-explain="两者都编译到 out/ 目录——技术上完全可以提取。但 150 行复制带来的维护成本远低于一个额外模块带来的心智负担。当共享逻辑超过 300 行时，这个权衡可能会翻转。">检查答案</button>
+  <div class="feedback" id="q1-fb"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>问题 2</h3>
+  <p><code>debug.ts</code> 过滤 <code>agent-*.jsonl</code> 文件的原因是什么？</p>
+  <label><input type="radio" name="q2" value="a"> 这些文件格式不同，解析会崩溃——必须跳过</label>
+  <label><input type="radio" name="q2" value="b"> 这些是 Claude Code 的子代理会话文件——不是用户直接交互的会话，不应出现在状态栏</label>
+  <label><input type="radio" name="q2" value="c"> 这些文件可能包含敏感数据——跳过以保护隐私</label>
+  <label><input type="radio" name="q2" value="d"> 这是一个 bug——作者本想过滤其他文件但写错了</label>
+  <button class="quiz-btn" data-quiz="q2" data-answer="b" data-explain="agent-*.jsonl 是子代理（Agent/Workflow）的独立会话文件。它们和普通会话放在同一目录下，但不是用户对话——跳过是正确行为。值得注意的是 extension.ts 中没有这个过滤——可能是个遗漏。">检查答案</button>
+  <div class="feedback" id="q2-fb"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>问题 3</h3>
+  <p>超时会话分析中，同项目的会话按什么顺序排列？</p>
+  <label><input type="radio" name="q3" value="a"> 按最后更新时间——最活跃的在前</label>
+  <label><input type="radio" name="q3" value="b"> 按 sessionCreated 从新到老——最新创建的在前</label>
+  <label><input type="radio" name="q3" value="c"> 按 token 数量——最大的在前</label>
+  <label><input type="radio" name="q3" value="d"> 随机排列——顺序不影响淘汰结果</label>
+  <button class="quiz-btn" data-quiz="q3" data-answer="b" data-explain="group.sort 按 sessionCreated 从新到老排列。这样内层循环 j=0 到 i-1 检查的是 &quot;所有比当前会话更新创建的会话&quot; ——如果其中任何一个的创建时间 > 当前会话的最后更新时间，当前会话就被淘汰。">检查答案</button>
+  <div class="feedback" id="q3-fb"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>问题 4</h3>
+  <p>为什么 debug.ts 的入口代码从 <code>process.argv[2]</code> 读取参数，而不是像 extension.ts 那样从 VS Code 配置读取？</p>
+  <label><input type="radio" name="q4" value="a"> 性能更好——process.argv 比 vscode.workspace.getConfiguration 快</label>
+  <label><input type="radio" name="q4" value="b"> process.argv 是 TypeScript 编译器的内置功能——比手动解析配置更可靠</label>
+  <label><input type="radio" name="q4" value="c"> debug.ts 不依赖 vscode API——它是独立 Node.js 脚本，只能用标准库。命令行参数是标准库中最简单的配置传递方式</label>
+  <label><input type="radio" name="q4" value="d"> VS Code 配置系统在扩展外部不可用——debug.ts 不会访问 settings.json</label>
+  <button class="quiz-btn" data-quiz="q4" data-answer="c" data-explain="debug.ts 的目标是 &quot;不依赖 VS Code 也能跑&quot; 。用 process.argv 读取参数是 Node.js 中最简单、最通用的配置方式——不需要任何 API 依赖。">检查答案</button>
+  <div class="feedback" id="q4-fb"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>问题 5</h3>
+  <p>debug.ts 的诊断输出中，<code>❌ HIDE</code> 的判定有三种可能性——以下哪一项<strong>不会</strong>导致 HIDE？</p>
+  <label><input type="radio" name="q5" value="a"> wasCleared=true——会话以 /clear 结束</label>
+  <label><input type="radio" name="q5" value="b"> 新会话的创建时间 > 当前会话的最后更新时间——老会话被取代</label>
+  <label><input type="radio" name="q5" value="c"> totalTokens 超过 contextLimit——会话超出上下文窗口</label>
+  <label><input type="radio" name="q5" value="d"> 以上全部都会导致 HIDE</label>
+  <button class="quiz-btn" data-quiz="q5" data-answer="c" data-explain="debug.ts 的超时会话分析只检查两种条件：wasCleared 和 超时会话。totalTokens 超过 contextLimit 不会导致隐藏——它的影响在 extension.ts 中表现为红色/黄色背景警告，但在 debug.ts 中不是隐藏条件。">检查答案</button>
+  <div class="feedback" id="q5-fb"></div>
+</div>
+
+<h2>9. 推荐深入阅读</h2>
+<ul>
+  <li><a href="https://nodejs.org/api/process.html#processargv">Node.js：process.argv</a> — 命令行参数的读取方式</li>
+  <li><a href="https://www.typescriptlang.org/tsconfig/">TypeScript：tsconfig.json 参考</a> — <code>outDir</code>、<code>rootDir</code>、<code>module</code> 等关键编译选项</li>
+  <li><a href="0004-find-active-sessions.html">Lesson 0004：findActiveSessions</a> — debug.ts 中复制的那 90 行核心逻辑</li>
+  <li><a href="0005-refresh-all-sessions.html">Lesson 0005：refreshAllSessions</a> — 子代理 token 盲区与本课 agent-* 过滤的关联</li>
+  <li><a href="../reference/vscode-extension-api-basics.html">📋 参考：VS Code 扩展 API 基础</a></li>
+</ul>
+
+<div class="callout">
+  <strong>💡 提问提示：</strong>debug.ts 揭示了扩展架构的一个重要维度——<strong>可观测性</strong>。想把 debug.ts 的超时会话分析改成一个 VS Code 命令面板（Command Palette）里可直接调用的"诊断报告"吗？想把 agent-*.jsonl 过滤逻辑合入 extension.ts 让它更正确吗？或者想知道如何为扩展写单元测试？这些问题都可以继续追问。
+</div>
+
+<div class="nav">
+  <a href="0005-refresh-all-sessions.html">← Lesson 0005：refreshAllSessions</a>
+  <a href="../reference/glossary.html">📖 术语表</a>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+</body>
+</html>

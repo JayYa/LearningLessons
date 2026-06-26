@@ -35,10 +35,10 @@
              StatusBarItem[]      ← 状态栏标签</pre>
 
 <p>
-  <code>refreshAllSessions()</code> 是整个扩展的<strong>调度中心</strong>。它不是定时器驱动的——而是<strong>事件驱动</strong>的，有四个触发入口：
+  <code>refreshAllSessions()</code> 是整个扩展的<strong>调度中心</strong>。它的触发机制是<strong>事件驱动 + 轮询兜底</strong>的混合策略，有五个触发入口：
 </p>
 
-<h2>2. 四种触发时机</h2>
+<h2>2. 五种触发时机</h2>
 
 <table>
   <tr><th>触发源</th><th>代码位置</th><th>场景</th></tr>
@@ -62,9 +62,14 @@
     <td><code>hideSession</code> L41</td>
     <td>用户点击状态栏条目隐藏某个会话</td>
   </tr>
+  <tr>
+    <td>定时轮询</td>
+    <td><code>setInterval</code> L75</td>
+    <td>每 N 秒兜底刷新（默认 30s，可通过 <code>refreshInterval</code> 配置）</td>
+  </tr>
 </table>
 
-<pre><span class="cmt">// 四种触发路径汇聚到同一个函数</span>
+<pre><span class="cmt">// 五种触发路径汇聚到同一个函数</span>
 <span class="kw">export function</span> <span class="fn">activate</span>(context) {
     <span class="cmt">// 1. 命令触发</span>
     registerCommand(<span class="str">'claudeContextBar.hideSession'</span>, sessionFile => {
@@ -86,10 +91,14 @@
         <span class="kw">if</span> (filename?.endsWith(<span class="str">'.jsonl'</span>))
             refreshAllSessions();  <span class="cmt">// ←</span>
     });
+
+    <span class="cmt">// 5. 定时轮询触发</span>
+    <span class="kw">const</span> intervalSeconds = config.get&lt;number&gt;(<span class="str">'refreshInterval'</span>, 30);
+    refreshInterval = setInterval(refreshAllSessions, intervalSeconds * 1000);  <span class="cmt">// ←</span>
 }</pre>
 
 <div class="callout">
-  <strong>🎯 为什么是事件驱动而非轮询？</strong>轮询（setInterval 每秒跑一次）在会话不变时浪费 CPU；事件驱动只在必要时触发。四种触发覆盖了所有"状态栏需要更新"的场景——没有遗漏，也没有浪费。这是 Lesson 0002 中 <code>fs.watch</code> 适配器模式的最终目的地。
+  <strong>🎯 为什么事件驱动之外还要加轮询？</strong>前四种触发是<strong>事件驱动</strong>的——只在必要时执行，不会浪费 CPU。但 <code>fs.watch</code> 在某些平台（尤其是 Windows + 网络驱动器）上<strong>不可靠</strong>——可能漏报文件变更事件。第 5 种触发（默认 30 秒轮询）是一个<strong>兜底机制</strong>：即使文件事件丢了，状态栏最迟 30 秒内也会更新到正确状态。这不是"事件驱动 vs 轮询"的二选一，而是<strong>"事件优先 + 轮询兜底"</strong>的工程实践——正常路径走事件（即时响应），异常路径走轮询（最终一致性）。这也呼应了 Lesson 0002 中 <code>fs.watch</code> 适配器模式的已知局限。
 </div>
 
 <h2>3. 主流程概览</h2>
@@ -143,7 +152,13 @@
 <p>两种模式下，<code>projectColorMap</code> 的构建逻辑完全一致——差别只在于颜色来源。</p>
 
 <div class="callout">
-  <strong>🎯 一个微妙的设计选择：</strong><code>projectColorMap</code> 在<strong>每次</strong> <code>refreshAllSessions()</code> 调用时重新计算，而非持久化。这意味着颜色不保证跨刷新稳定——如果 session A 消失，session B 的颜色可能变。为什么不存下来？因为项目列表本身就是动态的——存下来的映射可能在项目删除后变成死数据。每次重建虽然"浪费"了一点计算，但换来了零状态管理的简单性。
+  <strong>🎯 一个值得审视的设计选择：</strong><code>projectColorMap</code> 在<strong>每次</strong> <code>refreshAllSessions()</code> 调用时重新计算，而非持久化。颜色按 session 数组中的<strong>出现顺序</strong>分配（数组按 lastUpdated 从新到老排列）。这意味着：
+  <br><br>
+  <strong>优点：</strong>零状态管理——不需要存储映射、处理过期清理、担心"死项目"占用调色板位置。
+  <br><br>
+  <strong>代价：</strong>颜色不保证跨刷新稳定。如果一个靠前的项目不再活跃（它的所有 session 过期），后面所有项目的颜色索引都会向前滑动一位——用户可能看到熟悉的项目突然变成另一种颜色。
+  <br><br>
+  这不是一个"已解决"的设计——它是一个<strong>权衡</strong>。对于大多数用户（同时活跃 2-3 个项目），颜色漂移很少发生；但对于重度用户（5+ 个项目频繁切换），这可能是一个真实的 UX 痛点。一个可能的改进方向：对 projectName 做确定性哈希取模，使颜色与出现顺序解耦。
 </div>
 
 <h2>5. StatusBarItem 的创建与复用</h2>
@@ -272,6 +287,15 @@ entry.item.text = <span class="str">`${icon}${iconSpace}${displayName}: ${sessio
 </table>
 
 <div class="callout">
+  <strong>⚙️ 可配置，但只接受百分比：</strong>两个阈值都可通过 VS Code 设置修改——<code>claudeContextBar.warningThreshold</code> 和 <code>claudeContextBar.dangerThreshold</code>。但注意：它们<strong>只能填百分比数值</strong>，不存在对应的"绝对 token 数"配置项。
+  <br><br>
+  代码中的比较逻辑是：
+  <pre>session.percentage = (totalTokens / contextLimit) * 100
+if (session.percentage >= dangerThreshold) { … }</pre>
+  如果你想在剩余 5 万 token 时告警，需要手动换算：设定 <code>contextLimit</code> 为 200K → 剩余 5 万 = 用了 150K = 75%。所以设 <code>dangerThreshold: 75</code>。如果你改了 <code>contextLimit</code>，阈值的实际 token 含义会跟着变——这是一个容易被忽视的耦合。
+</div>
+
+<div class="callout">
   <strong>🎯 这里再次出现了 Lesson 0003 的主题：ThemeColor。</strong>代码中使用 <code>new vscode.ThemeColor('statusBarItem.errorBackground')</code> 而非硬编码 <code>#ff0000</code>，确保无论在深色还是浅色主题下都能正常工作。这是 VS Code 扩展的 UI 铁律。
 </div>
 
@@ -305,6 +329,31 @@ entry.item.text = <span class="str">`${icon}${iconSpace}${displayName}: ${sessio
   <code>vscode.MarkdownString</code> 支持 Markdown 语法：粗体、表格、代码块、斜体。工具链极简——不需要 React 或模板引擎，一个构造器调用完成。
 </p>
 
+<div class="callout">
+  <strong>🧠 Cache Read / Cache Creation 是什么？</strong>这是 Anthropic API 的<strong>提示缓存（Prompt Caching）</strong>机制。当你发 prompt 给 Claude 时，如果某部分内容（例如 system prompt、长文档）和上一次请求完全一样，API 可以跳过重复计算——直接从缓存读取。两类 token 分别对应：
+  <br><br>
+  <strong>Cache Read</strong>（<code>cache_read_input_tokens</code>）——缓存命中，读取时按基础输入价格的 <strong>10%</strong> 计费（打一折）。这是你省钱的地方。
+  <br><br>
+  <strong>Cache Creation</strong>（<code>cache_creation_input_tokens</code>）——缓存写入，首次将内容标记为可缓存时，按基础输入价格的 <strong>125%</strong> 计费（加收 25% 写入溢价）。这是你为之后的省钱付出的"投资"。
+  <br><br>
+  两项之和 + 普通 input_tokens（不走缓存的输入）= totalTokens。tooltip 中展示这两项，让用户直观看到缓存的利用效率——Cache Read 很大说明缓存利用得好，Cache Creation 很大说明正在大量写入新缓存。
+  <br><br>
+  <a href="https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching">📖 Anthropic 文档：Prompt Caching</a>
+</div>
+
+<div class="callout">
+  <strong>⚠️ 一个容易被忽视的盲区：Sub-agent 的 token 用量无法统计。</strong>当你使用 <code>Agent</code> 工具或 <code>Workflow</code> 派出子代理时，子代理独立发起 API 调用，消耗自己的 token。但 JSONL 中的记录结构是：
+  <br><br>
+  <pre>// 父会话 JSONL 中的 Agent 调用
+assistant → tool_use { name: "Agent", input: { prompt: "..." } }
+user     → tool_result { content: [{ text: "子代理的回复..." }] }
+//                      ↑ 只有文本回复，没有 usage 数据！</pre>
+  <br>
+  在 <code>~/.claude/projects/</code> 下扫描所有含 Agent 调用的会话，<strong>0 个</strong> tool_result 中包含 <code>usage</code> 字段。这意味着子代理的 token 消耗被沉默地丢弃了——状态栏显示的百分比和 tooltip 中的 token 总数，实际是父会话直接 API 调用的<strong>低估</strong>。
+  <br><br>
+  <code>~/.claude/stats-cache.json</code> 中的 <code>modelUsage</code> 累计了全模型的总 token（很可能已包含子代理），但它只有全量累计、没有 session 粒度——无法按项目拆分。要真正解决这个盲区，需要 Claude Code 把子代理的 usage 写回父会话 JSONL，或暴露独立的聚合端点。这是一个架构层面的缺口，不是扩展偷懒。
+</div>
+
 <h2>10. 标记-清除：清理消失的会话</h2>
 
 <p>
@@ -334,24 +383,24 @@ entry.item.text = <span class="str">`${icon}${iconSpace}${displayName}: ${sessio
 
 <h2>11. 完整数据流</h2>
 
-<pre><span class="cmt">                       触发源
-          ┌───────────────┼───────────────┐
-          │               │               │
-    初始化/配置变更   文件监听(.jsonl)   隐藏命令
-          │               │               │
-          └───────────────┼───────────────┘
-                          │
-                          ▼
-               findActiveSessions()
-               ┌──────────────────┐
-               │ 扫描 ~/.claude   │
-               │ 解码 项目路径     │
-               │ 解析 JSONL       │  ← 8 步管线
-               │ 定限 上下文窗口   │
-               │ 过滤 淘汰+隐藏    │
-               │ 编号 稳定命名     │
-               │ 截断 前 5 条      │
-               └──────┬───────────┘
+<pre><span class="cmt">                          触发源
+          ┌────────────┬──────┼──────────┬──────────┐
+          │            │      │          │          │
+    初始化      配置变更  文件监听(.jsonl) 隐藏命令  定时轮询(30s)
+          │            │      │          │          │
+          └────────────┴──────┼──────────┴──────────┘
+                             │
+                             ▼
+                  findActiveSessions()
+                  ┌──────────────────┐
+                  │ 扫描 ~/.claude   │
+                  │ 解码 项目路径     │
+                  │ 解析 JSONL       │  ← 8 步管线
+                  │ 定限 上下文窗口   │     ⚠️ 盲区：只能读到
+                  │ 过滤 淘汰+隐藏    │        父会话的 usage，
+                  │ 编号 稳定命名     │        子代理 token 不可见
+                  │ 截断 前 5 条      │
+                  └──────┬───────────┘
                       │
                       ▼  SessionInfo[]
                       │
@@ -383,19 +432,20 @@ entry.item.text = <span class="str">`${icon}${iconSpace}${displayName}: ${sessio
   <li>找到 <code>getEmojiForProject()</code>（第 183 行），看看你的项目名会匹配到哪个 emoji——如果不满意，思考：按什么顺序调整 <code>emojiMap</code> 能改变匹配结果？</li>
   <li>找到 <code>getShortName()</code>（第 256 行），用几个你自己的项目名测试压缩效果。边界情况：单字母项目名、"a-b"两个短词——压缩结果合理吗？</li>
   <li>在第 717–723 行找到标记-清除的清除阶段——如果把这个循环<strong>放到</strong>主循环<strong>之前</strong>会有什么问题？</li>
-  <li>修改 <code>claudeContextBar.warningThreshold</code> 为 30，观察状态栏背景色变化——验证威胁阈值着色逻辑</li>
+  <li>修改 <code>claudeContextBar.warningThreshold</code> 为 30，修改 <code>contextLimit</code> 为 100000——观察：warning 在多少 token 时触发？验证阈值百分比和 contextLimit 的耦合关系。</li>
+  <li>打开 <code>~/.claude/projects/</code> 下<strong>你自己用过 Agent 的某个项目</strong>的 JSONL 文件，搜索 <code>"Agent"</code>，找到 tool_use 和紧随其后的 tool_result。确认：tool_result 中是否包含 <code>usage</code> 字段？子代理消耗的 token 去了哪里？</li>
 </ol>
 
 <h2>13. 知识检查</h2>
 
 <div class="quiz" id="q1">
   <h3>问题 1</h3>
-  <p><code>refreshAllSessions()</code> 的四种触发时机不包括以下哪一种？</p>
-  <label><input type="radio" name="q1" value="a"> 扩展激活时的初始化调用</label>
-  <label><input type="radio" name="q1" value="b"> 定时轮询（setInterval 每秒一次）</label>
-  <label><input type="radio" name="q1" value="c"> <code>fs.watch</code> 检测到 .jsonl 文件变化</label>
-  <label><input type="radio" name="q1" value="d"> 用户点击状态栏条目触发 hideSession 命令</label>
-  <button onclick="checkQuiz('q1','b','扩展是事件驱动的，不使用轮询。四种触发源是：初始化、文件监听、配置变更、隐藏命令。')">检查答案</button>
+  <p><code>refreshAllSessions()</code> 的五种触发时机中，哪一种的<strong>设计目的</strong>是作为其他触发机制的"兜底"？</p>
+  <label><input type="radio" name="q1" value="a"> 初始化触发——确保扩展启动时就有数据</label>
+  <label><input type="radio" name="q1" value="b"> 定时轮询（setInterval，默认 30 秒）——防止 fs.watch 漏报文件事件</label>
+  <label><input type="radio" name="q1" value="c"> 配置变更触发——响应用户修改设置</label>
+  <label><input type="radio" name="q1" value="d"> 文件监听触发——检测 .jsonl 文件变化</label>
+  <button class="quiz-btn" data-quiz="q1" data-answer="b" data-explain="定时轮询是兜底机制。fs.watch 在某些平台（尤其是 Windows）上可能漏报事件，30 秒轮询保证状态栏最终一定会更新到正确状态——这是\&quot;最终一致性\&quot;的思想。">检查答案</button>
   <div class="feedback" id="q1-fb"></div>
 </div>
 
@@ -406,7 +456,7 @@ entry.item.text = <span class="str">`${icon}${iconSpace}${displayName}: ${sessio
   <label><input type="radio" name="q2" value="b"> 相同的颜色——因为 projectColorMap 以 projectName 为键</label>
   <label><input type="radio" name="q2" value="c"> 随机的颜色——每次刷新都可能不同</label>
   <label><input type="radio" name="q2" value="d"> 第一个红色，第二个黄色，第三个绿色</label>
-  <button onclick="checkQuiz('q2','b','颜色以 projectName 为键分配——同一项目的不同会话共享颜色，让用户视觉上归组。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q2" data-answer="b" data-explain="颜色以 projectName 为键分配——同一项目的不同会话共享颜色，让用户视觉上归组。">检查答案</button>
   <div class="feedback" id="q2-fb"></div>
 </div>
 
@@ -417,7 +467,7 @@ entry.item.text = <span class="str">`${icon}${iconSpace}${displayName}: ${sessio
   <label><input type="radio" name="q3" value="b"> 这是一个 bug——应该反过来，最老的放到最显眼的位置</label>
   <label><input type="radio" name="q3" value="c"> 因为 sessions 按 lastUpdated 从新到老排列——最老 = 最不活跃 = priority 最小 = 最靠右</label>
   <label><input type="radio" name="q3" value="d"> priority 值不影响排列顺序——只是为了日志记录</label>
-  <button onclick="checkQuiz('q3','c','sessions 按 lastUpdated 从新到老排列，最新的在 index 0，获得最大 priority，最靠左。越不活跃的越靠右。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q3" data-answer="c" data-explain="sessions 按 lastUpdated 从新到老排列，最新的在 index 0，获得最大 priority，最靠左。越不活跃的越靠右。">检查答案</button>
   <div class="feedback" id="q3-fb"></div>
 </div>
 
@@ -428,7 +478,7 @@ entry.item.text = <span class="str">`${icon}${iconSpace}${displayName}: ${sessio
   <label><input type="radio" name="q4" value="b"> 兼容深色/浅色主题——ThemeColor 根据当前主题自动解析为合适的色值</label>
   <label><input type="radio" name="q4" value="c"> VS Code 要求所有扩展使用 ThemeColor，否则拒绝加载</label>
   <label><input type="radio" name="q4" value="d"> ThemeColor 支持透明度——硬编码颜色做不到</label>
-  <button onclick="checkQuiz('q4','b','ThemeColor 是语义化颜色引用——深色主题下 errorBackground 解析为暗红，浅色主题下为浅红。硬编码颜色无法适配两种主题。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q4" data-answer="b" data-explain="ThemeColor 是语义化颜色引用——深色主题下 errorBackground 解析为暗红，浅色主题下为浅红。硬编码颜色无法适配两种主题。">检查答案</button>
   <div class="feedback" id="q4-fb"></div>
 </div>
 
@@ -439,7 +489,7 @@ entry.item.text = <span class="str">`${icon}${iconSpace}${displayName}: ${sessio
   <label><input type="radio" name="q5" value="b"> 所有 StatusBarItem 会被删除然后重新创建——导致状态栏闪烁</label>
   <label><input type="radio" name="q5" value="c"> 新的 session 无法被创建——因为 statusBarItems Map 已经被清空</label>
   <label><input type="radio" name="q5" value="d"> VS Code 会崩溃——因为 StatusBarItem 的创建和销毁顺序有严格限制</label>
-  <button onclick="checkQuiz('q5','b','如果先清除，seenPaths 为空 → 所有旧条目被 dispose → 主循环中全部重新 createStatusBarItem → 每条都闪烁一次。先标记后清除可以在重建时复用已有的条目。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q5" data-answer="b" data-explain="如果先清除，seenPaths 为空 → 所有旧条目被 dispose → 主循环中全部重新 createStatusBarItem → 每条都闪烁一次。先标记后清除可以在重建时复用已有的条目。">检查答案</button>
   <div class="feedback" id="q5-fb"></div>
 </div>
 
@@ -450,8 +500,30 @@ entry.item.text = <span class="str">`${icon}${iconSpace}${displayName}: ${sessio
   <label><input type="radio" name="q6" value="b"> Tscript</label>
   <label><input type="radio" name="q6" value="c"> Type</label>
   <label><input type="radio" name="q6" value="d"> Tscr</label>
-  <button onclick="checkQuiz('q6','b','typescript 是单词项目名，走 extractLastSyllable 路径："script" 是最后的辅音+元音+辅音群，加上首字母 "T" → "Tscript"。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q6" data-answer="b" data-explain="typescript 是单词项目名，走 extractLastSyllable 路径：&quot;script&quot; 是最后的辅音+元音+辅音群，加上首字母 &quot;T&quot; → &quot;Tscript&quot;。">检查答案</button>
   <div class="feedback" id="q6-fb"></div>
+</div>
+
+<div class="quiz" id="q7">
+  <h3>问题 7</h3>
+  <p>为什么修改 <code>contextLimit</code> 后，<code>warningThreshold</code> 的实际 token 含义会跟着变？</p>
+  <label><input type="radio" name="q7" value="a"> 因为 warningThreshold 的值会自动随 contextLimit 同步调整</label>
+  <label><input type="radio" name="q7" value="b"> 因为 percentage = (totalTokens / contextLimit) × 100，分母变了，同一个百分比对应的绝对 token 数就变了</label>
+  <label><input type="radio" name="q7" value="c"> 因为 VS Code 会在 contextLimit 变更时自动重置 warningThreshold</label>
+  <label><input type="radio" name="q7" value="d"> 它们之间没有关系——这是个 bug</label>
+  <button class="quiz-btn" data-quiz="q7" data-answer="b" data-explain="warningThreshold 是百分比，percentage 的计算分母是 contextLimit。contextLimit 从 200K 改为 100K 后，同样的 50% 从&quot;10 万 token&quot;变成了&quot;5 万 token&quot;——阈值本身没变，但它的实际含义变了。两个配置项之间存在隐蔽耦合。">检查答案</button>
+  <div class="feedback" id="q7-fb"></div>
+</div>
+
+<div class="quiz" id="q8">
+  <h3>问题 8</h3>
+  <p>关于子代理（Agent/Workflow）的 token 用量，以下哪一项是正确的？</p>
+  <label><input type="radio" name="q8" value="a"> 子代理的 token 用量会自动累加到父会话的 usage 中</label>
+  <label><input type="radio" name="q8" value="b"> 子代理的 token 用量记录在独立的 JSONL 文件中，扩展可以读取</label>
+  <label><input type="radio" name="q8" value="c"> 子代理的 tool_result 中只包含文本回复，不包含 usage——状态栏显示的 token 数是低估</label>
+  <label><input type="radio" name="q8" value="d"> 子代理不消耗 token——它们复用父会话的计算结果</label>
+  <button class="quiz-btn" data-quiz="q8" data-answer="c" data-explain="这是当前扩展的一个盲区。Agent 工具调用的 tool_result 只返回子代理的文本输出，不包含 token usage。stats-cache.json 可能有全量累计但无 session 粒度——要按项目统计子代理用量，目前做不到。">检查答案</button>
+  <div class="feedback" id="q8-fb"></div>
 </div>
 
 <h2>14. 推荐深入阅读</h2>
@@ -464,7 +536,7 @@ entry.item.text = <span class="str">`${icon}${iconSpace}${displayName}: ${sessio
 </ul>
 
 <div class="callout">
-  <strong>💡 提问提示：</strong><code>refreshAllSessions()</code> 是数据管线的终点——但也是扩展功能迭代的起点。想加入右键菜单？调整排序策略？添加声音警告？或者想把那 5 条硬编码上限做成可配置的？这些问题都可以在这个对话中继续追问。
+  <strong>💡 提问提示：</strong><code>refreshAllSessions()</code> 是数据管线的终点——但也是扩展功能迭代的起点。想加入右键菜单？调整排序策略？添加声音警告？想把那 5 条硬编码上限做成可配置的？想把子代理 token 也纳入统计？或者用确定性哈希解决颜色漂移问题？这些问题都可以在这个对话中继续追问。
 </div>
 
 <div class="nav">

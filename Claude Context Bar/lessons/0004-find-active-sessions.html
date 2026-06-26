@@ -374,7 +374,7 @@ sessionC (最新) → projectName = <span class="str">'webapp-3'</span></pre>
   <label><input type="radio" name="q1" value="b"> 尽早丢弃不需要的数据——在管线最早阶段减少后续步骤的工作量</label>
   <label><input type="radio" name="q1" value="c"> 性能优化——内存中过滤比磁盘 I/O 更快</label>
   <label><input type="radio" name="q1" value="d"> 防御性编程——防止解析逻辑遇到过期文件时崩溃</label>
-  <button onclick="checkQuiz('q1','b','在最早可能的阶段丢弃不需要的数据，可以大幅减少后续解析步骤的工作量。这是数据管线设计的通用原则。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q1" data-answer="b" data-explain="在最早可能的阶段丢弃不需要的数据，可以大幅减少后续解析步骤的工作量。这是数据管线设计的通用原则。">检查答案</button>
   <div class="feedback" id="q1-fb"></div>
 </div>
 
@@ -385,7 +385,7 @@ sessionC (最新) → projectName = <span class="str">'webapp-3'</span></pre>
   <label><input type="radio" name="q2" value="b"> 文件末尾的 JSON 行比开头的更短，解析更快</label>
   <label><input type="radio" name="q2" value="c"> 需要找到<strong>最近的</strong> /clear——从后往前遇到的第一个 /clear 就是最近的</label>
   <label><input type="radio" name="q2" value="d"> JSONL 格式要求逆向解析，正向遍历会出错</label>
-  <button onclick="checkQuiz('q2','c','从后往前扫描可以在遇到第一个 /clear 时就停止——这个就是最近的。从前往后则需要扫描完整文件才能确定。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q2" data-answer="c" data-explain="从后往前扫描可以在遇到第一个 /clear 时就停止——这个就是最近的。从前往后则需要扫描完整文件才能确定。">检查答案</button>
   <div class="feedback" id="q2-fb"></div>
 </div>
 
@@ -396,7 +396,7 @@ sessionC (最新) → projectName = <span class="str">'webapp-3'</span></pre>
   <label><input type="radio" name="q3" value="b"> 文件中存在 /clear 命令 AND /clear 之后没有用户消息</label>
   <label><input type="radio" name="q3" value="c"> 文件中存在 /clear 命令，无论之后是否有用户消息</label>
   <label><input type="radio" name="q3" value="d"> token 用量在 /clear 命令后降至零</label>
-  <button onclick="checkQuiz('q3','b','需要同时满足：(1)存在 /clear；(2)/clear 之后没有用户消息。如果用户在 /clear 后又发了消息，说明会话被重新使用了——wasCleared=false。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q3" data-answer="b" data-explain="需要同时满足：(1)存在 /clear；(2)/clear 之后没有用户消息。如果用户在 /clear 后又发了消息，说明会话被重新使用了——wasCleared=false。">检查答案</button>
   <div class="feedback" id="q3-fb"></div>
 </div>
 
@@ -407,7 +407,7 @@ sessionC (最新) → projectName = <span class="str">'webapp-3'</span></pre>
   <label><input type="radio" name="q4" value="b"> 旧会话 lastUpdated=13:45，新会话 created=13:30 → 不淘汰</label>
   <label><input type="radio" name="q4" value="c"> 旧会话 lastUpdated=12:00，新会话 created=12:05 → 淘汰</label>
   <label><input type="radio" name="q4" value="d"> 旧会话 lastUpdated=14:00，新会话 created=15:00 → 淘汰</label>
-  <button onclick="checkQuiz('q4','b','新会话的创建时间(13:30)早于旧会话的最后更新时间(13:45)——旧会话在新会话创建后仍然有活动，说明用户在并行使用。不淘汰。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q4" data-answer="b" data-explain="新会话的创建时间(13:30)早于旧会话的最后更新时间(13:45)——旧会话在新会话创建后仍然有活动，说明用户在并行使用。不淘汰。">检查答案</button>
   <div class="feedback" id="q4-fb"></div>
 </div>
 
@@ -418,7 +418,7 @@ sessionC (最新) → projectName = <span class="str">'webapp-3'</span></pre>
   <label><input type="radio" name="q5" value="b"> sessionCreated——最老的会话保留原名</label>
   <label><input type="radio" name="q5" value="c"> totalTokens——token 最多的用原名</label>
   <label><input type="radio" name="q5" value="d"> 文件名——字典序最靠前的用原名</label>
-  <button onclick="checkQuiz('q5','b','活跃会话按 sessionCreated 从老到新排序。最老的保留原名（webapp），后来的依次加 -2、-3。排序依据是创建时间，不是最后更新时间或 token 量。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q5" data-answer="b" data-explain="活跃会话按 sessionCreated 从老到新排序。最老的保留原名（webapp），后来的依次加 -2、-3。排序依据是创建时间，不是最后更新时间或 token 量。">检查答案</button>
   <div class="feedback" id="q5-fb"></div>
 </div>
 
@@ -429,7 +429,7 @@ sessionC (最新) → projectName = <span class="str">'webapp-3'</span></pre>
   <label><input type="radio" name="q6" value="b"> 自动重新显示——因为 lastUpdated > hiddenAt，扩展会从 hiddenSessions 中删除记录</label>
   <label><input type="radio" name="q6" value="c"> 在下次 VS Code 重启后重新显示</label>
   <label><input type="radio" name="q6" value="d"> 显示但颜色变灰表示"曾被隐藏"</label>
-  <button onclick="checkQuiz('q6','b','如果会话在隐藏后又有新活动（lastUpdated > hiddenAt），扩展会自动从 hiddenSessions 中删除该会话——「既然还在用，就别藏了」。这是合理的用户体验设计。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q6" data-answer="b" data-explain="如果会话在隐藏后又有新活动（lastUpdated > hiddenAt），扩展会自动从 hiddenSessions 中删除该会话——「既然还在用，就别藏了」。这是合理的用户体验设计。">检查答案</button>
   <div class="feedback" id="q6-fb"></div>
 </div>
 

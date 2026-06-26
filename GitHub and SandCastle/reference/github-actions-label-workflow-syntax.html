@@ -104,6 +104,10 @@ on:
 
 <h2 id="label-ops">3. 标签操作 (gh CLI)</h2>
 
+<div class="callout warning">
+  <strong>⚠️ 前置要求：</strong>以下所有 <code>gh</code> 命令都要求 <code>gh</code> CLI 能识别当前仓库。在 GitHub Actions 中，要么先在之前的 step 中 <code>uses: actions/checkout@v4</code>（提供 <code>.git</code> 目录），要么设置环境变量 <code>GH_REPO: ${{ github.repository }}</code>。详见 <a href="../lessons/0001-your-first-label-triggered-workflow.html">第 1 课</a>。
+</div>
+
 <div class="syntax-block">
   <h3>添加标签</h3>
 <pre><code>gh issue edit "$ISSUE_NUMBER" --add-label "agent:in-progress"</code></pre>

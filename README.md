@@ -1,6 +1,6 @@
 # Learning Lessons
 
-这套课程沿四条独立轨道展开，各自深入一个专门领域：现代 .NET 技术纵深从 C# 8 一路推进到 C# 14，覆盖可空引用类型、异步流、records、主构造函数、集合表达式、ref struct 接口与泛型反变、field 关键字、扩展成员及中等特性合集，构建从 Framework 4.8 到最新 .NET 的完整语言演进地图；历史轨道以《冰海战纪》为叙事锚点，从维京时代社会概览延伸到丹麦征服英格兰、北海帝国、维京东线、文兰探险、社会层级结构、基督教化与日常生活；工具轨道分两支——Claude Context Bar 聚焦 VS Code 扩展开发底层（扩展解剖、激活生命周期、StatusBarItem API、findActiveSessions 数据引擎到 refreshAllSessions 从数据到 UI 的完整数据流），GitHub and SandCastle 深入 GitHub Actions 标签触发自动化（从第一个工作流到状态机抽象再到链式触发与预检模式等高级模式）。四条轨道虽主题各异，却共享同一方法论——从表层 API 下沉到内部机制，从孤立知识点串成系统认知。
+这套课程沿四条独立轨道展开，各自深入一个专门领域：现代 .NET 技术纵深从 C# 8 一路推进到 C# 14，覆盖可空引用类型、异步流、records、主构造函数、集合表达式、ref struct 接口与泛型反变、field 关键字、扩展成员到最新小特性合集，构建从 Framework 4.8 到最新 .NET 的完整语言演进地图；历史轨道以《冰海战纪》为叙事锚点，从维京时代概览延伸到丹麦征服英格兰、北海帝国、维京东线、文兰探险、社会层级、基督教化、日常生活与战争方式，还原漫画背后的真实北欧历史；工具轨道分两支——Claude Context Bar 聚焦 VS Code 扩展开发底层（从扩展解剖、激活生命周期、StatusBarItem UI 原语、findActiveSessions 数据引擎、refreshAllSessions 数据流到独立调试管线），GitHub and SandCastle 深入 GitHub Actions 标签触发自动化（从第一个工作流到状态机抽象再到链式触发与预检等高级模式）。四条轨道虽主题各异，却共享同一方法论——从表层 API 下沉到内部机制，从孤立知识点串成系统认知。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
@@ -30,7 +30,8 @@
 | 20 | [Lesson 20: C# 13 — 小特性合集](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/20-csharp13-small-features.html) | 速览 C# 13 中多项实用小特性，收尾 C# 13 语言演进全景 |
 | 21 | [Lesson 21: C# 14 — field 关键字](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/21-csharp14-field-keyword.html) | 探索 C# 14 field 关键字，简化属性访问器的自定义逻辑编写 |
 | 22 | [Lesson 22: C# 14 — 扩展成员](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/22-csharp14-extension-members.html) | 解析 C# 14 扩展成员语法，以更自然的方式为已有类型添加方法与属性 |
-| 23 | [Lesson 23: C# 14 — 中等特性合集](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/23-csharp14-mid-features.html) | 收尾 C# 14 中等特性合集：params 增强、部分属性等语言特性收束 |
+| 23 | [Lesson 23: C# 14 — 中等特性合集](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/23-csharp14-mid-features.html) | 收尾 C# 14 中等特性合集：params 增强、部分属性等语言特性深度解析 |
+| 24 | [Lesson 24: C# 14 — 小特性合集](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/24-csharp14-small-features.html) | 速览 C# 14 各项小特性，完成 C# 14 语言演进全景收官 |
 
 **参考资料：**
 - [异步流速查 · Async Streams · C# 8](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/async-streams-cheatsheet.html) — IAsyncEnumerable 消费、取消与配置速查
@@ -57,7 +58,8 @@
 | 6 | [Lesson 0006 — 文兰：北欧人发现北美与定居失败](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0006-vinland-norse-in-north-america.html) | 追寻北欧人向西探索文兰的航海壮举，解析北美定居尝试的成败与考古证据 |
 | 7 | [Lesson 0007 — 维京人的社会结构：Jarl、Karl 与奴隶](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0007-viking-social-hierarchy.html) | 拆解维京社会的三层等级体系，从贵族 Jarl、自由民 Karl 到奴隶，揭示《冰海战纪》角色的社会身份根源 |
 | 8 | [Lesson 0008 — 北欧的基督教化：从奥丁到基督](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0008-viking-christianization.html) | 追溯北欧从多神信仰到基督教化的漫长转变，理解《冰海战纪》中信仰冲突的历史根源 |
-| 9 | [Lesson 0009 — 维京人的日常生活：长屋、食物与衣装](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0009-viking-daily-life.html) | 走进维京人的日常世界，了解长屋生活、饮食习俗与衣物装扮，还原战斧之外的真实维京 |
+| 9 | [Lesson 0009 — 维京人的日常生活：长屋、食物、衣装、营养与体格](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0009-viking-daily-life.html) | 走进维京人的日常世界，了解长屋生活、饮食习俗与衣物装扮，还原战斧之外的真实维京 |
+| 10 | [Lesson 0010 — 维京人的战争方式：武器、盔甲与战术](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0010-viking-warfare.html) | 解析维京人的武器、盔甲与战术体系，还原北海战士在战场上的真实面貌与战斗智慧 |
 
 **参考资料：**
 - [🗺 东部地理术语指南](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/eastern-geography-guide.html) — 拜占庭 · 罗斯 · 基辅 · 君士坦丁堡地理术语速查
@@ -78,6 +80,7 @@
 | 3 | [Lesson 0003 — StatusBarItem：状态栏 UI 原语](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0003-statusbar-api.html) | 解析 StatusBarItem API 的设计与用法，掌握状态栏 UI 元素的创建与控制 |
 | 4 | [Lesson 0004 — findActiveSessions：数据引擎](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0004-find-active-sessions.html) | 揭示 findActiveSessions 数据引擎如何扫描 git 仓库与终端会话，驱动扩展的上下文感知 |
 | 5 | [Lesson 0005 — refreshAllSessions：从数据到 UI](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0005-refresh-all-sessions.html) | 串联数据引擎与状态栏 UI，完成从轮询数据源到刷新显示的完整数据闭环 |
+| 6 | [Lesson 0006 — debug.ts：独立调试管线](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0006-debug-harness.html) | 构建扩展的独立调试环境，不依赖 VS Code 运行时可快速验证核心逻辑 |
 
 **参考资料：**
 - [参考：数据格式速查](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/data-formats.html) — Claude Context Bar 内部数据结构的序列化格式速查

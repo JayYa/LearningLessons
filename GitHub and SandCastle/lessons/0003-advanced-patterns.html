@@ -111,12 +111,12 @@ Implement 完成 → gh pr edit --add-label "agent:review" → Review 工作流�
     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}</code></pre>
 
 <div class="callout success">
-  <strong>✅ 优雅降级模式：</strong>即使 PAT 不可用，工作流也能正常运行——只是链式触发需要人类手动帮忙。这是防御性设计的最佳实践。
+  <strong>✅ 优雅降级模式：</strong>即使 PAT 不可用，工作流也能正常运行——只是链式触发需要人类手动帮忙。这是防御性设计的最佳实践。注意代码中的 <code>if [ -n "$AGENT_PAT" ]; then</code> 是 <strong>shell 条件判断</strong>（方括号内必须有空格），不是 GitHub Actions 的 <code>if:</code>（详见<a href="0002-the-label-state-machine.html">第 2 课逐步解析</a>）。
 </div>
 </div>
 
 <div class="callout">
-  <strong>🔑 为什么需要 PAT？</strong>GitHub 的递归抑制是有意设计的。如果没有它，两个互相触发的工作流会无限循环，消耗所有 Action 配额。PAT 绕过了这个保护，所以你必须确保你的工作流不会形成无限循环。
+  <strong>🔑 为什么需要 PAT？</strong>GitHub 的递归抑制是有意设计的。如果没有它，两个互相触发的工作流会无限循环，消耗所有 Action 配额。PAT 绕过了这个保护，所以你必须确保你的工作流不会形成无限循环。另外别忘了 <code>concurrency</code>——它防止同一个 Issue/PR 同时跑多个实例，是链式触发场景下的另一道保险（详见<a href="0002-the-label-state-machine.html">第 2 课 concurrency 深入解释</a>）。
 </div>
 
 <hr>
@@ -129,7 +129,7 @@ Implement 完成 → gh pr edit --add-label "agent:review" → Review 工作流�
 	  <tr><th>机制</th><th>作用</th></tr>
 	  <tr>
 	    <td><code>jobs.&lt;job&gt;.outputs</code></td>
-	    <td>job 的输出声明。值来自该 job 中某个 step 通过 <code>echo "key=value" &gt;&gt; "$GITHUB_OUTPUT"</code> 写入的内容。</td>
+	    <td>job 的输出声明。值来自该 job 中某个 step 通过 <code>echo "key=value" &gt;&gt; "$GITHUB_OUTPUT"</code> 写入的内容（<code>$GITHUB_OUTPUT</code> 的概念见<a href="0002-the-label-state-machine.html">第 2 课运行环境概念</a>）。</td>
 	  </tr>
 	  <tr>
 	    <td><code>jobs.&lt;job&gt;.needs</code></td>

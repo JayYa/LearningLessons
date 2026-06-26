@@ -310,7 +310,7 @@ context.subscriptions 逐个 dispose
   <label><input type="radio" name="q1" value="b"> context.subscriptions</label>
   <label><input type="radio" name="q1" value="c"> vscode.Disposable</label>
   <label><input type="radio" name="q1" value="d"> package.json</label>
-  <button onclick="checkQuiz('q1','b','registerCommand() 返回的 Disposable 被推入 context.subscriptions，VS Code 在停用扩展时自动调用它的 dispose()。','再看一下第 2.1 节的代码。registerCommand 的返回值被 push 到了哪里？')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q1" data-answer="b" data-explain="registerCommand() 返回的 Disposable 被推入 context.subscriptions，VS Code 在停用扩展时自动调用它的 dispose()。" data-explain-incorrect="再看一下第 2.1 节的代码。registerCommand 的返回值被 push 到了哪里？">检查答案</button>
   <div class="feedback" id="q1-fb"></div>
 </div>
 
@@ -321,7 +321,7 @@ context.subscriptions 逐个 dispose
   <label><input type="radio" name="q2" value="b"> 通过一个包装了 dispose() 的对象 push 到 subscriptions，同时在 deactivate() 中手动 close</label>
   <label><input type="radio" name="q2" value="c"> 通过 registerCommand() 间接注册</label>
   <label><input type="radio" name="q2" value="d"> 通过 onDidChangeConfiguration 的事件回调清理</label>
-  <button onclick="checkQuiz('q2','b','它在 activate 末尾被包进一个有 dispose() 方法的对象 push 到 subscriptions，同时在 deactivate() 中也有 close()——双重保险。','复习第 2.4 节和第 3 节。fs.watch 返回的不是 VS Code Disposable，需要特殊处理。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q2" data-answer="b" data-explain="它在 activate 末尾被包进一个有 dispose() 方法的对象 push 到 subscriptions，同时在 deactivate() 中也有 close()——双重保险。" data-explain-incorrect="复习第 2.4 节和第 3 节。fs.watch 返回的不是 VS Code Disposable，需要特殊处理。">检查答案</button>
   <div class="feedback" id="q2-fb"></div>
 </div>
 
@@ -332,7 +332,7 @@ context.subscriptions 逐个 dispose
   <label><input type="radio" name="q3" value="b"> 定时器是兜底——文件监听在某些场景下会漏掉变化</label>
   <label><input type="radio" name="q3" value="c"> 定时器用于 UI 动画，文件监听用于数据同步</label>
   <label><input type="radio" name="q3" value="d"> 这是代码冗余，两者可以合并</label>
-  <button onclick="checkQuiz('q3','b','文件监听在某些文件系统（网络挂载、WSL 等）中不可靠，定时器作为兜底确保状态栏最终一致性。','再读第 2.5 节。这是一种常见的工程防御模式。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q3" data-answer="b" data-explain="文件监听在某些文件系统（网络挂载、WSL 等）中不可靠，定时器作为兜底确保状态栏最终一致性。" data-explain-incorrect="再读第 2.5 节。这是一种常见的工程防御模式。">检查答案</button>
   <div class="feedback" id="q3-fb"></div>
 </div>
 
@@ -343,7 +343,7 @@ context.subscriptions 逐个 dispose
   <label><input type="radio" name="q4" value="b"> 以上全部</label>
   <label><input type="radio" name="q4" value="c"> 有些 Disposable 需要在扩展停用前中途销毁，自动管理剥夺了这种选择权</label>
   <label><input type="radio" name="q4" value="d"> 非 VS Code 资源（如 fs.watch）返回的不是 Disposable，API 无法统一管理</label>
-  <button onclick="checkQuiz('q4','b','以上全部都是原因。技术约束、生命周期灵活性、拥有权原则、非 VS Code 资源的适配——这些共同构成了为什么 VS Code 把控制权交给你而不是自动管理。','这个选项本身没错，但不是最完整的答案。复习第 1.2 节——四个原因不是互斥的，它们共同解释了这一设计。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q4" data-answer="b" data-explain="以上全部都是原因。技术约束、生命周期灵活性、拥有权原则、非 VS Code 资源的适配——这些共同构成了为什么 VS Code 把控制权交给你而不是自动管理。" data-explain-incorrect="这个选项本身没错，但不是最完整的答案。复习第 1.2 节——四个原因不是互斥的，它们共同解释了这一设计。">检查答案</button>
   <div class="feedback" id="q4-fb"></div>
 </div>
 

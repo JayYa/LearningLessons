@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 24: C# 14 — 小特性合集</title>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
+</head>
+<body>
+
+<h1>Lesson 24: C# 14 — 小特性合集 <span class="en">Small Features</span></h1>
+<p class="subtitle">Span 隐式转换 · 自定义复合赋值 · partial 构造/事件 · 单文件应用 · C# 14 收官</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="23-csharp14-mid-features.html">Lesson 23（中等特性合集）</a>。本课是 C# 14 最后一课——四个"你不一定每天用到，但需要时救你一命"的特性。至此 C# 14（.NET 10 LTS）全部 10 个特性覆盖完毕。<br>
+<strong>阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/whats-new/csharp-14">Microsoft Learn: C# 14 新增功能</a> ·
+<a href="https://github.com/dotnet/csharplang/blob/main/proposals/csharp-14.0/first-class-span-types.md">Span 一等公民提案</a> ·
+<a href="https://github.com/dotnet/csharplang/blob/main/proposals/csharp-14.0/user-defined-compound-assignment.md">复合赋值提案</a>
+</div>
+
+<!-- ========================== 0. HOOK ========================== -->
+
+<h2>〇、四个场景 <span class="en">Four Specialized Tools</span></h2>
+
+<p>这四个特性不是 field 关键字那种"人人每天用"，也不是扩展成员那种"改变语言叙事"。它们是<strong>专用工具</strong>——特定场景下的生产力飞跃：</p>
+
+<table>
+<tr><th>特性</th><th>谁最受益</th><th>一句话</th></tr>
+<tr><td>Span 隐式转换</td><td>性能敏感代码作者</td><td>数组和字符串直接当 Span 用——不用再写 <code>.AsSpan()</code></td></tr>
+<tr><td>自定义复合赋值</td><td>数值库/游戏数学作者</td><td><code>v += other</code> 直接修改原对象——零分配</td></tr>
+<tr><td>partial 构造/事件</td><td>源生成器作者</td><td>构造和事件可以跨文件拆分——生成代码新维度</td></tr>
+<tr><td>单文件应用</td><td>脚本/原型开发者</td><td><code>dotnet run app.cs</code>——不需要 .csproj，不需要 sln</td></tr>
+</table>
+
+<!-- ========================== 1. SPAN ========================== -->
+
+<h2>一、Span 隐式转换 <span class="en">First-Class Span Support</span></h2>
+
+<h3>1.1 问题：Span 好用，但创建它很啰嗦</h3>
+
+<p>Span 自 C# 7.2 引入以来一直是高性能代码的基石。但把普通类型变成 Span 需要显式转换——每次用一个 API 都要先调用 <code>.AsSpan()</code> 或强制转换：</p>
+
+<pre><code><span class="cmt">// C# 7.2~13：常见场景——每一次都多写一行</span>
+ReadOnlySpan&lt;<span class="kw">char</span>&gt; name = <span class="str">"Christopher"</span>.AsSpan();  <span class="cmt">// 字符串 → Span</span>
+Span&lt;<span class="kw">int</span>&gt; numbers = stackalloc[] { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span> };     <span class="cmt">// stackalloc 可以，但…</span>
+
+<span class="kw">int</span>[] data = { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>, <span class="num">4</span>, <span class="num">5</span> };
+ProcessData(data.AsSpan());                       <span class="cmt">// 数组 → Span——每次都要 .AsSpan()</span>
+ProcessData((Span&lt;<span class="kw">int</span>&gt;)data);                    <span class="cmt">// 或者显式转换</span>
+
+<span class="kw">void</span> ProcessData(Span&lt;<span class="kw">int</span>&gt; span) { ... }</code></pre>
+
+<p>问题不在于 Span 的 API 设计——问题在于 C# 语言<strong>没把 Span 当成一等公民</strong>。数组可以隐式转为 <code>IEnumerable&lt;T&gt;</code>，为什么不能隐式转为 <code>Span&lt;T&gt;</code>？</p>
+
+<h3>1.2 C# 14：五条隐式转换</h3>
+
+<pre><code><span class="cmt">// C# 14——这些都隐式转换，不需要 .AsSpan()</span>
+ReadOnlySpan&lt;<span class="kw">char</span>&gt; name = <span class="str">"Christopher"</span>;             <span class="cmt">// ① string → ROSpan&lt;char&gt;</span>
+Span&lt;<span class="kw">int</span>&gt; numbers = stackalloc[] { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span> }; <span class="cmt">// ② stackalloc → Span&lt;T&gt;</span>
+
+<span class="kw">int</span>[] data = { <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span> };
+Span&lt;<span class="kw">int</span>&gt; s = data;                           <span class="cmt">// ③ T[] → Span&lt;T&gt;</span>
+ReadOnlySpan&lt;<span class="kw">int</span>&gt; rs = data;                    <span class="cmt">// ④ T[] → ReadOnlySpan&lt;T&gt;</span>
+ReadOnlySpan&lt;<span class="kw">int</span>&gt; rs2 = s;                      <span class="cmt">// ⑤ Span&lt;T&gt; → ReadOnlySpan&lt;T&gt;</span>
+
+ProcessData(data);                              <span class="cmt">// 直接传数组——不需要 .AsSpan()！</span></code></pre>
+
+<div class="callout callout--good">
+<strong>最大收益：</strong>API 作者只需要暴露 <code>ReadOnlySpan&lt;T&gt;</code> 一个重载——数组、Span、string 全部隐式传入。<strong>不用为了覆盖不同调用方写 N 个重载。</strong>
+</div>
+
+<h3>1.3 扩展方法接收者——历史性突破</h3>
+
+<p>在 C# 13 中，数组不能调用 Span 的扩展方法——这是最别扭的限制之一：</p>
+
+<pre><code><span class="cmt">// C# 13：数组不能调 Span 扩展方法 ❌</span>
+<span class="kw">int</span>[] arr = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];
+Console.WriteLine(arr.StartsWith(<span class="num">1</span>));  <span class="cmt">// CS8773: 数组不能成为 Span 扩展方法的接收者</span>
+
+<span class="cmt">// C# 14：隐式转换让数组也能调 ✅</span>
+<span class="kw">int</span>[] arr = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];
+Console.WriteLine(arr.StartsWith(<span class="num">1</span>));  <span class="cmt">// True——arr 隐式转为 ReadOnlySpan&lt;int&gt;</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>注意：</strong>这是一个<strong>重大更改</strong>。C# 14 中 Span 重载参与决议后，某些代码的<strong>重载决议结果可能改变</strong>——原本调用 <code>IEnumerable&lt;T&gt;</code> 重载的代码可能转而调用 <code>ReadOnlySpan&lt;T&gt;</code> 重载。这在表达式树（expression tree）场景中尤其需要注意。
+</div>
+
+<h3>1.4 转换一览</h3>
+
+<table>
+<tr><th>从</th><th>到</th><th>C# 13</th><th>C# 14</th></tr>
+<tr><td><code>string</code></td><td><code>ReadOnlySpan&lt;char&gt;</code></td><td>❌ 需 <code>.AsSpan()</code></td><td>✅ 隐式</td></tr>
+<tr><td><code>T[]</code></td><td><code>Span&lt;T&gt;</code></td><td>❌ 需显式转换</td><td>✅ 隐式</td></tr>
+<tr><td><code>T[]</code></td><td><code>ReadOnlySpan&lt;T&gt;</code></td><td>❌ 需显式转换</td><td>✅ 隐式</td></tr>
+<tr><td><code>Span&lt;T&gt;</code></td><td><code>ReadOnlySpan&lt;T&gt;</code></td><td>❌ 需显式转换</td><td>✅ 隐式</td></tr>
+<tr><td><code>stackalloc T[]</code></td><td><code>Span&lt;T&gt;</code></td><td>✅ 已经是隐式</td><td>✅ 保持</td></tr>
+</table>
+
+<!-- ========================== 2. COMPOUND ASSIGNMENT ========================== -->
+
+<h2>二、自定义复合赋值运算符 <span class="en">User-Defined Compound Assignment</span></h2>
+
+<h3>2.1 问题：+= 永远创建新对象</h3>
+
+<p>过去定义 <code>operator +</code> 时，编译器自动把 <code>a += b</code> 展开为 <code>a = a + b</code>——<strong>每次都创建新实例</strong>。对于大类型（矩阵、向量、BigInteger），这产生大量垃圾：</p>
+
+<pre><code><span class="cmt">// C# 13：只能定义 operator +</span>
+<span class="kw">public</span> <span class="kw">struct</span> Vector3
+{
+    <span class="kw">public</span> <span class="kw">decimal</span> X, Y, Z;
+
+    <span class="kw">public</span> <span class="kw">static</span> Vector3 <span class="kw">operator</span> +(Vector3 left, Vector3 right)
+        => <span class="kw">new</span>(left.X + right.X, left.Y + right.Y, left.Z + right.Z);
+}
+
+<span class="kw">var</span> v = <span class="kw">new</span> Vector3 { X = <span class="num">1</span>, Y = <span class="num">2</span>, Z = <span class="num">3</span> };
+v += <span class="kw">new</span> Vector3 { X = <span class="num">4</span>, Y = <span class="num">5</span>, Z = <span class="num">6</span> };
+<span class="cmt">// 编译器生成：v = v + other   ← v + other 创建了新 Vector3，然后赋值回 v</span>
+<span class="cmt">// 循环中反复 += → 大量临时对象 → GC 压力</span></code></pre>
+
+<h3>2.2 C# 14：实例方法形式的复合赋值——原地修改</h3>
+
+<pre><code><span class="cmt">// C# 14：定义 void operator += —— 原地修改，零分配</span>
+<span class="kw">public</span> <span class="kw">struct</span> Vector3
+{
+    <span class="kw">public</span> <span class="kw">decimal</span> X, Y, Z;
+
+    <span class="cmt">// 传统 operator +（独立的 a + b 表达式仍然可用）</span>
+    <span class="kw">public</span> <span class="kw">static</span> Vector3 <span class="kw">operator</span> +(Vector3 left, Vector3 right)
+        => <span class="kw">new</span>(left.X + right.X, left.Y + right.Y, left.Z + right.Z);
+
+    <span class="cmt">// 🆕 复合赋值——实例方法，void 返回，直接改 this</span>
+    <span class="kw">public</span> <span class="kw">void</span> <span class="kw">operator</span> +=(Vector3 right)
+    {
+        X += right.X;
+        Y += right.Y;
+        Z += right.Z;
+    }
+}
+
+<span class="kw">var</span> v = <span class="kw">new</span> Vector3 { X = <span class="num">1</span>, Y = <span class="num">2</span>, Z = <span class="num">3</span> };
+v += <span class="kw">new</span> Vector3 { X = <span class="num">4</span>, Y = <span class="num">5</span>, Z = <span class="num">6</span> };
+<span class="cmt">// 编译器直接用 void operator += —— 不创建新对象</span>
+
+<span class="cmt">// operator + 仍然独立存在：</span>
+<span class="kw">var</span> v3 = v1 + v2;   <span class="cmt">// 用传统 operator + —— 创建新对象（合理——你需要新值）</span></code></pre>
+
+<div class="callout callout--good">
+<strong>关键洞察：</strong>过去 <code>a += b</code> 只是 <code>a = a + b</code> 的语法糖——你没法区分"想原地修改"和"想新建赋值"。C# 14 让这两者<strong>有了不同的编译路径</strong>：复合赋值走原地修改，独立运算符走新建。
+</div>
+
+<h3>2.3 编译器抉择顺序</h3>
+
+<p>遇到 <code>a += b</code> 时编译器的查找优先级：</p>
+
+<div class="diagram">
+a += b  →
+  ① 找 void operator +=(T) 实例方法？ → 有 → 用（原地修改）
+  ② 没有 → 降级为 a = a + b → 找 operator +(T, T) 静态方法
+  ③ 也没有 → 编译错误
+</div>
+
+<h3>2.4 支持的运算符一览</h3>
+
+<table>
+<tr><th>运算符</th><th>签名</th><th>说明</th></tr>
+<tr><td><code>+=</code></td><td><code>public void operator +=(T value)</code></td><td>加法复合赋值</td></tr>
+<tr><td><code>-=</code></td><td><code>public void operator -=(T value)</code></td><td>减法</td></tr>
+<tr><td><code>*=</code>/<code>/=</code>/<code>%=</code></td><td><code>public void operator *=(T value)</code></td><td>乘除模</td></tr>
+<tr><td><code>&amp;=</code>/<code>|=</code>/<code>^=</code></td><td><code>public void operator &amp;=(T value)</code></td><td>位运算</td></tr>
+<tr><td><code>&lt;&lt;=</code>/<code>&gt;&gt;=</code>/<code>&gt;&gt;&gt;=</code></td><td><code>public void operator &lt;&lt;=(int value)</code></td><td>移位</td></tr>
+<tr><td><code>++</code>/<code>--</code></td><td><code>public void operator ++()</code></td><td>增减——<strong>无参数</strong></td></tr>
+</table>
+
+<p>全部支持 <code>checked</code> 上下文：<code>public void operator checked +=(T value)</code>。</p>
+
+<!-- ========================== 3. PARTIAL ========================== -->
+
+<h2>三、partial 构造和事件 <span class="en">Partial Constructors &amp; Events</span></h2>
+
+<h3>3.1 问题：源生成器只能生成方法，不能生成构造</h3>
+
+<p>C# 2 引入 <code>partial class</code>，C# 3 引入 <code>partial method</code>，C# 9 引入 <code>partial property</code>。但<strong>构造</strong>和<strong>事件</strong>——两种最常见的代码生成目标——一直不能 partial。</p>
+
+<p>这对<strong>源生成器</strong>（Source Generator）是一个真实限制。比如你写了一个 <code>[WeakEvent]</code> 特性，希望源生成器自动生成事件的基础设施代码——做不到，因为事件不能 partial。你只能用手写方式绕路。</p>
+
+<h3>3.2 C# 14：partial 构造</h3>
+
+<pre><code><span class="cmt">// ──── 你写的代码（定义声明） ────</span>
+<span class="kw">public</span> <span class="kw">partial</span> <span class="kw">class</span> User
+{
+    <span class="kw">public</span> <span class="kw">partial</span> User(<span class="kw">string</span> name);           <span class="cmt">// ← 声明——只有签名，没有体</span>
+}
+
+<span class="cmt">// ──── 源生成器产生的代码（实现声明） ────</span>
+<span class="kw">public</span> <span class="kw">partial</span> <span class="kw">class</span> User
+{
+    <span class="kw">public</span> <span class="kw">partial</span> User(<span class="kw">string</span> name)             <span class="cmt">// ← 实现——实际体</span>
+    {
+        Name = name ?? <span class="kw">throw</span> <span class="kw">new</span> ArgumentNullException(<span class="kw">nameof</span>(name));
+    }
+
+    <span class="kw">public</span> <span class="kw">string</span> Name { <span class="kw">get</span>; }
+}</code></pre>
+
+<p>关键规则：</p>
+<ul>
+  <li>仅<strong>实现声明</strong>可以有 <code>: base(...)</code> 或 <code>: this(...)</code> 初始化器</li>
+  <li>仅<strong>一个</strong> partial 声明可以有主构造函数语法</li>
+  <li>参数签名必须<strong>完全一致</strong></li>
+  <li>不支持 <code>static</code> 构造和终结器</li>
+</ul>
+
+<h3>3.3 partial 事件</h3>
+
+<pre><code><span class="cmt">// ──── 你写的代码（定义声明） ────</span>
+<span class="kw">public</span> <span class="kw">partial</span> <span class="kw">class</span> Service
+{
+    [WeakEvent]
+    <span class="kw">public</span> <span class="kw">partial</span> <span class="kw">event</span> EventHandler? OnChange;  <span class="cmt">// ← 字段式声明</span>
+}
+
+<span class="cmt">// ──── 源生成器产生的代码（实现声明） ────</span>
+<span class="kw">public</span> <span class="kw">partial</span> <span class="kw">class</span> Service
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> WeakEvent _onChange = <span class="kw">new</span>();
+
+    <span class="kw">public</span> <span class="kw">partial</span> <span class="kw">event</span> EventHandler? OnChange
+    {
+        <span class="kw">add</span>    => _onChange.Add(<span class="kw">value</span>);            <span class="cmt">// 必须同时写 add 和 remove</span>
+        <span class="kw">remove</span> => _onChange.Remove(<span class="kw">value</span>);
+    }
+}</code></pre>
+
+<div class="callout callout--info">
+<strong>现实场景：</strong>Xamarin/.NET MAUI 的 Objective-C 互操作、MVVM 工具包的属性变更通知、Avalonia 的绑定代码——都是 partial 构造/事件的目标用户。这个特性的存在理由就是<strong>让源生成器能做以前只能手写的事</strong>。
+</div>
+
+<!-- ========================== 4. FILE-BASED APPS ========================== -->
+
+<h2>四、单文件应用 <span class="en">File-Based Apps</span></h2>
+
+<h3>4.1 问题：一个 .cs 文件也需要 .csproj</h3>
+
+<p>想写一个快速脚本——读取文件、发个 HTTP 请求、格式化输出——需要先 <code>dotnet new console</code>，改 .csproj 加 NuGet 包，然后才能写代码。相比之下 Python 的 <code>python script.py</code> 零体力。</p>
+
+<h3>4.2 C# 14：直接 dotnet run 一个 .cs 文件</h3>
+
+<pre><code><span class="cmt">// ──── script.cs —— 一个文件，零项目文件 ────</span>
+#!/usr/bin/env dotnet
+#:package Spectre.Console@*
+
+<span class="kw">using</span> Spectre.Console;
+
+AnsiConsole.MarkupLine(<span class="str">"[bold green]Hello from a single file![/]"</span>);
+
+<span class="kw">var</span> files = Directory.GetFiles(<span class="str">"."</span>, <span class="str">"*.cs"</span>);
+AnsiConsole.Write(<span class="kw">new</span> BarChart()
+    .AddItem(<span class="str">"C# Files"</span>, files.Length, Color.Green));</code></pre>
+
+<pre><code><span class="cmt"># 运行——不需要 .csproj，不需要 sln</span>
+dotnet run script.cs
+
+<span class="cmt"># Unix/Mac——加执行权限后直接运行</span>
+chmod +x script.cs
+./script.cs</code></pre>
+
+<h3>4.3 四个 #: 指令</h3>
+
+<table>
+<tr><th>指令</th><th>作用</th><th>示例</th></tr>
+<tr><td><code>#:package</code></td><td>引用 NuGet 包</td><td><code>#:package Spectre.Console@*</code></td></tr>
+<tr><td><code>#:project</code></td><td>引用其他项目</td><td><code>#:project ../Lib/Lib.csproj</code></td></tr>
+<tr><td><code>#:property</code></td><td>设置 MSBuild 属性</td><td><code>#:property PublishAot=true</code></td></tr>
+<tr><td><code>#:sdk</code></td><td>指定 SDK</td><td><code>#:sdk Microsoft.NET.Sdk.Web</code></td></tr>
+</table>
+
+<div class="callout callout--info">
+<strong>边界：</strong><code>#!</code> 和 <code>#:</code> 指令会被 C# 编译器<strong>忽略</strong>——它们由 MSBuild 在项目文件生成阶段读取。在传统项目中使用这些指令只会产生<strong>警告</strong>，不会报错。单文件应用<strong>默认开启 Native AOT</strong>，首次运行会编译为原生二进制。
+</div>
+
+<h3>4.4 定位——不是替代项目，是替代脚本</h3>
+
+<p>单文件应用不是让你把整个生产项目塞进一个文件。它的定位是：</p>
+
+<div class="triad">
+  <div>
+    <h4>🧪 快速原型</h4>
+    <p>试一个 API、验证一个想法——<br>不需要建项目、配 NuGet。</p>
+  </div>
+  <div>
+    <h4>🔧 运维脚本</h4>
+    <p>数据处理、文件批处理、<br>CI 工具——C# 强类型安全。</p>
+  </div>
+  <div>
+    <h4>📖 教学/示例</h4>
+    <p>分享一个概念——给对方一个<br>.cs 文件，不是整个 repo。</p>
+  </div>
+</div>
+
+<p class="mild">这不意味着 C# 成了脚本语言——它仍然是编译型、强类型的。只是<strong>绕过了项目文件的仪式</strong>，让 C# 在"临时写个东西"的赛道上可以一用。</p>
+
+<!-- ========================== 5. QUIZ ========================== -->
+
+<h2>五、测验 <span class="en">Quiz</span></h2>
+
+<div class="quiz" id="q1">
+  <h3>1/5 · Span 隐式转换</h3>
+  <p class="question">C# 14 中以下哪个转换<strong>不是</strong>隐式的？</p>
+  <label><input type="radio" name="q1" value="a">A. <code>string</code> → <code>ReadOnlySpan&lt;char&gt;</code></label>
+  <label><input type="radio" name="q1" value="b">B. <code>int[]</code> → <code>Span&lt;int&gt;</code></label>
+  <label><input type="radio" name="q1" value="c">C. <code>ReadOnlySpan&lt;int&gt;</code> → <code>Span&lt;int&gt;</code></label>
+  <label><input type="radio" name="q1" value="d">D. <code>Span&lt;int&gt;</code> → <code>ReadOnlySpan&lt;int&gt;</code></label>
+  <div class="feedback" id="f_q1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>2/5 · 复合赋值抉择</h3>
+  <p class="question">以下代码中，<code>v += other</code> 走哪条编译路径？</p>
+  <pre><code>struct V { public void operator +=(V r) => X += r.X; }</code></pre>
+  <label><input type="radio" name="q2" value="a">A. 展开为 v = v + other——找 operator +</label>
+  <label><input type="radio" name="q2" value="b">B. 直接调用 void operator +=——原地修改</label>
+  <label><input type="radio" name="q2" value="c">C. 编译错误——void operator 不能用于 struct</label>
+  <label><input type="radio" name="q2" value="d">D. 先找 operator +，找不到再找 operator +=</label>
+  <div class="feedback" id="f_q2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>3/5 · partial 构造规则</h3>
+  <p class="question">关于 partial 构造，以下哪个说法是<strong>正确</strong>的？</p>
+  <label><input type="radio" name="q3" value="a">A. 定义声明和实现声明都可以写 <code>: base(...)</code> 初始化器</label>
+  <label><input type="radio" name="q3" value="b">B. 定义声明和实现声明的参数签名可以不同——编译器取并集</label>
+  <label><input type="radio" name="q3" value="c">C. 只有实现声明可以写 <code>: base(...)</code> 或 <code>: this(...)</code> 初始化器</label>
+  <label><input type="radio" name="q3" value="d">D. partial 构造可以用于 static 构造函数</label>
+  <div class="feedback" id="f_q3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>4/5 · 单文件应用指令</h3>
+  <p class="question">以下哪个<strong>不是</strong>单文件应用的有效指令？</p>
+  <label><input type="radio" name="q4" value="a">A. <code>#:package Newtonsoft.Json@13.0.3</code></label>
+  <label><input type="radio" name="q4" value="b">B. <code>#:sdk Microsoft.NET.Sdk.Web</code></label>
+  <label><input type="radio" name="q4" value="c">C. <code>#:import System.Text.Json</code></label>
+  <label><input type="radio" name="q4" value="d">D. <code>#:property PublishAot=true</code></label>
+  <div class="feedback" id="f_q4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>5/5 · 综合判断</h3>
+  <p class="question">关于 C# 14 这四个小特性，以下哪个说法<strong>正确</strong>？</p>
+  <label><input type="radio" name="q5" value="a">A. Span 隐式转换是纯编译时行为——不产生任何运行时开销</label>
+  <label><input type="radio" name="q5" value="b">B. 自定义复合赋值 <code>void operator ++()</code> 需要手动区分前置和后置——编译器不会自动处理</label>
+  <label><input type="radio" name="q5" value="c">C. partial 事件的定义声明必须包含 <code>add</code>/<code>remove</code> 访问器</label>
+  <label><input type="radio" name="q5" value="d">D. 单文件应用的 <code>#!</code> 和 <code>#:</code> 指令由 C# 编译器直接解析和执行</label>
+  <div class="feedback" id="f_q5"></div>
+
+  <button onclick="checkAll()">提交全部答案</button>
+  <div class="score" id="score" style="display:none"></div>
+</div>
+
+<!-- ========================== 6. SUMMARY ========================== -->
+
+<h2>六、C# 14 全回顾 <span class="en">C# 14 Retrospective</span></h2>
+
+<p>C# 14 是 .NET 10 LTS 的语言——10 个新特性，从"改变叙事"到"消除纸割伤"：</p>
+
+<table>
+<tr><th>#</th><th>特性</th><th>课</th><th>日常频率</th><th>一句话</th></tr>
+<tr><td>1</td><td><strong>field 关键字</strong></td><td><a href="21-csharp14-field-keyword.html">L21</a></td><td>⭐⭐⭐⭐⭐</td><td>属性访问器直接引用合成后备字段</td></tr>
+<tr><td>2</td><td><strong>扩展成员</strong></td><td><a href="22-csharp14-extension-members.html">L22</a></td><td>⭐⭐⭐⭐</td><td>extension 块——属性、静态、运算符</td></tr>
+<tr><td>3</td><td><strong>Null 条件赋值</strong></td><td><a href="23-csharp14-mid-features.html">L23</a></td><td>⭐⭐⭐⭐⭐</td><td>?. 站在赋值左边</td></tr>
+<tr><td>4</td><td><strong>Lambda 修饰符</strong></td><td><a href="23-csharp14-mid-features.html">L23</a></td><td>⭐⭐⭐⭐</td><td>out/ref/in 参数——省略类型</td></tr>
+<tr><td>5</td><td><strong>nameof 泛型</strong></td><td><a href="23-csharp14-mid-features.html">L23</a></td><td>⭐⭐⭐</td><td>nameof(List&lt;&gt;)</td></tr>
+<tr><td>6</td><td><strong>Span 隐式转换</strong></td><td>L24</td><td>⭐⭐⭐</td><td>数组、string 直接当 Span 用</td></tr>
+<tr><td>7</td><td><strong>复合赋值</strong></td><td>L24</td><td>⭐⭐</td><td>void operator +=——零分配</td></tr>
+<tr><td>8</td><td><strong>partial 构造/事件</strong></td><td>L24</td><td>⭐⭐</td><td>源生成器新维度</td></tr>
+<tr><td>9</td><td><strong>单文件应用</strong></td><td>L24</td><td>⭐⭐</td><td>dotnet run app.cs</td></tr>
+<tr><td>10</td><td><em>文件级预处理器指令</em></td><td>L24 §4</td><td>⭐</td><td>#! / #: ——属于单文件应用</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>C# 14 最值得带回日常工作的三个特性：</strong><br>
+🥇 <strong>field 关键字</strong>——消除最常见的样板<br>
+🥈 <strong>Null 条件赋值</strong>——每天都在救你一行 if-null 检查<br>
+🥉 <strong>扩展属性</strong>——把状态查询从方法变回属性
+</div>
+
+<!-- ========================== 7. NEXT ========================== -->
+
+<h2>七、C# 8~14 全部学完。下一步？<span class="en">What's Next After C# 14?</span></h2>
+
+<p>25 节课，7 个 C# 版本（8→14），覆盖了从 .NET Framework 4.8 到 .NET 10 LTS 的完整语言演进。你已具备在现代 .NET 项目中自信编码的能力。</p>
+
+<p>接下来的学习路径取决于你的兴趣方向：</p>
+
+<div class="triad">
+  <div>
+    <h4>🧵 ASP.NET Core</h4>
+    <p>Web API · 中间件 · 依赖注入 ·<br>Minimal API · gRPC · 认证授权</p>
+  </div>
+  <div>
+    <h4>🗄️ EF Core</h4>
+    <p>Code First · 迁移 · 查询优化 ·<br>领域驱动设计 · 性能调优</p>
+  </div>
+  <div>
+    <h4>⚡ 性能与工具链</h4>
+    <p>Span/Memory 深度 · Native AOT ·<br>源生成器 · BenchmarkDotNet</p>
+  </div>
+</div>
+
+<p class="mild"><a href="../reference/nrt-cheatsheet.html">📖 NRT 速查</a> · <a href="23-csharp14-mid-features.html">← L23: 中等特性合集</a> · <a href="../../MISSION.md">🎯 回顾 Mission</a></p>
+
+<hr class="section-divider">
+
+<div class="lesson-footer">
+<p><strong>推荐阅读：</strong><a href="https://learn.microsoft.com/zh-cn/dotnet/csharp/whats-new/csharp-14">C# 14 新增功能（完整列表）</a> · <a href="https://dev.to/cristiansifuentes/mastering-implicit-span-conversions-in-c-14-performance-with-safety-36nm">Span 隐式转换深度教程</a> · <a href="https://www.heise.de/en/blog/New-in-NET-10-0-4-New-operator-overloads-in-C-14-0-11121248.html">复合赋值实战</a></p>
+<p><strong>课后实操：</strong>找到项目中所有 <code>.AsSpan()</code> 调用——C# 14 下大部分可以删掉。给一个频繁 <code>+=</code> 的 struct 加上复合赋值运算符。试试 <code>dotnet run singlefile.cs</code> 的体验。</p>
+<p><strong>有问题？</strong>C# 14 全部 10 个特性你已学完——哪一块还想深挖？或者想转向 ASP.NET Core / EF Core 方向？你的教师（Claude）随时在。</p>
+</div>
+
+<script src="../assets/scripts/quiz.js"></script>
+<script>
+const answers = { q1: 'c', q2: 'b', q3: 'c', q4: 'c', q5: 'a' };
+const explanations = {
+  q1: { correct: '✅ 正确！C——ReadOnlySpan→Span 不是隐式的（这会破坏只读安全——Span 允许写入，ReadOnlySpan 只读。反向才是隐式的）。A/B/D 都是 C# 14 新增的隐式转换。', wrong: '❌ 答案是 C。ReadOnlySpan→Span 不是隐式的——这会破坏只读安全。ReadOnlySpan 是只读的，Span 是可写的——隐式转换会开一个写入后门。其他三项（string→ROSpan, T[]→Span, Span→ROSpan）都是 C# 14 新增隐式转换。' },
+  q2: { correct: '✅ 正确！编译器优先查找 void operator += 作为实例方法——找到就直接原地修改。只有找不到时才降级为 a = a + b 模式。', wrong: '❌ 答案是 B。编译器查找优先级：① void operator += 实例方法 → ② 降级为 a = a + b（operator + 静态方法）。有复合赋值时优先用复合赋值——这是 C# 14 的关键语义。' },
+  q3: { correct: '✅ 正确！C——只有实现声明可以写构造初始化器（:base/:this）。定义声明只声明签名。static 构造和终结器不支持 partial。参数签名必须完全一致（不是并集）。', wrong: '❌ 答案是 C。规则：① 只有实现声明可以有 :base/:this 初始化器；② 参数签名必须完全一致；③ 不支持 static 构造；④ 定义声明只写签名（分号体）。' },
+  q4: { correct: '✅ 正确！C——#:import 不存在。有效的四个指令是 #:package（NuGet）、#:project（项目引用）、#:property（MSBuild 属性）、#:sdk（SDK 指定）。', wrong: '❌ 答案是 C。#:import 不存在——这是混淆选项。有效的指令是 #:package、#:project、#:property、#:sdk——四个，没有 import。' },
+  q5: { correct: '✅ 正确！A——Span 隐式转换是纯编译时行为（语法糖），编译后的 IL 和显式转换完全一致——零运行时开销。B 错：++ 一个定义同时覆盖前后置；C 错：定义声明是字段式事件（不含 add/remove），实现声明才含；D 错：#! 和 #: 由 MSBuild 解析，C# 编译器忽略它们。', wrong: '❌ 答案是 A。Span 隐式转换是纯编译时糖——零运行时开销。B 错：void operator ++() 一个方法同时处理前置和后置（编译器自动管理时机）；C 错：定义声明是字段式事件，实现声明才含 add/remove；D 错：指令由 MSBuild 解析，不是 C# 编译器。' },
+};
+function checkAll() { Quiz.checkAll(answers, explanations); }
+</script>
+</body>
+</html>

@@ -178,7 +178,7 @@
   <label><input type="radio" name="q1" value="b"> onCommand:python</label>
   <label><input type="radio" name="q1" value="c"> onStartupFinished</label>
   <label><input type="radio" name="q1" value="d"> workspaceContains:*.py</label>
-  <button onclick="checkQuiz('q1','a','onLanguage:python 会在你打开 .py 文件时激活扩展。','再想想。提示：VS Code 文档中 Activation Events 列表里有 onLanguage: 前缀的事件。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q1" data-answer="a" data-explain="onLanguage:python 会在你打开 .py 文件时激活扩展。" data-explain-incorrect="再想想。提示：VS Code 文档中 Activation Events 列表里有 onLanguage: 前缀的事件。">检查答案</button>
   <div class="feedback" id="q1-fb"></div>
 </div>
 
@@ -189,7 +189,7 @@
   <label><input type="radio" name="q2" value="b"> export function activate()</label>
   <label><input type="radio" name="q2" value="c"> export function run()</label>
   <label><input type="radio" name="q2" value="d"> export default class Extension</label>
-  <button onclick="checkQuiz('q2','b','VS Code 要求入口文件导出 activate() 函数，以及可选的 deactivate() 函数。','再读一遍第 2.3 节。VS Code 文档明确规定了入口文件的导出签名。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q2" data-answer="b" data-explain="VS Code 要求入口文件导出 activate() 函数，以及可选的 deactivate() 函数。" data-explain-incorrect="再读一遍第 2.3 节。VS Code 文档明确规定了入口文件的导出签名。">检查答案</button>
   <div class="feedback" id="q2-fb"></div>
 </div>
 
@@ -200,7 +200,7 @@
   <label><input type="radio" name="q3" value="b"> 在发布前自动编译，确保不会发布过时的代码</label>
   <label><input type="radio" name="q3" value="c"> 在 VS Code 启动时预加载扩展</label>
   <label><input type="radio" name="q3" value="d"> 每次 git commit 前自动格式化代码</label>
-  <button onclick="checkQuiz('q3','b','vscode:prepublish 是 vsce 工具在发布前自动执行的钩子，确保编译产物是最新的。','再想想。提示：这个脚本的名称里有 prepublish（发布前）。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q3" data-answer="b" data-explain="vscode:prepublish 是 vsce 工具在发布前自动执行的钩子，确保编译产物是最新的。" data-explain-incorrect="再想想。提示：这个脚本的名称里有 prepublish（发布前）。">检查答案</button>
   <div class="feedback" id="q3-fb"></div>
 </div>
 

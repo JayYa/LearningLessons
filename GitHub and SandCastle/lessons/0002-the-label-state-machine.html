@@ -25,7 +25,7 @@
 
 <h1>📖 第二课：标签状态机</h1>
 
-<p><strong>预计完成时间：12 分钟</strong> &nbsp;|&nbsp;
+<p><strong>预计完成时间：15 分钟</strong> &nbsp;|&nbsp;
 难度：中级 &nbsp;|&nbsp;
 类型：知识 + 技能</p>
 
@@ -40,7 +40,8 @@
 <ul>
   <li>理解为什么 sandcastle 和 course-video-manager 使用 4 个标签来追踪工作流状态</li>
   <li>实现完整的 <strong>trigger → in-progress → done | blocked</strong> 状态转换</li>
-  <li>使用 <code>failure()</code> 和 <code>always()</code> 条件函数优雅地处理成功和失败路径</li>
+  <li>使用 <code>success()</code> / <code>failure()</code> / <code>always()</code> 条件函数优雅地处理成功和失败路径</li>
+  <li>理解 <code>concurrency</code> 并发控制：<code>group</code> 和 <code>cancel-in-progress</code> 的配合</li>
 </ul>
 
 <hr>
@@ -156,6 +157,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+    env:
+      GH_REPO: ${{ github.repository }}  # gh CLI 需要，参见第 1 课
     concurrency:
       group: agent-hello-issue-${{ github.event.issue.number }}
       cancel-in-progress: false
@@ -226,12 +229,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}</code></pre>
 </div>
 
-<h3>两个重要的运行环境概念</h3>
+<h3>三个重要的运行环境概念</h3>
 
-	<p>在分析新代码之前，先了解两个工作流中频繁出现的概念：</p>
+	<p>在分析新代码之前，先了解三个工作流中频繁出现的概念：</p>
 
 	<table>
 	  <tr><th>概念</th><th>说明</th></tr>
+	  <tr>
+	    <td><code>${{ github.workspace }}</code></td>
+	    <td>GitHub Actions 自动提供的<strong>工作目录绝对路径</strong>。这是 <code>actions/checkout</code> 检出源码后仓库文件所在的位置，也是 <code>run</code> 步骤的默认工作目录。你的仓库代码在这里。</td>
+	  </tr>
 	  <tr>
 	    <td><code>$RUNNER_TEMP</code></td>
 	    <td>GitHub Actions 自动提供的<strong>临时目录路径</strong>。工作流结束后自动清理。用于存放中间文件（如要发表的评论内容）。不用手动创建或删除。</td>
@@ -241,6 +248,15 @@ jobs:
 	    <td>一个特殊文件路径。用 <code>echo "key=value" &gt;&gt; "$GITHUB_OUTPUT"</code> 写入后，后续步骤可以用 <code>steps.&lt;id&gt;.outputs.key</code> 读取该值。（本课暂未使用，第 3 课会用到）</td>
 	  </tr>
 	</table>
+
+<div class="callout">
+  <strong>🔍 区分 <code>github.workspace</code> 和 <code>RUNNER_TEMP</code>：</strong>它们是两个完全不同的目录：
+  <ul>
+    <li><code>github.workspace</code> → <strong>源码目录</strong>，checkout 后仓库文件在这里，<code>run</code> 步骤默认在此执行</li>
+    <li><code>RUNNER_TEMP</code> → <strong>临时文件目录</strong>，仅用于暂存中间产物（如评论内容），用完即弃</li>
+  </ul>
+  课程中用 <code>$RUNNER_TEMP/comment.md</code> 写评论内容，正是因为那条评论只是中间产物，不需要保留在仓库里。
+</div>
 
 	<h3>逐步解析：新增的部分</h3>
 
@@ -255,6 +271,10 @@ jobs:
     <td>清理上一次失败的阻塞标签，使得重试成为可能</td>
   </tr>
   <tr>
+    <td><code>if: success()</code></td>
+    <td>仅在前面的所有步骤都成功时运行。<strong>这是默认行为</strong>——不写 <code>if:</code> 等价于 <code>if: success()</code></td>
+  </tr>
+  <tr>
     <td><code>if: failure()</code></td>
     <td>GitHub Actions 的<strong>状态检查函数</strong>：仅在前面的步骤失败时运行</td>
   </tr>
@@ -263,18 +283,44 @@ jobs:
     <td>无论前面步骤成功还是失败，都运行。用于<strong>必须执行</strong>的清理操作</td>
   </tr>
   <tr>
+    <td><code>if: cancelled()</code></td>
+    <td>仅在工作流被手动取消时运行。极少单独使用，但配合 <code>always()</code> 可以做取消后清理</td>
+  </tr>
+  <tr>
     <td><code>steps.work.outcome == 'failure'</code></td>
     <td>精确检查哪个步骤失败。当有多个步骤可能失败但你只想在某些失败时添加 blocked 标签时很有用</td>
   </tr>
   <tr>
     <td><code>&lt;&lt;EOF ... EOF</code></td>
     <td>heredoc 语法：将多行文本通过管道传给 <code>gh</code>，避免 shell 变量转义的麻烦</td>
-	  </tr>
-	  <tr>
-	    <td><code>if [ "$VAR" = "value" ]; then</code></td>
-	    <td>shell 的条件判断（不是 GitHub Actions 的 <code>if:</code>！）。<code>[ ]</code> 是 shell 的 test 命令，方括号<strong>内侧必须有空格</strong>。</td>
+  </tr>
+  <tr>
+    <td><code>if [ "$VAR" = "value" ]; then</code></td>
+    <td>shell 的条件判断（不是 GitHub Actions 的 <code>if:</code>！）。<code>[ ]</code> 是 shell 的 test 命令，方括号<strong>内侧必须有空格</strong>。</td>
   </tr>
 </table>
+
+<div class="callout">
+  <strong>🔍 <code>steps.work.outcome</code> 从哪里来？</strong>它<strong>不由你手动设置</strong>——GitHub Actions 运行器在每个步骤结束后自动记录结果。整个过程是：
+  <ul>
+    <li>shell 中 <code>exit 0</code>（数字退出码）→ 运行器捕获 → 翻译成 <code>success</code>（字符串）</li>
+    <li>shell 中 <code>exit 1</code>（或任何非零值）→ 运行器捕获 → 翻译成 <code>failure</code>（字符串）</li>
+    <li>步骤因 <code>if:</code> 条件不满足被跳过 → <code>skipped</code></li>
+    <li>工作流被手动取消 → <code>cancelled</code></li>
+  </ul>
+  你只需给步骤一个 <code>id:</code>（如 <code>id: work</code>），之后就能用 <code>steps.work.outcome</code> 读取它。GitHub Actions 把几十种非零退出码统一成几个语义清晰的字符串——编排层关心的是<strong>状态语义</strong>，而不是具体退出码数字。
+  <br><br>
+  还有一个相关字段 <code>steps.&lt;id&gt;.conclusion</code>：它受 <code>continue-on-error</code> 影响——如果步骤失败但设置了 <code>continue-on-error: true</code>，<code>outcome</code> 是 <code>failure</code>，但 <code>conclusion</code> 会是 <code>success</code>。
+</div>
+
+<div class="callout">
+  <strong>🔍 深入理解 <code>concurrency</code>：</strong>两个参数配合控制并发行为：
+  <ul>
+    <li><strong><code>group</code></strong> — 定义"谁和谁竞争"。同一个 <code>group</code> 值下同时只能有一个实例运行。课程中 <code>group: agent-hello-issue-${{ github.event.issue.number }}</code> 意味着"以 Issue 编号分组"：Issue #5 不能同时跑两个 <code>agent:hello</code> 工作流，但 Issue #7 不受影响，可以并行跑。</li>
+    <li><strong><code>cancel-in-progress</code></strong> — 决定竞争发生时如何处理旧实例：<code>true</code> = 立刻<strong>杀死</strong>正在运行的旧实例，让新实例开始；<code>false</code>（课程用法）= 旧实例继续跑完，新实例<strong>排队等待</strong>。</li>
+  </ul>
+  课程选择 <code>cancel-in-progress: false</code> 是为了保护标签状态机的原子转换——如果旧实例刚把标签从 <code>agent:hello</code> 换成 <code>agent:in-progress</code> 就被杀死，标签状态会永远卡住。排队等待更安全。
+</div>
 
 <div class="callout warning">
   <strong>⚠️ 重要：</strong><code>if: always()</code> 不可或缺。如果没有它，当任务步骤失败时，GitHub Actions 默认会<strong>跳过</strong>所有后续步骤。这意味着 <code class="label label-yellow">agent:in-progress</code> 会永远留在 Issue 上，后续的标签触发也不会工作。使用 <code>always()</code> 确保清理步骤<strong>总是</strong>执行。
@@ -348,6 +394,24 @@ jobs:
   <p class="quiz-feedback" id="q3-feedback"></p>
 </div>
 
+<div class="quiz" id="q4">
+  <p class="quiz-question">4. 不写 <code>if:</code> 条件的步骤，默认行为等价于什么？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q4', true)">A. if: success() — 只有前面步骤都成功才执行</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q4', false)">B. if: always() — 无论前面步骤成功与否都执行</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q4', false)">C. if: failure() — 只有前面步骤失败才执行</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q4', false)">D. if: none — 该步骤无条件跳过</div>
+  <p class="quiz-feedback" id="q4-feedback"></p>
+</div>
+
+<div class="quiz" id="q5">
+  <p class="quiz-question">5. <code>steps.work.outcome</code> 的值 '<code>failure</code>' 是如何产生的？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q5', false)">A. 需要手动在工作流中设置：echo "outcome=failure" >> "$GITHUB_OUTPUT"</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q5', true)">B. 运行器自动捕获 step 的非零退出码，将其翻译为字符串 'failure'</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q5', false)">C. 由 gh CLI 在操作 Issue 标签后写入</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q5', false)">D. 在 workflow_dispatch 触发时由用户传入</div>
+  <p class="quiz-feedback" id="q5-feedback"></p>
+</div>
+
 <script>
 function selectQuiz(el, quizId, isCorrect) {
   const quiz = document.getElementById(quizId);
@@ -393,6 +457,7 @@ function selectQuiz(el, quizId, isCorrect) {
   <li><strong>主阅读材料：</strong><a href="https://github.com/mattpocock/sandcastle/blob/main/.github/workflows/agent-explore.yml">sandcastle agent-explore.yml</a> — 看完整的状态机在一个 80 行的工作流中是如何实现的</li>
   <li><a href="https://github.com/mattpocock/course-video-manager/blob/main/docs/agents/afk-agent-platform-spec.md">course-video-manager: AFK Agent Platform Spec</a> — 完整的规范文档，包含状态图、拒绝条件、并发模型</li>
   <li><a href="../reference/github-actions-label-workflow-syntax.html">参考文档：标签工作流语法速查表</a> — 本课中出现的所有语法的快速参考</li>
+  <li><a href="https://docs.github.com/actions/learn-github-actions/contexts#steps-context">GitHub Actions 官方文档：steps 上下文</a> — <code>steps.&lt;id&gt;.outcome</code> 的官方定义</li>
 </ul>
 
 <hr>

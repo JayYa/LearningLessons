@@ -439,7 +439,7 @@ arguments: [session.sessionFile]              <span class="cmt">// 命令参数�
   <label><input type="radio" name="q1" value="b"> 优先级 1000——数字越大越靠左</label>
   <label><input type="radio" name="q1" value="c"> 位置随机，优先级只影响隐藏顺序</label>
   <label><input type="radio" name="q1" value="d"> 两者位置相同，优先级只影响颜色</label>
-  <button onclick="checkQuiz('q1','b','对于 Right 对齐，优先级越高越靠左——高优先级更稳固，在空间不足时更晚被挤出。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q1" data-answer="b" data-explain="对于 Right 对齐，优先级越高越靠左——高优先级更稳固，在空间不足时更晚被挤出。">检查答案</button>
   <div class="feedback" id="q1-fb"></div>
 </div>
 
@@ -450,7 +450,7 @@ arguments: [session.sessionFile]              <span class="cmt">// 命令参数�
   <label><input type="radio" name="q2" value="b"> 返回一个根据当前主题动态解析的颜色，深色/浅色主题下表现不同</label>
   <label><input type="radio" name="q2" value="c"> 在状态栏中显示一个错误图标</label>
   <label><input type="radio" name="q2" value="d"> 创建一个红色的状态栏背景，然后在下次刷新时自动清除</label>
-  <button onclick="checkQuiz('q2','b','ThemeColor 是语义化颜色引用——同一个键在深色主题下解析为暗红，浅色主题下解析为浅红。这是 VS Code 处理主题适配的标准方式。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q2" data-answer="b" data-explain="ThemeColor 是语义化颜色引用——同一个键在深色主题下解析为暗红，浅色主题下解析为浅红。这是 VS Code 处理主题适配的标准方式。">检查答案</button>
   <div class="feedback" id="q2-fb"></div>
 </div>
 
@@ -461,7 +461,7 @@ arguments: [session.sessionFile]              <span class="cmt">// 命令参数�
   <label><input type="radio" name="q3" value="b"> delete 会自动调用 dispose，所以只需要 delete 就够了——双重操作是冗余代码</label>
   <label><input type="radio" name="q3" value="c"> dispose 销毁 VS Code 对象，delete 销毁对应的 Node.js 进程——各管一层</label>
   <label><input type="radio" name="q3" value="d"> 这是防御性编程——实际上只需要 dispose，delete 是可选的</label>
-  <button onclick="checkQuiz('q3','a','dispose() 通知 VS Code 释放 UI 资源，但 JavaScript 的 Map 仍然持有对已 dispose 对象的引用。delete 清理这个引用。只 dispose 不 delete → Map 中有僵尸引用，下次遍历可能崩溃；只 delete 不 dispose → UI 条目一直显示。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q3" data-answer="a" data-explain="dispose() 通知 VS Code 释放 UI 资源，但 JavaScript 的 Map 仍然持有对已 dispose 对象的引用。delete 清理这个引用。只 dispose 不 delete → Map 中有僵尸引用，下次遍历可能崩溃；只 delete 不 dispose → UI 条目一直显示。">检查答案</button>
   <div class="feedback" id="q3-fb"></div>
 </div>
 
@@ -472,7 +472,7 @@ arguments: [session.sessionFile]              <span class="cmt">// 命令参数�
   <label><input type="radio" name="q4" value="b"> 默认隐藏——必须显式调用 show() 才出现在状态栏中</label>
   <label><input type="radio" name="q4" value="c"> 取决于 alignment——Left 对齐默认可见，Right 对齐默认隐藏</label>
   <label><input type="radio" name="q4" value="d"> 取决于 priority——优先级高于 500 的默认可见</label>
-  <button onclick="checkQuiz('q4','b','创建出来的 StatusBarItem 默认是隐藏的，必须调用 show() 后才能在状态栏中看到。这是 VS Code API 的设计——给你机会在显示之前完成所有配置。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q4" data-answer="b" data-explain="创建出来的 StatusBarItem 默认是隐藏的，必须调用 show() 后才能在状态栏中看到。这是 VS Code API 的设计——给你机会在显示之前完成所有配置。">检查答案</button>
   <div class="feedback" id="q4-fb"></div>
 </div>
 
@@ -483,7 +483,7 @@ arguments: [session.sessionFile]              <span class="cmt">// 命令参数�
   <label><input type="radio" name="q5" value="b"> 优先级 1000——不管 Left 还是 Right，数字越大越靠左</label>
   <label><input type="radio" name="q5" value="c"> Left 对齐下两者位置相同，因为 Left 区不比较优先级</label>
   <label><input type="radio" name="q5" value="d"> 优先级 1000 靠右——Left 对齐的逻辑和 Right 相反</label>
-  <button onclick="checkQuiz('q5','b','优先级规则和左右无关——数字越大的条目越靠左。Left 区的逻辑是"大号先占位"，Right 区的逻辑是"大号更稳固所以放左边"。原因不同，结果一样。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q5" data-answer="b" data-explain="优先级规则和左右无关——数字越大的条目越靠左。Left 区的逻辑是&quot;大号先占位&quot;，Right 区的逻辑是&quot;大号更稳固所以放左边&quot;。原因不同，结果一样。">检查答案</button>
   <div class="feedback" id="q5-fb"></div>
 </div>
 
@@ -494,7 +494,7 @@ arguments: [session.sessionFile]              <span class="cmt">// 命令参数�
   <label><input type="radio" name="q6" value="b"> 会话的主键——作为 statusBarItems Map 的 key、hiddenSessions 的 key、seenPaths Set 的成员、命令参数</label>
   <label><input type="radio" name="q6" value="c"> 是 sessionId 的别名——两者完全等价，可以互换使用</label>
   <label><input type="radio" name="q6" value="d"> 仅在 dispose 清理阶段使用——用于找到需要销毁的条目</label>
-  <button onclick="checkQuiz('q6','b','sessionFile 是会话JSONL文件的磁盘完整路径，是整个扩展中唯一绝对不重复的标识符。它在 Map、Set、命令参数等多种场景中充当索引——是贯穿全代码的主键。')">检查答案</button>
+  <button class="quiz-btn" data-quiz="q6" data-answer="b" data-explain="sessionFile 是会话JSONL文件的磁盘完整路径，是整个扩展中唯一绝对不重复的标识符。它在 Map、Set、命令参数等多种场景中充当索引——是贯穿全代码的主键。">检查答案</button>
   <div class="feedback" id="q6-fb"></div>
 </div>
 
