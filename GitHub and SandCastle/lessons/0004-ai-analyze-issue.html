@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0004 — AI 分析 Issue：第一个 AI 驱动的工作流</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .contract-table th:first-child, .contract-table td:first-child { width: 120px; }
+  .roadmap { counter-reset: step; }
+  .roadmap li { list-style: none; margin: 1rem 0; }
+  .roadmap li::before {
+    counter-increment: step;
+    content: counter(step);
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    width: 26px; height: 26px;
+    background: var(--accent); color: white;
+    border-radius: 50%; font-size: 0.85em; font-weight: 700;
+    margin-right: 0.5em;
+  }
+</style>
+</head>
+<body>
+
+<h1>🤖 第四课：AI 分析 Issue — 第一个 AI 驱动的工作流</h1>
+
+<p><strong>预计完成时间：30 分钟</strong> &nbsp;|&nbsp;
+难度：中级 &nbsp;|&nbsp;
+类型：实践</p>
+
+<div class="callout">
+  <strong>📌 前置要求：</strong>本课假设你已理解 <a href="0001-your-first-label-triggered-workflow.html">第 1 课</a> 的标签触发、<a href="0002-the-label-state-machine.html">第 2 课</a> 的状态机，以及 <a href="0003-advanced-patterns.html">第 3 课</a> 的 PAT 概念。
+</div>
+
+<hr>
+
+<h2>本课目标</h2>
+<p>在本课结束时，你将<strong>在自己的仓库中部署</strong>一个真实工作的 AI 驱动工作流：</p>
+<ul>
+  <li>给 Issue 添加 <code>agent:analyze</code> 标签</li>
+  <li>GitHub Actions 自动触发，调用 Claude Code 分析 Issue</li>
+  <li>AI 的分析结果自动发布为 Issue 评论</li>
+</ul>
+
+<p>这是你从"看懂别人的工作流"到"自己的仓库跑 AI"的<strong>关键一步</strong>。</p>
+
+<hr>
+
+<h2>你会看到什么</h2>
+
+<p>部署完成后，你的仓库行为如下：</p>
+
+<div class="flow">
+  ┌──────────────────────────────────────────────────┐
+  │ 1. 你在 Issue 上添加 agent:analyze 标签           │
+  └─────────────────┬────────────────────────────────┘
+                    │
+  ┌─────────────────▼────────────────────────────────┐
+  │ 2. GitHub Actions 自动触发（几秒内）              │
+  └─────────────────┬────────────────────────────────┘
+                    │
+  ┌─────────────────▼────────────────────────────────┐
+  │ 3. Claude Code 读取 Issue 内容                    │
+  │    分析需求、拆解任务、提出技术方案                │
+  └─────────────────┬────────────────────────────────┘
+                    │
+  ┌─────────────────▼────────────────────────────────┐
+  │ 4. 分析结果自动发布为 Issue 评论                   │
+  │    标签从 agent:analyze 变为 agent:analyzed       │
+  └──────────────────────────────────────────────────┘
+</div>
+
+<hr>
+
+<h2>新概念：Agent-Runner 契约</h2>
+
+<p>在开始写 YAML 之前，需要理解工作流和 AI 之间如何协作。sandcastle 和 course-video-manager 都遵循同一条<strong>设计铁律</strong>：</p>
+
+<div class="callout">
+  <strong>🔑 核心原则：</strong>工作流（orchestrator）拥有所有 GitHub 写操作——贴标签、发评论、推代码、开关 Issue。<strong>AI 代理只输出文件。</strong>这个"接缝"让 AI 跑腿可以任意替换，也让系统可以测试。
+</div>
+
+<p>具体的"合同条款"：</p>
+
+<table class="contract-table">
+  <tr><th>方向</th><th>机制</th><th>示例</th></tr>
+  <tr>
+    <td><strong>输入 → AI</strong></td>
+    <td>环境变量 + 预获取的上下文</td>
+    <td><code>ISSUE_NUMBER=42</code>、<code>ISSUE_TITLE=登录系统</code>、已 checkout 的代码仓库</td>
+  </tr>
+  <tr>
+    <td><strong>AI → 输出</strong></td>
+    <td>写入约定文件到 <code>OUTPUT_DIR</code></td>
+    <td><code>analysis.md</code>（分析报告）、<code>failure_reason.txt</code>（失败原因）</td>
+  </tr>
+  <tr>
+    <td><strong>工作流 → GitHub</strong></td>
+    <td>读取输出文件，调用 <code>gh</code> CLI 操作</td>
+    <td><code>gh issue comment "$N" --body-file analysis.md</code></td>
+  </tr>
+</table>
+
+<div class="callout success">
+  <strong>💡 为什么这样设计？</strong>AI 可能产生幻觉、格式错误或中途崩溃。如果 AI 直接操作 GitHub 而崩溃，仓库状态就乱了。把"输出"和"生效"分离，工作流可以先验证输出再执行，失败了也有清晰的回滚路径。
+</div>
+
+<hr>
+
+<h2>第一步：创建 Secret</h2>
+
+<p>Claude Code 在 CI 中运行需要一个认证凭证。先在你的仓库中设置：</p>
+
+<ol class="roadmap">
+  <li>打开 <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a> → 生成一个新的 Claude Code OAuth token（或使用已有的）</li>
+  <li>进入你的仓库 → <strong>Settings</strong> → <strong>Secrets and variables</strong> → <strong>Actions</strong></li>
+  <li>点击 <strong>New repository secret</strong></li>
+  <li>Name: <code>CLAUDE_CODE_OAUTH_TOKEN</code></li>
+  <li>Value: 粘贴你的 token</li>
+  <li>点击 <strong>Add secret</strong></li>
+</ol>
+
+<hr>
+
+<h2>第二步：理解工作流 YAML</h2>
+
+<p>下面是完整的工作流文件。先通读一遍，然后我们逐段拆解：</p>
+
+<pre><code># .github/workflows/agent-analyze.yml
+name: Agent Analyze Issue
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  analyze:
+    if: github.event.label.name == 'agent:analyze'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: agent-analyze-issue-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    permissions:
+      issues: write
+      contents: read
+
+    env:
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      ISSUE_TITLE: ${{ github.event.issue.title }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      # ── 阶段 1: 标签转换 ──
+      - name: Transition to in-progress
+        run: |
+          gh issue edit "$ISSUE_NUMBER" --remove-label "agent:analyze" || true
+          gh issue edit "$ISSUE_NUMBER" --remove-label "agent:blocked" || true
+          gh issue edit "$ISSUE_NUMBER" --add-label "agent:in-progress"
+
+      # ── 阶段 2: 准备环境 ──
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      # ── 阶段 3: 获取上下文 ──
+      - name: Fetch issue body
+        run: |
+          gh issue view "$ISSUE_NUMBER" --json title,body,labels \
+            > "$RUNNER_TEMP/issue-context.json"
+
+      # ── 阶段 4: AI 分析 ──
+      - name: Run AI analysis
+        id: analyze
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          claude -p "$(cat <<'PROMPT'
+          你是一个软件架构分析助手。下面是一个 GitHub Issue 的 JSON 数据。
+          请阅读这个 Issue 并用中文做以下分析：
+
+          1. **需求理解**：用 2-3 句话总结 Issue 想解决的问题
+          2. **技术方案**：提出 1-2 个可行的技术实现思路
+          3. **潜在风险**：指出实现中需要注意的 1-3 个风险点
+          4. **建议的下一步**：给出具体的行动建议
+
+          将分析结果写入文件 {{OUTPUT_DIR}}/analysis.md。
+          PROMPT
+          )" --output-format text --allowedTools Read,Grep,Glob \
+          > "$RUNNER_TEMP/analysis.md"
+
+      # ── 阶段 5: 发布结果 ──
+      - name: Post analysis as comment
+        if: success()
+        run: |
+          {
+            echo "## 🤖 AI 分析结果"
+            echo
+            echo "> 由 Claude Code 自动生成 | Issue #$ISSUE_NUMBER"
+            echo
+            cat "$RUNNER_TEMP/analysis.md"
+          } | gh issue comment "$ISSUE_NUMBER" --body-file -
+
+      # ── 阶段 6: 标签收尾 ──
+      - name: Mark analyzed
+        if: success()
+        run: |
+          gh issue edit "$ISSUE_NUMBER" --remove-label "agent:in-progress" || true
+          gh issue edit "$ISSUE_NUMBER" --add-label "agent:analyzed"
+
+      - name: Mark blocked on failure
+        if: failure()
+        run: |
+          gh issue edit "$ISSUE_NUMBER" --add-label "agent:blocked" || true
+          gh issue edit "$ISSUE_NUMBER" --remove-label "agent:in-progress" || true
+          gh issue comment "$ISSUE_NUMBER" \
+            --body "❌ AI 分析失败。请检查 [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) 的日志。修复后重新添加 \`agent:analyze\` 标签重试。"</code></pre>
+
+<hr>
+
+<h2>逐段拆解</h2>
+
+<h3>阶段 1：标签转换</h3>
+
+<pre><code>- name: Transition to in-progress
+  run: |
+    gh issue edit "$ISSUE_NUMBER" --remove-label "agent:analyze" || true
+    gh issue edit "$ISSUE_NUMBER" --remove-label "agent:blocked" || true
+    gh issue edit "$ISSUE_NUMBER" --add-label "agent:in-progress"</code></pre>
+
+<p>这是你在第 2 课学到的状态机模式。不同的是这里用了 <strong>shell 层的 <code>|| true</code></strong> 来处理标签可能不存在的情况——如果 Issue 上没有 <code>agent:blocked</code>，<code>gh issue edit --remove-label</code> 会报错退出（非零状态码），<code>|| true</code> 让它"忽略这个错误，继续执行"。</p>
+
+<div class="callout">
+  <strong>📎 回顾：</strong><code>agent:in-progress</code> 在这里既是状态标记，也是一把<strong>锁</strong>。如果有人手滑同时加了两遍 <code>agent:analyze</code>，<code>concurrency</code> 会让第二次运行排队等待（因为 <code>cancel-in-progress: false</code>）。
+</div>
+
+<h3>阶段 2：环境准备</h3>
+
+<pre><code>- uses: actions/checkout@v4
+  with:
+    fetch-depth: 1         # 只拉最新 commit，分析 Issue 不需要完整历史
+
+- uses: actions/setup-node@v4
+  with:
+    node-version: 22
+
+- name: Install Claude Code
+  run: npm install -g @anthropic-ai/claude-code</code></pre>
+
+<p>三个标准步骤。注意 <code>fetch-depth: 1</code> —— AI 分析 Issue 不需要 git 历史，拉最少就够了（回顾第 3 课的 <code>fetch-depth</code> 讨论）。</p>
+
+<p><code>npm install -g @anthropic-ai/claude-code</code> 全局安装 Claude Code CLI，之后就可以直接执行 <code>claude</code> 命令。</p>
+
+<h3>阶段 3：获取上下文</h3>
+
+<pre><code>- name: Fetch issue body
+  run: |
+    gh issue view "$ISSUE_NUMBER" --json title,body,labels \
+      > "$RUNNER_TEMP/issue-context.json"</code></pre>
+
+<p>用 <code>gh issue view --json</code> 把 Issue 数据导出为 JSON 文件。这样做的好处是：AI 可以在后续步骤中读取这个文件获取完整上下文，而不是依赖可能截断的环境变量。</p>
+
+<p><code>$RUNNER_TEMP</code> 是 GitHub Actions 提供的临时目录，工作流结束后自动清理。</p>
+
+<h3>阶段 4：AI 分析 — 核心步骤</h3>
+
+<pre><code>- name: Run AI analysis
+  id: analyze
+  env:
+    CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+  run: |
+    claude -p "$(cat &lt;&lt;'PROMPT'
+    你是一个软件架构分析助手。下面是一个 GitHub Issue 的 JSON 数据。
+    请阅读这个 Issue 并用中文做以下分析：
+
+    1. **需求理解**：用 2-3 句话总结 Issue 想解决的问题
+    2. **技术方案**：提出 1-2 个可行的技术实现思路
+    3. **潜在风险**：指出实现中需要注意的 1-3 个风险点
+    4. **建议的下一步**：给出具体的行动建议
+
+    将分析结果写入文件 {{OUTPUT_DIR}}/analysis.md。
+    PROMPT
+    )" --output-format text --allowedTools Read,Grep,Glob \
+    &gt; "$RUNNER_TEMP/analysis.md"</code></pre>
+
+<p>这一段的要点：</p>
+
+<table>
+  <tr><th>元素</th><th>含义</th></tr>
+  <tr>
+    <td><code>claude -p "..."</code></td>
+    <td>以非交互模式运行 Claude Code，<code>-p</code> = print（直接输出结果）。这是 CI 中使用 Claude Code 的标准方式。</td>
+  </tr>
+  <tr>
+    <td><code>cat &lt;&lt;'PROMPT' ... PROMPT</code></td>
+    <td>heredoc 语法：将多行文本作为字符串传给 <code>cat</code>，再被 <code>$()</code> 捕获为 <code>claude -p</code> 的参数。<code>'PROMPT'</code> 加引号防止 shell 在 heredoc 内部做变量展开。</td>
+  </tr>
+  <tr>
+    <td><code>--output-format text</code></td>
+    <td>输出纯文本（默认可能是流式 JSON），方便存入文件。</td>
+  </tr>
+  <tr>
+    <td><code>--allowedTools Read,Grep,Glob</code></td>
+    <td>限制 Claude Code 只能做<strong>只读</strong>操作——读文件、搜索、列出文件。不能写代码、不能执行命令。这是安全保障。</td>
+  </tr>
+  <tr>
+    <td><code>&gt; "$RUNNER_TEMP/analysis.md"</code></td>
+    <td>AI 输出重定向到文件。这就是 Agent-Runner 契约中的"输出文件"。</td>
+  </tr>
+</table>
+
+<div class="callout warning">
+  <strong>⚠️ 注意：</strong><code>--allowedTools</code> 是本课的<strong>安全边界</strong>。只给 AI 读权限，确保它不会意外（或被恶意 Issue 诱导）修改代码。后面的课会逐步放开权限——但先从只读开始，建立信心。
+</div>
+
+<h3>阶段 5：发布结果</h3>
+
+<pre><code>- name: Post analysis as comment
+  if: success()
+  run: |
+    {
+      echo "## 🤖 AI 分析结果"
+      echo
+      echo "&gt; 由 Claude Code 自动生成 | Issue #$ISSUE_NUMBER"
+      echo
+      cat "$RUNNER_TEMP/analysis.md"
+    } | gh issue comment "$ISSUE_NUMBER" --body-file -</code></pre>
+
+<p>这里体现了 Agent-Runner 契约的精髓：<strong>AI 只输出文件，工作流负责发布。</strong><code>{ ... } | gh issue comment --body-file -</code> 把 AI 的分析结果加上标题头，通过管道传给 <code>gh</code> CLI 发布。AI 从头到尾没有碰过 GitHub token。</p>
+
+<h3>阶段 6：标签收尾</h3>
+
+<pre><code># 成功路径
+- name: Mark analyzed
+  if: success()
+  run: |
+    gh issue edit "$ISSUE_NUMBER" --remove-label "agent:in-progress" || true
+    gh issue edit "$ISSUE_NUMBER" --add-label "agent:analyzed"
+
+# 失败路径
+- name: Mark blocked on failure
+  if: failure()
+  run: |
+    gh issue edit "$ISSUE_NUMBER" --add-label "agent:blocked" || true
+    gh issue edit "$ISSUE_NUMBER" --remove-label "agent:in-progress" || true
+    gh issue comment "$ISSUE_NUMBER" --body "❌ ..."</code></pre>
+
+<p>状态机收尾——第 2 课的模式在这里完整落地：</p>
+
+<div class="state-machine">
+agent:analyze → agent:in-progress → agent:analyzed   （✅ 成功）
+                                  → agent:blocked     （❌ 失败）
+</div>
+
+<p>注意 <code>agent:in-progress</code> <strong>两个分支都会移除</strong>——</p>失败路径用独立 step 确保锁不会被遗留。在 sandcastle 中这是用 <code>always()</code> 一步完成的，但拆成两个分支让你更清楚地看到成功和失败两条路径。
+
+<hr>
+
+<h2>第三步：部署到你的仓库</h2>
+
+<ol class="roadmap">
+  <li>在你的仓库中创建 <code>.github/workflows/agent-analyze.yml</code></li>
+  <li>将上面完整的 YAML 内容粘贴进去</li>
+  <li>确认 <code>CLAUDE_CODE_OAUTH_TOKEN</code> secret 已创建（第一步）</li>
+  <li>预先创建三个标签：<code>agent:analyze</code>、<code>agent:in-progress</code>、<code>agent:analyzed</code>、<code>agent:blocked</code></li>
+  <li>提交并推送到默认分支</li>
+  <li>创建一个测试 Issue，添加 <code>agent:analyze</code> 标签</li>
+  <li>观察 Actions 面板 → 等待完成 → 查看 Issue 评论</li>
+</ol>
+
+<div class="callout success">
+  <strong>🎉 如果看到 AI 的评论出现在 Issue 下：</strong>恭喜！你已经从"看懂别人的工作流"跨越到了"自己的仓库跑 AI"。这个看似简单的工作流，实际上已经包含了你在三个课程中学到的所有核心模式：标签触发、状态机、优雅降级、Agent-Runner 契约。
+</div>
+
+<hr>
+
+<h2>✏️ 诊断性测验</h2>
+
+<div class="quiz" id="q1">
+  <p class="quiz-question">1. Agent-Runner 契约中，AI 代理<strong>不能</strong>做什么？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', false)">A. 读取仓库中的文件</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', false)">B. 将分析结果写入文件</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', true)">C. 直接调用 gh CLI 给 Issue 发评论</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', false)">D. 通过环境变量接收 Issue 编号</div>
+  <p class="quiz-feedback" id="q1-feedback"></p>
+</div>
+
+<div class="quiz" id="q2">
+  <p class="quiz-question">2. <code>--allowedTools Read,Grep,Glob</code> 的作用是什么？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', false)">A. 让 Claude Code 运行得更快</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', true)">B. 限制 AI 只能做只读操作，防止意外修改代码</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', false)">C. 指定 Claude Code 使用哪个编程语言</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', false)">D. 开启多线程分析模式</div>
+  <p class="quiz-feedback" id="q2-feedback"></p>
+</div>
+
+<div class="quiz" id="q3">
+  <p class="quiz-question">3. 为什么 <code>gh issue edit --remove-label</code> 后面加 <code>|| true</code>？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', false)">A. 这是语法要求，每个 gh 命令都必须加</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', true)">B. 防止标签不存在时命令返回非零退出码导致 step 失败</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', false)">C. 让命令执行得更快</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', false)">D. 强制在标签不存在时创建一个新标签</div>
+  <p class="quiz-feedback" id="q3-feedback"></p>
+</div>
+
+<script>
+function selectQuiz(el, quizId, isCorrect) {
+  const quiz = document.getElementById(quizId);
+  quiz.querySelectorAll('.quiz-option').forEach(o => {
+    o.classList.remove('selected', 'correct', 'incorrect');
+    o.style.pointerEvents = 'none';
+  });
+  el.classList.add('selected');
+  el.classList.add(isCorrect ? 'correct' : 'incorrect');
+
+  const fb = document.getElementById(quizId + '-feedback');
+  fb.classList.add('show');
+  fb.style.color = isCorrect ? 'var(--success)' : 'var(--danger)';
+  fb.textContent = isCorrect ? '✅ 正确！' : '❌ 再想想。答案在课程内容中。';
+}
+</script>
+
+<hr>
+
+<h2>🎯 总结：你学到了什么</h2>
+
+<table>
+  <tr><th>新知识</th><th>具体内容</th></tr>
+  <tr>
+    <td>Agent-Runner 契约</td>
+    <td>AI 通过环境变量接输入 + 写入文件输出 → 工作流读取文件操作 GitHub。这层"接缝"让系统可测试、可替换。</td>
+  </tr>
+  <tr>
+    <td>Claude Code in CI</td>
+    <td><code>npm install -g @anthropic-ai/claude-code</code> 安装 → <code>claude -p "..."</code> 非交互执行 → <code>--allowedTools</code> 限制权限。</td>
+  </tr>
+  <tr>
+    <td>凭证管理</td>
+    <td><code>CLAUDE_CODE_OAUTH_TOKEN</code> 存在 GitHub Secrets 中，通过 <code>${{ secrets... }}</code> 传入环境变量。</td>
+  </tr>
+  <tr>
+    <td>输出收集模式</td>
+    <td>AI 输出 → <code>$RUNNER_TEMP/analysis.md</code> → <code>gh issue comment --body-file -</code> 发布。</td>
+  </tr>
+  <tr>
+    <td>安全渐进</td>
+    <td>从只读权限（<code>--allowedTools Read,Grep,Glob</code>）开始，建立信心后再逐步放开。</td>
+  </tr>
+</table>
+
+<div class="callout success">
+  <strong>🚀 下一步：</strong>部署成功后，下一步可以：
+  <ol>
+    <li><strong>改进 prompt：</strong>让 AI 的分析更贴合你的项目（在 prompt 中加入项目 README 或架构文档）</li>
+    <li><strong>放开权限：</strong>给 AI 添加 <code>Write</code> 和 <code>Edit</code> 权限，让它可以修改代码</li>
+    <li><strong>接入实现：</strong>参考 sandcastle 的 implement 工作流，让 AI 真正实现代码变更</li>
+  </ol>
+</div>
+
+<hr>
+
+<h2>推荐进一步阅读</h2>
+<ul>
+  <li><strong>主阅读材料：</strong><a href="https://github.com/mattpocock/sandcastle/blob/main/.github/workflows/agent-implement.yml">sandcastle agent-implement.yml</a> — 完整的 AI 实现工作流，对比你刚写的 analyze 工作流，观察相同模式和扩展之处</li>
+  <li><a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code 官方文档</a> — <code>--print</code>、<code>--allowedTools</code>、<code>--output-format</code> 等 CLI 参数的完整说明</li>
+  <li><a href="https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions">GitHub Docs: 在 Actions 中使用 Secrets</a></li>
+  <li><a href="../reference/github-actions-label-workflow-syntax.html">参考文档：标签工作流语法速查表</a></li>
+</ul>
+
+<hr>
+
+<div class="lesson-nav">
+  <a href="0003-advanced-patterns.html">← 第 3 课：高级模式</a>
+  <span>第 4 课</span>
+  <span></span>
+</div>
+
+<hr>
+
+<div class="callout">
+  <strong>💬 有问题？</strong>部署过程中遇到任何报错——无论是 YAML 语法、权限问题还是 Claude Code 行为不符合预期——直接向你的 AI 导师提问。
+</div>
+
+</body>
+</html>

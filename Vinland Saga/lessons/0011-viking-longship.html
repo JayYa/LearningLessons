@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0011 — 维京长船：设计、航海与海洋帝国</title>
+<link rel="stylesheet" href="../assets/base.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/compare.css">
+<link rel="stylesheet" href="../assets/tags.css">
+<link rel="stylesheet" href="../assets/reminder.css">
+<style>
+  :root {
+    --bg: #f6f8fa;
+    --text: #1e2a36;
+    --accent: #1a5276;
+    --muted: #4a6278;
+    --card-bg: #fdfeff;
+    --border: #a0b8c8;
+    --highlight: #e8f0f8;
+    --sea: #1a5276;
+    --wood: #8b6914;
+  }
+
+  h3 { color: #1a3a4a; }
+
+  /* design principle cards */
+  .principle-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  @media (max-width: 600px) { .principle-grid { grid-template-columns: 1fr; } }
+  .principle-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+  }
+  .principle-card .icon { font-size: 1.8rem; margin-bottom: 0.3rem; }
+  .principle-card h4 { font-size: 0.9rem; color: var(--accent); margin: 0.2rem 0; }
+  .principle-card p { font-size: 0.82rem; margin: 0; }
+
+  /* navigation instruments */
+  .nav-instrument {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    margin: 0.8rem 0;
+    flex-wrap: wrap;
+  }
+  .nav-card {
+    flex: 1;
+    min-width: 180px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.8rem;
+    text-align: center;
+  }
+  .nav-card .icon { font-size: 2rem; }
+  .nav-card h4 { font-size: 0.85rem; color: var(--accent); margin: 0.3rem 0; }
+  .nav-card p { font-size: 0.78rem; color: var(--muted); }
+
+  /* callout variants */
+  .sea-callout {
+    border-left: 4px solid #1a5276;
+    padding: 0.6rem 1rem;
+    margin: 1rem 0;
+    background: #eaf2f8;
+    border-radius: 0 4px 4px 0;
+    font-size: 0.9rem;
+  }
+
+  /* ship burial */
+  .burial-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.8rem;
+    margin: 1rem 0;
+  }
+  @media (max-width: 700px) { .burial-compare { grid-template-columns: 1fr; } }
+  .burial-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.8rem;
+  }
+  .burial-card h4 { font-size: 0.85rem; color: var(--accent); margin: 0 0 0.3rem; text-align: center; }
+  .burial-card p { font-size: 0.78rem; }
+
+  .ship-specs {
+    margin: 0.3rem 0;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .ship-specs span { display: inline-block; margin-right: 0.8rem; }
+</style>
+</head>
+<body>
+
+<h1>🛶 维京长船：设计、航海与海洋帝国</h1>
+<p class="subtitle">Lesson 0011 — 一块木板，一个海洋帝国</p>
+
+<p class="lead">
+  <a href="0010-viking-warfare.html">Lesson 0010</a> 讲了维京人怎么打陆战。但维京人之所以能踏上那些战场——从英格兰到君士坦丁堡，从冰岛到纽芬兰——全部依赖于一个东西：<strong>船</strong>。没有长船，就没有维京时代。这一课从造船哲学讲到航海秘术，从船上的日常生活到海上的死亡仪式——理解长船就是理解维京人为什么是维京人。
+</p>
+
+<!-- ====== 1: THESIS ====== -->
+<h2>一、"一块木板"——为什么船是维京文明的底座？</h2>
+
+<p>
+  维京时代的斯堪的纳维亚，<strong>陆路几乎不存在</strong>。山脉、沼泽、密林将定居点彼此隔开。但海洋和河流——它们连接一切。挪威的海岸线如果拉直，可以绕地球两圈（含峡湾和岛屿约 100,000 km）。在这个地理现实中，船不是奢侈品——是生存必需。
+</p>
+
+<div class="card">
+<h3>🌊 没有船 = 没有一切</h3>
+
+<table>
+  <tr><th style="width:20%;">维京时代的核心活动</th><th>对船的依赖</th></tr>
+  <tr><td><strong>贸易</strong></td><td>哥特兰→基辅→君士坦丁堡的迪尔汗姆白银贸易（<a href="../reference/viking-silver-economy.html">参考</a>）——全程水路，没有船贸易量为零</td></tr>
+  <tr><td><strong>劫掠</strong></td><td>林迪斯法恩（793）、巴黎围城（845、885）——所有"突袭"的不可预测性来自船能在任何海滩登陆</td></tr>
+  <tr><td><strong>殖民</strong></td><td>冰岛（~870）、格陵兰（~985）、文兰（~1000）——北大西洋殖民没有船根本不存在</td></tr>
+  <tr><td><strong>政治统一</strong></td><td>蓝牙哈拉尔统一丹麦、金发哈拉尔统一挪威——没有舰队就无法在峡湾间投射权力</td></tr>
+  <tr><td><strong>法律与集会</strong></td><td>冰岛议会（Alþingi）——参与者需要从全岛各地航行到辛格韦德利（Þingvellir），没有船就没有全民集会</td></tr>
+</table>
+
+<p style="font-size:0.85rem;margin-top:0.6rem;">
+  历史学家 Neil Price 说了一句精准的话：<strong>"维京时代不是始于某个年份——它始于第一块叠接木板被铆接在一起的那一刻。"</strong> 长船是维京时代所有军事、经济、政治活动的<strong>物理前提</strong>。
+</p>
+</div>
+
+<!-- ====== 2: DESIGN ====== -->
+<h2>二、长船的设计——柔性、浅吃水与叠接法的三角</h2>
+
+<p>
+  维京长船不是"一条船"——它是一种<strong>设计哲学</strong>的产物，这个哲学的三个支柱互相加强，缺一不可：
+</p>
+
+<div class="principle-grid">
+  <div class="principle-card">
+    <div class="icon">📐</div>
+    <h4>Clinker-built（叠接法）</h4>
+    <p>木板从龙骨向上逐层<strong>叠压</strong>——上层木板的下缘压在下层木板的上缘上，用铁铆钉固定。和地中海平接法（plank on frame，木板边对边拼合）的刚性不同，叠接法在造船阶段就<strong>不需要</strong>先搭骨架——木板本身就是结构。结果是<strong>轻、韧、有弹性</strong>——船在海浪中像鱼一样"扭动"而不是硬扛。叠接法是维京船一切特性的根基。</p>
+  </div>
+  <div class="principle-card">
+    <div class="icon">🪶</div>
+    <h4>极致的柔性轻量</h4>
+    <p>因为木板本身就是结构（而非依赖沉重肋骨），维京长船自重大幅低于同尺寸的其他文明船只。一艘 30 人 snekkja 重仅 1–2 吨。在海浪中船体会<strong>弹性扭曲</strong>——叠接木板之间微小的滑动吸收海浪的能量——而不是像刚性船体那样被浪击碎。奥塞贝格船（Oseberg, 820 AD）的船板在某些部位厚仅 <strong>2 cm</strong>——薄如现代家具板材。</p>
+  </div>
+  <div class="principle-card">
+    <div class="icon">🌊</div>
+    <h4>极浅吃水（0.5–1 m）</h4>
+    <p>浅吃水 = <strong>任何海滩都是港口</strong>。船可以直接冲上沙滩、冲进河口、深入内地河道。拜占庭皇帝君士坦丁七世记载：罗斯人在第聂伯河急流处把船拖上岸绕过障碍——能拖船的前提是船吃水浅到可以从任何河岸拉上来。法国西北部的维京突袭之所以无法防御——敌人可以在任何一段海岸出现，不需要找到一个深水港。</p>
+  </div>
+  <div class="principle-card">
+    <div class="icon">🌲</div>
+    <h4>木材选择的精准</h4>
+    <p>维京造船师不使用单一的木材——而是<strong>按部件的受力特性选材</strong>：龙骨用橡木（强度），船板用松木或橡木（韧性），桅杆用松木（轻且柔），桨用杉木（轻且有弹性），船首/船尾的弯曲构件用<strong>自然弯曲的树根或树枝</strong>（利用木材的天然弯曲纤维走向——切断的直纹木材在弯曲受力时会裂）。一艘船需要不同的树种、不同的树木部位——造船师不是木匠，是<strong>木材解剖学家</strong>。</p>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+<h3>🪵 从森林到海洋——造船过程</h3>
+
+<table>
+  <tr><th style="width:15%;">阶段</th><th>内容</th></tr>
+  <tr><td><strong>1. 选材</strong></td><td>不是砍树——是<strong>劈</strong>树。维京人用楔子和木槌沿木材的天然纤维方向将原木径向劈成木板（radial splitting）。这样劈出来的木板纤维连续完整，强度和韧性远高于锯出来的木板（锯会切断纤维）。一棵橡木可以劈出 4–8 块船板。</td></tr>
+  <tr><td><strong>2. 塑形</strong></td><td>用斧和刮刀（shave）将劈板削薄、修平整。船板在安装前就是弯曲的——通过<strong>蒸汽加热后弯压</strong>获得预设弧度。奥塞贝格船的一些板件显示了极为复杂的预设三维弯曲。</td></tr>
+  <tr><td><strong>3. 组装</strong></td><td>从龙骨开始，逐层叠压木板。每层用铁铆钉固定到下一层——Gokstad 船用了约 <strong>2,000 枚铆钉</strong>。铆钉的方形垫片（rove）在船内侧，钉头在外——可见的内铆钉成了维京船内部的标志性美学。肋骨（frame）在木板已形成船壳后<strong>再</strong>加进去——不是先有骨架再覆板，是先有船壳再加固。这是叠接法的核心逻辑反转。</td></tr>
+  <tr><td><strong>4. 密封</strong></td><td>木板叠缝之间填塞动物毛（通常是羊毛）浸透松焦油——<strong>不是堵死</strong>，而是允许一定程度的渗水和干燥循环来保持密封。船在下水后的最初几天会渗水，木头吸水膨胀后自行密封——这在古诺尔斯语中称为 <em>sjó-sótt</em>（"海病"）。</td></tr>
+</table>
+</div>
+
+<p style="font-size:0.82rem;color:var(--muted);margin-top:0.5rem;">
+  🔗 关于长船的具体分类（karvi / snekkja / skeið / knarr）和 portage（陆地运船）的操作细节，参见 <a href="../reference/viking-ships-and-portage.html">维京战船与 Portage 参考文档</a>。
+</p>
+
+<!-- ====== 3: NAVIGATION ====== -->
+<h2>三、没有罗盘的航海——怎样横渡北大西洋？</h2>
+
+<p>
+  维京人横渡挪威海到冰岛（~1,500 km）、从冰岛到格陵兰（~500 km）、从格陵兰到纽芬兰（~2,500 km）——<strong>全在没有磁罗盘的时代</strong>（磁罗盘在欧洲到 12–13 世纪才从中国传入、普及）。他们怎么做到的？用的是一整套<strong>多层冗余的导航技术组合</strong>——单一方法不可靠，但套在一起就够用了。
+</p>
+
+<div class="nav-instrument">
+  <div class="nav-card">
+    <div class="icon">☀️</div>
+    <h4>日晷罗盘（Sólaskífa）</h4>
+    <p>木制圆盘，中心竖一根小棒（gnomon）。棒影的轨迹在不同纬度不同——把出海前在特定纬度刻下的影轨和航行中实测对比，就能判断是否在正确的纬度上。格陵兰出土了一个被认为是日晷罗盘的木盘残片（~1000 AD）。这不是"找到方向"，而是<strong>"保持在正确的纬度带"</strong>——维京航海的核心不是东西向导航，是南北向（纬度）导航。</p>
+  </div>
+  <div class="nav-card">
+    <div class="icon">💎</div>
+    <h4>日长石（Sólarsteinn）</h4>
+    <p>冰岛 spar（一种透明的方解石晶体）可以将散射的天空光<strong>去偏振化</strong>——即使太阳被云层遮挡，也能通过旋转晶体定位太阳的精确位置。2011 年和 2018 年的实验验证了这种方法在现代气象条件下依然有效——误差在几度以内。但日长石在维京考古遗址中<strong>从未被确定出土</strong>——2013 年在 Alderney 一艘 16 世纪英国沉船中发现的方解石是目前唯一的考古证据。</p>
+  </div>
+  <div class="nav-card">
+    <div class="icon">🐦</div>
+    <h4>鸟导航（Haf-næfringr）</h4>
+    <p>携带笼中的乌鸦或海鸟出海——在看不到陆地时放飞。鸟本能飞向最近的陆地。如果鸟飞走了——朝它飞的方向航行。如果鸟飞回来了——它没找到陆地，继续在海上。这就是为什么渡鸦（hrafn）在维京航海传统中有特殊地位——Flóki Vilgerðarson 发现冰岛时就用渡鸦导航，他的绰号就是"渡鸦-弗洛基"。</p>
+  </div>
+  <div class="nav-card">
+    <div class="icon">🐋</div>
+    <h4>海洋阅读（Haf-vit）</h4>
+    <p>维京航海者通过波浪模式（远处岛屿会让浪型变圆）、海水颜色（浅水区变绿/蓝绿——格陵兰附近的海水颜色是发现东海岸的关键）、云层反射（冰盖下反射的阳光在远处云底形成"冰闪"——íss-blik）、漂浮物（海藻/浮木指示陆地）、鲸群和海鸟的飞行方向来综合判断位置。这不是单一技能，是一整套<strong>体感知识系统</strong>。</p>
+  </div>
+</div>
+
+<div class="sea-callout">
+  <strong>🧭 纬度航行的核心逻辑：</strong>维京航海不追求知道"每一个时刻的精确经纬度"——而是追求<strong>"保持在正确的纬度带"（latitude sailing）</strong>。要去格陵兰？先向北航行到挪威海岸的某个已知纬度（比如卑尔根），然后在这个纬度上向西直航——船员定时观测太阳中午高度，确保船没有偏南或偏北。维京人不知道纬度的数学定义，但他们知道"太阳在正午的高度"每个地方不同——这种经验知识已经包含了纬度的物理实质。
+</div>
+
+<!-- ====== 4: LIFE ABOARD ====== -->
+<h2>四、船上的生活——湿、冷、挤、无聊</h2>
+
+<div class="card">
+<h3>🌧️ 维京长船的内部体验</h3>
+
+<table>
+  <tr><th style="width:18%;">方面</th><th>现实</th></tr>
+  <tr>
+    <td><strong>空间</strong></td>
+    <td>极度拥挤。30 人的 snekkja 长度约 20 m，但扣除船首/船尾的翘起部分和桨手座位，每个人的个人空间大约就是<strong>自己的桨位</strong>——约 70–80 cm 宽，刚好坐下。</td>
+  </tr>
+  <tr>
+    <td><strong>遮蔽</strong></td>
+    <td><strong>没有船舱、没有甲板。</strong> 长船是完全敞开的。遇到雨雪风浪，唯一的遮蔽是横跨船体的皮制或织物篷——但通常只在夜间或极端天气时支起。绝大多数航行中，船员就是<strong>露天</strong>坐着。</td>
+  </tr>
+  <tr>
+    <td><strong>温度</strong></td>
+    <td>北大西洋的海水温度即使在夏天也只有 10–14°C。海风带走身体热量极快。船员靠羊毛衣物和厚毡斗篷（feltr）保暖——<strong>没有防水材料</strong>。湿羊毛仍然有保温能力（现代合成纤维出现前最好的湿冷防护），但长时间湿冷会导致体温过低。</td>
+  </tr>
+  <tr>
+    <td><strong>睡眠</strong></td>
+    <td><strong>不能躺下。</strong> 船员坐在自己的桨位上或蜷缩在座位下方的空间里睡。Gokstad 船的桨手座位下方有可拆卸的木板——白天坐、晚上拆开铺在船底当床板。风暴中你没法睡——必须不停地舀水（bail）。</td>
+  </tr>
+  <tr>
+    <td><strong>食物</strong></td>
+    <td>腌制/风干的鱼、干面包（<em>skreið</em>——特制的硬干鱼，可以存放数月）、发酵乳制品（skyr，一种类似酸奶的乳制品——富含蛋白质且耐储存）、干肉。船员喝的是携带的淡水或淡啤酒（水在桶里放久了会变质，淡啤酒的酒精能抑制细菌——低度到不足以喝醉）。航行中做饭几乎不可能——风浪中无法生火——食物全部冷食。</td>
+  </tr>
+  <tr>
+    <td><strong>卫生</strong></td>
+    <td>在船边解决——长船没有厕所。风暴中这是极其危险的（在舷侧被浪卷走是常见死因）。体臭和湿羊毛的气味在航行几天后充满全船——但这就是维京人的日常，没人在乎。</td>
+  </tr>
+  <tr>
+    <td><strong>娱乐</strong></td>
+    <td>讲故事（萨迦的口头传统可能在航行中就已形成）、下棋（hnefatafl，在 Gokstad 船中出土了棋盘和棋子）、唱歌和诗歌（scaldic poetry——复杂的音律诗，在划桨的单调节奏中背诵）、磨武器、修理船具。</td>
+  </tr>
+  <tr>
+    <td><strong>恐惧</strong></td>
+    <td>海是维京人最大的敌人。萨迦和诗歌中反复出现的恐惧不是敌人——是风暴。船在北大西洋的海浪中像一片木板。如果船裂了——<strong>没人来救你。</strong>水温在几分钟内就能致死。维京人不怕死——但怕淹死。淹死的人去的是海神 Ægir 和 Rán 的水下大厅，不是瓦尔哈拉。</td>
+  </tr>
+</table>
+</div>
+
+<div class="sea-callout">
+  <strong>⚡ 维京长船有多快？</strong><br>
+  现代实验（使用 Gokstad 复刻船 <em>Gaia</em> 和 <em>Havhingsten</em>）表明：桨力推进下约 3–5 节（~5.5–9 km/h）——这是搏斗/突袭速度；风力推进下约 7–12 节（~13–22 km/h），理想条件下可达<strong>15 节</strong>（~28 km/h）——这比同时代任何其他船只都快。挪威→奥克尼群岛（~550 km）在顺风下只需<strong>一天半到两天</strong>。挪威→冰岛（~1,500 km）约需 <strong>5–7 天</strong>。<em>Havhingsten</em> 在 2007 年从丹麦罗斯基勒开到了爱尔兰都柏林——用了一个多月（包括了等待天气和走错路的时间）——证明了长船确实可以横渡开阔海洋。
+</div>
+
+<!-- ====== 5: NAVAL BATTLE ====== -->
+<h2>五、海战——船是武器，船是战场</h2>
+
+<p>
+  维京海战和特洛伊战争或勒班陀战役毫无相似之处。这里没有撞角、没有炮、没有帆船机动战。维京海战是<strong>把陆战搬到连在一起的船上。</strong>
+</p>
+
+<div class="card">
+<h3>⚓ 维京海战的五条法则</h3>
+
+<ol>
+  <li><strong>双方先把船绑在一起。</strong> 这不是比喻。进攻方在接战前会将自己的船用绳索彼此绑连形成一个大平台——防守方也一样。目的是<strong>创造一个可以步战的平面</strong>。萨迦中称这种做法为 <em>at binda skipin saman</em>（"绑船在一起"）。一旦绑好，船就无法机动了——这场仗的输赢就是<strong>在这个浮动的木制战场上决定的</strong>。</li>
+
+  <li><strong>最大的船在中间。</strong> 国王或首领的旗舰（通常是最大的 skeið）在编队中央。两侧依次排列较小的船。中央是战斗最激烈的地方——国王本人就在那里。</li>
+
+  <li><strong>没有撞角。</strong> 地中海的桨帆战舰（galley）有一个船首撞角用来撞击敌船——维京长船<strong>没有</strong>。长船的浅吃水和柔性结构不适合撞击（撞上去自己的叠接板会先裂）。也<strong>没有</strong>希腊火之类的投射武器。海战开始的方式是<strong>箭雨和投矛 → 钩住敌船 → 拉近 → 登船肉搏</strong>。本质上和陆战一样——先远程骚扰，再近身格斗。</li>
+
+  <li><strong>桨手不战斗。</strong> 在接近阶段，桨手拼命划桨。一旦绑船完成，桨被收起来——桨手拿起盾和斧，变成步兵。维京战士同时是桨手——<strong>没有专门的"海军兵种"</strong>。这也是为什么维京部队只需要最小的后勤：同一批人，在海上就划船，上岸就战斗。</li>
+
+  <li><strong>输家要么死在船上，要么跳海。</strong> 跳海在维京海战中几乎等于死亡——北大西洋的水温加上盔甲的重量，生还率极低。萨迦记载斯维尔战役（Svolder, 1000年）中，挪威国王奥拉夫·特里格瓦松在被丹麦-瑞典联军包围后跳海——可能是自杀，以免被俘。</li>
+</ol>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+<h3>⚔️ 历史上海战与漫画对照</h3>
+
+<table>
+  <tr><th>战役</th><th>年份</th><th>历史</th><th>《冰海战纪》</th></tr>
+  <tr>
+    <td><strong>斯维尔战役</strong><br>Svolder</td>
+    <td>1000</td>
+    <td>丹麦（斯韦恩）+ 瑞典 + 挪威反叛贵族 vs 挪威国王奥拉夫·特里格瓦松。奥拉夫只有 11 艘船。他的旗舰"长蛇号"（Ormrinn Langi）——据萨迦描述有 34 对桨（68 桨手）。他在桥绑船战中坚持了数小时，最终兵败跳海。</td>
+    <td>漫画中未直接描绘，但这是斯韦恩（克努特的父亲）崛起为北海霸主的起点。</td>
+  </tr>
+  <tr>
+    <td><strong>伦敦桥之战</strong></td>
+    <td>1014</td>
+    <td>丹麦舰队（斯韦恩死后）在泰晤士河上夹击伦敦桥。维京舰队曾用绳索和锚试图拖垮木桥。奥拉夫·哈拉尔松（后来的圣奥拉夫）在这场战斗中打出重要角色。</td>
+    <td>漫画战争篇核心战役——阿谢拉特团的巅峰时刻。托尔克尔在桥上的长斧杀戮场面是漫画最著名的战斗场景之一。</td>
+  </tr>
+  <tr>
+    <td><strong>海尔格河之战</strong><br>Helgeå</td>
+    <td>1026</td>
+    <td>克努特大帝 vs 挪威-瑞典联军。克努特以舰队数量压倒。具体细节记录极少——<em>盎格鲁-撒克逊编年史</em>记载克努特"没有赢得一场辉煌的胜利"——暗示运气而非战术取胜。</td>
+    <td>漫画中克努特角色逐渐走向权力巅峰的阶段——此战是背景事件。</td>
+  </tr>
+</table>
+</div>
+
+<!-- ====== 6: MYTH ====== -->
+<h2>六、船在死亡与神话中——不只是交通工具</h2>
+
+<p>
+  在维京文化中，船的位置远高于"交通工具"——它是连接生与死、人与神、此岸与彼岸的<strong>载体</strong>。这不是比喻——它是物理操作。
+</p>
+
+<div class="burial-compare">
+  <div class="burial-card">
+    <h4>⚓ Gokstad 船葬</h4>
+    <div class="ship-specs"><span>📏 23.2 m</span><span>🪵 橡木</span><span>📅 ~890 AD</span></div>
+    <p>挪威。一个约 40–50 岁的男性（可能是小国王或大酋长）被葬在一艘<strong>完整的、可航行的</strong>长船中。船被拖上岸，放入一个挖掘的壕沟。墓室建在桅杆后方——死者躺在羽毛床垫上，周围是武器、12 匹马、6 只狗、一面装饰盾牌、一只孔雀（！——可能是英格兰或爱尔兰的劫掠品）。船葬的核心逻辑不是"把船献给死者"——而是<strong>"船要载着死者航行到死后世界"</strong>。</p>
+  </div>
+  <div class="burial-card">
+    <h4>👑 Oseberg 船葬</h4>
+    <div class="ship-specs"><span>📏 21.6 m</span><span>🪵 橡木</span><span>📅 ~820 AD</span></div>
+    <p>挪威。维京时代最华丽的船葬。两个女性（一个约70–80岁，一个约50岁——可能是王后和她的女仆/奴隶）。随葬品极尽奢华：精雕木车、四架雪橇、织布机、羽毛床垫、绣花挂毯、14 匹马、一头牛。船首的螺旋雕刻是维京艺术的巅峰。为什么两个女人得到如此尊荣？一个理论：年长的女性可能是<strong>女祭司/女智者（völva）</strong>——奥塞贝格船葬的神圣意味可能远超王室的世俗权力。</p>
+  </div>
+  <div class="burial-card">
+    <h4>🔥 燃烧船葬</h4>
+    <div class="ship-specs"><span>📜 文学/仪式描述</span></div>
+    <p>萨迦描述了另一种船葬形式：将死者放在船上，推向海中，然后从岸上<strong>射火箭点燃船</strong>。伊本·法德兰（922年）目睹了罗斯人的火葬仪式——将酋长放在船上，加上一个被杀的女奴作为<strong>陪葬</strong>，整艘船被点燃。船在火焰中化为灰烬——升入天空——这可能是最直接的人→神运输隐喻。但考古上<strong>还没有发现燃烧船葬的确凿证据</strong>。</p>
+  </div>
+</div>
+
+<p style="margin-top:0.5rem;font-size:0.82rem;color:var(--muted);">
+  💡 <strong>核心洞察：</strong>船葬不是"维京人喜欢船所以把船当陪葬品"这么简单。船在维京宗教中具有和基督教教堂、佛教寺庙相同的<strong>圣殿功能</strong>——它是从人间通往神域的交通工具。这与基督教的"灵魂升天"隐喻不同——北欧的船不是隐喻，是<strong>物理交通工具</strong>。死者真的要坐船去。
+</p>
+
+<!-- ====== 7: MANGA ====== -->
+<h2>七、《冰海战纪》中的船</h2>
+
+<div class="card">
+<table>
+  <tr><th>漫画描绘</th><th>评价</th></tr>
+  <tr>
+    <td><strong>阿谢拉特团的 snekkja</strong>——漫画中最常出现的船。细长的船身、低舷、龙首船头、单桅方帆</td>
+    <td><span class="tag-real">准确</span> Snekkja 是维京时代最常见的战船类型，漫画的比例和细节（桨位数量、船首雕刻、盾牌挂列方式）均符合考古。龙首（drakkar）在萨迦中有记载——但注意"drakkar"这个词本身只在晚期萨迦中出现，维京人自己可能不这样称呼他们的船。</td>
+  </tr>
+  <tr>
+    <td><strong>船上挂满盾牌（skjaldrim）</strong>——黄黑交替，沿船舷排列</td>
+    <td><span class="tag-real">准确</span> Gokstad 船葬出土 64 面盾牌——黄黑交替挂在船舷上。漫画忠实地还原了这一细节。但在实际航行中盾牌可能只在<strong>进港时</strong>悬挂（作为身份展示），长途航行中会收进船内——风吹浪打会损坏盾牌。</td>
+  </tr>
+  <tr>
+    <td><strong>船首龙首雕刻</strong></td>
+    <td><span class="tag-real">准确</span> 考古出土了多个船首柱的残段，Oseberg 船首的螺旋雕刻是实例。萨迦记载冰岛法律规定进港前必须<strong>取下龙首</strong>——以免惊吓到当地的保护精灵（landvættir）。这一细节漫画未涉及。</td>
+  </tr>
+  <tr>
+    <td><strong>扛船翻山</strong>（portage 场景）</td>
+    <td><span class="tag-mixed">半真半假</span> Portage 本身真实——但漫画中是<strong>扛在肩上</strong>翻山，历史上是<strong>在地面拖行</strong>（借助滚轮和润滑）。幸村诚用更戏剧化的视觉传达了同一个核心事实：维京长船可以离开水面。详见 <a href="../reference/viking-ships-and-portage.html">Portage 参考文档</a>。</td>
+  </tr>
+  <tr>
+    <td><strong>船上的日常生活</strong></td>
+    <td><span class="tag-fic">简化</span> 漫画中的海上场景通常很短——作为场景转换的过渡。船上生活的湿冷、拥挤、无聊和恐惧在漫画中几乎看不到。这不是"错误"——而是叙事经济学：漫画主角团在船上的时间，读者不需要看他们怎么舀水和吃干鱼。</td>
+  </tr>
+</table>
+</div>
+
+<!-- ====== QUIZ ====== -->
+<h2>📝 自我检测</h2>
+
+<div class="quiz">
+  <p><strong>Q1.</strong> 维京长船最核心的建造技术（clinker-built）的特点是什么？</p>
+  <label><input type="radio" name="q1" value="a"> A. 先搭骨架再覆船板——骨架决定船型</label>
+  <label><input type="radio" name="q1" value="b"> B. 木板从龙骨向上逐层叠压——木板本身就是结构，肋骨后加</label>
+  <label><input type="radio" name="q1" value="c"> C. 整根原木挖空——像独木舟一样</label>
+  <label><input type="radio" name="q1" value="d"> D. 铁板焊接——龙骨加铁壳</label>
+  <button onclick="checkQuiz(1,'b','✅ 正确！Clinker-built = 叠接法：木板逐层叠压，船壳本身就是结构——肋骨是在船壳形成之后再加入的。这与地中海平接法（先骨架后覆板）的逻辑完全相反。','❌ 不对。正确答案是 B。Clinker-built 的核心是&ldquo;船壳即结构&rdquo;——木板逐层叠压，肋骨后加。这和地中海&ldquo;先骨架后覆板&rdquo;的平接法逻辑完全相反。')">检查答案</button>
+  <div id="f1" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q2.</strong> 维京人在没有磁罗盘的情况下横渡北大西洋，最核心的导航策略是什么？</p>
+  <label><input type="radio" name="q2" value="a"> A. 依靠星星——像波利尼西亚航海者一样使用星图</label>
+  <label><input type="radio" name="q2" value="b"> B. 随洋流漂流——顺着北大西洋暖流就能自然到达目的地</label>
+  <label><input type="radio" name="q2" value="c"> C. 纬度航行——保持正午太阳高度在正确范围内，确保不偏南偏北</label>
+  <label><input type="radio" name="q2" value="d"> D. 完全靠运气——出海后听天由命</label>
+  <button onclick="checkQuiz(2,'c','✅ 正确！维京航海的核心策略是&ldquo;纬度航行&rdquo;（latitude sailing）：先沿海岸到达已知纬度，然后沿该纬度直航——用正午太阳高度保持纬度恒定。日晷罗盘（sólaskífa）、日长石（sólarsteinn）、鸟/鲸/海浪的综合观测都是为这一策略服务的。','❌ 不对。正确答案是 C。维京航海不是东西向&ldquo;找方向&rdquo;，而是南北向&ldquo;保持纬度&rdquo;——在正确纬度上向西或向东直航。太阳正午高度在不同纬度不同——这是他们能够观测和使用的。')">检查答案</button>
+  <div id="f2" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q3.</strong> 维京海战最独特的特点是什么？</p>
+  <label><input type="radio" name="q3" value="a"> A. 使用船首撞角撞击敌船——像地中海桨帆战舰一样</label>
+  <label><input type="radio" name="q3" value="b"> B. 双方的船先绑在一起形成浮动平台，然后进行步战</label>
+  <label><input type="radio" name="q3" value="c"> C. 使用希腊火（燃烧武器）远距离烧毁敌船</label>
+  <label><input type="radio" name="q3" value="d"> D. 依靠帆的机动优势——在敌船周围环绕射击</label>
+  <button onclick="checkQuiz(3,'b','✅ 正确！维京海战本质上是&ldquo;把陆战搬到连在一起的船上&rdquo;：双方先将己方船只绑连成浮动平台，然后登船肉搏。没有撞角、没有希腊火、没有帆船机动战。防御方同样会绑船迎战——这场仗的输赢就取决于这个浮动木制战场上的肉搏结果。','❌ 不对。正确答案是 B。维京海战最独特的特征是&ldquo;绑船&rdquo;（at binda skipin saman）：双方都将己方船绑在一起形成浮动步战平台。没有撞角（浅吃水柔性船体不适合）、没有希腊火、没有复杂的帆船机动——就是海上陆战。')">检查答案</button>
+  <div id="f3" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q4.</strong> 维京长船上的生活体验，哪一项描述最准确？</p>
+  <label><input type="radio" name="q4" value="a"> A. 舒适——有船舱和厨房，可以在船上做饭和睡觉</label>
+  <label><input type="radio" name="q4" value="b"> B. 危险但刺激——船员享受航行中的风雨和挑战</label>
+  <label><input type="radio" name="q4" value="c"> C. 湿冷、拥挤、没有遮蔽——北大西洋的冷水几分钟就能致命，淹死是最被恐惧的死法</label>
+  <label><input type="radio" name="q4" value="d"> D. 主要靠帆航行——桨手大部分时间在休息</label>
+  <button onclick="checkQuiz(4,'c','✅ 正确！长船是敞开的——没有船舱、没有甲板。在雨雪风浪中船员露天坐着——长时间湿冷会导致体温过低。如果船裂了——水温在几分钟内就能致死，没人来救你。维京人不怕战死（去瓦尔哈拉），但怕淹死——淹死者的归宿是海神的水下大厅，不是奥丁的英灵殿。','❌ 不对。正确答案是 C。长船完全敞开——没有船舱、没有甲板。湿羊毛在北大西洋海风中的寒冷是持续的折磨。淹死是维京人最恐惧的死法——不是去瓦尔哈拉，是去海神&AElig;gir 和 Rán 的水下大厅。')">检查答案</button>
+  <div id="f4" class="feedback"></div>
+</div>
+
+<div class="quiz">
+  <p><strong>Q5.</strong> （深度题）维京船葬（如 Gokstad、Oseberg）的核心宗教含义是什么？</p>
+  <label><input type="radio" name="q5" value="a"> A. 炫耀财富——把贵重物品埋入地下是权力展示</label>
+  <label><input type="radio" name="q5" value="b"> B. 船作为交通工具要物理地载着死者航行到死后世界——不是隐喻</label>
+  <label><input type="radio" name="q5" value="c"> C. 献祭给奥丁——船是献给神的祭品</label>
+  <label><input type="radio" name="q5" value="d"> D. 纯粹传统——没有特别的宗教含义</label>
+  <button onclick="checkQuiz(5,'b','✅ 正确！船葬的核心逻辑是&ldquo;船要物理地载着死者航行到死后世界&rdquo;——不是隐喻或展示。船在维京宗教中具有和教堂/寺庙相同的圣殿功能。这与基督教的&ldquo;灵魂升天&rdquo;不同——北欧的船不是隐喻，是物理交通工具。死者是真的要坐船走的。','❌ 不对。正确答案是 B。维京船葬不是财富炫耀、不是献给奥丁的祭品、不是无意义的传统——船被理解为从人间物理航行到神域的交通工具。这和基督教的灵魂隐喻不同——在北欧宗教中，死者真的需要一艘船来跨越生死之海。')">检查答案</button>
+  <div id="f5" class="feedback"></div>
+</div>
+
+<!-- ====== LESSON NAV ====== -->
+<hr>
+
+<div class="card" style="text-align:center;">
+  <p style="margin-bottom:0.4rem;"><strong>📚 课程导航</strong></p>
+  <p style="font-size:0.88rem;color:var(--muted);margin-bottom:0;">
+    ← <a href="0010-viking-warfare.html">Lesson 0010：维京战争</a>
+    &nbsp;·&nbsp;
+    <a href="0009-viking-daily-life.html">Lesson 0009：日常生活</a>
+    &nbsp;·&nbsp;
+    <a href="0008-viking-christianization.html">Lesson 0008：基督教化</a>
+    &nbsp;·&nbsp;
+    <a href="0005-varangian-east.html">Lesson 0005：东方远征</a>
+  </p>
+</div>
+
+<!-- ====== REMINDERS ====== -->
+<div class="reminder">
+  <strong>📖 建议阅读</strong><br>
+  📄 <a href="../reference/viking-ships-and-portage.html">维京战船与 Portage 参考</a>——船型分类、portage 操作细节、东西路线对照、实验考古数据。<br>
+  Vikingeskibsmuseet (Roskilde), <em><a href="https://www.vikingeskibsmuseet.dk/" target="_blank">Viking Ship Museum</a></em>——全球最权威的维京船考古博物馆，收藏了 Skuldelev 五艘船和实验考古复刻船。<br>
+  Neil Price, <em>The Children of Ash and Elm</em> (2020), ch. 11–12——关于维京船的设计、建造和海上生活的最佳英文综述。<br>
+  Thirslund, S. (1993). <em>Viking Navigation</em>——日晷罗盘和纬度航行的实验考古经典。
+</div>
+
+<div class="reminder-qa">
+  <strong>🤔 有疑问？</strong><br>
+  特定船型（knarr vs snekkja 在设计上的区别）、维京造船工具和铆钉的具体形制、日长石（sólarsteinn）的实验考古数据、Skuldelev 沉船（罗斯基勒峡湾发现了五艘故意沉船——为什么？）、Gokstad 复刻船横渡大西洋的详细数据、《冰海战纪》中阿谢拉特团的船是什么型号、维京人有没有双桅船、船首龙首的考古实物——都可以问我。
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

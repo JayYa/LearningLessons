@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 25: C# 15 — Union 类型</title>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
+</head>
+<body>
+
+<h1>Lesson 25: C# 15 — Union 类型 <span class="en">Union Types</span></h1>
+<p class="subtitle">.NET 11 Preview · 等了十年的 discriminated union · 编译期穷举检查 · 告别"枚举+switch"</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="24-csharp14-small-features.html">Lesson 24（C# 14 小特性合集）</a>。本课是 C# 15（.NET 11）系列的旗舰特性——C# 世界等了十年终于等到的可区分联合。<br>
+<strong>状态：</strong>当前以 .NET 11 Preview 5 <span class="badge badge--preview">Preview</span> 发布。部分特性仍在开发中，API 可能在 GA（预计 2026.11）前变化。<br>
+<strong>阅读：</strong><a href="https://learn.microsoft.com/en-us/dotnet/csharp/whats-new/csharp-15">C# 15 新增功能</a> ·
+<a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/union">Union 类型语言参考</a> ·
+<a href="https://github.com/dotnet/csharplang/blob/main/proposals/csharp-15.0/unions.md">Union 类型设计提案</a>
+</div>
+
+<!-- ========================== 0. HOOK ========================== -->
+
+<h2>〇、一个无处不在的烦恼 <span class="en">The One-Of Problem</span></h2>
+
+<p>编程中最常见的数据建模难题之一：<strong>一个值恰好是几种类型之一</strong>。</p>
+
+<table>
+<tr><th>场景</th><th>可能的类型</th><th>你现在的做法</th></tr>
+<tr><td>方法返回值</td><td>成功值 或 错误</td><td><code>object?</code> + <code>is</code> 检查⋯⋯编译器不帮你</td></tr>
+<tr><td>消息分发</td><td>OrderPlaced / PaymentReceived / ...</td><td>继承层次 + <code>switch</code>——新增消息类型不警告</td></tr>
+<tr><td>AST 节点</td><td>Literal / BinaryExpr / Variable / ...</td><td>抽象基类——穷举检查全靠纪律</td></tr>
+</table>
+
+<p>C# 过去有五种"绕路"——每一种都有真实痛点：</p>
+
+<div class="comparison">
+  <div class="old">
+    <h4>① enum + switch</h4>
+    <p>丢失类型信息——<code>case</code> 下面要强制转换。enum 值范围由你负责——忘记处理新值不会有警告。</p>
+  </div>
+  <div>
+    <h4>② 继承层次</h4>
+    <p>正确的面向对象方案——但<strong>不是封闭的</strong>。新人加了一个子类，分散在 47 个 <code>switch</code> 里都不会亮警告。</p>
+  </div>
+  <div class="old">
+    <h4>③ object? + is</h4>
+    <p>编译器完全不帮你。类型安全全靠开发者记忆。<code>if (x is string) ... else if (x is int) ... else throw</code> 是样板地狱。</p>
+  </div>
+  <div>
+    <h4>④ OneOf 库</h4>
+    <p>NuGet 上有 <code>OneOf</code> 包——但类型名不自然（<code>OneOf&lt;T0, T1&gt;</code>），没有编译期穷举检查，没有模式匹配集成。</p>
+  </div>
+  <div class="old">
+    <h4>⑤ F# discriminated union</h4>
+    <p>F# 从 1.0 就有。在 F# 项目中用——但 C# 调用 F# union 很别扭，且不能直接在 C# 里定义。</p>
+  </div>
+</div>
+
+<p><strong>核心矛盾：</strong>C# 缺少一个"这组类型到此为止——编译期帮我盯着"的语言构造。C# 15 回答了这个问题。</p>
+
+<!-- ========================== 1. SYNTAX ========================== -->
+
+<h2>一、Union 语法 <span class="en">Union Declaration</span></h2>
+
+<h3>1.1 基本声明</h3>
+
+<pre><code><span class="cmt">// 声明 case 类型——它们本身是普通 record/class/struct</span>
+<span class="kw">public</span> <span class="kw">record class</span> Cat(<span class="kw">string</span> Name);
+<span class="kw">public</span> <span class="kw">record class</span> Dog(<span class="kw">string</span> Name);
+<span class="kw">public</span> <span class="kw">record class</span> Bird(<span class="kw">string</span> Name);
+
+<span class="cmt">// 🆕 union 声明——只有一行</span>
+<span class="kw">public union</span> Pet(Cat, Dog, Bird);</code></pre>
+
+<p><code>union</code> 是一个<strong>类型声明</strong>，不是泛型约束、不是特性——是全新的一等公民类型。三行 <code>record class</code> + 一行 <code>union</code>，你有了一个编译期保证穷举的类型。</p>
+
+<h3>1.2 隐式转换——每个 case 自动能赋值给 union</h3>
+
+<pre><code><span class="kw">Pet</span> pet = <span class="kw">new</span> Dog(<span class="str">"Rex"</span>);          <span class="cmt">// Dog → Pet 隐式转换</span>
+<span class="kw">Pet</span> pet2 = <span class="kw">new</span> Cat(<span class="str">"Whiskers"</span>);    <span class="cmt">// Cat → Pet 隐式转换</span>
+
+Console.WriteLine(pet.Value);            <span class="cmt">// Dog { Name = Rex }</span>
+
+<span class="cmt">// 方法参数也是隐式的：</span>
+<span class="kw">void</span> Describe(<span class="kw">Pet</span> pet) { ... }
+
+Describe(<span class="kw">new</span> Dog(<span class="str">"Buddy"</span>));           <span class="cmt">// 直接传 Dog——不需要包装</span>
+Describe(<span class="kw">new</span> Cat(<span class="str">"Luna"</span>));            <span class="cmt">// 直接传 Cat</span></code></pre>
+
+<div class="callout callout--good">
+<strong>和 C# 14 Span 隐式转换的内在同一逻辑：</strong>让正确的事变得不费力气。你不需要 <code>new Pet(dog)</code> 包装——编译器替你做了，就像 <code>int[]</code> 不需要 <code>.AsSpan()</code> 一样。
+</div>
+
+<h3>1.3 case 类型可以是什么？</h3>
+
+<p>几乎任何能转为 <code>object</code> 的类型都可以：</p>
+
+<pre><code><span class="cmt">// 引用类型</span>
+<span class="kw">public union</span> Shape(Circle, Rectangle, Triangle);
+
+<span class="cmt">// 值类型——struct case 在默认形式下会装箱</span>
+<span class="kw">public union</span> IntOrString(<span class="kw">int</span>, <span class="kw">string</span>);
+
+<span class="cmt">// 泛型——经典 Option&lt;T&gt;</span>
+<span class="kw">public</span> <span class="kw">record class</span> None;
+<span class="kw">public</span> <span class="kw">record class</span> Some&lt;T&gt;(T Value);
+<span class="kw">public union</span> Option&lt;T&gt;(None, Some&lt;T&gt;);
+
+<span class="cmt">// 嵌套——union 本身也可以是另一个 union 的 case</span>
+<span class="kw">public union</span> Success&lt;T&gt;(T Value);
+<span class="kw">public union</span> Failure(Exception Error);
+<span class="kw">public union</span> Result&lt;T&gt;(Success&lt;T&gt;, Failure);</code></pre>
+
+<h3>1.4 Union 可以有自己的成员</h3>
+
+<pre><code><span class="kw">public</span> <span class="kw">record class</span> Meters(<span class="kw">double</span> Value);
+<span class="kw">public</span> <span class="kw">record class</span> Feet(<span class="kw">double</span> Value);
+
+<span class="kw">public union</span> Length(Meters, Feet)
+{
+    <span class="cmt">// 基于模式匹配计算属性</span>
+    <span class="kw">public</span> <span class="kw">double</span> TotalMeters => <span class="kw">this</span> <span class="kw">switch</span>
+    {
+        Meters m => m.Value,
+        Feet f => f.Value * <span class="num">0.3048</span>,
+    };
+
+    <span class="cmt">// 返回 union 类型的方法</span>
+    <span class="kw">public</span> Length Add(Length other) => <span class="kw">new</span> Meters(TotalMeters + other.TotalMeters);
+}</code></pre>
+
+<div class="callout callout--info">
+<strong>限制：</strong>union 体不能有<strong>实例字段</strong>、<strong>自动属性</strong>、<strong>字段式事件</strong>，也不能声明<strong>单参数 public 构造</strong>（编译器为每个 case 生成构造）。这些限制保证 union 的数据存储完全由生成的 <code>Value</code> 属性管理。
+</div>
+
+<!-- ========================== 2. PATTERN MATCHING ========================== -->
+
+<h2>二、模式匹配——编译器替你盯住每一种可能 <span class="en">Exhaustive Pattern Matching</span></h2>
+
+<h3>2.1 穷举检查：不加 default 才是正确的</h3>
+
+<pre><code><span class="kw">Pet</span> pet = <span class="kw">new</span> Dog(<span class="str">"Rex"</span>);
+
+<span class="kw">string</span> name = pet <span class="kw">switch</span>
+{
+    Dog d => d.Name,
+    Cat c => c.Name,
+    Bird b => b.Name,
+};  <span class="cmt">// ✅ 编译器通过了——三个 case 全部覆盖</span>
+    <span class="cmt">// 不需要 _ 兜底——编译器知道集合是封闭的</span></code></pre>
+
+<p>这才是关键——<strong>当你加了一个新 case 类型，每个 switch 都自动亮警告</strong>：</p>
+
+<pre><code><span class="cmt">// 后来有人加了一个新宠物类型：</span>
+<span class="kw">public</span> <span class="kw">record class</span> Fish(<span class="kw">string</span> Name, <span class="kw">double</span> Depth);
+
+<span class="cmt">// 改 union 声明：</span>
+<span class="kw">public union</span> Pet(Cat, Dog, Bird, Fish);   <span class="cmt">// ← 加了 Fish</span>
+
+<span class="cmt">// 💡 编译器立即在所有 switch 上亮警告：</span>
+<span class="cmt">// "The switch expression does not handle Fish"</span>
+<span class="cmt">// 你必须去每个 switch 加 Fish 的处理——这就是穷举安全的含义</span></code></pre>
+
+<div class="callout callout--good">
+<strong>这是 union 相比于继承层次的根本优势。</strong>继承层次中加子类，switch 不会警告——你只能在运行时发现 <code>InvalidOperationException</code>。Union 让你在<strong>编译期</strong>就知道所有遗漏。
+</div>
+
+<h3>2.2 "透明解包"——模式匹配直接作用在 Value 上</h3>
+
+<p>Union 的模式匹配有一个重要的设计决策：<strong>模式默认作用在 <code>.Value</code> 上，而不是 union 本身</strong>。这叫"透明解包"——你写 pattern match 时感觉就像在直接匹配 case 类型：</p>
+
+<pre><code><span class="kw">Pet</span> pet = <span class="kw">new</span> Cat(<span class="str">"Whiskers"</span>);
+
+<span class="cmt">// 你写的代码——直接匹配 case 类型</span>
+<span class="kw">var</span> result = pet <span class="kw">switch</span>
+{
+    Cat c => <span class="str">"猫: "</span> + c.Name,     <span class="cmt">// c 是 Cat 类型——不是 Pet</span>
+    Dog d => <span class="str">"狗: "</span> + d.Name,
+    Bird b => <span class="str">"鸟: "</span> + b.Name,
+};
+
+<span class="cmt">// 等价于编译器隐式做的：</span>
+<span class="cmt">// pet.Value switch { Cat c => ..., Dog d => ..., Bird b => ... }</span></code></pre>
+
+<p><strong>三个例外</strong>——以下模式作用在 union 值本身（不透明），不穿透到 <code>.Value</code>：</p>
+
+<table>
+<tr><th>模式</th><th>行为</th><th>场景</th></tr>
+<tr><td><code>_</code>（弃元）</td><td>匹配 union 值本身</td><td>兜底——但实际上穷举够了一般不需要</td></tr>
+<tr><td><code>var x</code></td><td>捕获 union 值本身</td><td>拿到 <code>Pet?</code> 而非 <code>.Value</code></td></tr>
+<tr><td><code>not</code></td><td>作用在 union 值本身</td><td><code>not null and var value</code> 中的 <code>not null</code></td></tr>
+</table>
+
+<h3>2.3 Null 处理</h3>
+
+<p>Union 是 struct——本身不能是 null。但 <code>.Value</code> 可以是 null（当 <code>default(Pet)</code> 时）。编译器跟踪 null 状态：</p>
+
+<pre><code><span class="kw">Pet</span> pet = <span class="kw">default</span>;   <span class="cmt">// .Value 是 null</span>
+Console.WriteLine(pet.Value <span class="kw">is</span> <span class="kw">null</span>);  <span class="cmt">// True</span>
+
+<span class="kw">var</span> desc = pet <span class="kw">switch</span>
+{
+    Dog d => d.Name,
+    Cat c => c.Name,
+    Bird b => b.Name,
+    <span class="kw">null</span> => <span class="str">"没有宠物"</span>,   <span class="cmt">// null 分支处理 default 情况</span>
+};
+
+<span class="cmt">// Nullable union：Pet? 也可用</span>
+<span class="kw">Pet?</span> maybePet = <span class="kw">null</span>;   <span class="cmt">// Nullable&lt;Pet&gt;——整个 union 为 null</span></code></pre>
+
+<div class="callout callout--warn">
+<strong>注意：</strong>如果 union case 中有值类型（如 <code>int</code>），<code>default</code> 构造的 union 其 <code>.Value</code> 也是 null——default union 不代表任何 case。你要么用 <code>null</code> 分支处理，要么确保 union 总是被赋有效值。
+</div>
+
+<!-- ========================== 3. COMPILER ========================== -->
+
+<h2>三、编译器生成了什么？ <span class="en">Compiler Lowering</span></h2>
+
+<h3>3.1 一行 union 展开为一个 struct</h3>
+
+<p>这是理解 union 本质最重要的部分。你写：</p>
+
+<pre><code><span class="kw">public union</span> Pet(Cat, Dog, Bird);</code></pre>
+
+<p>编译器把它<strong>降低</strong>为：</p>
+
+<pre><code>[System.Runtime.CompilerServices.Union]
+<span class="kw">public</span> <span class="kw">struct</span> Pet : IUnion
+{
+    <span class="cmt">// 每个 case 一个构造</span>
+    <span class="kw">public</span> Pet(Cat value) => Value = value;
+    <span class="kw">public</span> Pet(Dog value) => Value = value;
+    <span class="kw">public</span> Pet(Bird value) => Value = value;
+
+    <span class="cmt">// 存储——统一用 object?</span>
+    <span class="kw">public</span> <span class="kw">object?</span> Value { <span class="kw">get</span>; }
+
+    <span class="cmt">// 每个 case 一个隐式转换</span>
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">implicit</span> <span class="kw">operator</span> Pet(Cat value) => <span class="kw">new</span>(value);
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">implicit</span> <span class="kw">operator</span> Pet(Dog value) => <span class="kw">new</span>(value);
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">implicit</span> <span class="kw">operator</span> Pet(Bird value) => <span class="kw">new</span>(value);
+}</code></pre>
+
+<table>
+<tr><th>你写的</th><th>编译器生成的</th></tr>
+<tr><td><code>public union Pet(Cat, Dog, Bird);</code></td><td>一个 <code>struct</code> + <code>[Union]</code> attribute + <code>: IUnion</code> + 每个 case 的构造器 + 隐式转换 + <code>Value</code> 属性</td></tr>
+<tr><td><code>Pet pet = new Dog("Rex");</code></td><td><code>Pet pet = new Pet(new Dog("Rex"));</code> —— 构造调用</td></tr>
+<tr><td><code>pet switch { Dog d => ... }</code></td><td><code>pet.Value switch { Dog d => ... }</code> —— 模式穿透到 <code>.Value</code></td></tr>
+</table>
+
+<h3>3.2 运行时支持：UnionAttribute + IUnion</h3>
+
+<p>.NET 11 Preview 5 开始在 BCL 中内置两个运行时类型：</p>
+
+<pre><code><span class="kw">namespace</span> System.Runtime.CompilerServices;
+
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = <span class="kw">false</span>)]
+<span class="kw">public</span> <span class="kw">sealed</span> <span class="kw">class</span> UnionAttribute : Attribute;
+
+<span class="kw">public</span> <span class="kw">interface</span> IUnion
+{
+    <span class="kw">object?</span> Value { <span class="kw">get</span>; }
+}</code></pre>
+
+<p><code>IUnion</code> 让你在运行时检查一个值是不是 union 类型：</p>
+
+<pre><code><span class="kw">if</span> (value <span class="kw">is</span> IUnion { Value: <span class="kw">null</span> } u)
+    Console.WriteLine(<span class="str">"这是一个 Value 为 null 的 union"</span>);</code></pre>
+
+<h3>3.3 默认形式的代价：值类型装箱</h3>
+
+<p>因为存储统一用 <code>object?</code>，struct case 在默认生成的 union 中会<strong>装箱</strong>：</p>
+
+<pre><code><span class="kw">public union</span> IntOrString(<span class="kw">int</span>, <span class="kw">string</span>);
+
+<span class="kw">var</span> u = <span class="kw">new</span> IntOrString(<span class="num">42</span>);  <span class="cmt">// int 42 被装箱为 object——堆分配！</span></code></pre>
+
+<p>如果你在乎性能，可以手写<strong>自定义 union</strong>（§4）来避免装箱。</p>
+
+<div class="callout callout--info">
+<strong>这一点和 F# discriminated union 不同。</strong>F# DU 是 tagged union——编译器为每个 case 分配 tag + 字段的联合内存，值类型不装箱。C# 15 的默认形式选择了简单（统一 object? 存储）而非极致性能。未来版本可能会优化默认形式的存储策略。
+</div>
+
+<!-- ========================== 4. CUSTOM UNIONS ========================== -->
+
+<h2>四、自定义 Union——当你需要不同行为 <span class="en">Custom Union Types</span></h2>
+
+<h3>4.1 为什么需要手写？</h3>
+
+<p>编译器生成的 union 总是 struct + <code>object?</code> 存储。但你可能需要：</p>
+
+<ul>
+  <li><strong>避免装箱</strong>——值类型 case 不分配堆内存</li>
+  <li><strong>引用语义</strong>——class 而非 struct</li>
+  <li><strong>适配已有类型</strong>——不能改原类型，但想让它参与穷举检查</li>
+  <li><strong>自定义存储策略</strong>——tagged union 布局</li>
+</ul>
+
+<h3>4.2 手写 union 的最低要求</h3>
+
+<pre><code><span class="cmt">// 满足"基本 union 模式"的最低要求：</span>
+<span class="cmt">// ① [Union] attribute  ② 每个 case 一个单参数 public 构造  ③ 公开的 Value 属性</span>
+
+[System.Runtime.CompilerServices.Union]
+<span class="kw">public</span> <span class="kw">struct</span> Shape : System.Runtime.CompilerServices.IUnion
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">object?</span> _value;
+
+    <span class="kw">public</span> Shape(Circle value)  => _value = value;
+    <span class="kw">public</span> Shape(Rectangle value) => _value = value;
+
+    <span class="kw">public</span> <span class="kw">object?</span> Value => _value;
+}
+
+<span class="kw">public</span> <span class="kw">record class</span> Circle(<span class="kw">double</span> Radius);
+<span class="kw">public</span> <span class="kw">record class</span> Rectangle(<span class="kw">double</span> Width, <span class="kw">double</span> Height);
+
+<span class="cmt">// 使用——和编译器生成的 union 完全一样</span>
+<span class="kw">Shape</span> shape = <span class="kw">new</span> Shape(<span class="kw">new</span> Circle(<span class="num">5.0</span>));
+<span class="kw">var</span> area = shape <span class="kw">switch</span>
+{
+    Circle c => Math.PI * c.Radius * c.Radius,
+    Rectangle r => r.Width * r.Height,
+};</code></pre>
+
+<h3>4.3 无装箱访问模式 <span class="en">Non-Boxing Access Pattern</span></h3>
+
+<p>这才是高性能 union 的精华——用 tagged union 布局，模式匹配不装箱：</p>
+
+<pre><code>[System.Runtime.CompilerServices.Union]
+<span class="kw">public</span> <span class="kw">struct</span> IntOrBool : System.Runtime.CompilerServices.IUnion
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">int</span> _intValue;
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">bool</span> _boolValue;
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">byte</span> _tag;  <span class="cmt">// 0 = 无值, 1 = int, 2 = bool</span>
+
+    <span class="kw">public</span> IntOrBool(<span class="kw">int?</span> value)
+    {
+        <span class="kw">if</span> (value.HasValue) { _intValue = value.Value; _tag = <span class="num">1</span>; }
+    }
+    <span class="kw">public</span> IntOrBool(<span class="kw">bool?</span> value)
+    {
+        <span class="kw">if</span> (value.HasValue) { _boolValue = value.Value; _tag = <span class="num">2</span>; }
+    }
+
+    <span class="kw">public</span> <span class="kw">object?</span> Value => _tag <span class="kw">switch</span>
+    {
+        <span class="num">1</span> => _intValue,
+        <span class="num">2</span> => _boolValue,
+        _ => <span class="kw">null</span>
+    };
+
+    <span class="cmt">// HasValue —— 非装箱访问模式的关键</span>
+    <span class="kw">public</span> <span class="kw">bool</span> HasValue => _tag != <span class="num">0</span>;
+
+    <span class="cmt">// 每个 case 一个 TryGetValue —— 编译器首选这个而非 Value</span>
+    <span class="kw">public</span> <span class="kw">bool</span> TryGetValue(<span class="kw">out</span> <span class="kw">int</span> value)
+    {
+        value = _intValue;
+        <span class="kw">return</span> _tag == <span class="num">1</span>;
+    }
+    <span class="kw">public</span> <span class="kw">bool</span> TryGetValue(<span class="kw">out</span> <span class="kw">bool</span> value)
+    {
+        value = _boolValue;
+        <span class="kw">return</span> _tag == <span class="num">2</span>;
+    }
+}</code></pre>
+
+<p>当 <code>TryGetValue</code> 存在时，<strong>编译器优先用它做模式匹配</strong>——值类型 case 不需要装箱，直接从 tag 判断类型，从对应字段读取值：</p>
+
+<pre><code><span class="kw">IntOrBool</span> val = <span class="kw">new</span> IntOrBool((<span class="kw">int?</span>)<span class="num">42</span>);
+
+<span class="kw">var</span> desc = val <span class="kw">switch</span>
+{
+    <span class="kw">int</span> i => <span class="str">$"整数: {i}"</span>,      <span class="cmt">// 编译器用 TryGetValue(out int)——零装箱</span>
+    <span class="kw">bool</span> b => <span class="str">$"布尔: {b}"</span>,       <span class="cmt">// 编译器用 TryGetValue(out bool)——零装箱</span>
+};</code></pre>
+
+<div class="callout callout--good">
+<strong>日常使用建议：</strong>90% 的场景用编译器生成的简洁形式（一行 <code>public union Pet(Cat, Dog, Bird);</code>）。只有当你 profiling 发现装箱是瓶颈时，再手写无装箱版本。先写对，再写快。
+</div>
+
+<h3>4.4 class 版 union</h3>
+
+<pre><code><span class="cmt">// 如果需要引用语义（如作为 EF Core 的 owned entity）</span>
+[System.Runtime.CompilerServices.Union]
+<span class="kw">public</span> <span class="kw">class</span> Result&lt;T&gt; : System.Runtime.CompilerServices.IUnion
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">object?</span> _value;
+
+    <span class="kw">public</span> Result(T? value)         => _value = value;
+    <span class="kw">public</span> Result(Exception? value) => _value = value;
+
+    <span class="kw">public</span> <span class="kw">object?</span> Value => _value;
+}
+
+<span class="cmt">// 使用——模式匹配和 struct union 完全一样</span>
+Result&lt;<span class="kw">string</span>&gt; ok = <span class="kw">new</span> Result&lt;<span class="kw">string</span>&gt;(<span class="str">"success"</span>);
+Result&lt;<span class="kw">string</span>&gt; err = <span class="kw">new</span> Result&lt;<span class="kw">string</span>&gt;(<span class="kw">new</span> InvalidOperationException(<span class="str">"failed"</span>));
+
+<span class="kw">var</span> msg = ok <span class="kw">switch</span>
+{
+    <span class="kw">string</span> s => <span class="str">$"OK: {s}"</span>,
+    Exception e => <span class="str">$"Error: {e.Message}"</span>,
+    <span class="kw">null</span> => <span class="str">"null"</span>,
+};</code></pre>
+
+<!-- ========================== 5. COMPARISON ========================== -->
+
+<h2>五、Union vs 一切——选型指南 <span class="en">When to Use What</span></h2>
+
+<table>
+<tr><th>方案</th><th>类型安全</th><th>穷举检查</th><th>无装箱</th><th>简洁声明</th><th>适用场景</th></tr>
+<tr><td><strong>Union（简洁形式）</strong></td><td>✅</td><td>✅ 编译期</td><td>❌ 引用类型天然无装箱；值类型会装箱</td><td>✅ 一行</td><td>日常业务逻辑、API 返回值、消息分发</td></tr>
+<tr><td><strong>Union（手写无装箱）</strong></td><td>✅</td><td>✅ 编译期</td><td>✅</td><td>❌ ~40 行样板</td><td>热路径、游戏循环、高频调用方法</td></tr>
+<tr><td>继承层次</td><td>⚠️ 运行时检查</td><td>❌ 无</td><td>✅</td><td>✅</td><td>类型需要外部扩展（不同程序集加子类）</td></tr>
+<tr><td>enum + switch</td><td>❌ 手动转换</td><td>⚠️ 有警告但不强制</td><td>✅</td><td>✅</td><td>只区分状态、不携带数据</td></tr>
+<tr><td>OneOf 库</td><td>⚠️ 部分</td><td>❌ 无</td><td>⚠️ 视实现</td><td>✅</td><td>不想升 .NET 11 的过渡方案</td></tr>
+<tr><td>F# DU</td><td>✅</td><td>✅ 编译期</td><td>✅</td><td>✅</td><td>F# 项目内部——C# 调用别扭</td></tr>
+</table>
+
+<div class="callout callout--info">
+<strong>简单决策规则：</strong>如果"这组类型到此为止，以后不加了"→ union。如果"未来可能有新的子类型来自其他程序集"→ 继承层次 + <code>closed</code>（见下节课）。Union 的力量来自封闭——封闭让它能穷举。
+</div>
+
+<!-- ========================== 6. REAL-WORLD ========================== -->
+
+<h2>六、三个实战场景 <span class="en">Real-World Examples</span></h2>
+
+<h3>6.1 Result 模式——告别 "out 参数 + bool 返回"</h3>
+
+<pre><code><span class="kw">public</span> <span class="kw">record class</span> Success&lt;T&gt;(T Value);
+<span class="kw">public</span> <span class="kw">record class</span> Error(<span class="kw">string</span> Message, Exception? Inner = <span class="kw">null</span>);
+
+<span class="kw">public union</span> Result&lt;T&gt;(Success&lt;T&gt;, Error)
+{
+    <span class="cmt">// 方便构造的静态工厂</span>
+    <span class="kw">public</span> <span class="kw">static</span> Result&lt;T&gt; Ok(T value) => <span class="kw">new</span> Success&lt;T&gt;(value);
+    <span class="kw">public</span> <span class="kw">static</span> Result&lt;T&gt; Fail(<span class="kw">string</span> msg, Exception? ex = <span class="kw">null</span>) => <span class="kw">new</span> Error(msg, ex);
+
+    <span class="cmt">// 便捷解构</span>
+    <span class="kw">public</span> TOut Match&lt;TOut&gt;(Func&lt;T, TOut&gt; onSuccess, Func&lt;Error, TOut&gt; onError)
+        => <span class="kw">this</span> <span class="kw">switch</span>
+        {
+            Success&lt;T&gt; s => onSuccess(s.Value),
+            Error e => onError(e),
+        };
+}
+
+<span class="cmt">// ──── 调用方 ────</span>
+<span class="kw">Result</span>&lt;<span class="kw">int</span>&gt; Divide(<span class="kw">int</span> a, <span class="kw">int</span> b)
+    => b == <span class="num">0</span>
+        ? Result&lt;<span class="kw">int</span>&gt;.Fail(<span class="str">"除数不能为零"</span>)
+        : Result&lt;<span class="kw">int</span>&gt;.Ok(a / b);
+
+<span class="cmt">// 使用——编译器强迫你处理两种结果</span>
+<span class="kw">var</span> msg = Divide(<span class="num">10</span>, <span class="num">2</span>).Match(
+    onSuccess: val => <span class="str">$"结果: {val}"</span>,
+    onError: err => <span class="str">$"失败: {err.Message}"</span>
+);</code></pre>
+
+<div class="callout callout--good">
+<strong>面试加分项：</strong>大多开发者还在用 <code>bool TryDivide(int a, int b, out int result)</code> 或 <code>(int? Result, string? Error)</code>。你用 union 表达的 Result——类型安全、穷举检查、扩展新 case 自动亮警告——体现的是现代 C# 的设计思维。
+</div>
+
+<h3>6.2 消息/命令分发——新加消息自动提醒</h3>
+
+<pre><code><span class="kw">public</span> <span class="kw">record class</span> OrderPlaced(<span class="kw">int</span> OrderId, <span class="kw">decimal</span> Amount);
+<span class="kw">public</span> <span class="kw">record class</span> PaymentReceived(<span class="kw">int</span> OrderId);
+<span class="kw">public</span> <span class="kw">record class</span> OrderCancelled(<span class="kw">int</span> OrderId, <span class="kw">string</span> Reason);
+
+<span class="kw">public union</span> OrderEvent(OrderPlaced, PaymentReceived, OrderCancelled);
+
+<span class="cmt">// ──── 消息处理器 ────</span>
+<span class="kw">void</span> Handle(OrderEvent e)
+{
+    <span class="kw">switch</span> (e)
+    {
+        <span class="kw">case</span> OrderPlaced p:
+            Console.WriteLine(<span class="str">$"新订单 {p.OrderId}，金额 {p.Amount}"</span>);
+            <span class="kw">break</span>;
+        <span class="kw">case</span> PaymentReceived r:
+            Console.WriteLine(<span class="str">$"订单 {r.OrderId} 已付款"</span>);
+            <span class="kw">break</span>;
+        <span class="kw">case</span> OrderCancelled c:
+            Console.WriteLine(<span class="str">$"订单 {c.OrderId} 已取消: {c.Reason}"</span>);
+            <span class="kw">break</span>;
+    }
+}
+
+<span class="cmt">// 🆕 六个月后，有人加了新消息类型：</span>
+<span class="cmt">// public record class OrderRefunded(int OrderId, decimal Amount);</span>
+<span class="cmt">// 改 union: public union OrderEvent(OrderPlaced, PaymentReceived, OrderCancelled, OrderRefunded);</span>
+<span class="cmt">// → 💡 Handle() 立刻亮编译警告——"你没处理 OrderRefunded！"</span></code></pre>
+
+<h3>6.3 Option&lt;T&gt;——值可能存在也可能不存在</h3>
+
+<pre><code><span class="kw">public</span> <span class="kw">record class</span> None;
+<span class="kw">public</span> <span class="kw">record class</span> Some&lt;T&gt;(T Value);
+
+<span class="kw">public union</span> Option&lt;T&gt;(None, Some&lt;T&gt;)
+{
+    <span class="kw">public</span> <span class="kw">static</span> Option&lt;T&gt; From(T? value)
+        => value <span class="kw">is</span> <span class="kw">null</span> ? <span class="kw">new</span> None() : <span class="kw">new</span> Some&lt;T&gt;(value);
+}
+
+<span class="cmt">// 比 nullable 更强力——引用类型也能有 "没有值" 的状态</span>
+<span class="kw">var</span> found = FindUser(<span class="str">"alice"</span>);
+<span class="kw">var</span> greeting = found <span class="kw">switch</span>
+{
+    Some&lt;User&gt; s => <span class="str">$"你好，{s.Value.Name}"</span>,
+    None => <span class="str">"用户不存在"</span>,
+};</code></pre>
+
+<!-- ========================== 7. LIMITATIONS ========================== -->
+
+<h2>七、当前限制与未来 <span class="en">Current Limitations &amp; Roadmap</span></h2>
+
+<p>C# 15 还在 Preview——以下功能在提案中但目前<strong>尚未实现</strong>：</p>
+
+<table>
+<tr><th>未实现</th><th>提案内容</th><th>影响</th></tr>
+<tr><td><strong>Union 子类型关系</strong></td><td>如果 <code>union A(B, C)</code> 且 <code>union D(B, C, E)</code>，D 应可隐式转为 A（子集 → 超集）</td><td>目前无法在不同 union 间转换</td></tr>
+<tr><td><strong>泛型约束上的 union</strong></td><td><code>where T : union</code> 限制 T 必须是 union 类型</td><td>无法写泛型 union 工具函数</td></tr>
+<tr><td><strong>纯值类型存储</strong></td><td>编译器自动为 struct case 生成无装箱 tagged union 布局</td><td>值类型 case 默认装箱——见 §3.3</td></tr>
+<tr><td><strong>默认穷举</strong></td><td>即使不用 switch 表达式，普通 <code>if/else</code> 也能触发穷举警告</td><td>目前只有 switch 表达式有穷举检查</td></tr>
+</table>
+
+<div class="callout callout--warn">
+<strong>使用 Preview 的代价：</strong>安装 .NET 11 Preview SDK，项目里设 <code>&lt;LangVersion&gt;preview&lt;/LangVersion&gt;</code>。GA 前 API 可能微小调整。生产项目建议等 2026.11 GA 后再引入。
+</div>
+
+<!-- ========================== 8. QUIZ ========================== -->
+
+<h2>八、测验 <span class="en">Quiz</span></h2>
+
+<div class="quiz" id="q1">
+  <h3>1/5 · Union 是什么</h3>
+  <p class="question">C# 15 的 union 编译器生成的是哪种底层类型？</p>
+  <label><input type="radio" name="q1" value="a">A. class——引用类型，new 出来在堆上</label>
+  <label><input type="radio" name="q1" value="b">B. struct——值类型，标记 [Union] attribute，实现 IUnion</label>
+  <label><input type="radio" name="q1" value="c">C. record——有值相等和 deconstruct</label>
+  <label><input type="radio" name="q1" value="d">D. enum——和 C 的 union 一样，是值的标签映射</label>
+  <div class="feedback" id="f_q1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>2/5 · 穷举检查</h3>
+  <p class="question">以下关于 union 穷举检查的说法，哪个是<strong>正确</strong>的？</p>
+  <label><input type="radio" name="q2" value="a">A. 只有当 union 所有 case 都被处理时，switch 表达式才是穷举的——不需要 _ 兜底</label>
+  <label><input type="radio" name="q2" value="b">B. 即使覆盖了所有 case，switch 也必须加 _（弃元）兜底——编译器的硬性要求</label>
+  <label><input type="radio" name="q2" value="c">C. 穷举检查只对编译器生成的 union 有效——手写 union 没有穷举检查</label>
+  <label><input type="radio" name="q2" value="d">D. 因为 union 是封闭的，加新 case 类型后编译器自动给所有 switch 加 default 分支</label>
+  <div class="feedback" id="f_q2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>3/5 · 透明解包</h3>
+  <p class="question">以下哪个模式<strong>不会</strong>穿透到 <code>.Value</code>，而是作用在 union 值本身？</p>
+  <label><input type="radio" name="q3" value="a">A. <code>Cat c</code></label>
+  <label><input type="radio" name="q3" value="b">B. <code>null</code></label>
+  <label><input type="radio" name="q3" value="c">C. <code>var x</code></label>
+  <label><input type="radio" name="q3" value="d">D. 以上全部穿透到 .Value</label>
+  <div class="feedback" id="f_q3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>4/5 · 值类型装箱</h3>
+  <p class="question">使用编译器生成的简洁 union 形式，<code>public union IntOrString(int, string);</code> 创建 <code>new IntOrString(42)</code> 时发生了什么？</p>
+  <label><input type="radio" name="q4" value="a">A. int 42 直接存储在 union struct 的 int 字段中——零装箱</label>
+  <label><input type="radio" name="q4" value="b">B. int 42 被装箱为 object——发生一次堆分配</label>
+  <label><input type="radio" name="q4" value="c">C. 编译器报错——union 不支持值类型 case</label>
+  <label><input type="radio" name="q4" value="d">D. int 被转为 string "42" 存储</label>
+  <div class="feedback" id="f_q4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>5/5 · 综合判断</h3>
+  <p class="question">关于 C# 15 union，以下哪个说法<strong>正确</strong>？</p>
+  <label><input type="radio" name="q5" value="a">A. Union 的模式匹配默认作用在 union 值本身——你需要手动访问 .Value 才能拿到 case 数据</label>
+  <label><input type="radio" name="q5" value="b">B. 手写 union 必须实现 IUnion 接口——否则编译器不把它当作 union 类型</label>
+  <label><input type="radio" name="q5" value="c">C. Union 的穷举检查是新加 case 类型时——所有 switch 自动亮编译警告——这是它比继承层次的根本优势</label>
+  <label><input type="radio" name="q5" value="d">D. Union 类型可以同时声明 class 和 struct 作为 case 类型——但不能混用</label>
+  <div class="feedback" id="f_q5"></div>
+
+  <button onclick="checkAll()">提交全部答案</button>
+  <div class="score" id="score" style="display:none"></div>
+</div>
+
+<!-- ========================== 9. SUMMARY ========================== -->
+
+<h2>九、总结 <span class="en">Summary</span></h2>
+
+<table>
+<tr><th>要点</th><th>一句话</th></tr>
+<tr><td><strong>声明</strong></td><td><code>public union Pet(Cat, Dog, Bird);</code> —— 一行</td></tr>
+<tr><td><strong>隐式转换</strong></td><td>每个 case 类型自动能赋值给 union——不需要包装</td></tr>
+<tr><td><strong>穷举检查</strong></td><td>switch 覆盖所有 case = 通过；加新 case = 全部 switch 亮警告</td></tr>
+<tr><td><strong>透明解包</strong></td><td>模式匹配默认穿透到 <code>.Value</code>——你感觉在直接匹配 case 类型</td></tr>
+<tr><td><strong>编译器降低</strong></td><td>struct + [Union] + IUnion + 每个 case 一个构造/隐式转换</td></tr>
+<tr><td><strong>默认存储</strong></td><td><code>object?</code> —— struct case 会装箱；用自定义 union 可避免</td></tr>
+<tr><td><strong>手写 union</strong></td><td>满足基本 union 模式即可——编译器识别 [Union] + 单参数构造 + Value</td></tr>
+<tr><td><strong>状态</strong></td><td>.NET 11 Preview 5——GA 预计 2026.11</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>最值得记住的一件事：</strong>Union 让你把"这组类型到此为止"写进代码——编译器帮你盯着。加一个新 case 而忘记更新某个 switch？编译失败。这在继承层次中是一个静默的运行时 bug。这是 union 存在的终极理由。
+</div>
+
+<!-- ========================== 10. NEXT ========================== -->
+
+<h2>十、下一步 <span class="en">Next: Closed Hierarchies</span></h2>
+
+<p>Union 解决的是"一组不相关的类型，值必须是其中之一"。但如果你的类型<strong>天然有继承关系</strong>（基类 + 派生类），你想获得同样的穷举检查怎么办？C# 15 的 <strong>Closed Hierarchies</strong>（<code>closed class</code>）就是答案——下节课。</p>
+
+<div class="triad">
+  <div>
+    <h4>🔗 Closed Hierarchies</h4>
+    <p><code>closed class</code> —— 继承关系中的穷举检查。Natural complement to unions.</p>
+  </div>
+  <div>
+    <h4>📦 Collection Expression Args</h4>
+    <p><code>[with(capacity: 100), .. items]</code> —— 集合初始化小改进。</p>
+  </div>
+  <div>
+    <h4>🔒 Memory Safety</h4>
+    <p>声明指针不再需要 <code>unsafe</code> 块——多版本演进第一步。</p>
+  </div>
+</div>
+
+<p class="mild"><a href="24-csharp14-small-features.html">← L24: C# 14 小特性合集</a> · <a href="26-csharp15-closed-hierarchies.html">L26: Closed Hierarchies →</a> · <a href="../../MISSION.md">🎯 回顾 Mission</a></p>
+
+<hr class="section-divider">
+
+<div class="lesson-footer">
+<p><strong>推荐阅读：</strong><a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/union">Union 类型语言参考</a> · <a href="https://github.com/dotnet/csharplang/blob/main/proposals/csharp-15.0/unions.md">设计提案</a> · <a href="https://blog.ndepend.com/csharp-unions/">NDepend: C# Unions 深度分析</a></p>
+<p><strong>课后实操：</strong>找项目中一段 <code>if (x is T1) ... else if (x is T2) ... else throw</code> 的代码——用 union 重写。体验编译期穷举检查：加一个新 case 类型，看 switch 亮警告，修好它。</p>
+<p><strong>有问题？</strong>Union 是 C# 15 最重量级的新特性——任何细节不清楚的，你的教师（Claude）随时在。</p>
+</div>
+
+<script src="../assets/scripts/quiz.js"></script>
+<script>
+const answers = { q1: 'b', q2: 'a', q3: 'c', q4: 'b', q5: 'c' };
+const explanations = {
+  q1: { correct: '✅ 正确！B——编译器生成的 union 是一个 struct，标记 [Union] attribute 并实现 IUnion 接口。A 错：默认是 struct 不是 class。C 错：union 和 record 是不同的概念——union 不添加值相等或 deconstruct。D 错：C 的 union 是内存重叠布局，C# union 是可区分联合。', wrong: '❌ 答案是 B。编译器生成的 union 是 struct + [Union] + IUnion。不是 class（虽然可以手写 class 版），不是 record（不添加值相等），更不是 C 风格的 union（C 的 union 是内存重叠——完全不同）。' },
+  q2: { correct: '✅ 正确！A——当所有 case 类型都被处理时，编译器认为 switch 是穷举的——不需要 _ 兜底。这正是 union 的力量：集合封闭，编译器可以验证穷举。加新 case → 全部 switch 亮警告。', wrong: '❌ 答案是 A。union 的 switch 表达式是穷举的时候不需要 _ 兜底——编译器验证了所有 case 都被覆盖。B 错——不需要强制兜底。C 错——手写 union 也有穷举检查（只要正确标记 [Union]）。D 错——编译器不自动加 default，而是亮警告让你手动处理。' },
+  q3: { correct: '✅ 正确！C——var x 模式捕获 union 值本身（如 Pet 或 Pet?），不穿透到 .Value。_ 弃元和 not 模式也是例外。其他类型模式（Cat c、Dog d 等）都自动穿透到 .Value。', wrong: '❌ 答案是 C。三个例外不穿透到 .Value：_（弃元）、var x、not。选项 A（Cat c）是类型模式——会穿透；B（null）在 union 上检查 .Value 是否为 null——穿透的。只有 var x 捕获的是 union 自身。' },
+  q4: { correct: '✅ 正确！B——默认生成的 union 用 object? 存储所有 case。int 是值类型，赋值给 object? 时发生装箱——堆分配。如果你需要零装箱，要手写带 TryGetValue 和 tagged union 布局的自定义 union（§4.3）。', wrong: '❌ 答案是 B。编译器生成的 union 统一用 object? 存储——值类型 case 会装箱。A 是 F# DU 的行为但不是 C# 15 默认形式。如果要避免装箱，需要手写带 TryGetValue 的 tagged union（§4.3）。' },
+  q5: { correct: '✅ 正确！C——union 的根本优势就是穷举检查：集合封闭，编译器能验证，加新 case 自动亮警告。继承层次做不到这一点。A 错——模式匹配默认穿透到 .Value（透明解包）。B 错——手写 union 需要 [Union] attribute 但不强制 IUnion（虽推荐）。D 错——union 完全可以混用 class 和 struct case。', wrong: '❌ 答案是 C。Union 的根本优势：编译期穷举检查——集合封闭，加新 case 自动亮警告。A 错——默认穿透到 .Value。B 错——[Union] attribute 是必须的，IUnion 推荐但非强制。D 错——union 完全可以混用 class 和 struct case（如 union IntOrString(int, string)）。' },
+};
+function checkAll() { Quiz.checkAll(answers, explanations); }
+</script>
+</body>
+</html>

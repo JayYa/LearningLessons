@@ -82,10 +82,22 @@ Console.WriteLine(arr.StartsWith(<span class="num">1</span>));  <span class="cmt
 Console.WriteLine(arr.StartsWith(<span class="num">1</span>));  <span class="cmt">// True——arr 隐式转为 ReadOnlySpan&lt;int&gt;</span></code></pre>
 
 <div class="callout callout--warn">
-<strong>注意：</strong>这是一个<strong>重大更改</strong>。C# 14 中 Span 重载参与决议后，某些代码的<strong>重载决议结果可能改变</strong>——原本调用 <code>IEnumerable&lt;T&gt;</code> 重载的代码可能转而调用 <code>ReadOnlySpan&lt;T&gt;</code> 重载。这在表达式树（expression tree）场景中尤其需要注意。
+<strong>⚠ 重大更改：Span 重载优先级高于 IEnumerable！</strong>当 <code>T[]</code> 同时匹配 <code>ReadOnlySpan&lt;T&gt;</code> 和 <code>IEnumerable&lt;T&gt;</code> 两个重载时，C# 14 会选择<strong> Span 重载</strong>。这是因为 C# 重载决议的"更好转换"规则：<code>int[]</code> → <code>ReadOnlySpan&lt;int&gt;</code> 不涉及接口分派、不涉及装箱——编译器直接把数组内部指针打包成 Span 结构体——被视为比 <code>int[]</code> → <code>IEnumerable&lt;int&gt;</code>（接口引用转换）<strong>更直接</strong>的转换。具体类型（或 ref struct）优先于接口类型——这是一条通用规则。在表达式树（expression tree）场景中尤其需要注意：LINQ provider 可能生成不同的 SQL。
 </div>
 
-<h3>1.4 转换一览</h3>
+<h3>1.4 重载决议细节</h3>
+
+<pre><code><span class="kw">int</span>[] data = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];
+
+<span class="kw">void</span> Process(ReadOnlySpan&lt;<span class="kw">int</span>&gt; items) => Console.WriteLine(<span class="str">"快路径"</span>);
+<span class="kw">void</span> Process(IEnumerable&lt;<span class="kw">int</span>&gt; items) => Console.WriteLine(<span class="str">"慢路径"</span>);
+
+Process(data);  <span class="cmt">// C# 13: 走 IEnumerable 重载</span>
+                <span class="cmt">// C# 14: 走 Span 重载 ← 重载决议往高性能方向倾斜</span></code></pre>
+
+<p>这在 99% 的场景中正是你想要的——零分配、更快。你不需要改调用代码，升级编译器就行。这也是 C# 14 把 Span 提升为"一等公民"的真正力量：<strong>整个生态的重载决议都往高性能方向倾斜</strong>。</p>
+
+<h3>1.5 转换一览</h3>
 
 <table>
 <tr><th>从</th><th>到</th><th>C# 13</th><th>C# 14</th></tr>
@@ -172,7 +184,38 @@ a += b  →
 <tr><td><code>++</code>/<code>--</code></td><td><code>public void operator ++()</code></td><td>增减——<strong>无参数</strong></td></tr>
 </table>
 
-<p>全部支持 <code>checked</code> 上下文：<code>public void operator checked +=(T value)</code>。</p>
+<h3>2.5 checked 上下文——控制溢出行为</h3>
+
+<p>C# 中整数运算溢出有两种处理模式：</p>
+
+<pre><code><span class="kw">int</span> max = <span class="kw">int</span>.MaxValue;   <span class="cmt">// 2147483647</span>
+<span class="kw">int</span> bad = max + <span class="num">1</span>;         <span class="cmt">// -2147483648 —— unchecked 是默认，静默溢出</span>
+
+<span class="kw">checked</span>
+{
+    <span class="kw">int</span> crash = max + <span class="num">1</span>;  <span class="cmt">// 💥 OverflowException！</span>
+}</code></pre>
+
+<p><code>unchecked</code> 是<strong>默认</strong>（性能优先），<code>checked</code> 需显式开启——用 <code>checked</code> 块或 <code>/checked+</code> 编译选项。</p>
+
+<p>复合赋值支持两种版本：</p>
+
+<pre><code><span class="kw">public</span> <span class="kw">struct</span> IntVector
+{
+    <span class="kw">public</span> <span class="kw">int</span> X, Y;
+
+    <span class="cmt">// 无标记版本——跟随调用方的 checked/unchecked 上下文</span>
+    <span class="kw">public</span> <span class="kw">void</span> <span class="kw">operator</span> +=(IntVector r) { X += r.X; Y += r.Y; }
+
+    <span class="cmt">// 🆕 checked 版本——不管调用方什么上下文，溢出必须抛异常</span>
+    <span class="kw">public</span> <span class="kw">void</span> <span class="kw">operator</span> <span class="kw">checked</span> +=(IntVector r)
+    {
+        X = <span class="kw">checked</span>(X + r.X);
+        Y = <span class="kw">checked</span>(Y + r.Y);
+    }
+}</code></pre>
+
+<p>编译器在 <code>checked</code> 上下文中优先选 <code>checked</code> 版本，否则选无标记版本。这和 C# 11 引入的 <code>operator checked +</code> 是同一套机制。（注意课里的 <code>Vector3</code> 用 <code>decimal</code>——decimal <strong>始终是 checked 的</strong>，不需要显式声明。）</p>
 
 <!-- ========================== 3. PARTIAL ========================== -->
 
@@ -276,10 +319,48 @@ chmod +x script.cs
 </table>
 
 <div class="callout callout--info">
-<strong>边界：</strong><code>#!</code> 和 <code>#:</code> 指令会被 C# 编译器<strong>忽略</strong>——它们由 MSBuild 在项目文件生成阶段读取。在传统项目中使用这些指令只会产生<strong>警告</strong>，不会报错。单文件应用<strong>默认开启 Native AOT</strong>，首次运行会编译为原生二进制。
+<strong>边界：</strong><code>#!</code> 和 <code>#:</code> 指令会被 C# 编译器<strong>忽略</strong>——它们由 MSBuild 在项目文件生成阶段读取。在传统项目中使用这些指令只会产生<strong>警告</strong>，不会报错。<strong>Native AOT 仅针对 <code>dotnet publish</code></strong>——<code>dotnet run</code> 走普通 JIT 编译（保证迭代速度）。
 </div>
 
-<h3>4.4 定位——不是替代项目，是替代脚本</h3>
+<h3>4.4 dotnet run vs dotnet publish——产出完全不同</h3>
+
+<p>这是最容易误解的地方——两者的编译目标<strong>不是一回事</strong>：</p>
+
+<h4>dotnet run app.cs</h4>
+<p>走常规 JIT 构建→运行，<strong>不开启 Native AOT</strong>（否则改一行等几十秒）。SDK 在内存中生成虚拟 .csproj，恢复 NuGet 包，Roslyn 编译为 IL 程序集，输出到系统临时目录：</p>
+
+<pre><code><span class="cmt"># 构建输出位置（几乎不会手动去看）</span>
+&lt;temp&gt;/dotnet/runfile/app-&lt;hash&gt;/bin/Debug/net10.0/
+├── app.dll                  <span class="cmt">← IL 程序集</span>
+├── app.runtimeconfig.json
+├── app.deps.json            <span class="cmt">← 依赖图</span>
+├── Spectre.Console.dll      <span class="cmt">← NuGet 包（如有）</span>
+└── ...</code></pre>
+
+<h4>dotnet publish app.cs</h4>
+<p><strong>默认开启 Native AOT</strong>——产出单个自包含原生二进制，<strong>无需 .NET 运行时</strong>：</p>
+
+<pre><code><span class="cmt"># 发布输出——源码旁边的 artifacts/ 目录</span>
+artifacts/publish/app/
+└── app.exe    <span class="cmt">← 单文件原生二进制（Windows）</span>
+                <span class="cmt">   ≈8–15 MB，含你的代码 + NuGet 包 + 运行时子集</span>
+                <span class="cmt">   扔到任何一台没装 .NET 的机器上直接跑</span></code></pre>
+
+<table>
+<tr><th></th><th><code>dotnet run</code></th><th><code>dotnet publish</code></th></tr>
+<tr><td>编译目标</td><td>IL (.dll)</td><td>原生机器码 (.exe)</td></tr>
+<tr><td>输出位置</td><td>系统临时目录</td><td><code>artifacts/publish/</code>（源码旁）</td></tr>
+<tr><td>首次耗时</td><td>&lt; 1 秒</td><td>5–30 秒（AOT 编译慢）</td></tr>
+<tr><td>启动速度</td><td>~100ms（JIT）</td><td>&lt; 5ms（无 JIT）</td></tr>
+<tr><td>需要 .NET 运行时？</td><td>需要</td><td><strong>不需要</strong></td></tr>
+<tr><td>第三方库</td><td>独立 .dll 文件</td><td>全部编译进单一二进制</td></tr>
+</table>
+
+<div class="callout callout--info">
+<strong>要关闭 Native AOT：</strong>加 <code>#:property PublishAot=false</code>。如果只需要本地跑脚本，<code>dotnet run</code> 就是全部你需要的——Native AOT 是给分发用的。
+</div>
+
+<h3>4.5 定位——不是替代项目，是替代脚本</h3>
 
 <p>单文件应用不是让你把整个生产项目塞进一个文件。它的定位是：</p>
 

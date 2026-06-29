@@ -101,7 +101,7 @@
 </p>
 
 <div class="callout">
-  <strong>⚠️ 这与 Lesson 0005 的子代理盲区有关</strong>：这些 <code>agent-*.jsonl</code> 文件如果存在，它们包含子代理的 token usage。但目前 <code>extension.ts</code> 的 <code>findActiveSessions()</code> 没有过滤 <code>agent-</code> 前缀——它依赖 mtime 判断活跃性，可能误把 agent 会话文件当作普通会话处理。这是 debug.ts 比 extension.ts<strong>更正确</strong>的地方。
+  <strong>🔍 经 git blame 核实：<code>extension.ts</code> 第 440 行从初始提交起就有 <code>.filter(f => !f.startsWith('agent-'))</code>——两个文件的过滤规则<strong>从一开始就是一致的</strong>。</strong>本课程的初版曾误判此处不一致，已在后续讨论中修正。这个误判本身恰好说明了 debug.ts 的存在价值：把内部决策过程摊开，让代码行为变得<strong>可验证</strong>——如果没有 debug.ts 的源码，你只能靠"相信文档"而不是"亲自核实"。
 </div>
 
 <h3>3.2 详细的诊断输出</h3>
@@ -274,17 +274,113 @@ node out/debug.js Context-Bar        <span class="cmt"># 只分析名称包含 "
 <span class="cmt">              │       by 6b4f4a7a... │</span>
 <span class="cmt">              └───────────────────────┘</span></pre>
 
-<h2>7. 练习</h2>
+<h2 id="sec-common-vs-custom">7. 通用模式 vs 项目特定</h2>
+
+<p>
+  你可能在想：debug.ts 这种"独立调试管线"是大家都这么写，还是这个项目自己发明的？答案是：<strong>思想是通用的，具体的边界选择是项目特定的</strong>。
+</p>
+
+<h3>7.1 通用模式：可观测性管线（Observability Harness）</h3>
+
+<p>
+  把核心逻辑从受限运行环境中剥离，放到一个可以自由打印的独立脚本里——这个模式在软件工程的各个领域都有对应：
+</p>
+
+<table>
+  <tr><th>领域</th><th>叫什么</th><th>做什么</th></tr>
+  <tr><td>VS Code 扩展</td><td>Standalone debug script</td><td>绕过 Extension Host，在终端直接跑核心逻辑</td></tr>
+  <tr><td>嵌入式固件</td><td>Host-based test harness</td><td>在 PC 上模拟固件逻辑，不在微控制器上盲调</td></tr>
+  <tr><td>游戏引擎</td><td>Debug console / replay system</td><td>把游戏逻辑抽出来，脱离渲染引擎单独调试</td></tr>
+  <tr><td>编译器</td><td>Standalone pass runner</td><td>单独跑某一个编译 pass，不跑整个 pipeline</td></tr>
+  <tr><td>浏览器扩展</td><td>Background script debugger</td><td>把 Service Worker 逻辑抽到 Node.js 里调试</td></tr>
+</table>
+
+<p>共同点：<strong>运行环境太受限 → 把逻辑剥离/复制出来 → 在自由环境里看内部决策过程。</strong></p>
+
+<h3>7.2 项目特定的：代码复制 vs 提取共享模块的边界</h3>
+
+<p>
+  这个模式中，<em>可迁移</em>的是判断框架，<em>不可迁移</em>的是具体的边界选择——在哪里划 150 行的线，取决于你的具体上下文：
+</p>
+
+<table>
+  <tr><th>因素</th><th>倾向于<strong>复制</strong></th><th>倾向于<strong>提取共享模块</strong></th></tr>
+  <tr><td>共享逻辑规模</td><td>&lt; 200 行</td><td>&gt; 300 行</td></tr>
+  <tr><td>消费者数量</td><td>2 个</td><td>3+ 个</td></tr>
+  <tr><td>演化方向</td><td>两边可能独立演化（如 debug.ts 的 SessionInfo 故意更简单）</td><td>所有消费者需要完全相同的接口</td></tr>
+  <tr><td>测试覆盖</td><td>无测试——复制更安全（没安全网时不想引入新模块）</td><td>有自动化测试——提取后敢改</td></tr>
+  <tr><td>模块成本</td><td>复制 150 行 &lt; 引入 50 行胶水 + 一个模块边界</td><td>共享逻辑足够大，胶水代码的固定成本被摊薄</td></tr>
+</table>
+
+<p>
+  对于<strong>这个项目</strong>：~150 行共享逻辑、2 个消费者、没有自动化测试、两边已有细微的分叉（SessionInfo 字段数不同）——复制是当前的最优解。但如果你为它写好了单元测试（见下一节），这个方程就会翻转——提取共享模块变成更安全的选择。
+</p>
+
+<div class="callout">
+  <strong>💡 这个判断框架来自两个经典来源：</strong>Sandi Metz 的 <a href="https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction">"The Wrong Abstraction"</a> 解释了为什么"提取共享代码"有时是更差的选择；John Ousterhout 的 <em>A Philosophy of Software Design</em> 第 9 章讨论了"模块应该深还是浅"——和 150 行的阈值直接相关。
+</div>
+
+<h2 id="sec-debug-to-test">8. 从调试到测试——后续改进方向</h2>
+
+<p>
+  debug.ts 解决的是<strong>可观测性</strong>（"行为为什么是这样？"），但它完全缺失了另一维度：<strong>自动化验证</strong>（"行为还正确吗？"）。当前项目没有任何自动化测试——每次改完代码，正确性完全依赖人眼检查。以下是按投入产出比从高到低排列的改进路线：
+</p>
+
+<h3>8.1 Level 1：纯逻辑单元测试（投入产出比最高）</h3>
+
+<p>
+  这个项目的核心逻辑<strong>天然适合单元测试</strong>——它们不依赖 VS Code API：
+</p>
+
+<table>
+  <tr><th>函数</th><th>输入</th><th>输出</th><th>VS Code 依赖</th></tr>
+  <tr><td><code>getLatestTokenCount()</code></td><td><code>.jsonl</code> 文件路径</td><td><code>TokenUsage</code> 结构体</td><td>零——只用 <code>fs</code></td></tr>
+  <tr><td>Supersession 算法</td><td><code>SessionInfo[]</code></td><td>过滤后的 <code>SessionInfo[]</code></td><td>零</td></tr>
+  <tr><td><code>decodeProjectPath()</code></td><td><code>"C--dev-my-project"</code></td><td><code>{name, fullPath}</code></td><td>零</td></tr>
+  <tr><td><code>getContextLimitForModel()</code></td><td><code>"claude-sonnet-4-6-1m"</code></td><td><code>1000000</code></td><td>零</td></tr>
+</table>
+
+<p>
+  测试方法：手写一组小型 <code>.jsonl</code> fixture 文件，覆盖所有边界情况，然后用 Node 原生 <code>node:test</code>（零依赖）或 <a href="https://vitest.dev/">Vitest</a> 断言输出。这些测试跑在毫秒级——<strong>从"每次改代码手动跑 <code>node out/debug.js</code> 再人眼扫输出"变成"改完代码跑 <code>npm test</code>，3 秒出结果"。</strong>
+</p>
+
+<pre><span class="cmt">// 应该覆盖的 fixture 场景（举例）</span>
+<span class="cmt">//   clear-no-new-messages.jsonl   → wasCleared = true</span>
+<span class="cmt">//   clear-then-new-message.jsonl  → wasCleared = false</span>
+<span class="cmt">//   empty-file.jsonl              → totalTokens = 0（不崩溃）</span>
+<span class="cmt">//   no-usage-entry.jsonl          → 旧格式会话，totalTokens = 0</span>
+<span class="cmt">//   agent-subagent.jsonl          → 确认 agent- 过滤正确</span></pre>
+
+<h3>8.2 Level 2：提取 shared.ts（依赖 Level 1）</h3>
+
+<p>
+  有了单元测试做安全网，你可以安全地把复制的 ~150 行提取为 <code>shared.ts</code>——测试覆盖了正确性，<code>extension.ts</code> 和 <code>debug.ts</code> 消费同一个真相来源时不会互相拖累。这正是上一节 7.2 表格中"测试覆盖"那一行的含义：<strong>没有测试前，复制更安全；有了测试后，提取更合理。</strong>
+</p>
+
+<h3>8.3 Level 3：debug.ts 的 Snapshot 测试</h3>
+
+<p>
+  构造一个已知的 <code>.claude/projects/</code> 目录结构作为 fixture，重定向 <code>getClaudeProjectsDir()</code> 指向它，运行 <code>debugSessions()</code>，对输出做 snapshot diff——任何意外的输出变化都会在 CI 中被捕获。
+</p>
+
+<h3>8.4 Level 4：VS Code 集成测试（收益递减）</h3>
+
+<p>
+  VS Code 官方 <a href="https://github.com/microsoft/vscode-test"><code>@vscode/test-electron</code></a> 可以在真实 Extension Host 中运行测试。但对于这个项目，边际收益很低——核心逻辑是纯数据变换，单元测试已覆盖 90% 风险。集成测试每次都要启动一个 VS Code 实例，慢且 flaky。
+</p>
+
+<h2>9. 练习</h2>
 
 <ol>
   <li>运行 <code>npm run compile && node out/debug.js</code>，观察自己所有项目的诊断输出——是否有 <code>❌ HIDE</code> 的会话？原因是什么？</li>
   <li>传入一个项目名过滤参数（如 <code>node out/debug.js teach</code>），对比全量输出——确认过滤逻辑生效</li>
-  <li>打开 <code>debug.ts</code>，对比 <code>getLatestTokenCount()</code> 和 <code>extension.ts</code> 中的同名函数——找出<strong>两处</strong>代码差异并推测原因</li>
-  <li>在 <code>debug.ts</code> 第 171 行把 <code>!f.startsWith('agent-')</code> 改成 <code>f.startsWith('agent-')</code>（即反过来只看 agent 文件），编译运行——你的项目中有 <code>agent-*.jsonl</code> 文件吗？</li>
-  <li>体会"为什么不做共享模块"——如果要把 <code>getLatestTokenCount()</code> 提取到 <code>shared.ts</code>，需要改哪些文件？修改量和复制 90 行相比如何？</li>
+  <li>打开 <code>debug.ts</code>，对比 <code>getLatestTokenCount()</code> 和 <code>extension.ts</code> 中的同名函数——找出<strong>两处</strong>代码差异（提示：关注 <code>firstMessage</code> 的解析逻辑和 <code>SessionInfo</code> 的字段数量），推测为什么 debug.ts 可以有更简单的版本</li>
+  <li>在 <code>debug.ts</code> 第 171 行把 <code>!f.startsWith('agent-')</code> 改成 <code>f.startsWith('agent-')</code>（即反过来只看 agent 文件），编译运行——你的项目中有 <code>agent-*.jsonl</code> 文件吗？这个过滤在 <code>extension.ts</code> 第 440 行也同样存在——如果两处<strong>不一致</strong>，debug.ts 的诊断输出还能信任吗？</li>
+  <li>体会"为什么不做共享模块"——如果要把 <code>getLatestTokenCount()</code> 提取到 <code>shared.ts</code>，需要改哪些文件？修改量和复制 90 行相比如何？然后阅读 <a href="#sec-common-vs-custom">第 7 节</a> 的表格，确认你的判断和表格中的条件是否一致</li>
+  <li>（延伸）如果你要为这个项目添加自动化测试，你会先测哪个函数？为 <code>getLatestTokenCount()</code> 设计 3 个 fixture 场景——参考 <a href="#sec-debug-to-test">第 8 节</a> 的 pre 块中的示例</li>
 </ol>
 
-<h2>8. 知识检查</h2>
+<h2>10. 知识检查</h2>
 
 <div class="quiz" id="q1">
   <h3>问题 1</h3>
@@ -304,7 +400,7 @@ node out/debug.js Context-Bar        <span class="cmt"># 只分析名称包含 "
   <label><input type="radio" name="q2" value="b"> 这些是 Claude Code 的子代理会话文件——不是用户直接交互的会话，不应出现在状态栏</label>
   <label><input type="radio" name="q2" value="c"> 这些文件可能包含敏感数据——跳过以保护隐私</label>
   <label><input type="radio" name="q2" value="d"> 这是一个 bug——作者本想过滤其他文件但写错了</label>
-  <button class="quiz-btn" data-quiz="q2" data-answer="b" data-explain="agent-*.jsonl 是子代理（Agent/Workflow）的独立会话文件。它们和普通会话放在同一目录下，但不是用户对话——跳过是正确行为。值得注意的是 extension.ts 中没有这个过滤——可能是个遗漏。">检查答案</button>
+  <button class="quiz-btn" data-quiz="q2" data-answer="b" data-explain="agent-*.jsonl 是子代理（Agent/Workflow）的独立会话文件。它们和普通会话放在同一目录下，但不是用户对话——跳过是正确行为。debug.ts 和 extension.ts 都做了这个过滤，保持一致是 debug.ts 能准确镜像扩展行为的必要条件。">检查答案</button>
   <div class="feedback" id="q2-fb"></div>
 </div>
 
@@ -341,17 +437,20 @@ node out/debug.js Context-Bar        <span class="cmt"># 只分析名称包含 "
   <div class="feedback" id="q5-fb"></div>
 </div>
 
-<h2>9. 推荐深入阅读</h2>
+<h2>11. 推荐深入阅读</h2>
 <ul>
   <li><a href="https://nodejs.org/api/process.html#processargv">Node.js：process.argv</a> — 命令行参数的读取方式</li>
   <li><a href="https://www.typescriptlang.org/tsconfig/">TypeScript：tsconfig.json 参考</a> — <code>outDir</code>、<code>rootDir</code>、<code>module</code> 等关键编译选项</li>
   <li><a href="0004-find-active-sessions.html">Lesson 0004：findActiveSessions</a> — debug.ts 中复制的那 90 行核心逻辑</li>
-  <li><a href="0005-refresh-all-sessions.html">Lesson 0005：refreshAllSessions</a> — 子代理 token 盲区与本课 agent-* 过滤的关联</li>
+  <li><a href="0005-refresh-all-sessions.html">Lesson 0005：refreshAllSessions</a> — 子代理 token 盲区与 agent-* 过滤的关联</li>
   <li><a href="../reference/vscode-extension-api-basics.html">📋 参考：VS Code 扩展 API 基础</a></li>
+  <li><a href="https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction">Sandi Metz：The Wrong Abstraction</a> — 为什么"提取共享代码"有时是更差的选择（见 <a href="#sec-common-vs-custom">第 7 节</a> 的讨论）</li>
+  <li><a href="https://github.com/microsoft/vscode-test">@vscode/test-electron</a> — VS Code 官方集成测试框架（见 <a href="#sec-debug-to-test">第 8.4 节</a>）</li>
+  <li><a href="https://vitest.dev/">Vitest</a> — 零配置的单元测试框架，适合第 8.1 节的 fixture-based 测试</li>
 </ul>
 
 <div class="callout">
-  <strong>💡 提问提示：</strong>debug.ts 揭示了扩展架构的一个重要维度——<strong>可观测性</strong>。想把 debug.ts 的超时会话分析改成一个 VS Code 命令面板（Command Palette）里可直接调用的"诊断报告"吗？想把 agent-*.jsonl 过滤逻辑合入 extension.ts 让它更正确吗？或者想知道如何为扩展写单元测试？这些问题都可以继续追问。
+  <strong>💡 提问提示：</strong>debug.ts 揭示了扩展架构的一个重要维度——<strong>可观测性</strong>。想把 debug.ts 的超时会话分析改成一个 VS Code 命令面板（Command Palette）里可直接调用的"诊断报告"吗？想为这个项目添加自动化单元测试（见 <a href="#sec-debug-to-test">第 8 节</a>）吗？想看看提取 <code>shared.ts</code> 在实际操作中会遇到什么坑？这些问题都可以继续追问。
 </div>
 
 <div class="nav">
