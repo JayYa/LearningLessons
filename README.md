@@ -1,6 +1,6 @@
-# Learning Lessons
+# 📘 Learning Lessons
 
-这套课程沿四条独立轨道展开，各自深入一个专门领域：现代 .NET 技术纵深从 C# 8 一路推进到 C# 15，覆盖可空引用类型、异步流、records、主构造函数、集合表达式、ref struct 接口与泛型反变、field 关键字、扩展成员到 union 类型，构建从 Framework 4.8 到最新 .NET 的完整语言演进地图；历史轨道以《冰海战纪》为叙事锚点，从维京时代概览延伸到丹麦征服英格兰、北海帝国、维京东线、文兰探险、社会层级、基督教化、日常生活、战争方式到长船技术，还原漫画背后的真实北欧历史；工具轨道分两支——Claude Context Bar 聚焦 VS Code 扩展开发底层（从扩展解剖、激活生命周期、StatusBarItem UI 原语、findActiveSessions 数据引擎、refreshAllSessions 数据流、独立调试管线到单元测试体系），GitHub and SandCastle 深入 GitHub Actions 标签触发自动化（从第一个工作流到标签状态机、高级模式再到 AI 驱动的工作流）。四条轨道虽主题各异，却共享同一方法论——从表层 API 下沉到内部机制，从孤立知识点串成系统认知。
+一套涵盖现代 C# 语言演进、维京历史、VS Code 扩展开发与 GitHub Actions 自动化的技术/人文课程合集。四个课程分别深挖 .NET 从 C# 8 到 C# 15 的每一次语法升级、冰海战纪背后的真实维京时代、从零构建一个 VS Code 扩展的工程全流程，以及用 GitHub 标签触发 AI 工作流的自动化实践。虽主题各异，但共享同一方法论——从表层 API 下沉到内部机制，从孤立知识点串成系统认知。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
@@ -33,6 +33,7 @@
 | 23 | [Lesson 23: C# 14 — 中等特性合集](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/23-csharp14-mid-features.html) | 收尾 C# 14 中等特性合集：params 增强、部分属性等语言特性深度解析 |
 | 24 | [Lesson 24: C# 14 — 小特性合集](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/24-csharp14-small-features.html) | 速览 C# 14 各项小特性，完成 C# 14 语言演进全景收官 |
 | 25 | [Lesson 25: C# 15 — Union 类型](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/25-csharp15-union-types.html) | 探索 C# 15 的 union 类型语法，以类型安全方式表达多选一的数据结构 |
+| 26 | [Lesson 26: C# 15 — Closed Hierarchies（封闭继承层次）](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/26-csharp15-closed-hierarchies.html) | 讲解 C# 15 封闭继承层次，限制类型派生以确保 API 的完整性与可预测性 |
 
 **参考资料：**
 - [异步流速查 · Async Streams · C# 8](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/async-streams-cheatsheet.html) — IAsyncEnumerable 消费、取消与配置速查
@@ -62,6 +63,7 @@
 | 9 | [Lesson 0009 — 维京人的日常生活：长屋、食物、衣装、营养与体格](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0009-viking-daily-life.html) | 走进维京人的日常世界，了解长屋生活、饮食习俗与衣物装扮，还原战斧之外的真实维京 |
 | 10 | [Lesson 0010 — 维京人的战争方式：武器、盔甲与战术](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0010-viking-warfare.html) | 解析维京人的武器、盔甲与战术体系，还原北海战士在战场上的真实面貌与战斗智慧 |
 | 11 | [Lesson 0011 — 维京长船：设计、航海与海洋帝国](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0011-viking-longship.html) | 深入维京长船的设计原理、航海技术与建造工艺，揭示北欧海洋帝国赖以崛起的工程基础 |
+| 12 | [Lesson 0012 — 冰岛萨迦：口传、书写与历史的炼金术](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0012-icelandic-sagas.html) | 解读冰岛萨迦文学如何将口传记忆转化为书写文本，探讨其作为历史素材的可信度与局限 |
 
 **参考资料：**
 - [🗡️ 中国古代佩剑传统参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/chinese-sword-tradition.html) — 中国古代佩剑文化传统与维京武器的跨文化对照
@@ -85,11 +87,13 @@
 | 5 | [Lesson 0005 — refreshAllSessions：从数据到 UI](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0005-refresh-all-sessions.html) | 串联数据引擎与状态栏 UI，完成从轮询数据源到刷新显示的完整数据闭环 |
 | 6 | [Lesson 0006 — debug.ts：独立调试管线](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0006-debug-harness.html) | 构建扩展的独立调试环境，不依赖 VS Code 运行时可快速验证核心逻辑 |
 | 7 | [Lesson 0007 — 单元测试：从 fixture 设计到安全重构](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0007-unit-tests.html) | 构建扩展的单元测试体系，从 fixture 设计原则到安全重构策略，确保代码可维护性 |
+| 8 | [Lesson 0008 — CI 集成：用 GitHub Actions 自动运行测试](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0008-ci-integration.html) | 在 GitHub Actions 中配置跨平台测试矩阵与自动发布流程，实现 CI/CD 集成 |
 
 **参考资料：**
 - [参考：数据格式速查](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/data-formats.html) — Claude Context Bar 内部数据结构的序列化格式速查
 - [参考：术语表](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/glossary.html) — VS Code 扩展开发核心术语速查
 - [参考：npm 包命名规则](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/npm-package-naming-rules.html) — npm 包名称约束、作用域包与命名最佳实践
+- [参考：Node.js 测试框架对比](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/testing-frameworks.html) — Node.js 主流测试框架（Mocha、Jest、Vitest、Node Test Runner）对比分析
 - [参考：VS Code 扩展 API 基础](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/vscode-extension-api-basics.html) — 扩展清单、贡献点与核心 API 速查
 
 ## GitHub and SandCastle
@@ -100,6 +104,7 @@
 | 2 | [Lesson 0002 — 标签状态机](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0002-the-label-state-machine.html) | 将标签工作流抽象为状态机，掌握工作流编排的工程化思维 |
 | 3 | [Lesson 0003 — 高级模式：链式触发、预检、形状检测与 PRD 链式推进](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0003-advanced-patterns.html) | 探索链式触发、预检与形状检测等高级模式，解决真实场景中的复杂自动化需求 |
 | 4 | [Lesson 0004 — AI 分析 Issue：第一个 AI 驱动的工作流](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0004-ai-analyze-issue.html) | 将 AI 能力集成到 GitHub Actions 工作流中，实现 Issue 内容的智能分析与自动处理 |
+| 5 | [Lesson 0005 — 从 YAML 内联到 TypeScript 脚本：迈向 Sandcastle 架构](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0005-from-yaml-to-typescript.html) | 将 YAML 内联脚本重构为 TypeScript 模块，为 Sandcastle 可扩展架构奠定基础 |
 
 **参考资料：**
 - [Reference — Agent-Runner 契约速查表](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/reference/agent-runner-contract.html) — Agent-Runner 接口契约与集成规范速查

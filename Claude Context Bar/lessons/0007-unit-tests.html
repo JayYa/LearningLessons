@@ -59,6 +59,10 @@
 </table>
 
 <div class="callout">
+  <strong>🔮 前瞻：当测试需要 mock 时，<code>node:test</code> 就不够了。</strong>本课聚焦纯函数测试——不需要 mock。但当你未来需要测试 <code>refreshAllSessions()</code> 这种依赖 VS Code API 的函数时（需要 mock <code>vscode.window.createStatusBarItem()</code>），Vitest 的 <code>vi.mock()</code> 是更好的选择。详见 <a href="../reference/testing-frameworks.html">测试框架对比参考</a>。
+</div>
+
+<div class="callout">
   <strong>🎯 本课聚焦于第一行：<code>getLatestTokenCount()</code>。</strong>它是整个扩展中最复杂、最容易出错的函数——90 行双向扫描逻辑、6 种边界情况。测试了它，就覆盖了扩展 60% 的 bug 风险。其他纯函数（decodeProjectPath、formatTokens、getContextLimitForModel）的测试模式完全相同，练习中会涉及。
 </div>
 
@@ -151,7 +155,7 @@ finalUsage = {
 <h2>4. 编写测试：<code>node:test</code> + <code>node:assert</code></h2>
 
 <p>
-  Node.js 18+ 内置了测试框架 <code>node:test</code>，零依赖。以下是测试文件的主体结构：
+  Node.js 18+ 内置了测试框架 <code>node:test</code>，零依赖——这也是本课选它的原因：纯函数 + fixture 文件场景不需要 mock，零依赖就是最优解。其他场景下（需要 mock、快照、coverage），Vitest 是社区目前最推荐的选择（详见 <a href="../reference/testing-frameworks.html">测试框架对比参考</a>）。以下是测试文件的主体结构：
 </p>
 
 <pre><span class="cmt">// ===== src/get-latest-token-count.test.ts =====</span>
@@ -366,6 +370,7 @@ node --test out/get-latest-token-count.test.js   <span class="cmt"># 8 tests sti
   <li><a href="0006-debug-harness.html">Lesson 0006：debug.ts</a> — 本课的直接前置：可观测性 vs 可验证性</li>
   <li><a href="0004-find-active-sessions.html">Lesson 0004：findActiveSessions</a> — 本课测试的核心函数来源</li>
   <li><a href="https://martinfowler.com/bliki/TestCoverage.html">Martin Fowler：TestCoverage</a> — 测试覆盖率应该多高？Fowler 论证了"覆盖率不是目的，而是诊断工具"</li>
+  <li><a href="../reference/testing-frameworks.html">📖 测试框架对比参考</a> — <code>node:test</code> vs Jest vs Vitest vs Mocha 完整对比、选型建议、API 速查</li>
 </ul>
 
 <div class="callout">
@@ -374,6 +379,7 @@ node --test out/get-latest-token-count.test.js   <span class="cmt"># 8 tests sti
 
 <div class="nav">
   <a href="0006-debug-harness.html">← Lesson 0006：debug.ts</a>
+  <a href="0008-ci-integration.html">Lesson 0008：CI 集成 →</a>
   <a href="../reference/glossary.html">📖 术语表</a>
 </div>
 

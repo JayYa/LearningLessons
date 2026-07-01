@@ -110,16 +110,41 @@
 
 <h2>第一步：创建 Secret</h2>
 
-<p>Claude Code 在 CI 中运行需要一个认证凭证。先在你的仓库中设置：</p>
+<p>Claude Code 在 CI 中运行需要一个认证凭证——这个 token 来自 <strong>Anthropic</strong>（Claude 的开发商），而不是 GitHub。完整链路分两段：</p>
+
+<h3>1-A：获取 Claude Code OAuth Token</h3>
+
+<p>在你的本地终端执行：</p>
+
+<pre><code>claude login</code></pre>
+
+<p>这会弹出浏览器，跳转到 Anthropic 的 OAuth 授权页面。授权完成后，Claude Code 将 token 保存在本地。用以下命令查看这个 token：</p>
+
+<pre><code># macOS / Linux
+cat ~/.claude/credentials.json
+
+# Windows（PowerShell）
+Get-Content "$env:USERPROFILE\.claude\credentials.json"</code></pre>
+
+<p>复制输出中的 OAuth token 值。</p>
+
+<div class="callout">
+  <strong>📝 备选：</strong>也可以在 <a href="https://console.anthropic.com/" target="_blank">Anthropic Console</a> 生成 API key，但 OAuth token 更适合 Claude Code 在 CI 中的使用场景。
+</div>
+
+<h3>1-B：存入 GitHub Repository Secret</h3>
 
 <ol class="roadmap">
-  <li>打开 <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a> → 生成一个新的 Claude Code OAuth token（或使用已有的）</li>
   <li>进入你的仓库 → <strong>Settings</strong> → <strong>Secrets and variables</strong> → <strong>Actions</strong></li>
   <li>点击 <strong>New repository secret</strong></li>
   <li>Name: <code>CLAUDE_CODE_OAUTH_TOKEN</code></li>
-  <li>Value: 粘贴你的 token</li>
+  <li>Value: 粘贴刚才从 <code>~/.claude/credentials.json</code> 中复制的 token</li>
   <li>点击 <strong>Add secret</strong></li>
 </ol>
+
+<div class="callout warning">
+  <strong>⚠️ 常见误区：</strong><code>CLAUDE_CODE_OAUTH_TOKEN</code> 不是 GitHub Personal Access Token，不能在 <code>github.com/settings/tokens</code> 中生成。那是 GitHub 自己的 token 页面，和 Anthropic / Claude 无关。这里你只是把 Anthropic 颁发的 token"存进"GitHub 的保险箱（Secret），来源和存放是两回事。
+</div>
 
 <hr>
 
@@ -193,7 +218,7 @@ jobs:
           3. **潜在风险**：指出实现中需要注意的 1-3 个风险点
           4. **建议的下一步**：给出具体的行动建议
 
-          将分析结果写入文件 {{OUTPUT_DIR}}/analysis.md。
+          请直接输出分析结果，不要做其他操作。
           PROMPT
           )" --output-format text --allowedTools Read,Grep,Glob \
           > "$RUNNER_TEMP/analysis.md"
@@ -287,7 +312,7 @@ jobs:
     3. **潜在风险**：指出实现中需要注意的 1-3 个风险点
     4. **建议的下一步**：给出具体的行动建议
 
-    将分析结果写入文件 {{OUTPUT_DIR}}/analysis.md。
+    请直接输出分析结果，不要做其他操作。
     PROMPT
     )" --output-format text --allowedTools Read,Grep,Glob \
     &gt; "$RUNNER_TEMP/analysis.md"</code></pre>
@@ -481,7 +506,7 @@ function selectQuiz(el, quizId, isCorrect) {
 <div class="lesson-nav">
   <a href="0003-advanced-patterns.html">← 第 3 课：高级模式</a>
   <span>第 4 课</span>
-  <span></span>
+  <a href="0005-from-yaml-to-typescript.html">第 5 课：从 YAML 到 TypeScript →</a>
 </div>
 
 <hr>

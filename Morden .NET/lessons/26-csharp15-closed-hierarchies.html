@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 26: C# 15 — Closed Hierarchies（封闭继承层次）</title>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
+</head>
+<body>
+
+<h1>Lesson 26: C# 15 — Closed Hierarchies <span class="en">Closed Class Hierarchies</span></h1>
+<p class="subtitle">.NET 11 Preview · 继承树上的穷举检查 · Union 的自然搭档</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="25-csharp15-union-types.html">Lesson 25（Union 类型）</a>。本课是 C# 15 系列的第二课——当你需要继承关系，又想获得 Union 级别的穷举检查。<br>
+<strong>状态：</strong>.NET 11 Preview 5 <span class="badge badge--preview">Preview</span> 已合并。Preview 5 需手动声明 <code>ClosedAttribute</code>——GA 前 BCL 会内置。<br>
+<strong>阅读：</strong><a href="https://learn.microsoft.com/en-us/dotnet/csharp/whats-new/csharp-15">C# 15 新增功能</a> ·
+<a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/closed">closed 修饰符语言参考</a> ·
+<a href="https://github.com/dotnet/csharplang/issues/9499">设计提案 #9499</a>
+</div>
+
+<!-- ========================== 0. HOOK ========================== -->
+
+<h2>〇、Union 做不到的事 <span class="en">What Unions Can't Do</span></h2>
+
+<p>上节课我们学了 Union——"一个值恰好是几种无关类型之一"。但现实中有另一类场景：</p>
+
+<table>
+<tr><th>场景</th><th>类型关系</th><th>Union 合适吗？</th></tr>
+<tr><td>AST 节点</td><td>Literal / BinaryExpr / Variable——<strong>没有共同基类</strong>，各自独立</td><td>✅ 合适——这正是 Union 的甜区</td></tr>
+<tr><td>HTTP 响应</td><td>Success / Redirect / ClientError / ServerError——<strong>共享</strong> StatusCode、Headers</td><td>⚠️ 勉强——每种 response 都要重复 StatusCode 字段</td></tr>
+<tr><td>门禁状态</td><td>Closed / Open(percent) / Locked——<strong>概念上是同一事物的不同状态</strong></td><td>⚠️ 勉强——但 Open(percent) 和 Locked 在业务上"是一种 GateState"</td></tr>
+<tr><td>支付方式</td><td>CreditCard / WeChatPay / Alipay——<strong>共享</strong> ProcessPayment() 流程</td><td>❌ 不合适——每种支付方式有大量共享逻辑，继承层次更自然</td></tr>
+</table>
+
+<p><strong>核心张力：</strong>继承层次让你共享代码，但<strong>丢失了编译期穷举检查</strong>——新人加一个子类，分散在 47 个 switch 里都不会亮警告。Union 给你穷举检查，但<strong>丢失了继承的代码复用</strong>——没有基类字段、没有虚方法、没有 protected 成员。</p>
+
+<p>C# 15 的 <code>closed</code> 修饰符回答了这个问题：<strong>继承层次 + 编译期穷举 = 同时拥有两边的优势。</strong></p>
+
+<!-- ========================== 1. SYNTAX ========================== -->
+
+<h2>一、基本语法 <span class="en">Closed Class Declaration</span></h2>
+
+<h3>1.1 一行声明——和 Union 一样简洁</h3>
+
+<pre><code><span class="kw">public closed record class</span> GateState;          <span class="cmt">// ← 只加了 closed 一个词</span>
+<span class="kw">public record class</span> Closed : GateState;         <span class="cmt">// 门关着——没有额外数据</span>
+<span class="kw">public record class</span> Open(<span class="kw">float</span> Percent) : GateState;  <span class="cmt">// 门开着——带开度</span>
+<span class="kw">public record class</span> Locked(<span class="kw">string</span> Reason) : GateState; <span class="cmt">// 门锁了——带原因</span></code></pre>
+
+<p>三行派生类 + 基类前加一个 <code>closed</code>——和 Union 的"三行 case + 一行 union"几乎一样的声明量。</p>
+
+<h3>1.2 跨程序集受限——封闭的边界</h3>
+
+<pre><code><span class="cmt">// ──── Assembly A: 定义方 ────</span>
+<span class="kw">public closed record class</span> Shape;
+<span class="kw">public record class</span> Circle(<span class="kw">double</span> R) : Shape;
+<span class="kw">public record class</span> Rect(<span class="kw">double</span> W, <span class="kw">double</span> H) : Shape;
+
+<span class="cmt">// ──── Assembly B: 引用方 ────</span>
+<span class="kw">public record class</span> Triangle(<span class="kw">double</span> A, <span class="kw">double</span> B, <span class="kw">double</span> C) : Shape;
+<span class="cmt">// ❌ 编译错误 CS9214:</span>
+<span class="cmt">// "'Shape' is a closed class and cannot be derived from outside assembly 'A'"</span></code></pre>
+
+<p><code>closed</code> 的边界是<strong>程序集</strong>——不是命名空间、不是项目、不是文件。同一个 .dll 内可以随意派生；跨 .dll 不行。这给了库作者一个强保证：<strong>"我定义的类型，子类型只有我列出的这些——不会有外部代码偷偷加一个新的。"</strong></p>
+
+<div class="callout callout--info">
+<strong>和 <code>sealed</code> 的区别：</strong><code>sealed</code> 是"零个子类"——完全禁止派生。 <code>closed</code> 是"有限个子类，但都在本程序集内"——允许派生，但集合是封闭的。你可以把 <code>sealed</code> 理解为 <code>closed</code> 的特殊情况（子类数量 = 0）。
+</div>
+
+<h3>1.3 隐式 abstract——不需要显式写</h3>
+
+<p><code>closed class</code> 的设计假设是"基类本身不应该被直接实例化"——它只是派生类的占位符。因此编译器把 <code>closed</code> 视为<strong>隐式 abstract</strong>：</p>
+
+<pre><code><span class="kw">public closed record class</span> GateState;  <span class="cmt">// 隐式 abstract——不能 new</span>
+
+<span class="kw">var</span> state = <span class="kw">new</span> GateState();  <span class="cmt">// ❌ 编译错误——和 abstract class 一样</span>
+
+<span class="cmt">// 下面这些修饰符不能和 closed 同时出现：</span>
+<span class="cmt">// closed sealed class  → ❌ 矛盾：sealed 禁止派生，closed 允许有限派生</span>
+<span class="cmt">// closed static class  → ❌ static class 根本不能派生</span>
+<span class="cmt">// closed abstract class → ⚠️ 警告：closed 已经隐含 abstract，重复多余</span></code></pre>
+
+<!-- ========================== 2. EXHAUSTIVENESS ========================== -->
+
+<h2>二、穷举检查——和 Union 一模一样的体验 <span class="en">Exhaustive Pattern Matching</span></h2>
+
+<h3>2.1 不加 default——编译器说 OK</h3>
+
+<pre><code><span class="kw">string</span> Describe(GateState state) => state <span class="kw">switch</span>
+{
+    Closed => <span class="str">"门关着"</span>,
+    Open(<span class="kw">var</span> percent) => <span class="str">$"门开着 {percent}%"</span>,
+    Locked(<span class="kw">var</span> reason) => <span class="str">$"门锁了: {reason}"</span>,
+};  <span class="cmt">// ✅ 编译通过——三个直接派生类全部覆盖，不需要 _ 兜底</span></pre>
+
+<h3>2.2 加新子类 → 全面亮警告</h3>
+
+<pre><code><span class="cmt">// 六个月后，有人加了第四种状态：</span>
+<span class="kw">public record class</span> Maintenance(<span class="kw">string</span> Worker) : GateState;
+
+<span class="cmt">// 💡 编译器立即在所有 switch 上亮警告：</span>
+<span class="cmt">// "The switch expression does not handle 'Maintenance'"</span>
+<span class="cmt">// 同一个程序集内的所有 switch 全部收到——无一遗漏</span></code></pre>
+
+<div class="callout callout--good">
+<strong>这和 Union 的穷举检查是同一套机制。</strong>编译器在编译时枚举 <code>closed</code> 基类的所有直接派生类（只能在本程序集内），验证 switch 覆盖了每一个。加一个新派生类 → 所有 switch 亮 CS8509 警告。继承层次第一次有了和 Union 一样的编译期安全网。
+</div>
+
+<!-- ========================== 3. COMPARISON ========================== -->
+
+<h2>三、Union vs Closed Hierarchy——选型决策 <span class="en">Choosing Between Them</span></h2>
+
+<h3>3.1 并排对比</h3>
+
+<pre><code><span class="cmt">// 方案 A: Union——无关类型，恰好是其中之一</span>
+<span class="kw">public record class</span> Cat(<span class="kw">string</span> Name);
+<span class="kw">public record class</span> Dog(<span class="kw">string</span> Name);
+<span class="kw">public record class</span> Bird(<span class="kw">string</span> Name);
+<span class="kw">public union</span> Pet(Cat, Dog, Bird);
+
+<span class="cmt">// 方案 B: Closed Hierarchy——有共同基类，继承关系有意义</span>
+<span class="kw">public closed record class</span> Pet;
+<span class="kw">public record class</span> Cat(<span class="kw">string</span> Name) : Pet;
+<span class="kw">public record class</span> Dog(<span class="kw">string</span> Name) : Pet;
+<span class="kw">public record class</span> Bird(<span class="kw">string</span> Name) : Pet;</code></pre>
+
+<p><strong>两者都能穷举检查。</strong>区别在于其他维度：</p>
+
+<table>
+<tr><th>维度</th><th>Union</th><th>Closed Hierarchy</th></tr>
+<tr><td><strong>case 类型之间的关系</strong></td><td>无关——各自独立定义</td><td>有共同基类——"是一种"关系</td></tr>
+<tr><td><strong>共享字段/方法</strong></td><td>❌ 无——除非在 case 类型上手动重复</td><td>✅ 可以——基类定义字段、虚方法、protected 成员</td></tr>
+<tr><td><strong>基类行为</strong></td><td>无基类——union 是 struct</td><td>可以有虚方法、抽象方法、模板方法模式</td></tr>
+<tr><td><strong>外部扩展</strong></td><td>❌ 封闭——新 case 必须改 union 声明</td><td>❌ 封闭——新子类必须在同一程序集</td></tr>
+<tr><td><strong>多态调度</strong></td><td>通过 switch 模式匹配</td><td>switch 模式匹配 <strong>或</strong> 虚方法调用</td></tr>
+<tr><td><strong>存储开销</strong></td><td>struct + object?——值类型装箱</td><td>引用类型——天然在堆上，无额外装箱</td></tr>
+<tr><td><strong>适合场景</strong></td><td>互不相关的"tagged value"</td><td>有自然继承关系的类型族</td></tr>
+</table>
+
+<h3>3.2 一句话决策</h3>
+
+<div class="callout callout--good">
+<strong>如果子类型共享状态/行为 → Closed Hierarchy。如果子类型只是恰好属于同一集合 → Union。</strong>说人话：如果你的派生类需要从基类继承字段、方法、或 protected 成员，用 Closed Hierarchy。如果只是一组互不相关的 case 标签，用 Union。两者的穷举检查能力完全相同——选哪个取决于<strong>你需不需要继承</strong>。
+</div>
+
+<h3>3.3 一个边界案例——两种都行</h3>
+
+<p>有时候同一个领域模型两种都能表达。比如 <code>Pet</code>：</p>
+
+<pre><code><span class="cmt">// Union 版——Cat/Dog/Bird 各自独立，没有共享代码</span>
+<span class="kw">public union</span> Pet(Cat, Dog, Bird);
+<span class="cmt">// ✅ 更简单，如果三种宠物没有任何共同行为</span>
+
+<span class="cmt">// Closed Hierarchy 版——如果所有宠物都共享一些东西</span>
+<span class="kw">public closed record class</span> Pet
+{
+    <span class="kw">public required string</span> Name { <span class="kw">get</span>; <span class="kw">init</span>; }       <span class="cmt">// 所有宠物都有名字</span>
+    <span class="kw">public abstract string</span> Sound();                  <span class="cmt">// 每种宠物发出不同声音</span>
+}
+<span class="kw">public record class</span> Cat(<span class="kw">string</span> Name) : Pet { <span class="kw">public override string</span> Sound() => <span class="str">"喵"</span>; }
+<span class="kw">public record class</span> Dog(<span class="kw">string</span> Name) : Pet { <span class="kw">public override string</span> Sound() => <span class="str">"汪"</span>; }
+<span class="kw">public record class</span> Bird(<span class="kw">string</span> Name) : Pet { <span class="kw">public override string</span> Sound() => <span class="str">"啾"</span>; }
+<span class="cmt">// ✅ 当宠物需要共享字段（Name）或行为（Sound）时更合适</span></code></pre>
+
+<p><strong>两者都正确——选让你的代码更清晰的那个。</strong>如果今天不确定，从 Union 开始。迁移到 Closed Hierarchy 的成本很低（case 类型加上 <code>: BaseType</code>，union 声明改为 <code>closed class</code>）。</p>
+
+<!-- ========================== 4. NON-TRANSITIVE ========================== -->
+
+<h2>四、非传递性——封闭只到直接子类 <span class="en">Non-Transitive Closure</span></h2>
+
+<h3>4.1 封闭不向下传递</h3>
+
+<p>一个常见的误解：以为 <code>closed</code> 会沿着继承链向下传递。实际上<strong>不会</strong>——封闭性只约束<strong>直接派生</strong>：</p>
+
+<pre><code><span class="cmt">// ──── Assembly A ────</span>
+<span class="kw">public closed record class</span> Animal;              <span class="cmt">// closed: 直接子类必须在本程序集</span>
+<span class="kw">public record class</span> Mammal : Animal;             <span class="cmt">// 本程序集内派生 → ✅</span>
+<span class="kw">public record class</span> Bird : Animal;               <span class="cmt">// 本程序集内派生 → ✅</span>
+
+<span class="cmt">// ──── Assembly B: 引用方 ────</span>
+<span class="kw">public record class</span> Dog : Mammal;  <span class="cmt">// ✅ 合法！Mammal 不是 closed——可以从外部派生</span>
+<span class="kw">public record class</span> Cat : Mammal;  <span class="cmt">// ✅ 同样合法</span></code></pre>
+
+<p>这意味着 <code>Animal</code> 的 switch 穷举只需要覆盖 <code>Mammal</code> 和 <code>Bird</code>——不需要知道 <code>Dog</code> 和 <code>Cat</code> 的存在。穷举检查的粒度是<strong>直接派生类</strong>。</p>
+
+<h3>4.2 如果你想让子类也封闭</h3>
+
+<p>给 <code>Mammal</code> 也加 <code>closed</code>：</p>
+
+<pre><code><span class="kw">public closed record class</span> Mammal : Animal;     <span class="cmt">// closed: Mammal 的直接子类也必须在本程序集</span>
+<span class="kw">public record class</span> Dog : Mammal;
+<span class="kw">public record class</span> Cat : Mammal;
+<span class="kw">public record class</span> Human : Mammal;
+
+<span class="cmt">// 现在 Mammal 的 switch 也需要穷举 Dog、Cat、Human</span></code></pre>
+
+<div class="callout callout--info">
+<strong>设计理由：</strong>如果 <code>closed</code> 是传递的，继承层次中每一层都自动封闭——这会极大地限制外部程序集的扩展能力。非传递性给你精细控制：你可以在继承链的<strong>任意一层</strong>选择"到此为止"，而让其他层保持开放。
+</div>
+
+<!-- ========================== 5. COMPILER ========================== -->
+
+<h2>五、编译器生成了什么？ <span class="en">Compiler Lowering</span></h2>
+
+<h3>5.1 一个 attribute 搞定</h3>
+
+<p>和 Union 类似，<code>closed</code> 由编译器通过一个 attribute 实现。你写：</p>
+
+<pre><code><span class="kw">public closed record class</span> GateState;</code></pre>
+
+<p>编译器生成：</p>
+
+<pre><code>[System.Runtime.CompilerServices.Closed]    <span class="cmt">// ← 就是这个 attribute</span>
+<span class="kw">public abstract record class</span> GateState;   <span class="cmt">// closed → abstract</span></code></pre>
+
+<p>编译时，编译器看到 <code>[Closed]</code> attribute → 枚举当前程序集中所有直接派生类 → 用这个列表验证 switch 穷举。运行时<strong>没有</strong>额外开销——attribute 只是元数据标记，不影响 JIT 生成的代码。</p>
+
+<h3>5.2 Preview 5 的临时负担</h3>
+
+<p>.NET 11 Preview 5 的 BCL 还没内置 <code>ClosedAttribute</code>。使用 <code>closed</code> 的项目需要自己声明：</p>
+
+<pre><code><span class="kw">namespace</span> System.Runtime.CompilerServices;
+
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = <span class="kw">false</span>, Inherited = <span class="kw">false</span>)]
+<span class="kw">public sealed class</span> ClosedAttribute : Attribute { }</code></pre>
+
+<div class="callout callout--warn">
+<strong>和 Lesson 25 Union 的 Preview 5 情况类似：</strong><code>ClosedAttribute</code> 在 GA 前会移入 BCL。届时你不再需要手动声明。目前最简单的方式是项目里放一个 <code>ClosedAttribute.cs</code> 文件，GA 后删掉。
+</div>
+
+<h3>5.3 编译期行为 vs 运行时行为</h3>
+
+<table>
+<tr><th>层面</th><th>发生了什么</th></tr>
+<tr><td><strong>编译期</strong></td><td>编译器看到 <code>[Closed]</code> → 枚举同一程序集内所有直接派生类 → 在每次 switch 时用这个列表做穷举验证。新加派生类 → 重算列表 → 之前通过的 switch 可能现在失败。</td></tr>
+<tr><td><strong>运行时</strong></td><td>什么也不发生。<code>closed</code> 是纯粹的编译期概念——CLR 不感知它。和 <code>abstract class</code> 完全一样的运行时行为。</td></tr>
+<tr><td><strong>跨程序集</strong></td><td>引用方编译器看到 <code>[Closed]</code> → 拒绝在该程序集外定义直接派生类。这是编译期检查，不是运行时反射。</td></tr>
+</table>
+
+<!-- ========================== 6. REAL-WORLD ========================== -->
+
+<h2>六、三个实战场景 <span class="en">Real-World Examples</span></h2>
+
+<h3>6.1 HTTP 响应建模——共享 StatusCode 和 Headers</h3>
+
+<pre><code><span class="kw">public closed record class</span> HttpResponse
+{
+    <span class="kw">public required int</span> StatusCode { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="kw">public required</span> Dictionary&lt;<span class="kw">string</span>, <span class="kw">string</span>&gt; Headers { <span class="kw">get</span>; <span class="kw">init</span>; }
+
+    <span class="kw">public abstract string</span> Summarize();
+}
+
+<span class="kw">public record class</span> Success&lt;T&gt;(T Body) : HttpResponse
+{
+    <span class="kw">public override string</span> Summarize() => <span class="str">$"200 OK: {Body}"</span>;
+}
+<span class="kw">public record class</span> Redirect(<span class="kw">string</span> Location) : HttpResponse
+{
+    <span class="kw">public override string</span> Summarize() => <span class="str">$"302 → {Location}"</span>;
+}
+<span class="kw">public record class</span> ClientError(<span class="kw">string</span> Message) : HttpResponse
+{
+    <span class="kw">public override string</span> Summarize() => <span class="str">$"4xx: {Message}"</span>;
+}
+<span class="kw">public record class</span> ServerError(Exception Error) : HttpResponse
+{
+    <span class="kw">public override string</span> Summarize() => <span class="str">$"5xx: {Error.Message}"</span>;
+}
+
+<span class="cmt">// 使用——StatusCode 在基类定义一次，所有子类自动拥有</span>
+<span class="kw">var</span> response = <span class="kw">new</span> Success&lt;<span class="kw">string</span>&gt;(<span class="str">"ok"</span>) { StatusCode = <span class="num">200</span>, Headers = [] };
+Console.WriteLine(response.StatusCode);  <span class="cmt">// 200——基类属性，不是 Success 独有</span></code></pre>
+
+<p>这个场景如果用 Union，每种响应都要重复声明 StatusCode 和 Headers——样板地狱。Closed Hierarchy 让你在基类定义一次，所有派生类自动继承。</p>
+
+<h3>6.2 状态机——门禁系统</h3>
+
+<pre><code><span class="kw">public closed record class</span> GateState
+{
+    <span class="kw">public abstract bool</span> CanPass();
+    <span class="kw">public abstract</span> GateState Next();
+}
+
+<span class="kw">public record class</span> Closed : GateState
+{
+    <span class="kw">public override bool</span> CanPass() => <span class="kw">false</span>;
+    <span class="kw">public override</span> GateState Next() => <span class="kw">new</span> Open(<span class="num">100</span>);
+}
+<span class="kw">public record class</span> Open(<span class="kw">float</span> Percent) : GateState
+{
+    <span class="kw">public override bool</span> CanPass() => Percent > <span class="num">0</span>;
+    <span class="kw">public override</span> GateState Next() => <span class="kw">new</span> Closed();
+}
+<span class="kw">public record class</span> Locked(<span class="kw">string</span> Reason) : GateState
+{
+    <span class="kw">public override bool</span> CanPass() => <span class="kw">false</span>;
+    <span class="kw">public override</span> GateState Next() => <span class="kw">new</span> Closed();
+}
+
+<span class="cmt">// 处理——用 switch 穷举所有状态，也可以用虚方法多态</span>
+<span class="kw">string</span> Describe(GateState state) => state <span class="kw">switch</span>
+{
+    Closed => <span class="str">"关"</span>,
+    Open(<span class="kw">var</span> p) => <span class="str">$"开 {p}%"</span>,
+    Locked(<span class="kw">var</span> r) => <span class="str">$"锁: {r}"</span>,
+};
+
+<span class="cmt">// 或者直接用虚方法——两种方式都能获得编译期穷举检查</span>
+<span class="kw">if</span> (!state.CanPass()) Console.WriteLine(<span class="str">"禁止通行"</span>);</code></pre>
+
+<div class="callout callout--good">
+<strong>注意：</strong>虚方法调用本身没有穷举检查——如果你加了一个新状态但忘了 override <code>CanPass()</code>，编译器不会警告（基类的 abstract 会强制 override，但如果加了非 abstract 的虚方法就不一定了）。<strong>穷举检查来自 switch 表达式，不是虚方法。</strong>两种机制互补：虚方法给多态，switch 给穷举检查。
+</div>
+
+<h3>6.3 支付方式——策略模式 + 穷举检查</h3>
+
+<pre><code><span class="kw">public closed record class</span> PaymentMethod
+{
+    <span class="kw">public abstract</span> Task&lt;<span class="kw">bool</span>&gt; Process(<span class="kw">decimal</span> amount);
+    <span class="kw">public abstract string</span> DisplayName { <span class="kw">get</span>; }
+}
+
+<span class="kw">public record class</span> CreditCard(<span class="kw">string</span> Number, <span class="kw">string</span> Cvv) : PaymentMethod
+{
+    <span class="kw">public override string</span> DisplayName => <span class="str">$"信用卡 ****{Number[^4..]}"</span>;
+    <span class="kw">public override</span> Task&lt;<span class="kw">bool</span>&gt; Process(<span class="kw">decimal</span> amount) => <span class="cmt">/* 调用银行网关 */</span>;
+}
+<span class="kw">public record class</span> WeChatPay(<span class="kw">string</span> OpenId) : PaymentMethod
+{
+    <span class="kw">public override string</span> DisplayName => <span class="str">"微信支付"</span>;
+    <span class="kw">public override</span> Task&lt;<span class="kw">bool</span>&gt; Process(<span class="kw">decimal</span> amount) => <span class="cmt">/* 调用微信 API */</span>;
+}
+<span class="kw">public record class</span> Alipay(<span class="kw">string</span> UserId) : PaymentMethod
+{
+    <span class="kw">public override string</span> DisplayName => <span class="str">"支付宝"</span>;
+    <span class="kw">public override</span> Task&lt;<span class="kw">bool</span>&gt; Process(<span class="kw">decimal</span> amount) => <span class="cmt">/* 调用支付宝 API */</span>;
+}
+
+<span class="cmt">// ──── 使用端 ────</span>
+<span class="kw">async</span> Task Pay(PaymentMethod method, <span class="kw">decimal</span> amount)
+{
+    <span class="kw">var</span> typeLabel = method <span class="kw">switch</span>     <span class="cmt">// 穷举检查——所有支付方式被覆盖</span>
+    {
+        CreditCard => <span class="str">"信用卡"</span>,
+        WeChatPay => <span class="str">"微信"</span>,
+        Alipay => <span class="str">"支付宝"</span>,
+    };
+    Console.WriteLine(<span class="str">$"使用 {typeLabel} 支付 {amount} 元"</span>);
+    <span class="kw">await</span> method.Process(amount);       <span class="cmt">// 多态——每种支付方式有不同的处理逻辑</span>
+}
+
+<span class="cmt">// 新加支付方式——改两处：加子类 + 更新 switch（编译器帮你找到所有 switch）</span>
+<span class="cmt">// public record class UnionPay(string BankCode) : PaymentMethod { ... }</span>
+<span class="cmt">// → 所有 PaymentMethod 的 switch 自动亮警告</span></code></pre>
+
+<!-- ========================== 7. BOTTOM LINE ========================== -->
+
+<h2>七、一张大表——四种"封闭"方式的最终对比 <span class="en">The Complete Picture</span></h2>
+
+<table>
+<tr><th></th><th>sealed</th><th>closed</th><th>union</th><th>abstract</th></tr>
+<tr><td><strong>子类型数量</strong></td><td>0</td><td>有限个（同一程序集）</td><td>有限个（在 union 声明中列出）</td><td>无限（任意程序集）</td></tr>
+<tr><td><strong>穷举检查</strong></td><td>N/A（无子类型可检查）</td><td>✅ switch 覆盖所有直接子类</td><td>✅ switch 覆盖所有 case</td><td>❌ 编译器不知道有多少子类</td></tr>
+<tr><td><strong>子类型能共享基类代码</strong></td><td>N/A</td><td>✅ 继承字段、方法、protected</td><td>❌ 无基类概念</td><td>✅ 标准继承</td></tr>
+<tr><td><strong>外部程序集能加子类</strong></td><td>❌</td><td>❌（但外部可派生非 closed 的间接子类）</td><td>❌</td><td>✅</td></tr>
+<tr><td><strong>存储类型</strong></td><td>任意</td><td>引用类型</td><td>struct（默认）</td><td>引用类型</td></tr>
+<tr><td><strong>适合场景</strong></td><td>"这就是最终形态"</td><td>"子类到此为止——但我需要继承"</td><td>"这些类型互不相关——恰好属于同一集合"</td><td>"未来可能有新子类——来自任何地方"</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>记忆法：</strong><code>sealed</code> = 零子类 · <code>closed</code> = 有限子类+继承 · <code>union</code> = 有限子类+无继承 · <code>abstract</code> = 无限子类。从最封闭到最开放——选你在安全性和灵活性之间的平衡点。
+</div>
+
+<!-- ========================== 8. LIMITATIONS ========================== -->
+
+<h2>八、当前限制与未来 <span class="en">Current Limitations &amp; Roadmap</span></h2>
+
+<table>
+<tr><th>限制</th><th>详情</th><th>影响</th></tr>
+<tr><td><strong>需手动声明 ClosedAttribute</strong></td><td>Preview 5 BCL 尚未内置——需项目内手动声明</td><td>小——一个文件的事，GA 后删掉</td></tr>
+<tr><td><strong>只支持 class/record class</strong></td><td><code>closed struct</code> 不合法——struct 本身不能继承</td><td>无——struct 无法被继承，closed 无意义</td></tr>
+<tr><td><strong>穷举检查只在 switch 表达式</strong></td><td>和 Union 一致——普通 if/else 不触发穷举警告</td><td>风格约束——多用 switch 表达式</td></tr>
+<tr><td><strong>不支持泛型约束</strong></td><td>不能写 <code>where T : closed</code></td><td>无法写泛型工具方法——和 Union 的泛型约束缺失对称</td></tr>
+<tr><td><strong>不传递</strong></td><td>非 closed 的直接子类可被外部程序集派生</td><td>设计如此——见 §4.1。如果需要全链封闭，每层都加 closed</td></tr>
+</table>
+
+<!-- ========================== 9. QUIZ ========================== -->
+
+<h2>九、测验 <span class="en">Quiz</span></h2>
+
+<div class="quiz" id="q1">
+  <h3>1/5 · 基本概念</h3>
+  <p class="question"><code>closed class</code> 的"封闭"边界是什么？</p>
+  <label><input type="radio" name="q1" value="a">A. 同一个命名空间——不同命名空间不能派生</label>
+  <label><input type="radio" name="q1" value="b">B. 同一个程序集——跨 .dll 不能直接派生</label>
+  <label><input type="radio" name="q1" value="c">C. 同一个项目——不同 .csproj 不能派生</label>
+  <label><input type="radio" name="q1" value="d">D. 同一个文件——文件外不能派生</label>
+  <div class="feedback" id="f_q1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>2/5 · 和 sealed 的区别</h3>
+  <p class="question">以下关于 <code>closed</code> 和 <code>sealed</code> 的说法，哪个<strong>正确</strong>？</p>
+  <label><input type="radio" name="q2" value="a">A. closed 和 sealed 可以组合——表示"有限子类且不能再被继承"</label>
+  <label><input type="radio" name="q2" value="b">B. closed 是 sealed 的超集——sealed 等同于"有 0 个子类的 closed"</label>
+  <label><input type="radio" name="q2" value="c">C. closed 类本身可以被 new 实例化——和 sealed 一样</label>
+  <label><input type="radio" name="q2" value="d">D. sealed 类可以有穷举检查，和 closed 一样</label>
+  <div class="feedback" id="f_q2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>3/5 · 非传递性</h3>
+  <p class="question"><code>public closed record class Animal</code>，同程序集有 <code>Mammal : Animal</code>（Mammal 不加 closed）。外部程序集的 <code>Dog : Mammal</code> 合法吗？</p>
+  <label><input type="radio" name="q3" value="a">A. 不合法——Animal 是 closed，整个继承链都被封闭</label>
+  <label><input type="radio" name="q3" value="b">B. 合法——Mammal 不是 closed，外部可以派生它</label>
+  <label><input type="radio" name="q3" value="c">C. 不合法——Mammal 继承自 closed 的 Animal，自动也是 closed</label>
+  <label><input type="radio" name="q3" value="d">D. 合法——但 Dog 必须声明为 sealed</label>
+  <div class="feedback" id="f_q3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>4/5 · Union vs Closed Hierarchy</h3>
+  <p class="question">以下哪个场景<strong>最适合</strong>用 Closed Hierarchy 而非 Union？</p>
+  <label><input type="radio" name="q4" value="a">A. 方法返回值——要么是 int，要么是 string，要么是 Exception</label>
+  <label><input type="radio" name="q4" value="b">B. AST 节点——Literal / BinaryExpr / Variable，互不继承</label>
+  <label><input type="radio" name="q4" value="c">C. 支付方式——CreditCard / WeChatPay / Alipay，共享 ProcessPayment() 流程</label>
+  <label><input type="radio" name="q4" value="d">D. Option&lt;T&gt;——None 或 Some&lt;T&gt;，互不相关</label>
+  <div class="feedback" id="f_q4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>5/5 · 综合判断</h3>
+  <p class="question">关于 C# 15 Closed Hierarchy，以下哪个说法<strong>正确</strong>？</p>
+  <label><input type="radio" name="q5" value="a">A. closed class 的 switch 穷举检查必须覆盖所有间接派生类（孙子类）</label>
+  <label><input type="radio" name="q5" value="b">B. closed 是运行时强制——CLR 会阻止外部程序集通过反射创建派生类</label>
+  <label><input type="radio" name="q5" value="c">C. 在同一个程序集内新加一个直接派生类——所有 switch 自动亮编译警告</label>
+  <label><input type="radio" name="q5" value="d">D. closed 只能用于 record class——普通 class 不能用 closed</label>
+  <div class="feedback" id="f_q5"></div>
+
+  <button onclick="checkAll()">提交全部答案</button>
+  <div class="score" id="score" style="display:none"></div>
+</div>
+
+<!-- ========================== 10. SUMMARY ========================== -->
+
+<h2>十、总结 <span class="en">Summary</span></h2>
+
+<table>
+<tr><th>要点</th><th>一句话</th></tr>
+<tr><td><strong>声明</strong></td><td><code>public closed record class Base;</code> —— 基类前加一个词</td></tr>
+<tr><td><strong>封闭边界</strong></td><td>同一程序集内可派生——跨 .dll 不行</td></tr>
+<tr><td><strong>隐式 abstract</strong></td><td>不能 new——和 abstract class 一样；不能和 sealed/static 共存</td></tr>
+<tr><td><strong>穷举检查</strong></td><td>switch 覆盖所有直接派生类 = 通过——和 Union 同一套机制</td></tr>
+<tr><td><strong>非传递</strong></td><td>封闭只约束直接子类——非 closed 的间接子类可被外部派生</td></tr>
+<tr><td><strong>编译器降低</strong></td><td><code>[Closed]</code> attribute + 隐式 abstract——纯编译期，运行时零开销</td></tr>
+<tr><td><strong>vs Union</strong></td><td>需要继承 → Closed Hierarchy；不需要 → Union——穷举检查能力相同</td></tr>
+<tr><td><strong>vs sealed</strong></td><td>sealed = 0 子类；closed = 有限子类+继承+穷举检查</td></tr>
+<tr><td><strong>状态</strong></td><td>.NET 11 Preview 5 已合并——GA 预计 2026.11</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>最值得记住的一件事：</strong>继承层次第一次拥有了编译期穷举检查。你不再需要"要么放弃继承改用 Union，要么放弃穷举检查接受运行时异常"——<code>closed</code> 让你同时拥有两者。如果你的类型族有自然的继承关系（共享字段、虚方法、模板方法模式），Closed Hierarchy 是你的首选。
+</div>
+
+<!-- ========================== 11. NEXT ========================== -->
+
+<h2>十一、下一步 <span class="en">Next: Collection Expression Arguments</span></h2>
+
+<p>Closed Hierarchies 和 Union 构成了 C# 15 穷举检查的<strong>双支柱</strong>——一个管有继承的类型族，一个管无关联的 case 集合。下节课转向集合表达式的实用增强：</p>
+
+<div class="triad">
+  <div>
+    <h4>📦 Collection Expression Args</h4>
+    <p><code>[with(capacity: 100), .. items]</code> —— 向集合构造器传参，一行指定容量/比较器。</p>
+  </div>
+  <div>
+    <h4>🗂️ Dictionary Expressions</h4>
+    <p><code>["key": value]</code> 语法——字典字面量。仍在开发中，可能随后续 Preview 发布。</p>
+  </div>
+  <div>
+    <h4>🔒 Memory Safety</h4>
+    <p>声明指针不再需要 <code>unsafe</code> 块——解引用仍需 unsafe。多版本演进第一步。</p>
+  </div>
+</div>
+
+<p class="mild"><a href="25-csharp15-union-types.html">← L25: Union 类型</a> · <a href="27-csharp15-collection-expression-args.html">L27: Collection Expression Arguments →</a> · <a href="../../MISSION.md">🎯 回顾 Mission</a></p>
+
+<hr class="section-divider">
+
+<div class="lesson-footer">
+<p><strong>推荐阅读：</strong><a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/closed">closed 修饰符语言参考</a> · <a href="https://github.com/dotnet/csharplang/issues/9499">设计提案 #9499</a> · <a href="25-csharp15-union-types.html">L25: Union 类型（Closed Hierarchy 的姊妹特性）</a></p>
+<p><strong>课后实操：</strong>找项目中一个 abstract class + 多个派生类的继承层次。给基类加 <code>closed</code>——（1）确认所有派生类都在同一程序集内；（2）找一个 switch 语句处理这些派生类，删掉 default 分支——看编译器是否通过；（3）临时加一个派生类——看编译器是否亮警告。体验继承层次首次拥有的穷举检查。</p>
+<p><strong>有问题？</strong>Closed Hierarchy 和 Union 的选择是最常见的困惑点——任何细节不清楚的，你的教师（Claude）随时在。</p>
+</div>
+
+<script src="../assets/scripts/quiz.js"></script>
+<script>
+const answers = { q1: 'b', q2: 'b', q3: 'b', q4: 'c', q5: 'c' };
+const explanations = {
+  q1: { correct: '✅ 正确！B——closed 的边界是程序集（assembly）。同一个 .dll/.exe 内可以自由派生；跨程序集不行。命名空间、项目（.csproj）、文件都不是封闭边界——编译器只看程序集边界。', wrong: '❌ 答案是 B。closed 的边界是程序集（assembly），不是命名空间、项目或文件。同一个 .dll/.exe 内可自由派生；跨程序集不行。' },
+  q2: { correct: '✅ 正确！B——sealed 等同于"有 0 个子类的 closed"。A 错：closed 和 sealed 不能共存——矛盾。C 错：closed 是隐式 abstract——不能 new。D 错：sealed 没有子类可检查，谈不上穷举。', wrong: '❌ 答案是 B。sealed = 0 子类，closed = 有限子类——sealed 是 closed 的特例。A 错（不能共存），C 错（不能实例化），D 错（sealed 无子类可穷举）。' },
+  q3: { correct: '✅ 正确！B——非传递性：closed 只约束直接派生类。Mammal 不是 closed，外部程序集可以自由派生它。如果要阻止，给 Mammal 也加 closed。', wrong: '❌ 答案是 B。closed 不向下传递——Mammal 不是 closed，外部可以自由派生它。如果想让 Mammal 的子类也封闭，需要给 Mammal 也加 closed 修饰符。' },
+  q4: { correct: '✅ 正确！C——支付方式天然有继承关系：共享 ProcessPayment() 流程、DisplayName 属性等。A/B/D 都适合 Union——互不相关的类型恰好属于同一集合。', wrong: '❌ 答案是 C。A（返回值三选一）、B（AST 节点）、D（Option）都是互不相关的类型——Union 更合适。只有 C 有共享行为（ProcessPayment），需要继承——Closed Hierarchy 是正解。' },
+  q5: { correct: '✅ 正确！C——和 Union 一样，新加直接派生类 → 所有 switch 亮警告。A 错：穷举只检查直接派生类。B 错：closed 是纯编译期概念，CLR 不感知。D 错：普通 class 也能用 closed——不限于 record。', wrong: '❌ 答案是 C。A 错（只检查直接派生类），B 错（纯编译期，非运行时），D 错（普通 class 也能用 closed）。加新子类 → 全面亮警告——和 Union 完全一致。' },
+};
+function checkAll() { Quiz.checkAll(answers, explanations); }
+</script>
+</body>
+</html>

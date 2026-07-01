@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 0005 — 从 YAML 内联到 TypeScript 脚本：迈向 Sandcastle 架构</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .compare-table th:first-child, .compare-table td:first-child { width: 120px; }
+  .compare-table td:last-child { width: 340px; }
+  .file-tree { background: var(--code-bg); border-radius: 6px; padding: 0.8em 1.2em; font-family: var(--mono); font-size: 0.9em; line-height: 1.8; }
+  .file-tree .dir { color: var(--accent); }
+  .file-tree .file { color: var(--text); }
+  .file-tree .comment { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<h1>🧱 第五课：从 YAML 到 TypeScript — 迈向 Sandcastle 架构</h1>
+
+<p><strong>预计完成时间：35 分钟</strong> &nbsp;|&nbsp;
+难度：中级 &nbsp;|&nbsp;
+类型：重构 + 实践</p>
+
+<div class="callout">
+  <strong>📌 前置要求：</strong>本课是对 <a href="0004-ai-analyze-issue.html">第 4 课</a> 的架构升级。你需要已理解 Agent-Runner 契约，并成功部署过 <code>agent-analyze.yml</code>（简化版）。如果你还没部署过，先去第 4 课跑通再回来。
+</div>
+
+<hr>
+
+<h2>本课目标</h2>
+<p>将第 4 课的 <strong>内联 <code>claude -p</code></strong> 重构为 <strong>TypeScript 脚本编排</strong>模式：</p>
+<ul>
+  <li>Prompt 从 YAML heredoc 中迁出 → 独立 <code>.md</code> 文件</li>
+  <li>AI 调用逻辑从 YAML 中迁出 → TypeScript 脚本（<code>npx tsx</code> 执行）</li>
+  <li>YAML 回归本职：只做编排（触发、环境准备、结果发布、标签收尾）</li>
+</ul>
+
+<p>这是从"第 4 课简化版"迈向 <strong>sandcastle 真实架构</strong>的第一步。功能不变，结构升级。</p>
+
+<hr>
+
+<h2>为什么要重构？第 4 课的问题</h2>
+
+<p>第 4 课的 <code>agent-analyze.yml</code> 把所有逻辑塞进了一个 YAML 文件：</p>
+
+<pre><code># 第 4 课做法：prompt 内联在 YAML 的 heredoc 里
+- name: Run AI analysis
+  run: |
+    claude -p "$(cat &lt;&lt;'PROMPT'
+    你是一个软件架构分析助手...
+    1. **需求理解**：用 2-3 句话...
+    2. **技术方案**：提出 1-2 个...
+    ...
+    PROMPT
+    )" --output-format text --allowedTools Read,Grep,Glob \
+    &gt; "$RUNNER_TEMP/analysis.md"</code></pre>
+
+<p>能跑，但有三个问题会随着扩展而放大：</p>
+
+<table>
+  <tr><th>问题</th><th>为什么是问题</th></tr>
+  <tr>
+    <td><strong>Prompt 不可 review</strong></td>
+    <td>嵌在 YAML 的 shell heredoc 里，没有语法高亮，PR diff 一坨，改一个词要翻几十行 YAML。</td>
+  </tr>
+  <tr>
+    <td><strong>YAML 职责混乱</strong></td>
+    <td>YAML 既要管 GitHub 事件（标签、评论、token），又要管 AI 调用逻辑（prompt、参数、输出重定向）——两个不同层次的关注点搅在一起。</td>
+  </tr>
+  <tr>
+    <td><strong>不可复用、不可测试</strong></td>
+    <td>Analyze 的逻辑没法脱离 GitHub Actions 单独运行。想在本地调试 prompt？只能 push → 贴标签 → 等 CI 跑完。</td>
+  </tr>
+</table>
+
+<p>sandcastle 和 course-video-manager 的做法完全不同。它们引入了一层<strong>TypeScript 编排脚本</strong>，把关注点拆成三层：</p>
+
+<div class="file-tree">
+  <span class="dir">.sandcastle/</span>
+  <span class="dir">└── analyze/</span>
+  <span class="file">    ├── analyze.ts</span>      <span class="comment">← 编排脚本：读 prompt → 调 claude → 写输出 → 验证</span>
+  <span class="file">    └── prompt.md</span>        <span class="comment">← AI prompt：纯 Markdown，可 review，可复用</span>
+</div>
+
+<p>YAML 只剩下一行调用：</p>
+
+<pre><code>npx tsx .sandcastle/analyze/analyze.ts</code></pre>
+
+<hr>
+
+<h2>新概念：三层架构</h2>
+
+<p>sandcastle 不直接调用 <code>claude -p</code>，而是严格遵循三层分离：</p>
+
+<table class="compare-table">
+  <tr><th>层级</th><th>载体</th><th>职责</th><th>第 4 课（❌）</th><th>本课目标（✅）</th></tr>
+  <tr>
+    <td><strong>编排层</strong></td>
+    <td><code>.github/workflows/*.yml</code></td>
+    <td>响应事件、准备环境、消费输出、操作 GitHub</td>
+    <td>混入了 AI 调用</td>
+    <td>只做编排</td>
+  </tr>
+  <tr>
+    <td><strong>脚本层</strong></td>
+    <td><code>.sandcastle/*.ts</code></td>
+    <td>组装上下文、加载 prompt、调用 AI、验证输出</td>
+    <td>不存在</td>
+    <td>TypeScript 脚本</td>
+  </tr>
+  <tr>
+    <td><strong>知识层</strong></td>
+    <td><code>.sandcastle/*.md</code></td>
+    <td>AI prompt 内容——"AI 应该怎么做"</td>
+    <td>嵌在 YAML heredoc</td>
+    <td>独立 Markdown 文件</td>
+  </tr>
+</table>
+
+<div class="callout">
+  <strong>🔑 核心原则：</strong>YAML 不知道 prompt 长什么样；prompt 不知道自己在哪个工作流里运行；脚本是中间的胶水。任何一层可以独立修改、独立测试。
+</div>
+
+<hr>
+
+<h2>第一步：创建 prompt 文件</h2>
+
+<p>把第 4 课的 prompt 从 YAML heredoc 中提取出来，存为独立文件。</p>
+
+<p>在仓库根目录创建 <code>.sandcastle/analyze/prompt.md</code>：</p>
+
+<pre><code>你是一个软件架构分析助手。下面是一个 GitHub Issue 的 JSON 数据，
+存储在 {{CONTEXT_FILE}} 中。
+
+请阅读这个 Issue 并用中文做以下分析：
+
+1. **需求理解**：用 2-3 句话总结 Issue 想解决的问题
+2. **技术方案**：提出 1-2 个可行的技术实现思路
+3. **潜在风险**：指出实现中需要注意的 1-3 个风险点
+4. **建议的下一步**：给出具体的行动建议
+
+直接输出分析结果，不要做其他操作。</code></pre>
+
+<div class="callout">
+  <strong>📝 注意 <code>{{CONTEXT_FILE}}</code>：</strong>这是一个<strong>模板变量</strong>，由脚本层在运行时替换为实际文件路径。prompt 文件不硬编码路径——不同环境（本地 vs CI）路径不同。
+</div>
+
+<hr>
+
+<h2>第二步：写 TypeScript 编排脚本</h2>
+
+<p>创建 <code>.sandcastle/analyze/analyze.ts</code>。这个脚本做四件事：</p>
+
+<ol>
+  <li><strong>读取环境变量</strong>（YAML 传入的 Issue 编号、标题等）</li>
+  <li><strong>加载 prompt 文件</strong>，替换其中的模板变量</li>
+  <li><strong>调用 <code>claude</code> CLI</strong>，传入 prompt 和权限参数</li>
+  <li><strong>验证输出</strong>，写入结果文件</li>
+</ol>
+
+<pre><code>// .sandcastle/analyze/analyze.ts
+import { execSync } from "node:child_process";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+
+// ── 1. 读取 YAML 传来的环境变量 ──
+const issueNumber = process.env.ISSUE_NUMBER;
+const issueTitle = process.env.ISSUE_TITLE;
+const contextFile = process.env.CONTEXT_FILE;
+const outputDir = process.env.OUTPUT_DIR || process.env.RUNNER_TEMP || "/tmp";
+
+if (!issueNumber || !contextFile) {
+  console.error("❌ 缺少必要的环境变量: ISSUE_NUMBER 或 CONTEXT_FILE");
+  process.exit(1);
+}
+
+console.log(`🔍 正在分析 Issue #${issueNumber}: ${issueTitle}`);
+
+// ── 2. 加载 prompt 模板，替换变量 ──
+const promptTemplate = readFileSync(
+  join(import.meta.dirname, "prompt.md"),
+  "utf-8"
+);
+const prompt = promptTemplate.replace("{{CONTEXT_FILE}}", contextFile);
+
+// ── 3. 调用 claude CLI ──
+const outputFile = join(outputDir, "analysis.md");
+
+try {
+  const result = execSync("claude", {
+    input: prompt,
+    env: {
+      ...process.env,
+      CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN!,
+    },
+    timeout: 5 * 60 * 1000, // 5 分钟超时
+    maxBuffer: 1024 * 1024,  // 1MB 输出上限
+  });
+
+  // ── 4. 写入输出文件 ──
+  writeFileSync(outputFile, result.stdout, "utf-8");
+  console.log(`✅ 分析完成，输出已写入 ${outputFile}`);
+  console.log(`📊 分析长度: ${result.stdout.length} 字符`);
+
+} catch (error) {
+  // ── 失败处理：写 failure_reason.txt ──
+  const reason = error instanceof Error ? error.message : String(error);
+  writeFileSync(join(outputDir, "failure_reason.txt"), reason, "utf-8");
+  console.error(`❌ AI 分析失败: ${reason}`);
+  process.exit(1);
+}</code></pre>
+
+<h3>逐行解释</h3>
+
+<table>
+  <tr><th>代码</th><th>解释</th></tr>
+  <tr>
+    <td><code>import { execSync } from "node:child_process"</code></td>
+    <td>Node.js 内置模块。同步调用外部命令（这里就是 <code>claude</code> CLI）。同步 = 阻塞等待完成，简单直接，适合 CI 场景。</td>
+  </tr>
+  <tr>
+    <td><code>process.env.ISSUE_NUMBER</code></td>
+    <td>读取 YAML 通过 <code>env:</code> 传入的环境变量。这是 YAML 和脚本之间的"合同"。</td>
+  </tr>
+  <tr>
+    <td><code>import.meta.dirname</code></td>
+    <td>当前脚本所在目录的绝对路径。用它拼接 <code>prompt.md</code> 路径，确保无论从哪里执行都能找到 prompt 文件。</td>
+  </tr>
+  <tr>
+    <td><code>promptTemplate.replace("{{CONTEXT_FILE}}", ...)</code></td>
+    <td>运行时模板替换。比 YAML heredoc 灵活——不同环境替换不同值。</td>
+  </tr>
+  <tr>
+    <td><code>execSync("claude", { input: prompt, ... })</code></td>
+    <td>通过 stdin 传入 prompt（而不是命令行参数 <code>-p</code>）。这样 prompt 可以任意长，不受命令行长度限制。</td>
+  </tr>
+  <tr>
+    <td><code>timeout: 5 * 60 * 1000</code></td>
+    <td>5 分钟超时。如果 AI 卡住，脚本不会永远挂起。</td>
+  </tr>
+  <tr>
+    <td><code>maxBuffer: 1024 * 1024</code></td>
+    <td>stdout 最大 1MB。防止异常情况下内存溢出。</td>
+  </tr>
+  <tr>
+    <td><code>failure_reason.txt</code></td>
+    <td>Agent-Runner 契约规定的失败输出文件。工作流可以读取它来发布错误信息。</td>
+  </tr>
+</table>
+
+<div class="callout warning">
+  <strong>⚠️ 为什么用 <code>execSync</code> 而不是 <code>claude -p</code>？</strong><code>execSync</code> 通过 stdin 传入 prompt，不受命令行长度限制（Windows 下命令行最长 8191 字符）。而且 <code>execSync</code> 给代码带来了错误处理：
+  超时、非零退出码、stdout 过大——三种失败场景都能捕获并写入 <code>failure_reason.txt</code>。
+</div>
+
+<hr>
+
+<h2>第三步：简化 YAML</h2>
+
+<p>重构后的 <code>.github/workflows/agent-analyze.yml</code> 第 4 阶段大幅简化：</p>
+
+<pre><code># ── 阶段 3: 获取上下文（不变）──
+- name: Fetch issue body
+  run: |
+    gh issue view "$ISSUE_NUMBER" --json title,body,labels \
+      > "$RUNNER_TEMP/issue-context.json"
+
+# ── 阶段 4: AI 分析（重构后）──
+- name: Run AI analysis
+  id: analyze
+  env:
+    CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    CONTEXT_FILE: ${{ runner.temp }}/issue-context.json
+    OUTPUT_DIR: ${{ runner.temp }}
+  run: |
+    npx tsx .sandcastle/analyze/analyze.ts \
+      > "$RUNNER_TEMP/analysis.md"</code></pre>
+
+<p>原来 ~20 行的 heredoc + claude 参数 + 重定向，现在变成了 <strong>1 行 <code>npx tsx</code> 调用</strong>。prompt 内容、claude 参数、错误处理全部搬到了 TypeScript 脚本里。</p>
+
+<div class="callout">
+  <strong>📝 <code>npx tsx</code> 是什么？</strong><code>tsx</code> 是一个 npm 包，能直接执行 <code>.ts</code> 文件而无需先编译成 <code>.js</code>。它内部用 esbuild 做即时编译，速度极快。sandcastle 和 course-video-manager 都用它来跑 TypeScript 编排脚本。
+</div>
+
+<hr>
+
+<h2>第四步：补全依赖安装</h2>
+
+<p>现在工作流需要 <code>tsx</code> 来执行 TypeScript 脚本。在环境准备阶段加一行安装：</p>
+
+<pre><code># ── 阶段 2: 环境准备 ──
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 1
+
+- uses: actions/setup-node@v4
+  with:
+    node-version: 22
+
+- name: Install tsx
+  run: npm install -g tsx
+
+- name: Install Claude Code
+  run: npm install -g @anthropic-ai/claude-code</code></pre>
+
+<hr>
+
+<h2>完整对照：重构前 vs 重构后</h2>
+
+<table>
+  <tr><th>维度</th><th>第 4 课（重构前）</th><th>第 5 课（重构后）</th></tr>
+  <tr>
+    <td>Prompt 位置</td>
+    <td>YAML heredoc 内联</td>
+    <td><code>.sandcastle/analyze/prompt.md</code></td>
+  </tr>
+  <tr>
+    <td>调用方式</td>
+    <td><code>claude -p "$(cat &lt;&lt;'PROMPT'...)"</code></td>
+    <td><code>npx tsx .sandcastle/analyze/analyze.ts</code></td>
+  </tr>
+  <tr>
+    <td>Prompt 传入方式</td>
+    <td>命令行参数（<code>-p</code>）</td>
+    <td>stdin（<code>execSync</code> 的 <code>input</code> 选项）</td>
+  </tr>
+  <tr>
+    <td>错误处理</td>
+    <td><code>|| true</code>（shell 级别）</td>
+    <td>try/catch + <code>failure_reason.txt</code>（TS 级别）</td>
+  </tr>
+  <tr>
+    <td>本地可调试？</td>
+    <td>❌ 脱离 YAML 没法跑</td>
+    <td>✅ <code>npx tsx analyze.ts</code> 本地直接跑</td>
+  </tr>
+  <tr>
+    <td>Prompt 可 review？</td>
+    <td>❌ PR diff 里一坨</td>
+    <td>✅ 纯 Markdown，diff 清晰</td>
+  </tr>
+  <tr>
+    <td>向 sandcastle 对齐</td>
+    <td>0%</td>
+    <td>~60%（缺 <code>@ai-hero/sandcastle</code> 和 schema 验证）</td>
+  </tr>
+</table>
+
+<hr>
+
+<h2>✏️ 诊断性测验</h2>
+
+<div class="quiz" id="q1">
+  <p class="quiz-question">1. 重构后，AI 调用的实际执行发生在哪一层？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', false)">A. 编排层（YAML）</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', true)">B. 脚本层（TypeScript）</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', false)">C. 知识层（Markdown）</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q1', false)">D. GitHub Actions Runner 直接调用</div>
+  <p class="quiz-feedback" id="q1-feedback"></p>
+</div>
+
+<div class="quiz" id="q2">
+  <p class="quiz-question">2. 为什么 prompt 文件中用 <code>{{CONTEXT_FILE}}</code> 而不是硬编码路径？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', false)">A. 这是 YAML 语法，必须用双花括号</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', true)">B. 不同运行环境路径不同，由脚本在运行时替换</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', false)">C. Claude 要求所有文件路径用花括号包裹</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q2', false)">D. 这是 TypeScript 的模板字符串语法</div>
+  <p class="quiz-feedback" id="q2-feedback"></p>
+</div>
+
+<div class="quiz" id="q3">
+  <p class="quiz-question">3. <code>execSync</code> 通过 stdin 传入 prompt 的主要优势是什么？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', false)">A. 比命令行参数执行更快</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', false)">B. Claude 只能从 stdin 读取输入</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', true)">C. 不受命令行长度限制，且便于错误处理</div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q3', false)">D. stdin 会自动加密传输内容</div>
+  <p class="quiz-feedback" id="q3-feedback"></p>
+</div>
+
+<div class="quiz" id="q4">
+  <p class="quiz-question">4. 重构后，YAML 中 AI 分析阶段的核心调用变成了什么？</p>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q4', false)">A. <code>claude -p "..." --output-format text</code></div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q4', false)">B. <code>node analyze.js</code></div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q4', true)">C. <code>npx tsx .sandcastle/analyze/analyze.ts</code></div>
+  <div class="quiz-option" onclick="selectQuiz(this, 'q4', false)">D. <code>npm run analyze</code></div>
+  <p class="quiz-feedback" id="q4-feedback"></p>
+</div>
+
+<script>
+function selectQuiz(el, quizId, isCorrect) {
+  const quiz = document.getElementById(quizId);
+  quiz.querySelectorAll('.quiz-option').forEach(o => {
+    o.classList.remove('selected', 'correct', 'incorrect');
+    o.style.pointerEvents = 'none';
+  });
+  el.classList.add('selected');
+  el.classList.add(isCorrect ? 'correct' : 'incorrect');
+
+  const fb = document.getElementById(quizId + '-feedback');
+  fb.classList.add('show');
+  fb.style.color = isCorrect ? 'var(--success)' : 'var(--danger)';
+  fb.textContent = isCorrect ? '✅ 正确！' : '❌ 再想想。答案在课程内容中。';
+}
+</script>
+
+<hr>
+
+<h2>🎯 总结：你学到了什么</h2>
+
+<table>
+  <tr><th>新知识</th><th>具体内容</th></tr>
+  <tr>
+    <td>三层架构</td>
+    <td>编排层（YAML，管 GitHub）→ 脚本层（TS，管 AI 调用）→ 知识层（MD，管 prompt）。各层独立修改、独立测试。</td>
+  </tr>
+  <tr>
+    <td><code>npx tsx</code></td>
+    <td>直接执行 <code>.ts</code> 文件，无需编译。sandcastle / course-video-manager 的标准做法。</td>
+  </tr>
+  <tr>
+    <td><code>execSync</code> stdin 模式</td>
+    <td>通过 <code>{ input: prompt }</code> 传入 prompt，不受命令行长度限制。配合 <code>timeout</code> 和 <code>maxBuffer</code> 提供完整错误处理。</td>
+  </tr>
+  <tr>
+    <td>模板变量</td>
+    <td>prompt 文件用 <code>{{VARIABLE}}</code> 占位，脚本层在运行时替换。解耦 prompt 内容和运行环境。</td>
+  </tr>
+  <tr>
+    <td>失败输出规范</td>
+    <td>Agent-Runner 契约要求失败时输出 <code>failure_reason.txt</code>。用 try/catch 实现，比 shell <code>|| true</code> 更精确。</td>
+  </tr>
+</table>
+
+<div class="callout success">
+  <strong>📊 你现在的位置：</strong><br>
+  sandcastle 对齐度 ~60%。还缺两个关键组件：
+  <ol>
+    <li><strong>Schema 验证：</strong>AI 输出不只是"非空"，而是要符合预期格式（sandcastle 用 <code>runWithExtraction()</code> 实现）</li>
+    <li><strong><code>@ai-hero/sandcastle</code>：</strong>mattpocock 的 npm 包，提供 <code>sandcastle.claudeCode()</code> / <code>run()</code> / <code>runWithExtraction()</code>，封装了 session 管理、重试、schema 验证</li>
+  </ol>
+  <p>后面的课程会逐步补上这两块。</p>
+</div>
+
+<hr>
+
+<h2>推荐进一步阅读</h2>
+<ul>
+  <li><strong>主阅读材料：</strong><a href="https://github.com/mattpocock/sandcastle/tree/main/.sandcastle/agent-workflows">sandcastle/.sandcastle/agent-workflows/</a> — 看真实的 <code>review.ts</code>、<code>implement.ts</code> 是怎么写的。对比你刚写的 <code>analyze.ts</code>，找出相同模式和扩展之处</li>
+  <li><a href="https://www.npmjs.com/package/@ai-hero/sandcastle"><code>@ai-hero/sandcastle</code> npm 包</a> — 了解 <code>sandcastle.claudeCode()</code> 和 <code>runWithExtraction()</code> 的 API</li>
+  <li><a href="../reference/agent-runner-contract.html">参考文档：Agent-Runner 契约速查表</a> — 回顾输入/输出规范、可靠性模式、权限控制</li>
+  <li><a href="https://nodejs.org/api/child_process.html#child_processexecsynccommand-options">Node.js 文档：execSync</a> — <code>input</code>、<code>timeout</code>、<code>maxBuffer</code> 等选项的官方说明</li>
+</ul>
+
+<hr>
+
+<div class="lesson-nav">
+  <a href="0004-ai-analyze-issue.html">← 第 4 课：AI 分析 Issue</a>
+  <span>第 5 课</span>
+  <span></span>
+</div>
+
+<hr>
+
+<div class="callout">
+  <strong>💬 有问题？</strong>重构过程中遇到任何 TypeScript 或 <code>execSync</code> 的报错——直接向你的 AI 导师提问。本地调试时建议先设好环境变量，然后直接运行 <code>npx tsx .sandcastle/analyze/analyze.ts</code>，比 push → 等 CI 快一百倍。
+</div>
+
+</body>
+</html>

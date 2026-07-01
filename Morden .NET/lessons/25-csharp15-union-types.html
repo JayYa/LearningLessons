@@ -57,6 +57,10 @@
   </div>
 </div>
 
+<div class="callout callout--info">
+<strong>💡 插播：AST 节点是什么？</strong>AST = Abstract Syntax Tree（抽象语法树）。编译器解析源码后，在内存中构建一棵树——每个结点（"AST 节点"）代表一个语法构造。比如 <code>x = 3 + y * 2</code> 解析后是一棵由 Assignment、Variable、BinaryExpr、Literal 等不同节点类型组成的树。每个节点恰好是几种类型之一——这是 discriminated union 在编程语言领域最经典的应用场景。F#、Rust、Haskell、TypeScript 的编译器全这么写；C# 自己的 Roslyn 编译器也用继承层次建模 AST 节点。
+</div>
+
 <p><strong>核心矛盾：</strong>C# 缺少一个"这组类型到此为止——编译期帮我盯着"的语言构造。C# 15 回答了这个问题。</p>
 
 <!-- ========================== 1. SYNTAX ========================== -->
@@ -74,6 +78,10 @@
 <span class="kw">public union</span> Pet(Cat, Dog, Bird);</code></pre>
 
 <p><code>union</code> 是一个<strong>类型声明</strong>，不是泛型约束、不是特性——是全新的一等公民类型。三行 <code>record class</code> + 一行 <code>union</code>，你有了一个编译期保证穷举的类型。</p>
+
+<div class="callout callout--info">
+<strong>为什么写 <code>record class</code> 而不是 <code>record</code>？</strong><code>public record class Cat(string Name)</code> 和 <code>public record Cat(string Name)</code> 完全等价——前者是 C# 10 引入 <code>record struct</code> 后的显式写法。本课统一使用 <code>record class</code> 是<strong>意图明确的编码风格</strong>：在 union 语境中，case 是 class 还是 struct 直接影响存储策略（是否装箱，见 §3.3）。读者不需要猜。
+</div>
 
 <h3>1.2 隐式转换——每个 case 自动能赋值给 union</h3>
 
@@ -111,6 +119,10 @@ Describe(<span class="kw">new</span> Cat(<span class="str">"Luna"</span>));     
 <span class="kw">public union</span> Success&lt;T&gt;(T Value);
 <span class="kw">public union</span> Failure(Exception Error);
 <span class="kw">public union</span> Result&lt;T&gt;(Success&lt;T&gt;, Failure);</code></pre>
+
+<div class="callout callout--good">
+<strong>record、class、struct 可以混用吗？完全可以。</strong>Union 不关心 case 是 record class、普通 class、record struct 还是原始 struct——凡是能转为 <code>object</code> 的类型都能放进去。<code>public union IntOrString(int, string)</code> 就是 struct + class 混用的例子。唯一的代价是 struct case 默认会装箱（见 §3.3），热路径上需要手写 tagged union（见 §4.3）。
+</div>
 
 <h3>1.4 Union 可以有自己的成员</h3>
 
@@ -277,7 +289,51 @@ Console.WriteLine(pet.Value <span class="kw">is</span> <span class="kw">null</sp
 
 <span class="kw">var</span> u = <span class="kw">new</span> IntOrString(<span class="num">42</span>);  <span class="cmt">// int 42 被装箱为 object——堆分配！</span></code></pre>
 
-<p>如果你在乎性能，可以手写<strong>自定义 union</strong>（§4）来避免装箱。</p>
+<h4>装箱到底发生了什么？</h4>
+
+<p>一次装箱——运行时做三件事：</p>
+
+<pre><code><span class="cmt">// int x = 42;
+// object o = x;   ← 装箱</span>
+
+<span class="cmt">// 步骤 1: 堆分配——CLR 在 GC 堆上找空闲空间（~20-30 字节）  ~10-20 CPU 周期</span>
+<span class="cmt">// 步骤 2: 内存拷贝——把值从栈拷到堆（int 就 4 字节）         ~数 CPU 周期</span>
+<span class="cmt">// 步骤 3: GC 记账——这个 boxed 对象从此进入 GC 引用链         隐性成本——累积才显现</span></code></pre>
+
+<table>
+<tr><th></th><th>栈分配 (struct)</th><th>装箱 (box)</th></tr>
+<tr><td>指令数</td><td>~1 (ESP -= sizeof)</td><td>~50-100 (分配 + 拷贝 + 写入 MethodTable 指针)</td></tr>
+<tr><td>单次耗时</td><td>~1-2 CPU 周期</td><td>~50-100 CPU 周期</td></tr>
+<tr><td>GC 压力</td><td>零——栈自动回收</td><td>每个 boxed 对象进入 GC 引用链</td></tr>
+</table>
+
+<p><strong>单次装箱约是栈分配的 50-100 倍。</strong>但这不代表你的程序会慢 100 倍——关键在于调用频率。</p>
+
+<h4>什么时候你需要在乎？</h4>
+
+<table>
+<tr><th>调用频率</th><th>典型场景</th><th>建议</th></tr>
+<tr><td><strong>冷路径</strong>（&lt; 1000 次/秒）</td><td>HTTP 请求返回值、DB 查询结果包装、API 响应</td><td>✅ 默认形式完全够用——一次请求本身 ~10ms + DB ~50ms，多花 0.0001ms 装箱是<strong>噪声</strong></td></tr>
+<tr><td><strong>温路径</strong>（1000-10000 次/秒）</td><td>UI 数据绑定、消息分发、事件处理</td><td>⚠️ 通常仍可接受，但值得在 profiling 中看一眼 GC 占比</td></tr>
+<tr><td><strong>热路径</strong>（&gt; 100000 次/秒）</td><td>游戏循环、高频交易、实时数据流处理</td><td>🔴 必须手写 tagged union（§4.3）——100 万次装箱 ≈ 100ms 纯分配 + 触发 GC Gen0</td></tr>
+</table>
+
+<h4>真正的杀手不是单次分配，是 GC</h4>
+
+<p>100 万个 boxed int ≈ 约 20-24 MB 堆分配。在 ~100ms 内触发多次 Gen0、一次 Gen1；如果持续分配，Gen2 也跑不掉：</p>
+
+<table>
+<tr><th>GC 代</th><th>触发条件</th><th>暂停时间</th><th>用户感知</th></tr>
+<tr><td>Gen0</td><td>分配达到 ~2MB 阈值</td><td>0.1-2ms</td><td>无感知</td></tr>
+<tr><td>Gen1</td><td>Gen0 幸存对象累积</td><td>1-10ms</td><td>可能感知</td></tr>
+<tr><td>Gen2</td><td>Gen1 幸存 → Gen2 满</td><td><strong>10-100ms+</strong></td><td><strong>明显卡顿</strong></td></tr>
+</table>
+
+<p>Gen2 暂停超过 10ms 是人眼可感知的"卡顿"——这才是装箱在热路径上的真正代价。</p>
+
+<div class="callout callout--good">
+<strong>一句话决策：90% 的场景直接写 <code>public union X(int, string)</code>，别想太多。</strong>你什么时候担心过 <code>List&lt;int&gt;</code> 装箱？<code>List&lt;int&gt;</code> 是泛型所以不装箱——但日常业务里 <code>object</code> 转 <code>int</code>（拆箱）遍地都是，也没见谁因此重构系统。装箱在非热路径上是无害噪声。只有当 profiling 显示你的方法每秒构造<strong>数万次以上</strong>带值类型 case 的 union <strong>且</strong> GC 占比显著时，再去翻 §4.3 手写 tagged union。<strong>先写对，再写快——这是工程纪律，不是免责声明。</strong>
+</div>
 
 <div class="callout callout--info">
 <strong>这一点和 F# discriminated union 不同。</strong>F# DU 是 tagged union——编译器为每个 case 分配 tag + 字段的联合内存，值类型不装箱。C# 15 的默认形式选择了简单（统一 object? 存储）而非极致性能。未来版本可能会优化默认形式的存储策略。
