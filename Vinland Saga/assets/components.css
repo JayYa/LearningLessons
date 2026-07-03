@@ -1,0 +1,101 @@
+/* ============================================================
+   assets/components.css — 可选共享组件
+   Vinland Saga 教学 workspace
+
+   依赖：base.css（:root 变量）
+   加载方式：
+     <link rel="stylesheet" href="../assets/components.css">
+
+   包含三个可选组件：
+     §1 — Quote block（引言/语录块）
+     §2 — Callout（提示/标注框，四色变体 + 兼容旧 .sea-callout）
+     §3 — Evidence tiers（证据/可靠性三层分级系统）
+   ============================================================ */
+
+/* ==============================
+   §1 — Quote Block（引言/语录块）
+   ============================== */
+.quote-block {
+  border-left: 4px solid var(--accent);
+  margin: 0.8rem 0;
+  padding: 0.5rem 1rem;
+  background: var(--highlight);
+  border-radius: 0 4px 4px 0;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.quote-block .attrib {
+  display: block;
+  text-align: right;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: normal;
+  margin-top: 0.3rem;
+}
+
+/* ==============================
+   §2 — Callout（提示/标注框）
+   ============================== */
+.callout {
+  --callout-bg: #eaf2f8;
+  --callout-border: #1a5276;
+
+  border-left: 4px solid var(--callout-border);
+  padding: 0.6rem 1rem;
+  margin: 1rem 0;
+  background: var(--callout-bg);
+  border-radius: 0 4px 4px 0;
+  font-size: 0.9rem;
+}
+
+.callout-warn {
+  --callout-bg: #fff8e1;
+  --callout-border: #f9a825;
+}
+
+.callout-good {
+  --callout-bg: #e8f5e9;
+  --callout-border: #2e7d32;
+}
+
+.callout-bad {
+  --callout-bg: #fbe9e7;
+  --callout-border: #c62828;
+}
+
+/* 兼容旧版类名（lesson 0011 等使用）—— 功能等同于 .callout */
+.sea-callout {
+  border-left: 4px solid #1a5276;
+  padding: 0.6rem 1rem;
+  margin: 1rem 0;
+  background: #eaf2f8;
+  border-radius: 0 4px 4px 0;
+  font-size: 0.9rem;
+}
+
+/* ==============================
+   §3 — Evidence Tiers（证据三层分级）
+   ============================== */
+.evidence-tier {
+  padding: 0.5rem 0.8rem;
+  margin: 0.3rem 0;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  border: 1px solid var(--border);
+}
+
+.evidence-strong {
+  background: #e8f5e9;
+  border-left: 4px solid #2e7d32;
+}
+
+.evidence-moderate {
+  background: #fff8e1;
+  border-left: 4px solid #f9a825;
+}
+
+.evidence-weak {
+  background: #fbe9e7;
+  border-left: 4px solid #c62828;
+}

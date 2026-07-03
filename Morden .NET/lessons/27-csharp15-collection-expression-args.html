@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 27: C# 15 — 集合表达式参数</title>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
+</head>
+<body>
+
+<h1>Lesson 27: C# 15 — 集合表达式参数 <span class="en">Collection Expression Arguments</span></h1>
+<p class="subtitle">.NET 11 Preview · with(...) 向集合构造器传参 · 一行指定容量/比较器</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="26-csharp15-closed-hierarchies.html">Lesson 26（Closed Hierarchies）</a>；熟悉 <a href="15-csharp12-collection-expressions.html">Lesson 15（C# 12 集合表达式）</a>的基础语法。<br>
+<strong>状态：</strong>.NET 11 Preview 5 <span class="badge badge--preview">Preview</span> 已合并。<br>
+<strong>阅读：</strong><a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/collection-expressions#collection-expression-arguments">集合表达式参数语言参考</a> ·
+<a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/proposals/collection-expression-arguments">功能规范</a> ·
+<a href="https://github.com/dotnet/csharplang/discussions/8886">设计讨论 #8886</a>
+</div>
+
+<!-- ========================== 0. HOOK ========================== -->
+
+<h2>〇、「[] 很好，但我还想传个参数」 <span class="en">The Missing Piece</span></h2>
+
+<p>C# 12 的集合表达式 <code>[1, 2, 3]</code> 统一了四种集合创建语法——一个方括号打天下。但它有一个盲区：</p>
+
+<table>
+<tr><th>场景</th><th>C# 12 能做吗？</th><th>你被迫回退到……</th></tr>
+<tr><td>创建 List 并预分配容量</td><td>❌ <code>[with(capacity: 100)]</code> 不存在</td><td><code>new List&lt;int&gt;(100) { 1, 2, 3 }</code>——告别方括号</td></tr>
+<tr><td>创建忽略大小写的 HashSet</td><td>❌ 方括号内传不了 comparer</td><td><code>new HashSet&lt;string&gt;(StringComparer.OrdinalIgnoreCase) { "a", "b" }</code></td></tr>
+<tr><td>创建自定义 comparer 的字典</td><td>❌ 无解</td><td>不用集合表达式，回到构造函数 + Add</td></tr>
+</table>
+
+<p><strong>核心张力：</strong>集合表达式让创建集合变得简洁——但一旦你需要指定容量、比较器、或任何构造函数参数，你就被踢出方括号世界，回到 <code>new T() { }</code> 的旧语法。C# 15 的 <code>with(...)</code> 元素填上了这个缺口。</p>
+
+<!-- ========================== 1. SYNTAX ========================== -->
+
+<h2>一、基本语法——方括号的第一个元素 <span class="en">with(...) as First Element</span></h2>
+
+<h3>1.1 看代码——一眼懂</h3>
+
+<pre><code><span class="cmt">// ──── C# 12：创建 List，想预分配容量？对不起，方括号做不到 ────</span>
+List&lt;<span class="kw">string</span>&gt; old = <span class="kw">new</span> List&lt;<span class="kw">string</span>&gt;(<span class="num">100</span>) { <span class="str">"a"</span>, <span class="str">"b"</span>, <span class="str">"c"</span> };  <span class="cmt">// new + 花括号——旧时代语法</span>
+
+<span class="cmt">// ──── C# 15：with(capacity: ...) 作为方括号的第一个元素 ────</span>
+List&lt;<span class="kw">string</span>&gt; names = [with(capacity: <span class="num">100</span>), <span class="str">"a"</span>, <span class="str">"b"</span>, <span class="str">"c"</span>];
+<span class="cmt">// ↑ with(...) 必须是第一个元素——语义上先构造、再填充</span>
+
+<span class="cmt">// ──── HashSet 指定比较器——在此之前做不到 ────</span>
+HashSet&lt;<span class="kw">string</span>&gt; set = [with(StringComparer.OrdinalIgnoreCase), <span class="str">"Hello"</span>, <span class="str">"HELLO"</span>, <span class="str">"hello"</span>];
+<span class="cmt">// set.Count == 1——OrdinalIgnoreCase 下三个字符串相等</span>
+
+<span class="cmt">// ──── 结合 spread——容量预分配 + 批量复制 ────</span>
+<span class="kw">string</span>[] source = [<span class="str">"one"</span>, <span class="str">"two"</span>, <span class="str">"three"</span>];
+List&lt;<span class="kw">string</span>&gt; result = [with(capacity: source.Length * <span class="num">2</span>), .. source];
+<span class="cmt">// 先分配 source.Length*2 的容量，再 spread 复制——一步到位</span></code></pre>
+
+<div class="callout callout--info">
+<strong>位置规则：</strong><code>with(...)</code> 必须是集合表达式的<strong>第一个元素</strong>。写 <code>[1, 2, with(capacity: 3)]</code> 会编译错误。这对应集合的构造语义：先建壳、再装东西。位置规则也让读者一眼看到关键配置（如比较器），不用翻到表达式末尾。
+</div>
+
+<h3>1.2 只改了一个词——和 C# 12 的兼容性</h3>
+
+<pre><code><span class="cmt">// with(...) 出现前，这些全部合法：</span>
+<span class="kw">int</span>[] a = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];         <span class="cmt">// 数组——with() 不适用，不支持</span>
+Span&lt;<span class="kw">int</span>&gt; b = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];      <span class="cmt">// Span——with() 不适用，不支持</span>
+List&lt;<span class="kw">int</span>&gt; c = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];    <span class="cmt">// List——现在可以加 with()，也可以不加</span>
+
+<span class="cmt">// 如果有一个叫 with 的方法：</span>
+<span class="kw">object</span> with(<span class="kw">int</span> x, <span class="kw">int</span> y) => ...;
+<span class="kw">object</span>[] d = [with(<span class="num">1</span>, <span class="num">2</span>), <span class="num">3</span>];  <span class="cmt">// C# 14: 调用 with(1,2)，数组含两个元素</span>
+                                    <span class="cmt">// C# 15: 编译错误——object[] 不支持 with()</span></code></pre>
+
+<p>C# 15 中，只要 token 序列以 <code>with(</code> 开头，编译器就把它解析为 <code>with_element</code>。如果目标类型不支持参数（数组、Span），即使空 <code>with()</code> 也会报错。这和 C# 14 是 breaking change——仅在编译时指定 C# 15 语言版本时生效。</p>
+
+<!-- ========================== 2. THREE PATHWAYS ========================== -->
+
+<h2>二、三条通路——编译器如何分发 with() 的参数 <span class="en">Three Construction Pathways</span></h2>
+
+<p><code>with(...)</code> 的参数去哪了？取决于目标类型：</p>
+
+<table>
+<tr><th>目标类型</th><th>参数去往……</th><th>示例</th></tr>
+<tr>
+  <td><strong>① 普通 class/struct</strong><br>（有构造函数）</td>
+  <td>构造函数重载决议——和 <code>new T(args)</code> 一样</td>
+  <td><code>List&lt;T&gt;(int capacity)</code><br><code>HashSet&lt;T&gt;(IEqualityComparer&lt;T&gt;)</code></td>
+</tr>
+<tr>
+  <td><strong>② [CollectionBuilder] 类型</strong><br>（有工厂方法）</td>
+  <td>Create 方法的非 span 参数——<br>span 参数始终是最后一个，接收元素</td>
+  <td><code>ImmutableArray.Create&lt;T&gt;(ReadOnlySpan&lt;T&gt;)</code><br>或自定义 <code>MyBuilder.Create(comparer, elements)</code></td>
+</tr>
+<tr>
+  <td><strong>③ 接口类型</strong><br>（IList、IDictionary 等）</td>
+  <td>编译器预设的 curated 构造函数签名——<br>不支持任意参数</td>
+  <td><code>IList&lt;int&gt;</code> → <code>new List&lt;int&gt;(capacity)</code><br><code>IDictionary&lt;K,V&gt;</code> → <code>new Dictionary&lt;K,V&gt;(comparer)</code></td>
+</tr>
+</table>
+
+<h3>2.1 通路①：构造函数——最常用</h3>
+
+<pre><code><span class="cmt">// List&lt;T&gt; 有三个构造函数。编译器根据 with() 参数做重载决议：</span>
+List&lt;<span class="kw">int</span>&gt; l;
+
+l = [with(capacity: <span class="num">3</span>), <span class="num">1</span>, <span class="num">2</span>];   <span class="cmt">// → new List&lt;int&gt;(capacity: 3)</span>
+l = [with([<span class="num">1</span>, <span class="num">2</span>]), <span class="num">3</span>];            <span class="cmt">// → new List&lt;int&gt;(IEnumerable&lt;int&gt; collection)</span>
+l = [with(<span class="kw">default</span>)];                   <span class="cmt">// ❌ 歧义——default 匹配多个构造函数</span></code></pre>
+
+<div class="callout callout--good">
+<strong>关键：</strong>转换存在性只看 <code>with()</code> 的<strong>有无</strong>，不看具体参数。有 <code>with()</code> → 找至少一个可访问的构造函数 → 转换成立。无 <code>with()</code> → 必须有无参构造函数。这意味着<strong>没有无参构造函数的集合类型，必须用 <code>with()</code> 来创建</strong>——<code>[]</code> 不行，<code>[with(capacity: 1)]</code> 可以。
+</div>
+
+<h3>2.2 通路②：CollectionBuilder——工厂方法也能接参数</h3>
+
+<pre><code><span class="cmt">// 自定义集合类型——通过 [CollectionBuilder] 指定工厂方法</span>
+[CollectionBuilder(<span class="kw">typeof</span>(MyBuilder), <span class="str">"Create"</span>)]
+<span class="kw">class</span> MySet&lt;T&gt; : IEnumerable&lt;T&gt; { ... }
+
+<span class="kw">class</span> MyBuilder
+{
+    <span class="kw">public static</span> MySet&lt;T&gt; Create&lt;T&gt;(ReadOnlySpan&lt;T&gt; elements);
+    <span class="kw">public static</span> MySet&lt;T&gt; Create&lt;T&gt;(IEqualityComparer&lt;T&gt; comparer, ReadOnlySpan&lt;T&gt; elements);
+    <span class="cmt">// ↑ 注意：span 参数必须是最后一个——with() 参数在它之前</span>
+}
+
+<span class="cmt">// 使用——with() 的参数传给 comparer，元素传给 span</span>
+MySet&lt;<span class="kw">string</span>&gt; set = [with(StringComparer.OrdinalIgnoreCase), <span class="str">"a"</span>, <span class="str">"b"</span>];
+<span class="cmt">// → MyBuilder.Create&lt;string&gt;(StringComparer.OrdinalIgnoreCase, ["a", "b"])</span></code></pre>
+
+<p>编译器按"去掉 span 参数后的投影方法"做重载决议。Create 方法可以有多个重载——每个重载的 span 参数之前可以有不同数量和类型的额外参数。</p>
+
+<h3>2.3 通路③：接口类型——编译器替你选实现</h3>
+
+<pre><code><span class="cmt">// IList&lt;T&gt; / ICollection&lt;T&gt; → 背后用 List&lt;T&gt;，with() 参数映射到 List&lt;T&gt; 构造函数</span>
+IList&lt;<span class="kw">int</span>&gt; list = [with(capacity: <span class="num">4</span>), <span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];
+<span class="cmt">// → new List&lt;int&gt;(capacity: 4) { 1, 2, 3 }</span>
+
+<span class="cmt">// IDictionary&lt;K,V&gt; → 背后用 Dictionary&lt;K,V&gt;</span>
+IDictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; d = [with(StringComparer.Ordinal), <span class="str">"a"</span>: <span class="num">1</span>];
+<span class="cmt">// → new Dictionary&lt;string, int&gt;(StringComparer.Ordinal) { ["a"] = 1 }</span>
+
+<span class="cmt">// IReadOnlyDictionary&lt;K,V&gt; → 只能用 comparer 参数</span>
+IReadOnlyDictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; r = [with(StringComparer.Ordinal)];
+<span class="cmt">// ✅ comparer 参数——控制 key 比较语义</span>
+r = [with(capacity: <span class="num">2</span>)];
+<span class="cmt">// ❌ 编译错误——IReadOnlyDictionary 不支持 capacity 参数</span></code></pre>
+
+<table>
+<tr><th>接口</th><th>支持的 with() 签名</th></tr>
+<tr><td><code>IEnumerable&lt;E&gt;</code> / <code>IReadOnlyCollection&lt;E&gt;</code> / <code>IReadOnlyList&lt;E&gt;</code></td><td><code>()</code>（等效于没有 with()）</td></tr>
+<tr><td><code>IList&lt;E&gt;</code> / <code>ICollection&lt;E&gt;</code></td><td><code>List&lt;E&gt;()</code> · <code>List&lt;E&gt;(int)</code></td></tr>
+<tr><td><code>IDictionary&lt;K,V&gt;</code></td><td><code>Dictionary&lt;K,V&gt;()</code> · <code>(int)</code> · <code>(IEqualityComparer&lt;K&gt;)</code> · <code>(int, IEqualityComparer&lt;K&gt;)</code></td></tr>
+<tr><td><code>IReadOnlyDictionary&lt;K,V&gt;</code></td><td><code>()</code> · <code>(IEqualityComparer&lt;K&gt;?)</code></td></tr>
+</table>
+
+<!-- ========================== 3. PERFORMANCE ========================== -->
+
+<h2>三、性能——容量预分配的价值 <span class="en">Performance: Capacity Pre-allocation</span></h2>
+
+<h3>3.1 之前：写不出，只好多花钱</h3>
+
+<pre><code><span class="cmt">// C# 12：想把 spread 的元素放进 List，但没法预分配容量</span>
+List&lt;<span class="kw">string</span>&gt; names = [.. values];
+<span class="cmt">// 等价于：new List&lt;string&gt;()（默认容量 4），然后逐个 Add</span>
+<span class="cmt">// values 有 100 个元素 → List 内部数组扩容 log₂(100/4) ≈ 5 次</span>
+<span class="cmt">// 每次扩容：分配新数组 + 拷贝所有已存在的元素</span></code></pre>
+
+<h3>3.2 之后：一行搞定</h3>
+
+<pre><code><span class="cmt">// C# 15：with(capacity:) 直接传给构造函数——编译器不做额外工作</span>
+List&lt;<span class="kw">string</span>&gt; names = [with(capacity: values.Length), .. values];
+<span class="cmt">// 等价于：new List&lt;string&gt;(values.Length)，内部数组一次性分配够</span>
+<span class="cmt">// 零次扩容——values.Length 个元素直接塞进预分配的空间</span></code></pre>
+
+<div class="callout callout--good">
+<strong>不是编译器优化，是语法让你能做正确的事。</strong><code>with(capacity:)</code> 只是把参数转发给 <code>List&lt;T&gt;(int capacity)</code> 构造函数——和直接写 <code>new List&lt;T&gt;(n)</code> 一样。区别是：现在你能在方括号语法里做到这件事了，不用回退到 <code>new T() { }</code>。
+</div>
+
+<!-- ========================== 4. CORRECTNESS ========================== -->
+
+<h2>四、正确性——比较器指定 <span class="en">Correctness: Comparer Specification</span></h2>
+
+<pre><code><span class="cmt">// 常见 bug：忘了给 HashSet 传比较器——默认区分大小写</span>
+HashSet&lt;<span class="kw">string</span>&gt; names = [<span class="str">"Admin"</span>, <span class="str">"admin"</span>];  <span class="cmt">// Count == 2——两个值不等</span>
+
+<span class="cmt">// C# 15：比较器放在 with() 里，和元素写在一起——不容易忘</span>
+HashSet&lt;<span class="kw">string</span>&gt; names = [with(StringComparer.OrdinalIgnoreCase), <span class="str">"Admin"</span>, <span class="str">"admin"</span>];
+<span class="cmt">// Count == 1——OrdinalIgnoreCase 下 Admin == admin</span></code></pre>
+
+<p><strong>为什么 <code>with()</code> 放第一个位置能减少 bug：</strong>如果一个 100 行的字典表达式在<em>末尾</em>才标注比较器，你很可能看不到它——或者更糟：加了 99 个元素之后才发现比较器写错了。放在开头强迫读者（和写者）先想清楚"这个集合用什么样的相等/排序？"再往里塞东西。</p>
+
+<!-- ========================== 5. RESTRICTIONS ========================== -->
+
+<h2>五、边界与限制 <span class="en">Restrictions &amp; Edge Cases</span></h2>
+
+<table>
+<tr><th>限制</th><th>详情</th><th>原因</th></tr>
+<tr><td><strong>必须是第一个元素</strong></td><td><code>[1, with(capacity: 3), 2]</code> → ❌</td><td>语义上先构造再填充——和 new T(args) { } 的直觉一致</td></tr>
+<tr><td><strong>数组 / Span 不支持</strong></td><td><code>int[] a = [with(), 1, 2]</code> → ❌</td><td>数组和 Span 没有构造函数——长度由元素数量决定</td></tr>
+<tr><td><strong>dynamic 参数禁用</strong></td><td><code>[with((dynamic)comparer), "a"]</code> → ❌</td><td>dynamic 需要运行时 binder 做重载决议——集合表达式不支持</td></tr>
+<tr><td><strong>不影响类型推断</strong></td><td>with() 的参数<strong>不参与</strong>泛型推断和重载决议</td><td>避免 <code>[with(comparer)]</code> 的歧义——ambiguous 错误交给 target-typed new 处理</td></tr>
+<tr><td><strong>__arglist 不支持</strong></td><td><code>[with(__arglist(x, y))]</code> → ❌</td><td>除非免费实现——设计团队决定不为此增加复杂度</td></tr>
+<tr><td><strong>旧语言版本保持兼容</strong></td><td>C# 14 中 <code>[with(x,y)]</code> 仍被解析为方法调用</td><td>breaking change 只在 LangVersion ≥ 15 时生效</td></tr>
+</table>
+
+<!-- ========================== 6. DESIGN ========================== -->
+
+<h2>六、为什么是 <code>with</code>？——设计考量 <span class="en">Why "with"?</span></h2>
+
+<p>设计团队考虑了多种语法——最终 pick <code>with(...)</code> 有明确的取舍：</p>
+
+<table>
+<tr><th>候选语法</th><th>为什么被否决</th></tr>
+<tr><td><strong><code>[args(capacity: 10), 1, 2]</code></strong></td><td>技术上 equivalent——但 <code>with</code> 读起来更自然："a collection <strong>with</strong> capacity 10"</td></tr>
+<tr><td><strong><code>new(...)[1, 2]</code></strong> 或 <code>new([1, 2], capacity: 10)</code></strong></td><td>暗示调用构造函数——但 <code>[CollectionBuilder]</code> 类型不走构造函数。且语法扩散到 <code>[...]</code> 外部，读者可能以为是"创建后再拷贝"</td></tr>
+<tr><td><strong><code>[comparer; v1, v2]</code></strong>（分号分隔）</td><td>容易被忽略——<code>[1; 2]</code> 看起来太像 <code>[1, 2]</code>（一个逗号的差别）。写错时：对 List 把 <code>1</code> 当 capacity、只存一个元素 <code>2</code>，悄无声息</td></tr>
+<tr><td><strong><code>[comparer, v1]</code></strong>（元素复用）</td><td>当元素类型和比较器类型有继承关系时歧义——<code>HashSet&lt;object&gt;</code> 无法区分"第一个元素是比较器"还是"第一个元素就是放进集合的值"</td></tr>
+</table>
+
+<div class="callout callout--info">
+<strong>设计哲学总结：</strong>一个只有 6 个字符的 <code>with()</code>——语法着色下 <code>with</code> 关键字高亮、<code>()</code> 内的参数正常着色——视觉上不容忽视，语义上"先构造再填充"的直觉对应，扩展性上不限制未来新增参数类型。
+</div>
+
+<!-- ========================== 7. QUIZ ========================== -->
+
+<h2>七、测验 <span class="en">Quiz</span></h2>
+
+<div class="quiz" id="q1">
+  <h3>1/5 · 基本语法</h3>
+  <p class="question"><code>with(...)</code> 元素在集合表达式中的位置要求是？</p>
+  <label><input type="radio" name="q1" value="a">A. 可以放在任意位置——和普通元素一样</label>
+  <label><input type="radio" name="q1" value="b">B. 必须是最后一个元素</label>
+  <label><input type="radio" name="q1" value="c">C. 必须是第一个元素</label>
+  <label><input type="radio" name="q1" value="d">D. 必须在 spread 元素之前，普通元素之后</label>
+  <div class="feedback" id="f_q1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>2/5 · 通路识别</h3>
+  <p class="question"><code>ImmutableArray&lt;int&gt; arr = [with(), 1, 2, 3];</code> —— <code>with()</code> 的参数传给谁？</p>
+  <label><input type="radio" name="q2" value="a">A. ImmutableArray 的构造函数</label>
+  <label><input type="radio" name="q2" value="b">B. ImmutableArray.Create 工厂方法（通过 [CollectionBuilder]）</label>
+  <label><input type="radio" name="q2" value="c">C. 编译器合成的实现类构造函数</label>
+  <label><input type="radio" name="q2" value="d">D. ImmutableArray 不支持 with()</label>
+  <div class="feedback" id="f_q2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>3/5 · 数组和 Span</h3>
+  <p class="question">以下哪个表达式<strong>会</strong>产生编译错误？</p>
+  <label><input type="radio" name="q3" value="a">A. <code>List&lt;int&gt; l = [with(capacity: 5), 1, 2];</code></label>
+  <label><input type="radio" name="q3" value="b">B. <code>HashSet&lt;string&gt; s = [with(StringComparer.Ordinal), "a"];</code></label>
+  <label><input type="radio" name="q3" value="c">C. <code>int[] a = [with(length: 5), 1, 2, 3];</code></label>
+  <label><input type="radio" name="q3" value="d">D. <code>IList&lt;int&gt; i = [with(capacity: 4)];</code></label>
+  <div class="feedback" id="f_q3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>4/5 · 设计选择</h3>
+  <p class="question">为什么设计团队否决了 <code>[comparer; element1, element2]</code>（分号分隔）方案？</p>
+  <label><input type="radio" name="q4" value="a">A. 分号在 C# 中已被用作语句终止符——语法冲突</label>
+  <label><input type="radio" name="q4" value="b">B. <code>[1; 2]</code> 和 <code>[1, 2]</code> 视觉差异太小——写错时静默 bug：1 被当 capacity，集合只存 2</label>
+  <label><input type="radio" name="q4" value="c">C. 分号方案无法处理 capacity 参数——只支持 comparer</label>
+  <label><input type="radio" name="q4" value="d">D. 编译器实现复杂度太高</label>
+  <div class="feedback" id="f_q4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>5/5 · 综合判断</h3>
+  <p class="question">关于集合表达式参数，以下哪个说法<strong>正确</strong>？</p>
+  <label><input type="radio" name="q5" value="a">A. with() 的参数会参与泛型类型推断——影响目标类型的选择</label>
+  <label><input type="radio" name="q5" value="b">B. 没有无参构造函数的集合类型，不能使用集合表达式——即使加了 with()</label>
+  <label><input type="radio" name="q5" value="c">C. with() 是纯粹编译期转发——把参数传给构造函数或工厂方法，运行时零额外开销</label>
+  <label><input type="radio" name="q5" value="d">D. with() 可以出现在集合表达式中的任意位置——不局限于第一个</label>
+  <div class="feedback" id="f_q5"></div>
+
+  <button onclick="checkAll()">提交全部答案</button>
+  <div class="score" id="score" style="display:none"></div>
+</div>
+
+<!-- ========================== 8. SUMMARY ========================== -->
+
+<h2>八、总结 <span class="en">Summary</span></h2>
+
+<table>
+<tr><th>要点</th><th>一句话</th></tr>
+<tr><td><strong>语法</strong></td><td><code>[with(...), elements]</code> —— with() 必须是第一个元素</td></tr>
+<tr><td><strong>构造函数通路</strong></td><td>参数传给目标类型的构造函数——编译器做重载决议</td></tr>
+<tr><td><strong>CollectionBuilder 通路</strong></td><td>参数传给 Create 方法的非 span 参数——span 始终是最后一个</td></tr>
+<tr><td><strong>接口通路</strong></td><td>IList → List 构造函数；IDictionary → Dictionary 构造函数；不支持任意参数</td></tr>
+<tr><td><strong>数组 / Span</strong></td><td>不支持 with()——无构造函数，也无此必要</td></tr>
+<tr><td><strong>性能场景</strong></td><td><code>[with(capacity: n), .. values]</code> —— 一行消除扩容开销</td></tr>
+<tr><td><strong>正确性场景</strong></td><td><code>[with(comparer), .. values]</code> —— 比较器写在集合旁边，不易忘</td></tr>
+<tr><td><strong>运行时开销</strong></td><td>零——纯编译期转发，等价于手动调用构造函数或工厂方法</td></tr>
+<tr><td><strong>状态</strong></td><td>.NET 11 Preview 5 已合并——GA 预计 2026.11</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>最值得记住的一件事：</strong><code>with(...)</code> 让方括号语法不再有"盲区"。需要传容量？<code>[with(capacity: 100), .. data]</code>。需要比较器？<code>[with(StringComparer.OrdinalIgnoreCase), "a", "b"]</code>。你不需要在"简洁方括号"和"完整构造函数"之间做选择了——两者合一。
+</div>
+
+<!-- ========================== 9. NEXT ========================== -->
+
+<h2>九、下一步 <span class="en">Next: Memory Safety Evolution</span></h2>
+
+<p>C# 15 集合表达式参数填上了 C# 12 方括号语法的最后一块拼图。下节课转向 C# 15 的内存安全演进：</p>
+
+<div class="triad">
+  <div>
+    <h4>🔒 Memory Safety Phase 1</h4>
+    <p>声明指针、取地址 <code>&amp;</code>、<code>fixed</code>、<code>sizeof</code> 不再需要 <code>unsafe</code> 块——但解引用仍需 unsafe。这是多版本演进的第一步。</p>
+  </div>
+  <div>
+    <h4>🗂️ Dictionary Expressions</h4>
+    <p><code>["key": value]</code> 语法——字典字面量。仍在开发中，runtime 团队已介入，预计后续 Preview 发布。</p>
+  </div>
+  <div>
+    <h4>📋 C# 15 系列回顾</h4>
+    <p>Union Types → Closed Hierarchies → Collection Expression Args → Memory Safety。四大特性形成 C# 15 核心能力矩阵。</p>
+  </div>
+</div>
+
+<p class="mild"><a href="26-csharp15-closed-hierarchies.html">← L26: Closed Hierarchies</a> · <a href="28-csharp15-memory-safety.html">L28: Memory Safety →</a> · <a href="../../MISSION.md">🎯 回顾 Mission</a></p>
+
+<hr class="section-divider">
+
+<div class="lesson-footer">
+<p><strong>推荐阅读：</strong><a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/collection-expressions#collection-expression-arguments">集合表达式参数语言参考</a> · <a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/proposals/collection-expression-arguments">功能规范</a> · <a href="https://github.com/dotnet/csharplang/discussions/8886">设计讨论 #8886</a> · <a href="15-csharp12-collection-expressions.html">L15: C# 12 集合表达式（基础）</a></p>
+<p><strong>课后实操：</strong>找项目中用 <code>new List&lt;T&gt;(capacity) { }</code> 的地方——把它们改成 <code>[with(capacity: ...), ...]</code>。同样，如果有 <code>new HashSet&lt;T&gt;(comparer) { }</code>，改成 <code>[with(comparer), ...]</code>。体验"方括号语法统一一切集合创建"的完整图景。</p>
+<p><strong>有问题？</strong>集合表达式参数的三条通路（构造函数 / CollectionBuilder / 接口）是最容易搞混的地方——任何细节不清楚的，你的教师（Claude）随时在。</p>
+</div>
+
+<script src="../assets/scripts/quiz.js"></script>
+<script>
+const answers = { q1: 'c', q2: 'b', q3: 'c', q4: 'b', q5: 'c' };
+const explanations = {
+  q1: { correct: '✅ 正确！C——with(...) 必须是集合表达式的第一个元素。语义上"先构造、再填充"。写在其他位置会产生编译错误。', wrong: '❌ 答案是 C。with(...) 必须是第一个元素——位置不对直接编译错误。' },
+  q2: { correct: '✅ 正确！B——ImmutableArray 有 [CollectionBuilder(typeof(ImmutableArray), "Create")]，所以参数传给 Create 工厂方法。ImmutableArray 本身是 struct，不走构造函数。', wrong: '❌ 答案是 B。ImmutableArray 通过 [CollectionBuilder] 指定工厂方法 Create，不是构造函数。' },
+  q3: { correct: '✅ 正确！C——数组和 Span 不支持 with()。无论参数是什么，对数组写 with() 都是编译错误。A/B/D 全部合法。', wrong: '❌ 答案是 C。数组和 Span 不支持 with()——它们没有构造函数，参数无处可去。' },
+  q4: { correct: '✅ 正确！B——分号方案的主要否决理由是视觉差异太小。写 <code>[1; 2]</code>（分号）和 <code>[1, 2]</code>（逗号）只有一个字符之差——前者把 1 当 capacity、只存 2，属于静默语义错误。with() 有 6 个字符且 <code>with</code> 关键字高亮——不容易写错。', wrong: '❌ 答案是 B。分号方案被否决的主要原因是视觉差异太小——<code>[1; 2]</code> vs <code>[1, 2]</code> 一个字符之差，静默 bug。' },
+  q5: { correct: '✅ 正确！C——with() 是纯编译期转发，运行时零开销。A 错：参数不参与类型推断。B 错：有 with() 时不需要无参构造函数。D 错：with() 必须是第一个元素。', wrong: '❌ 答案是 C。A 错（参数不影响类型推断），B 错（有 with() 就不需要无参构造），D 错（必须在第一位）。' },
+};
+function checkAll() { Quiz.checkAll(answers, explanations); }
+</script>
+</body>
+</html>

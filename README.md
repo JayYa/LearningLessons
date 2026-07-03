@@ -34,6 +34,7 @@
 | 24 | [Lesson 24: C# 14 — 小特性合集](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/24-csharp14-small-features.html) | 速览 C# 14 各项小特性，完成 C# 14 语言演进全景收官 |
 | 25 | [Lesson 25: C# 15 — Union 类型](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/25-csharp15-union-types.html) | 探索 C# 15 的 union 类型语法，以类型安全方式表达多选一的数据结构 |
 | 26 | [Lesson 26: C# 15 — Closed Hierarchies（封闭继承层次）](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/26-csharp15-closed-hierarchies.html) | 讲解 C# 15 封闭继承层次，限制类型派生以确保 API 的完整性与可预测性 |
+| 27 | [Lesson 27: C# 15 — 集合表达式参数](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/27-csharp15-collection-expression-args.html) | 解析 C# 15 集合表达式作为方法参数的语法增强，进一步统一集合传递方式 |
 
 **参考资料：**
 - [异步流速查 · Async Streams · C# 8](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/async-streams-cheatsheet.html) — IAsyncEnumerable 消费、取消与配置速查
@@ -64,10 +65,13 @@
 | 10 | [Lesson 0010 — 维京人的战争方式：武器、盔甲与战术](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0010-viking-warfare.html) | 解析维京人的武器、盔甲与战术体系，还原北海战士在战场上的真实面貌与战斗智慧 |
 | 11 | [Lesson 0011 — 维京长船：设计、航海与海洋帝国](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0011-viking-longship.html) | 深入维京长船的设计原理、航海技术与建造工艺，揭示北欧海洋帝国赖以崛起的工程基础 |
 | 12 | [Lesson 0012 — 冰岛萨迦：口传、书写与历史的炼金术](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0012-icelandic-sagas.html) | 解读冰岛萨迦文学如何将口传记忆转化为书写文本，探讨其作为历史素材的可信度与局限 |
+| 13 | [Lesson 0013 — 维京时代的女性：钥匙、法律与萨迦中的女人](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0013-viking-women.html) | 还原维京女性的法律地位、家庭权力与社会角色，从萨迦中重新发现北欧妇女的真实面貌 |
 
 **参考资料：**
 - [🗡️ 中国古代佩剑传统参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/chinese-sword-tradition.html) — 中国古代佩剑文化传统与维京武器的跨文化对照
 - [🗺 东部地理术语指南](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/eastern-geography-guide.html) — 拜占庭 · 罗斯 · 基辅 · 君士坦丁堡地理术语速查
+- [⚖️ 冰岛共和国：无国王、有法律](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/icelandic-commonwealth-law.html) — 冰岛自由邦的独特法律体系与议会制度
+- [📖 冰岛识字率：中世纪欧洲的异类](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/icelandic-literacy.html) — 中世纪冰岛异乎寻常的高识字率及其对萨迦文化的影响
 - [🏛 诺曼起源争议参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/normanist-debate.html) — 诺曼起源争议学术背景与关键论据
 - [🧬 斯堪的纳维亚人起源参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/scandinavian-origins.html) — 斯堪的纳维亚人的民族起源、迁徙与遗传谱系学术参考
 - [维京时代大事年表](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-age-timeline.html) — Vinland Saga 历史时间线参考
@@ -88,6 +92,7 @@
 | 6 | [Lesson 0006 — debug.ts：独立调试管线](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0006-debug-harness.html) | 构建扩展的独立调试环境，不依赖 VS Code 运行时可快速验证核心逻辑 |
 | 7 | [Lesson 0007 — 单元测试：从 fixture 设计到安全重构](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0007-unit-tests.html) | 构建扩展的单元测试体系，从 fixture 设计原则到安全重构策略，确保代码可维护性 |
 | 8 | [Lesson 0008 — CI 集成：用 GitHub Actions 自动运行测试](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0008-ci-integration.html) | 在 GitHub Actions 中配置跨平台测试矩阵与自动发布流程，实现 CI/CD 集成 |
+| 9 | [Lesson 0009 — 打包与发布：从代码到 Marketplace](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0009-packaging-and-publishing.html) | 讲解 VS Code 扩展的打包配置、版本管理与 Marketplace 发布流程，完成从开发到上线的最后一公里 |
 
 **参考资料：**
 - [参考：数据格式速查](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/data-formats.html) — Claude Context Bar 内部数据结构的序列化格式速查

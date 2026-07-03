@@ -242,6 +242,9 @@
   <tr><td>GoF</td><td>Gang of Four</td><td>《设计模式》的四位作者，泛指书中 23 种经典模式</td></tr>
   <tr><td>JSONL</td><td>JSON Lines</td><td>每行一个独立 JSON 对象的文本格式（Claude Code 会话文件格式）</td></tr>
   <tr><td>mtime</td><td>modification time</td><td>文件的最后修改时间戳。在 <code>fs.statSync()</code> 返回的 <code>Stats</code> 对象上以 <code>.mtime</code> 属性暴露。findActiveSessions 用它来判断会话是否仍在活跃</td></tr>
+  <tr><td>CI</td><td>Continuous Integration</td><td>持续集成——频繁将代码合并到主干，每次 push / PR 自动构建和测试，确保代码始终处于可工作状态</td></tr>
+  <tr><td>CD</td><td>Continuous Delivery</td><td>持续交付——CI 通过后代码自动进入可发布状态，但"发布"按钮由人按下（如打 tag 触发 publish）</td></tr>
+  <tr><td>CD</td><td>Continuous Deployment</td><td>持续部署——CI 通过后自动部署到生产环境，无需人工干预。Delivery 的更进一步</td></tr>
   <tr><td>no-op</td><td>no operation</td><td>重复调用不会产生任何效果，也不会报错。例如对已关闭的 watcher 再次 <code>.close()</code></td></tr>
 </table>
 </div>

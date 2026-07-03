@@ -28,17 +28,26 @@
 </p>
 
 <table>
-  <tr><th></th><th>手动 <code>npm test</code></th><th>CI 自动运行</th></tr>
-  <tr><td>触发方式</td><td>你记得跑</td><td>每次 push / PR 自动触发</td></tr>
-  <tr><td>运行环境</td><td>你的机器（可能有隐藏状态）</td><td>全新虚拟机——从零安装</td></tr>
-  <tr><td>谁看到结果</td><td>只有你</td><td>整个团队（GitHub PR 页面上直接显示 ✅/❌）</td></tr>
-  <tr><td>防回归</td><td>⚠️ 取决于你的记忆力</td><td>✅ 强制执行——没过不能合并</td></tr>
-  <tr><td>发布前保护</td><td>❌ 你可以在测试失败时打 tag</td><td>⚠️ 需配合分支保护规则（本课第 4 节讨论）</td></tr>
-  <tr><td>最佳场景</td><td>开发中的快速反馈</td><td>合并前的最后一道防线</td></tr>
+  <tr><th></th><th>手动 <code>npm test</code></th><th>pre-push hook</th><th>CI 自动运行</th></tr>
+  <tr><td>触发方式</td><td>你记得跑</td><td><code>git push</code> 时自动触发</td><td>每次 push / PR 自动触发</td></tr>
+  <tr><td>运行环境</td><td>你的机器（可能有隐藏状态）</td><td>你的机器</td><td>全新虚拟机——从零安装</td></tr>
+  <tr><td>能否被绕过</td><td>❌ 你忘了就跑不了</td><td>⚠️ <code>--no-verify</code> 一秒绕过</td><td>❌ 无法绕过（见第 4 节）</td></tr>
+  <tr><td>谁看到结果</td><td>只有你</td><td>只有你</td><td>整个团队（GitHub PR 页面上直接显示 ✅/❌）</td></tr>
+  <tr><td>防回归</td><td>⚠️ 取决于你的记忆力</td><td>⚠️ 取决于你的自律</td><td>✅ 强制执行——没过不能合并</td></tr>
+  <tr><td>发布前保护</td><td>❌ 你可以在测试失败时打 tag</td><td>❌ 无法阻止打 tag</td><td>⚠️ 需配合分支保护规则（本课第 4 节讨论）</td></tr>
+	  <tr><td>最佳场景</td><td>开发中的快速反馈</td><td>本地最后一道防线</td><td>合并前的强制守门人</td></tr>
 </table>
 
 <p>
-  两者<strong>互补</strong>，不是替代：本地测试给快速反馈（3 秒），CI 给底线保障（你不会忘了跑）。
+  三者<strong>互补</strong>，不是替代——它们分别守在不同位置：
+</p>
+<ul>
+  <li><strong>手动 <code>npm test</code></strong>：开发中 3 秒快速反馈</li>
+  <li><strong>pre-push hook</strong>：push 前自动跑——但 <code>--no-verify</code> 可绕过，它是<strong>便利工具</strong>而非<strong>安全机制</strong></li>
+  <li><strong>CI</strong>：服务端强制执行——clean room 环境，结果全团队可见，配合分支保护规则物理阻止合并</li>
+</ul>
+<p>
+  你完全可以三者都用：pre-push hook 快速拦截低级错误，CI 在云端做最终裁决。但 pre-push hook 的"不通过就不 push"有一个根本局限：它是<strong>客户端脚本</strong>——团队里任何一个人 <code>git push --no-verify</code> 就跳过了。真正不可绕過的守门人，是服务端的 CI + 分支保护规则。
 </p>
 
 <div class="callout">
@@ -164,6 +173,17 @@
 </div>
 
 <h2>4. CI 作为发布前的守门人</h2>
+
+<div class="callout">
+  <strong>🤔 为什么不直接在 push 前跑测试？</strong><br>
+  你的直觉是对的——pre-push hook 确实可以在 <code>git push</code> 之前跑 <code>npm test</code>，不过就不 push。这听起来比"先 push 再让 CI 跑"更合理。但这里有一个关键的<strong>信任边界</strong>问题：<br><br>
+  <strong>1. pre-push hook 是客户端脚本，不是安全机制。</strong>它存在你本地的 <code>.git/hooks/</code> 目录里（不会被 Git 跟踪），<code>git push --no-verify</code> 一键就能跳过。你无法强制团队其他人启用它。<br><br>
+  <strong>2. push 坏代码到 feature branch 没有危害。</strong>在实际协作中，你经常<em>需要</em> push 未完成的代码——让 CI 在云端跑、让同事 review、换一台机器继续写。<strong>真正需要保护的是 <code>main</code> 分支</strong>，不是个人分支。<br><br>
+  <strong>3. 服务端才是唯一可信的执行环境。</strong>你本地的测试通过 ≠ 代码没问题——你的机器有隐藏状态（全局包、环境变量、操作系统差异）。CI 的干净虚拟机才能回答"换一台机器还能跑吗"。<br><br>
+  所以正确的分层是：<strong>pre-push hook → 便利工具</strong>（快速拦截），<strong>CI → 强制守门人</strong>（不可绕过）。你完全可以两者都用，但永远不要把安全性寄托在客户端脚本上。真正的防线是：<strong>CI 不通过 → 不能合并 PR → 坏代码进不了 main</strong>（需配合分支保护规则）。
+</div>
+
+
 
 <p>
   你的项目已经有一个 workflow 了——<code>.github/workflows/publish.yml</code>。把它和我们要创建的 <code>test.yml</code> 放在一起看：

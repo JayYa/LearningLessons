@@ -81,6 +81,27 @@
 <span class="cmt">// closed static class  → ❌ static class 根本不能派生</span>
 <span class="cmt">// closed abstract class → ⚠️ 警告：closed 已经隐含 abstract，重复多余</span></code></pre>
 
+<h3>1.4 为什么叫 <code>closed</code>？——关键词的象征意义</h3>
+
+<p>这个关键词有三层考量：</p>
+
+<table>
+<tr><th>层面</th><th>含义</th></tr>
+<tr>
+<td><strong>类型论——"封闭世界"</strong></td>
+<td>在类型系统中，<strong>封闭类型</strong>（Closed Type）指编译器能枚举出<strong>完整的、有限的</strong>子类型集合——"这个集合已经封闭，不会再有新的了。"普通 <code>abstract class</code> 是开放类型——外部程序集随时可能加新子类。加 <code>closed</code> 就把这个集合封口了，编译器可以放心穷举。</td>
+</tr>
+<tr>
+<td><strong>语义梯度——补全 <code>sealed</code> 和 <code>abstract</code> 之间的空白</strong></td>
+<td><code>sealed</code> = 零子类（彻底封死）→ <code>closed</code> = 有限子类，集合已知（封口但不封死）→ <code>abstract</code> = 无限子类，集合未知（完全开放）。<code>closed</code> 是 <code>sealed</code> 和 <code>abstract</code> 之间的中间地带——比 <code>sealed</code> 松一点，比 <code>abstract</code> 紧一点。</td>
+</tr>
+<tr>
+<td><strong>命名策略——刻意避开与 Java 的冲突</strong></td>
+<td>Java 17 的 <code>sealed class</code> 等价于 C# 的 <code>closed class</code>（有限子类 + 穷举检查）。但如果 C# 15 也沿用 <code>sealed</code>，就会跟 C# 已有的 <code>sealed</code>（零子类）含义冲突——一个关键词两个意思。选 <code>closed</code> 避开了这场命名混乱：两个词、两个概念、一清二楚。<br><br>
+<strong>其他候选词为什么没选：</strong><code>fixed</code>（容易和 fixed 语句混淆）、<code>final</code>（Java 已占用，表示"不可重写"）、<code>finite</code>（技术上准确但不够口语化）、<code>enum class</code>（太像枚举，且 C# enum 是值类型语义不搭）。<code>closed</code> 是唯一在类型论上有明确含义、跟 <code>sealed</code> 形成自然梯度、且不被现有特性抢占的词。</td>
+</tr>
+</table>
+
 <!-- ========================== 2. EXHAUSTIVENESS ========================== -->
 
 <h2>二、穷举检查——和 Union 一模一样的体验 <span class="en">Exhaustive Pattern Matching</span></h2>
@@ -111,59 +132,89 @@
 
 <h2>三、Union vs Closed Hierarchy——选型决策 <span class="en">Choosing Between Them</span></h2>
 
-<h3>3.1 并排对比</h3>
+<h3>3.1 看两组代码——一眼看出区别</h3>
 
-<pre><code><span class="cmt">// 方案 A: Union——无关类型，恰好是其中之一</span>
-<span class="kw">public record class</span> Cat(<span class="kw">string</span> Name);
-<span class="kw">public record class</span> Dog(<span class="kw">string</span> Name);
-<span class="kw">public record class</span> Bird(<span class="kw">string</span> Name);
-<span class="kw">public union</span> Pet(Cat, Dog, Bird);
+<p>同样的"三种消息类型"，Union 和 Closed Hierarchy 写出来<strong>完全不同</strong>：</p>
 
-<span class="cmt">// 方案 B: Closed Hierarchy——有共同基类，继承关系有意义</span>
-<span class="kw">public closed record class</span> Pet;
-<span class="kw">public record class</span> Cat(<span class="kw">string</span> Name) : Pet;
-<span class="kw">public record class</span> Dog(<span class="kw">string</span> Name) : Pet;
-<span class="kw">public record class</span> Bird(<span class="kw">string</span> Name) : Pet;</code></pre>
+<pre><code><span class="cmt">// ═══ 方案 A: Union——类型形状各异，毫无共同之处 ═══</span>
+<span class="kw">public record class</span> TextMessage(<span class="kw">string</span> Body, DateTime SentAt);
+<span class="kw">public record class</span> ImageMessage(<span class="kw">byte</span>[] Data, <span class="kw">string</span> MimeType);
+<span class="kw">public record class</span> Reaction(<span class="kw">string</span> Emoji, <span class="kw">int</span> TargetMsgId);
+<span class="kw">public union</span> ChatEvent(TextMessage, ImageMessage, Reaction);
+<span class="cmt">// ↑ 注意三个类型的字段<strong>完全不同</strong>：</span>
+<span class="cmt">//   TextMessage  → Body(string) + SentAt(DateTime)</span>
+<span class="cmt">//   ImageMessage → Data(byte[]) + MimeType(string)</span>
+<span class="cmt">//   Reaction     → Emoji(string) + TargetMsgId(int)</span>
+<span class="cmt">// 没有任何共同字段——强行抽基类只会得到一个空壳</span>
+
+<span class="cmt">// ═══ 方案 B: Closed Hierarchy——各有各的数据，共享基类行为 ═══</span>
+<span class="kw">public closed record class</span> Notification
+{
+    <span class="kw">public required</span> DateTime CreatedAt { <span class="kw">get</span>; <span class="kw">init</span>; }   <span class="cmt">// ← 所有通知都有的时间戳</span>
+    <span class="kw">public abstract</span> Task&lt;<span class="kw">bool</span>&gt; Send();                      <span class="cmt">// ← 所有通知都能发送</span>
+}
+<span class="kw">public record class</span> Email(<span class="kw">string</span> To, <span class="kw">string</span> Subject, <span class="kw">string</span> Body) : Notification
+{ <span class="kw">public override</span> Task&lt;<span class="kw">bool</span>&gt; Send() => <span class="cmt">/* SMTP */</span>; }
+<span class="kw">public record class</span> Sms(<span class="kw">string</span> PhoneNumber, <span class="kw">string</span> Text) : Notification
+{ <span class="kw">public override</span> Task&lt;<span class="kw">bool</span>&gt; Send() => <span class="cmt">/* 短信网关 */</span>; }
+<span class="kw">public record class</span> Push(<span class="kw">string</span> DeviceToken, <span class="kw">string</span> Title, <span class="kw">string</span> Body) : Notification
+{ <span class="kw">public override</span> Task&lt;<span class="kw">bool</span>&gt; Send() => <span class="cmt">/* FCM/APNs */</span>; }
+<span class="cmt">// ↑ 三个子类的字段<strong>也完全不同</strong>：</span>
+<span class="cmt">//   Email → To + Subject + Body（邮件地址）</span>
+<span class="cmt">//   Sms   → PhoneNumber + Text（手机号）</span>
+<span class="cmt">//   Push  → DeviceToken + Title + Body（设备令牌）</span>
+<span class="cmt">// 但它们<strong>都继承了</strong> CreatedAt（时间戳）和 Send()（发送行为）</span></code></pre>
+
+<div class="callout callout--info">
+<strong>核心区别一目了然：</strong>Union 的 TextMessage / ImageMessage / Reaction ——字段集完全不同，没有任何共享成员，三个独立类型恰好属于"聊天事件"这个集合。Closed Hierarchy 的 Email / Sms / Push ——字段也各不相同，但<strong>CreatedAt 和 Send() 是所有通知的共性</strong>，天然属于基类。<br><br>
+<strong>记法：</strong>Union = "形状各异，凑成一堆" · Closed Hierarchy = "各有特征，共享骨架"。
+</div>
 
 <p><strong>两者都能穷举检查。</strong>区别在于其他维度：</p>
 
 <table>
 <tr><th>维度</th><th>Union</th><th>Closed Hierarchy</th></tr>
-<tr><td><strong>case 类型之间的关系</strong></td><td>无关——各自独立定义</td><td>有共同基类——"是一种"关系</td></tr>
-<tr><td><strong>共享字段/方法</strong></td><td>❌ 无——除非在 case 类型上手动重复</td><td>✅ 可以——基类定义字段、虚方法、protected 成员</td></tr>
+<tr><td><strong>case 类型之间的关系</strong></td><td>无关——各自独立定义，字段集可以完全不同</td><td>有共同基类——"是一种"关系，共享基类成员</td></tr>
+<tr><td><strong>共享字段/方法</strong></td><td>❌ 无——每个 case 类型独立定义所有字段</td><td>✅ 基类定义一次，所有子类自动继承</td></tr>
 <tr><td><strong>基类行为</strong></td><td>无基类——union 是 struct</td><td>可以有虚方法、抽象方法、模板方法模式</td></tr>
 <tr><td><strong>外部扩展</strong></td><td>❌ 封闭——新 case 必须改 union 声明</td><td>❌ 封闭——新子类必须在同一程序集</td></tr>
 <tr><td><strong>多态调度</strong></td><td>通过 switch 模式匹配</td><td>switch 模式匹配 <strong>或</strong> 虚方法调用</td></tr>
 <tr><td><strong>存储开销</strong></td><td>struct + object?——值类型装箱</td><td>引用类型——天然在堆上，无额外装箱</td></tr>
-<tr><td><strong>适合场景</strong></td><td>互不相关的"tagged value"</td><td>有自然继承关系的类型族</td></tr>
+<tr><td><strong>典型场景</strong></td><td>API 返回值（Data / Error / Pending）<br>聊天事件（文字 / 图片 / 表情）<br>AST 节点（Literal / BinaryExpr / Variable）</td><td>通知渠道（邮件 / 短信 / 推送）<br>支付方式（信用卡 / 微信 / 支付宝）<br>HTTP 响应（Success / Redirect / Error）</td></tr>
 </table>
 
 <h3>3.2 一句话决策</h3>
 
 <div class="callout callout--good">
-<strong>如果子类型共享状态/行为 → Closed Hierarchy。如果子类型只是恰好属于同一集合 → Union。</strong>说人话：如果你的派生类需要从基类继承字段、方法、或 protected 成员，用 Closed Hierarchy。如果只是一组互不相关的 case 标签，用 Union。两者的穷举检查能力完全相同——选哪个取决于<strong>你需不需要继承</strong>。
+<strong>如果子类型有共同的字段或方法需要复用 → Closed Hierarchy。如果子类型只是恰好属于同一集合，没有任何共享代码 → Union。</strong><br><br>
+说人话：写代码时问自己一个问题——<strong>"如果我把这些类型放进一个继承层次，基类里能写什么？"</strong> 如果基类是空的（没有共享字段、没有共享方法），用 Union。如果基类里有实质内容（CreatedAt、Send()、StatusCode……），用 Closed Hierarchy。两者的穷举检查能力完全相同——选哪个取决于<strong>你需不需要继承</strong>。
 </div>
 
-<h3>3.3 一个边界案例——两种都行</h3>
+<h3>3.3 边界案例——当两种都能用时</h3>
 
-<p>有时候同一个领域模型两种都能表达。比如 <code>Pet</code>：</p>
+<p>有时同一个领域模型两种都能表达，选哪个取决于<strong>你预期未来会不会长出共享行为</strong>。比如一个简单的<code>Pet</code>：</p>
 
-<pre><code><span class="cmt">// Union 版——Cat/Dog/Bird 各自独立，没有共享代码</span>
+<pre><code><span class="cmt">// 场景：三种宠物目前只有名字不同——Union 更直接</span>
+<span class="kw">public record class</span> Cat(<span class="kw">string</span> Name);
+<span class="kw">public record class</span> Dog(<span class="kw">string</span> Name);
+<span class="kw">public record class</span> Bird(<span class="kw">string</span> Name);
 <span class="kw">public union</span> Pet(Cat, Dog, Bird);
-<span class="cmt">// ✅ 更简单，如果三种宠物没有任何共同行为</span>
+<span class="cmt">// ✅ 三个类型字段一样（都只有 Name）——但这是特例，现实中少见</span>
 
-<span class="cmt">// Closed Hierarchy 版——如果所有宠物都共享一些东西</span>
+<span class="cmt">// 但如果未来要加 FeedingSchedule、VetRecord、Adopt()……</span>
+<span class="cmt">// 共享行为开始累积 → 迁移到 Closed Hierarchy：</span>
 <span class="kw">public closed record class</span> Pet
 {
-    <span class="kw">public required string</span> Name { <span class="kw">get</span>; <span class="kw">init</span>; }       <span class="cmt">// 所有宠物都有名字</span>
-    <span class="kw">public abstract string</span> Sound();                  <span class="cmt">// 每种宠物发出不同声音</span>
+    <span class="kw">public required string</span> Name { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="kw">public abstract</span> FeedingSchedule DailyFeeding();  <span class="cmt">// 每种宠物喂食不同</span>
+    <span class="kw">public virtual</span> VetRecord? LastCheckup { <span class="kw">get</span>; <span class="kw">set</span>; }  <span class="cmt">// 所有宠物共享的结构</span>
 }
-<span class="kw">public record class</span> Cat(<span class="kw">string</span> Name) : Pet { <span class="kw">public override string</span> Sound() => <span class="str">"喵"</span>; }
-<span class="kw">public record class</span> Dog(<span class="kw">string</span> Name) : Pet { <span class="kw">public override string</span> Sound() => <span class="str">"汪"</span>; }
-<span class="kw">public record class</span> Bird(<span class="kw">string</span> Name) : Pet { <span class="kw">public override string</span> Sound() => <span class="str">"啾"</span>; }
-<span class="cmt">// ✅ 当宠物需要共享字段（Name）或行为（Sound）时更合适</span></code></pre>
+<span class="kw">public record class</span> Cat(<span class="kw">string</span> Name) : Pet { <span class="kw">public override</span> FeedingSchedule DailyFeeding() => <span class="cmt">/* 猫粮 2 次/天 */</span>; }
+<span class="kw">public record class</span> Dog(<span class="kw">string</span> Name) : Pet { <span class="kw">public override</span> FeedingSchedule DailyFeeding() => <span class="cmt">/* 狗粮 2 次/天 + 遛 */</span>; }
+<span class="kw">public record class</span> Bird(<span class="kw">string</span> Name) : Pet { <span class="kw">public override</span> FeedingSchedule DailyFeeding() => <span class="cmt">/* 鸟食 1 次/天 */</span>; }
+<span class="cmt">// ✅ 继承层次开始体现价值——FeedingSchedule 和 VetRecord 只需在基类定义一次</span></code></pre>
 
-<p><strong>两者都正确——选让你的代码更清晰的那个。</strong>如果今天不确定，从 Union 开始。迁移到 Closed Hierarchy 的成本很低（case 类型加上 <code>: BaseType</code>，union 声明改为 <code>closed class</code>）。</p>
+<p><strong>两者都正确——选让你现在的代码更清晰的那个。</strong>如果今天不确定，从 Union 开始。当共享行为开始涌现（基类不再空洞），迁移到 Closed Hierarchy 的成本很低：case 类型加上 <code>: BaseType</code>，union 声明改为 <code>closed class</code>。</p>
 
 <!-- ========================== 4. NON-TRANSITIVE ========================== -->
 

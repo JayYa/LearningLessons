@@ -5,10 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lesson 0012 — 冰岛萨迦：口传、书写与历史的炼金术</title>
 <link rel="stylesheet" href="../assets/base.css">
-<link rel="stylesheet" href="../assets/quiz.css">
 <link rel="stylesheet" href="../assets/compare.css">
-<link rel="stylesheet" href="../assets/tags.css">
-<link rel="stylesheet" href="../assets/reminder.css">
+<link rel="stylesheet" href="../assets/components.css">
 <style>
   :root {
     --bg: #faf8f3;
@@ -18,7 +16,6 @@
     --card-bg: #fefcf8;
     --border: #c4b89a;
     --highlight: #f7f2e8;
-    --sea: #1a5276;
   }
 
   h3 { color: #3a2a1a; }
@@ -66,24 +63,6 @@
     padding-left: 0.6rem;
   }
 
-  .quote-block {
-    border-left: 4px solid var(--accent);
-    margin: 0.8rem 0;
-    padding: 0.5rem 1rem;
-    background: var(--highlight);
-    border-radius: 0 4px 4px 0;
-    font-style: italic;
-    font-size: 0.88rem;
-  }
-  .quote-block .attrib {
-    display: block;
-    text-align: right;
-    font-size: 0.78rem;
-    color: var(--muted);
-    font-style: normal;
-    margin-top: 0.3rem;
-  }
-
   .vinland-compare {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -92,19 +71,6 @@
   }
   @media (max-width: 650px) { .vinland-compare { grid-template-columns: 1fr; } }
 
-  .saga-reliability {
-    margin: 0.8rem 0;
-  }
-  .saga-reliability .layer {
-    padding: 0.5rem 0.8rem;
-    margin: 0.3rem 0;
-    border-radius: 6px;
-    font-size: 0.82rem;
-    border: 1px solid var(--border);
-  }
-  .layer.strong { background: #e8f5e9; border-left: 4px solid #2e7d32; }
-  .layer.moderate { background: #fff8e1; border-left: 4px solid #f9a825; }
-  .layer.weak { background: #fbe9e7; border-left: 4px solid #c62828; }
 </style>
 </head>
 <body>
@@ -204,7 +170,7 @@
   <tr><th style="width:18%;">因素</th><th>为什么促使了萨迦的书写</th></tr>
   <tr>
     <td><strong>没有国王</strong></td>
-    <td>冰岛是欧洲中世纪唯一没有君主制的国家（约 930 年建立议会，无执行机构）。没有国王意味着<strong>没有"官方历史"来压制地方版本</strong>。每个家族都可以保留和书写自家版本的故事——导致了丰富多彩的多元叙事。</td>
+    <td>冰岛是欧洲中世纪唯一没有君主制的国家（约 930 年建立议会，无执行机构）。没有国王意味着<strong>没有"官方历史"来压制地方版本</strong>。每个家族都可以保留和书写自家版本的故事——导致了丰富多彩的多元叙事。<br><span style="font-size:0.8rem;">📎 深入阅读：<a href="../reference/icelandic-commonwealth-law.html">冰岛共和国：无国王、有法律——政治与法律体系参考</a></span></td>
   </tr>
   <tr>
     <td><strong>法律传统</strong></td>
@@ -216,7 +182,7 @@
   </tr>
   <tr>
     <td><strong>识字率</strong></td>
-    <td>冰岛的识字率在中世纪西欧异常高——不仅有拉丁字母传统（教会引入的），还有如尼文传统（本土的）。冰岛的长屋遗址中发现了大量带有短文的木片和骨片——"日常书写"非常普遍。这使冰岛具备了写作的人力和文化基础设施。</td>
+    <td>冰岛的识字率在中世纪西欧异常高——不仅有拉丁字母传统（教会引入的），还有如尼文传统（本土的）。冰岛的长屋遗址中发现了大量带有短文的木片和骨片——"日常书写"非常普遍。这使冰岛具备了写作的人力和文化基础设施。<br><span style="font-size:0.8rem;">📎 深入阅读：<a href="../reference/icelandic-literacy.html">冰岛识字率：中世纪欧洲的异类——Kvöldvaka · 家庭教学 · 萨迦驱动的读写需求</a></span></td>
   </tr>
   <tr>
     <td><strong>基督教化的特殊方式</strong></td>
@@ -313,6 +279,7 @@
       <tr><td><strong>莱夫角色</strong></td><td>文兰的<strong>发现者和首航者</strong>。比亚尔尼的角色被大幅压制——莱夫的光芒得到增强。</td></tr>
       <tr><td><strong>古德丽德</strong></td><td>同样嫁给索尔芬。但更突出她作为"基督教贤妻"的角色——反映了写作时间更晚的宗教氛围。</td></tr>
       <tr><td><strong>学术评价</strong></td><td>更"文学化"——有更多超自然元素（先知的预言）、更连贯的英雄叙事、基督教色彩更浓。学者普遍认为这是<strong>将早期的材料重新编排以适应更晚期读者的口味</strong>。</td></tr>
+    </table>
   </div>
 </div>
 
@@ -354,20 +321,20 @@
 </p>
 
 <div class="saga-reliability">
-  <div class="layer strong">
+  <div class="evidence-tier evidence-strong">
     <strong>🟢 高层级：大概率准确</strong><br>
     <strong>核心事件骨架。</strong> 谁杀死了谁、某次战役发生在哪一年、某次航行是否真的发生、L'Anse aux Meadows 是否真实存在——这些"硬事实"经得起考古验证。L'Anse aux Meadows 在 1960 年代被发掘，证实了萨迦中"北欧人到达过纽芬兰"的核心主张。国王萨迦中的主要政治事件（战役、王位继承）通常有多个来源交叉核实。<br>
     <strong>地名和人名。</strong> 超过 90% 的 <em>Njáls saga</em> 地名至今在冰岛地图上可查。这不是虚构小说能做到的——这是缠在真实地理上的叙事。
   </div>
 
-  <div class="layer moderate">
+  <div class="evidence-tier evidence-moderate">
     <strong>🟡 中层级：可能有真实核心但被修饰</strong><br>
     <strong>对话和细节。</strong> 没有人录音。萨迦中逐字逐句的对话——尤其是私密的、无第三者在场的对话——是<strong>写作者的重构</strong>。但这不意味着对话是"编的"——口传传统中的对话是代代讲述者持续打磨的。好的对话是"应该被说出来的"——不是"被说出来的"。<br>
     <strong>数量和时间。</strong> "三十艘船"、"战斗了一天一夜"——数字在口传中最容易被夸大。四十个家族萨迦中的冲突规模通常合理——大部分是一次杀 1–5 人的规模——这增加了可信度。<br>
     <strong>因果关系。</strong> "因为他杀了她父亲，所以她复仇"——这类因果链可能被<strong>简化</strong>。实际历史中一个冲突可能有 5 个原因——萨迦通常只保留最清晰的 1 个。
   </div>
 
-  <div class="layer weak">
+  <div class="evidence-tier evidence-weak">
     <strong>🔴 低层级：大概率是文学创造</strong><br>
     <strong>超自然现象。</strong> 预言梦、鬼魂、会说话的渡鸦、女巫的诅咒。这些与现代历史写作完全不兼容——但在萨迦的时代，这些不是"虚构"——是世界观的一部分。梦在萨迦中承载结构性功能——预兆"即将发生的暴力"——不一定是"编的"，但在现代意义上不是"历史"。<br>
     <strong>英雄化叙事。</strong> 单个英雄在不可能的条件下战胜大量敌人、孤身杀出重围——这是口传传统中"记住一个人的方式"。被夸张的概率很高。<br>
@@ -436,7 +403,7 @@
   <label><input type="radio" name="q1" value="b"> B. "说出来的话"或"被讲述的事"——与动词 segja（说）同源</label>
   <label><input type="radio" name="q1" value="c"> C. 法律文书——用于在议会上宣读的正式契约</label>
   <label><input type="radio" name="q1" value="d"> D. 国王的传记——专门用来记录王室成员的生平</label>
-  <button onclick="checkQuiz(1,'b','✅ 正确！saga 的原始含义非常朴素——就是"说出来的话"。在文字被引入之前，saga 就是在长屋里讲的故事。当这些故事在 12-13 世纪被写下来时，写作者保留了这个词——他们认为自己是在把老人口中的故事固定到羊皮纸上。','❌ 不对。正确答案是 B。saga 的原始含义是"说出来的话"或"被讲述的事"，与动词 segja（说）同源——和英语的 say、德语的 sagen 共享同一个印欧语词根。它不是史诗（史诗是韵文，萨迦是散文），不是法律文书，也不限于国王传记。')">检查答案</button>
+  <button onclick="checkQuiz(1,'b','✅ 正确！saga 的原始含义非常朴素——就是&quot;说出来的话&quot;。在文字被引入之前，saga 就是在长屋里讲的故事。当这些故事在 12-13 世纪被写下来时，写作者保留了这个词——他们认为自己是在把老人口中的故事固定到羊皮纸上。','❌ 不对。正确答案是 B。saga 的原始含义是&quot;说出来的话&quot;或&quot;被讲述的事&quot;，与动词 segja（说）同源——和英语的 say、德语的 sagen 共享同一个印欧语词根。它不是史诗（史诗是韵文，萨迦是散文），不是法律文书，也不限于国王传记。')">检查答案</button>
   <div id="f1" class="feedback"></div>
 </div>
 
@@ -456,7 +423,7 @@
   <label><input type="radio" name="q3" value="b"> B. 按信息类型分层——核心事件骨架（大概率准确）> 对话和数字（可能被修饰）> 超自然元素（文学创造）</label>
   <label><input type="radio" name="q3" value="c"> C. 13 世纪以前写的萨迦全信、14 世纪以后写的不信——以世纪为界一刀切</label>
   <label><input type="radio" name="q3" value="d"> D. 只相信被考古证实的部分——没有被考古证实的全部视为虚构</label>
-  <button onclick="checkQuiz(3,'b','✅ 正确！萨迦批评的核心方法论是分层——不是二元判断。核心事件骨架（地名/人名/主要冲突）大概率准确并经常被考古证实；对话和数字可能被口传修饰；超自然元素和晚期基督教植入在现代意义上不是历史但反映了写作时代的世界观。Ólafur Halldórsson 指出：人种学和物质文化的"背景事实"比政治事件的叙述更可靠——因为写作者几乎不可能弄错他自己日常生活的方式。','❌ 不对。正确答案是 B。萨迦的可靠性不是二元的"真/假"判断——不同类型的信息有不同的可靠性层级。考古验证了"文兰有人登陆过"这个核心主张（L\'Anse aux Meadows）——但没有验证"芙蕾迪斯用斧杀了五个女人"。这不是"全信或全不信"——是分层判断。')">检查答案</button>
+  <button onclick="checkQuiz(3,'b','✅ 正确！萨迦批评的核心方法论是分层——不是二元判断。核心事件骨架（地名/人名/主要冲突）大概率准确并经常被考古证实；对话和数字可能被口传修饰；超自然元素和晚期基督教植入在现代意义上不是历史但反映了写作时代的世界观。Ólafur Halldórsson 指出：人种学和物质文化的&quot;背景事实&quot;比政治事件的叙述更可靠——因为写作者几乎不可能弄错他自己日常生活的方式。','❌ 不对。正确答案是 B。萨迦的可靠性不是二元的&quot;真/假&quot;判断——不同类型的信息有不同的可靠性层级。考古验证了&quot;文兰有人登陆过&quot;这个核心主张（L\'Anse aux Meadows）——但没有验证&quot;芙蕾迪斯用斧杀了五个女人&quot;。这不是&quot;全信或全不信&quot;——是分层判断。')">检查答案</button>
   <div id="f3" class="feedback"></div>
 </div>
 
@@ -466,7 +433,7 @@
   <label><input type="radio" name="q4" value="b"> B. Grænlendinga saga 将多次航行分开描写，Eiríks saga 将其压缩为一次大型史诗——且对芙蕾迪斯的描绘截然相反</label>
   <label><input type="radio" name="q4" value="c"> C. 一部说北欧人在文兰发现了黄金，另一部说没发现任何有价值的东西</label>
   <label><input type="radio" name="q4" value="d"> D. 两部萨迦完全一致——没有矛盾，只是写作风格不同</label>
-  <button onclick="checkQuiz(4,'b','✅ 正确！两部萨迦在叙事结构（多次航行 vs 一次整合史诗）、首次发现者（比亚尔尼 vs 莱夫）、芙蕾迪斯的形象（冷血杀手 vs 怀孕女英雄）上存在系统性矛盾。学术共识：Grænlendinga saga 更古老、更接近口传材料——多次航行的复杂结构难以被"编造"（编造者会选择更简单的单一英雄叙事）；Eiríks saga 更像是将早期材料重新编排以适应更晚期读者的口味（更文学化、更基督教化、更英雄化）。','❌ 不对。正确答案是 B。两部萨迦的矛盾不是细节问题——是结构性和人设性的。Grænlendinga saga 的多航行框架 + 杀人者芙蕾迪斯 vs Eiríks saga 的单次史诗 + 女英雄芙蕾迪斯。学术共识认为 Grænlendinga saga 更接近原始材料——因为口传传统中"多次航行的复杂结构"比"一个连贯的英雄故事"更不可能被编造者发明。')">检查答案</button>
+  <button onclick="checkQuiz(4,'b','✅ 正确！两部萨迦在叙事结构（多次航行 vs 一次整合史诗）、首次发现者（比亚尔尼 vs 莱夫）、芙蕾迪斯的形象（冷血杀手 vs 怀孕女英雄）上存在系统性矛盾。学术共识：Grænlendinga saga 更古老、更接近口传材料——多次航行的复杂结构难以被&quot;编造&quot;（编造者会选择更简单的单一英雄叙事）；Eiríks saga 更像是将早期材料重新编排以适应更晚期读者的口味（更文学化、更基督教化、更英雄化）。','❌ 不对。正确答案是 B。两部萨迦的矛盾不是细节问题——是结构性和人设性的。Grænlendinga saga 的多航行框架 + 杀人者芙蕾迪斯 vs Eiríks saga 的单次史诗 + 女英雄芙蕾迪斯。学术共识认为 Grænlendinga saga 更接近原始材料——因为口传传统中&quot;多次航行的复杂结构&quot;比&quot;一个连贯的英雄故事&quot;更不可能被编造者发明。')">检查答案</button>
   <div id="f4" class="feedback"></div>
 </div>
 
@@ -476,7 +443,7 @@
   <label><input type="radio" name="q5" value="b"> B. 英语中 "Saga" 比 "Sagas" 读起来更好听——纯粹是审美选择</label>
   <label><input type="radio" name="q5" value="c"> C. 暗示这是"第三部文兰萨迦"——幸村诚在延续萨迦传统，而非只是改编它</label>
   <label><input type="radio" name="q5" value="d"> D. 单数形式在日本漫画标题中更常见——是出版惯例而非有意义的选择</label>
-  <button onclick="checkQuiz(5,'c','✅ 正确！单数 "Saga" 是一个多层次的有意识选择。如果漫画只是在"改编文兰萨迦的事件"，应该用复数——两部萨迦的学术统称就是 "Vinland Sagas"。幸村诚选单数——暗示他在做和 13 世纪冰岛写作者一样的事：从碎片化的来源中编织出一部新的、连贯的、属于他自己时代的文兰叙事。漫画的叙事技法（零旁白评判、大量对话、间接情感表达、以行动推进）与萨迦文学的核心特征高度一致——他吸收了萨迦的<strong>形式</strong>，不仅仅是萨迦的<strong>内容</strong>。','❌ 不对。正确答案是 C。单数 "Saga" 不是翻译错误或审美选择——它暗示这是"第三部文兰萨迦"。幸村诚的位置与 13 世纪冰岛萨迦写作者平行——两者都在从碎片化来源中编织新的连贯叙事。漫画叙事本身的形式技法（零旁白、间接情感、行动驱动）也惊人地接近萨迦文学。这不是"改编萨迦"——是"写一部萨迦"。')">检查答案</button>
+  <button onclick="checkQuiz(5,'c','✅ 正确！单数 &quot;Saga&quot; 是一个多层次的有意识选择。如果漫画只是在&quot;改编文兰萨迦的事件&quot;，应该用复数——两部萨迦的学术统称就是 &quot;Vinland Sagas&quot;。幸村诚选单数——暗示他在做和 13 世纪冰岛写作者一样的事：从碎片化的来源中编织出一部新的、连贯的、属于他自己时代的文兰叙事。漫画的叙事技法（零旁白评判、大量对话、间接情感表达、以行动推进）与萨迦文学的核心特征高度一致——他吸收了萨迦的<strong>形式</strong>，不仅仅是萨迦的<strong>内容</strong>。','❌ 不对。正确答案是 C。单数 &quot;Saga&quot; 不是翻译错误或审美选择——它暗示这是&quot;第三部文兰萨迦&quot;。幸村诚的位置与 13 世纪冰岛萨迦写作者平行——两者都在从碎片化来源中编织新的连贯叙事。漫画叙事本身的形式技法（零旁白、间接情感、行动驱动）也惊人地接近萨迦文学。这不是&quot;改编萨迦&quot;——是&quot;写一部萨迦&quot;。')">检查答案</button>
   <div id="f5" class="feedback"></div>
 </div>
 
@@ -495,6 +462,10 @@
     <a href="0006-vinland-norse-completion.html">Lesson 0006：文兰殖民</a>
     &nbsp;·&nbsp;
     <a href="../reference/vinland-saga-character-reference.html">角色-史实对照</a>
+    &nbsp;·&nbsp;
+    <a href="../reference/icelandic-commonwealth-law.html">冰岛共和国法律体系</a>
+    &nbsp;·&nbsp;
+    <a href="../reference/icelandic-literacy.html">冰岛识字率</a>
   </p>
 </div>
 
