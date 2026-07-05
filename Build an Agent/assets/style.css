@@ -1,0 +1,193 @@
+/* === Agent Academy — Shared Stylesheet === */
+/* Tufte-inspired: clean typography, generous whitespace, minimal chrome */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap');
+
+:root {
+  --bg: #fafaf8;
+  --card-bg: #ffffff;
+  --text: #1a1a1a;
+  --text-muted: #6b6b6b;
+  --accent: #2563eb;
+  --accent-soft: #dbeafe;
+  --border: #e5e5e5;
+  --success: #16a34a;
+  --success-soft: #dcfce7;
+  --warning: #d97706;
+  --warning-soft: #fef3c7;
+  --code-bg: #f4f4f5;
+  --radius: 6px;
+  --max-width: 720px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--text);
+  background: var(--bg);
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+}
+
+/* --- Typography --- */
+h1 { font-size: 2.2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+h2 { font-size: 1.5rem; font-weight: 600; margin: 2.5rem 0 0.75rem; color: var(--text); }
+h3 { font-size: 1.15rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+p  { margin: 0.75rem 0; }
+a  { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* --- Lesson Header --- */
+.lesson-meta {
+  display: flex; gap: 1rem; align-items: center;
+  font-size: 0.85rem; color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+.lesson-number {
+  display: inline-block;
+  background: var(--accent); color: white;
+  font-weight: 600; font-size: 0.75rem;
+  padding: 0.15em 0.6em; border-radius: 3px;
+}
+
+/* --- Tags / Concept Labels --- */
+.tag {
+  display: inline-block;
+  font-size: 0.75rem; font-weight: 500;
+  padding: 0.15em 0.55em; border-radius: 3px;
+  background: var(--accent-soft); color: var(--accent);
+  margin-right: 0.3em;
+}
+
+/* --- Cards --- */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin: 1.25rem 0;
+}
+.card--highlight {
+  border-left: 4px solid var(--accent);
+}
+.card--success {
+  border-left: 4px solid var(--success);
+  background: var(--success-soft);
+}
+.card--warning {
+  border-left: 4px solid var(--warning);
+  background: var(--warning-soft);
+}
+
+/* --- Code --- */
+code {
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.85em;
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+pre {
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  margin: 1.25rem 0;
+}
+pre code {
+  background: none; padding: 0; font-size: inherit;
+  color: inherit;
+}
+
+/* --- Diagrams --- */
+.diagram {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  text-align: center;
+  margin: 1.5rem 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* --- Quiz --- */
+.quiz { margin: 2rem 0; }
+.quiz-question {
+  font-weight: 600; margin-bottom: 0.75rem;
+}
+.quiz-option {
+  display: block;
+  width: 100%; text-align: left;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin: 0.4rem 0;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.15s, border-color 0.15s;
+}
+.quiz-option:hover { border-color: var(--accent); background: var(--accent-soft); }
+.quiz-option.selected { border-color: var(--accent); background: var(--accent-soft); }
+.quiz-option.correct { border-color: var(--success); background: var(--success-soft); }
+.quiz-option.incorrect { border-color: #dc2626; background: #fef2f2; }
+.quiz-feedback {
+  margin-top: 0.75rem; font-weight: 500; min-height: 1.5em;
+}
+.quiz-feedback.correct { color: var(--success); }
+.quiz-feedback.incorrect { color: #dc2626; }
+
+/* --- Steps / Numbered List --- */
+.steps { counter-reset: step; list-style: none; padding: 0; }
+.steps li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 2.5rem;
+  margin: 1rem 0;
+}
+.steps li::before {
+  content: counter(step);
+  position: absolute; left: 0; top: -0.1rem;
+  width: 1.75rem; height: 1.75rem;
+  background: var(--accent);
+  color: white;
+  font-weight: 600; font-size: 0.85rem;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* --- Footer / Navigation --- */
+.lesson-footer {
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+.lesson-footer nav {
+  display: flex; justify-content: space-between;
+}
+.ask-followup {
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin: 2rem 0 1rem;
+  font-size: 0.9rem;
+}
+
+/* --- Print --- */
+@media print {
+  body { font-size: 12pt; padding: 0; max-width: none; }
+  pre { border: 1px solid #ccc; }
+  .quiz-option { border: 1px solid #999; }
+}

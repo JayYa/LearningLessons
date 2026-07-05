@@ -1,6 +1,6 @@
 # 📘 Learning Lessons
 
-一套涵盖现代 C# 语言演进、维京历史、VS Code 扩展开发与 GitHub Actions 自动化的技术/人文课程合集。四个课程分别深挖 .NET 从 C# 8 到 C# 15 的每一次语法升级、冰海战纪背后的真实维京时代、从零构建一个 VS Code 扩展的工程全流程，以及用 GitHub 标签触发 AI 工作流的自动化实践。虽主题各异，但共享同一方法论——从表层 API 下沉到内部机制，从孤立知识点串成系统认知。
+一套覆盖现代 C# 语言演进、维京历史、VS Code 扩展开发、GitHub Actions 自动化与 AI Agent 构建的技术/人文课程合集。五个课程分别深挖 .NET 从 C# 8 到 C# 15 的每一次语法升级、冰海战纪背后的真实维京时代、从零构建一个 VS Code 扩展的工程全流程、用 GitHub 标签触发 AI 工作流的自动化实践，以及 AI Agent 的核心概念与构建方法。虽主题各异，但共享同一方法论——从表层 API 下沉到内部机制，从孤立知识点串成系统认知。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
@@ -114,5 +114,14 @@
 **参考资料：**
 - [Reference — Agent-Runner 契约速查表](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/reference/agent-runner-contract.html) — Agent-Runner 接口契约与集成规范速查
 - [Reference: 标签触发工作流语法速查表](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/reference/github-actions-label-workflow-syntax.html) — 标签触发工作流的事件类型、条件筛选与作业配置语法速查
+
+## Build an Agent
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [Lesson 01 · What is an Agent](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0001-what-is-an-agent.html) | 从零认识 AI Agent 的核心概念，理解 Agent 与普通 LLM 调用的本质区别 |
+
+**参考资料：**
+- [Agent Glossary · Reference](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/reference/agent-glossary.html) — AI Agent 领域核心术语速查
 
 *自动生成*

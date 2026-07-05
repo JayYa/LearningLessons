@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Glossary · Reference</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .glossary dt {
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    color: var(--text);
+  }
+  .glossary dt:first-of-type { border-top: none; margin-top: 0.5rem; }
+  .glossary dd {
+    margin-left: 0;
+    margin-top: 0.3rem;
+    color: var(--text-muted);
+  }
+  .glossary dd .aka {
+    font-style: italic;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="lesson-meta">
+  <span>Reference</span>
+  <span>·</span>
+  <span>Agent Academy</span>
+</div>
+
+<h1>Agent 核心概念速查表</h1>
+<p style="color:var(--text-muted);">
+  本术语表是 Agent 开发的"压缩字典"——每个术语的精确定义和它在代码中的对应物。持续更新。
+</p>
+
+<dl class="glossary">
+
+<dt>Agent（智能体）</dt>
+<dd>
+  一个能够<strong>自主感知环境、做出决策、调用工具并执行多步任务</strong>的 AI 系统。由一个 LLM + 工具集 + 记忆 + 执行循环（Agent Loop）组成。<br>
+  <span class="aka">对比：聊天机器人 = 单轮问答；Agent = 多步自主执行。</span>
+</dd>
+
+<dt>Agent Loop（Agent 循环）</dt>
+<dd>
+  驱动 Agent 运行的反馈循环：<strong>感知输入 → LLM 推理 → 调用工具(可选) → 获取结果 → 继续推理 → 生成最终输出</strong>。循环终止条件是 LLM 判断任务已完成或达到退出条件。<br>
+  <span class="aka">同义：ReAct Loop（Reasoning + Acting）。</span>
+</dd>
+
+<dt>LLM（Large Language Model / 大语言模型）</dt>
+<dd>
+  Agent 的<strong>决策中枢</strong>。接收「任务描述 + 对话历史 + 可用工具列表 + 工具执行结果」，输出「该调用哪个工具」或「最终回复」。LLM 不做实际动作，只做推理决策。常用模型：GPT-4o、Claude Opus、Gemini 等。
+</dd>
+
+<dt>Tool / Plugin（工具 / 插件）</dt>
+<dd>
+  可以被 Agent 调用的<strong>外部函数或 API</strong>，是 Agent 与外部世界交互的接口。在 Semantic Kernel 中通过 <code>[KernelFunction]</code> 定义，在 OpenAI 中叫 Function Calling。<br>
+  <span class="aka">同义：Function、Plugin、Skill、Action。</span>
+</dd>
+
+<dt>Function Calling（函数调用）</dt>
+<dd>
+  LLM 的一种能力——模型不直接执行函数，而是<strong>输出一个结构化的函数调用请求</strong>（函数名 + 参数 JSON），由框架负责实际执行。这是 Agent 能"做事"的关键机制。<br>
+  <span class="aka">注意：OpenAI 用这个术语，Anthropic 叫 Tool Use，本质相同。</span>
+</dd>
+
+<dt>Memory / Context（记忆 / 上下文）</dt>
+<dd>
+  Agent 的信息存储机制，分两层：<br>
+  · <strong>短期记忆</strong> = 对话历史（ChatHistory），Agent 通过上下文窗口"记住"当前会话<br>
+  · <strong>长期记忆</strong> = 向量数据库 + 语义检索（RAG），Agent 可以跨会话检索知识<br>
+  <span class="aka">关键约束：LLM 的上下文窗口有 token 上限，需要管理策略。</span>
+</dd>
+
+<dt>RAG（Retrieval-Augmented Generation / 检索增强生成）</dt>
+<dd>
+  在调用 LLM <strong>之前</strong>，先从外部知识库检索相关文档，将文档注入 Prompt 再让 LLM 回答。解决 LLM 知识过时、幻觉、私有知识三大问题。<br>
+  <span class="aka">流程：查询 → Embedding → 向量检索 → 拼入 Prompt → LLM 生成。</span>
+</dd>
+
+<dt>Semantic Kernel</dt>
+<dd>
+  Microsoft 开源的 <strong>AI Agent 编排框架</strong>（C# / Python / Java），核心概念：Kernel（编排引擎）、Plugins（工具）、Memory（记忆）、Agents（ChatCompletionAgent 等）。对 C# 开发者是自然选择。<br>
+  <span class="aka">对比：LangChain（Python 生态）、AutoGen（多 Agent 侧重）。</span>
+</dd>
+
+<dt>Kernel</dt>
+<dd>
+  Semantic Kernel 的<strong>中央编排器</strong>。管理 AI 服务连接、注册 Plugins、协调 Agent 执行。每个 Agent 关联一个 Kernel 实例。<br>
+  <span class="aka">类比：ASP.NET 的 Host/ServiceCollection。</span>
+</dd>
+
+<dt>ChatHistory</dt>
+<dd>
+  Semantic Kernel 中存储<strong>完整对话记录</strong>的数据结构。每次 Agent 调用时，ChatHistory 被序列化为 LLM 的消息数组（System + User + Assistant + Tool）。<br>
+  <span class="aka">关键操作：Add、序列化、截断（防止超出 token 限制）。</span>
+</dd>
+
+<dt>Instructions / System Prompt（系统指令）</dt>
+<dd>
+  定义 Agent <strong>角色、行为边界和工具使用规则</strong>的提示词。在 Semantic Kernel 中通过 <code>ChatCompletionAgent.Instructions</code> 设置。它是 Agent 的"性格"和"道德准则"。<br>
+  <span class="aka">写好 Instructions 是 Agent 工程最重要的技能之一。</span>
+</dd>
+
+<dt>ReAct（Reasoning + Acting）</dt>
+<dd>
+  最基础的 Agent 模式：LLM 交替进行<strong>推理（思考下一步）</strong>和<strong>行动（调用工具）</strong>。每个推理步骤基于前一次行动的结果。90% 的 Agent 应用都基于此模式。<br>
+  <span class="aka">对比：Plan-and-Execute（先规划好全部步骤再执行）。</span>
+</dd>
+
+<dt>Multi-Agent（多 Agent 系统）</dt>
+<dd>
+  多个 Agent <strong>分工协作</strong>完成复杂任务的架构。每个 Agent 有独立的 Instructions 和工具集，Agent 间通过共享消息或以层级调用协作。常见模式：Group Chat、Delegation、Debate。<br>
+  <span class="aka">Semantic Kernel 支持：AgentGroupChat、SelectionStrategy、TerminationStrategy。</span>
+</dd>
+
+<dt>MCP（Model Context Protocol）</dt>
+<dd>
+  Anthropic 提出的<strong>Agent-to-Tool 标准协议</strong>。定义统一的工具发现、调用、认证接口，让任何 Agent 能使用任何 MCP Server 提供的工具。<br>
+  <span class="aka">2025 年成为行业标准，Microsoft 已将 MCP 集成到 Semantic Kernel。</span>
+</dd>
+
+<dt>Token（令牌）</dt>
+<dd>
+  LLM 处理文本的<strong>最小单位</strong>——不是字也不是词。英文 ~0.75 词/token，中文 ~1-2 字/token。关键在于：<strong>token 有数量上限</strong>（上下文窗口）和<strong>按量计费</strong>（in + out tokens）。<br>
+  <span class="aka">Agent 开发的核心约束之一：长对话 = 更多 tokens = 更贵且可能超出窗口。</span>
+</dd>
+
+<dt>Temperature</dt>
+<dd>
+  控制 LLM 输出<strong>随机性</strong>的参数（0~2）。0 = 确定性（相同输入→相同输出），2 = 高随机性。Agent 的工具选择阶段建议低 temperature（0~0.3），创意生成阶段可以更高。<br>
+  <span class="aka">不是所有场景都该用默认值——根据步骤而非整个 Agent 调整。</span>
+</dd>
+
+</dl>
+
+<div class="lesson-footer" style="margin-top:3rem;">
+  <nav>
+    <a href="../lessons/0001-what-is-an-agent.html">← 返回 Lesson 01</a>
+    <span></span>
+  </nav>
+</div>
+
+</body>
+</html>
