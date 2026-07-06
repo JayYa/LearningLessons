@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 28: C# 15 — 内存安全第一阶段</title>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
+</head>
+<body>
+
+<h1>Lesson 28: C# 15 — 内存安全：重新定义 <code>unsafe</code> <span class="en">Memory Safety Phase 1</span></h1>
+<p class="subtitle">.NET 11 Preview · 指针声明不再需要 unsafe · unsafe 从"开关"变成"契约"</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="27-csharp15-collection-expression-args.html">Lesson 27（集合表达式参数）</a>；有基本的指针概念（知道 <code>int*</code> 和 <code>&amp;</code> 是什么）即可。<br>
+<strong>状态：</strong>.NET 11 Preview 5 <span class="badge badge--preview">Preview</span>——指针宽松已可用，完整合约强制仍在开发。<br>
+<strong>阅读：</strong><a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/unsafe-code">不安全代码语言参考</a> ·
+<a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/proposals/unsafe-evolution">功能规范</a> ·
+<a href="https://github.com/dotnet/csharplang/issues/9704">设计提案 #9704</a>
+</div>
+
+<!-- ========================== 0. HOOK ========================== -->
+
+<h2>〇、unsafe 不是开关，是承诺 <span class="en">The Big Reframe</span></h2>
+
+<p>C# 从 1.0 起就有 <code>unsafe</code> 关键字。它的工作方式二十多年没变：</p>
+
+<pre><code><span class="cmt">// C# 1.0 ~ C# 14：unsafe 是一把"所有指针操作的总开关"</span>
+<span class="kw">unsafe</span>
+{
+    <span class="kw">int</span>* p = &amp;x;       <span class="cmt">// 声明指针——要 unsafe</span>
+    <span class="kw">int</span> val = *p;       <span class="cmt">// 解引用——也要 unsafe</span>
+    <span class="kw">fixed</span> (<span class="kw">int</span>* f = arr)  <span class="cmt">// fixed——同样要 unsafe</span>
+}
+<span class="cmt">// unsafe 块就是一个大麻袋：所有和指针沾边的东西全扔进去</span></code></pre>
+
+<p>这个模型的问题是：<strong>它把"持有指针"和"解引用指针"混在一起</strong>。持有指针本身不破坏内存安全——只有通过指针读写内存才会。二十多年来，这两个概念被同一种语法死死绑在一起。</p>
+
+<p>C# 15 开始改变这一点。<strong>核心洞察：</strong></p>
+
+<div class="callout callout--good">
+<strong>指针的存在 ≠ 不安全。解引用指针 = 不安全。</strong><br>
+<code>int* p = &amp;x</code> 不会破坏任何东西。但 <code>*p = 42</code> 可能写到错误的地址。<br>
+C# 15 的 <code>unsafe</code> 从"标记所有指针操作"转向"标记真正危险的操作"。
+</div>
+
+<p>这不仅是语法上的放松——它是 C# 对内存安全的根本性反思。设计团队甚至提出了一个长达多版本的路线图。我们来看看第一步。</p>
+
+<!-- ========================== 1. TWO MODELS ========================== -->
+
+<h2>一、两套模型——一张表看懂什么变了 <span class="en">Two Models at a Glance</span></h2>
+
+<p>C# 15 定义了两套内存安全模型。原始模型（C# 1.0）仍然是默认——新模型通过 <code>LangVersion=preview</code> 开启：</p>
+
+<table>
+<tr><th>操作</th><th>原始模型（C# 1.0~14）</th><th>更新模型（C# 15 Preview）</th></tr>
+<tr><td><strong>声明指针类型</strong> <code>int* p</code></td><td>需要 <code>unsafe</code></td><td>✅ 安全代码中允许</td></tr>
+<tr><td><strong>取地址</strong> <code>&amp;x</code></td><td>需要 <code>unsafe</code></td><td>✅ 安全代码中允许</td></tr>
+<tr><td><strong><code>fixed</code> 语句</strong>（钉住变量）</td><td>需要 <code>unsafe</code></td><td>✅ 安全代码中允许</td></tr>
+<tr><td><strong><code>stackalloc</code> 转指针</strong></td><td>需要 <code>unsafe</code></td><td>✅ 安全代码中允许</td></tr>
+<tr><td><strong><code>sizeof</code></strong>（任意非托管类型）</td><td>需要 <code>unsafe</code></td><td>✅ 安全代码中允许</td></tr>
+<tr><td><strong>指针解引用</strong> <code>*p</code> / <code>p-&gt;m</code> / <code>p[i]</code></td><td>需要 <code>unsafe</code></td><td><strong>仍需要 <code>unsafe</code></strong></td></tr>
+<tr><td><strong>函数指针调用</strong></td><td>需要 <code>unsafe</code></td><td><strong>仍需要 <code>unsafe</code></strong></td></tr>
+<tr><td><strong>固定大小缓冲区元素访问</strong></td><td>需要 <code>unsafe</code></td><td><strong>仍需要 <code>unsafe</code></strong></td></tr>
+<tr><td><strong>调用 <code>unsafe</code> 标记的方法</strong></td><td>无调用者要求</td><td><strong>调用者需要 <code>unsafe</code></strong>（新增）</td></tr>
+</table>
+
+<p>关键的思维转变：<code>unsafe</code> 不再描述"你在做什么"，而是描述<strong>"谁负责验证安全"</strong>。</p>
+
+<!-- ========================== 2. RELAXED OPERATIONS ========================== -->
+
+<h2>二、C# 15 中不再需要 unsafe 的操作 <span class="en">Relaxed Operations</span></h2>
+
+<h3>2.1 声明指针 + 取地址——指针变成"一等公民"</h3>
+
+<pre><code><span class="cmt">// C# 15：这些代码不需要 unsafe 块——指针可以自由创建和传递</span>
+<span class="kw">int</span> value = <span class="num">42</span>;
+<span class="kw">int</span>* pointer = &amp;value;           <span class="cmt">// 声明 + 取地址——安全</span>
+<span class="kw">int</span>** pointerToPtr = &amp;pointer;   <span class="cmt">// 指向指针的指针——也安全</span>
+
+<span class="kw">void</span> Process(<span class="kw">int</span>* p) { }            <span class="cmt">// 方法参数可以是指针——安全</span>
+<span class="kw">int</span>* GetPointer() => &amp;_field;    <span class="cmt">// 返回值也可以——安全（注意生命周期！）</span></code></pre>
+
+<div class="callout callout--bad">
+<strong>但你仍然不能解引用：</strong><code>Console.WriteLine(*pointer)</code> 仍然需要 <code>unsafe</code> 块。指针可以"持有"和"传递"，但只有在 <code>unsafe</code> 上下文中才能"看里面"。
+</div>
+
+<h3>2.2 fixed 语句——钉住变量不再需要 unsafe</h3>
+
+<pre><code><span class="cmt">// C# 15：fixed 本身不需要 unsafe——只有解引用需要</span>
+<span class="kw">int</span>[] numbers = [<span class="num">10</span>, <span class="num">20</span>, <span class="num">30</span>, <span class="num">40</span>, <span class="num">50</span>];
+
+<span class="kw">fixed</span> (<span class="kw">int</span>* first = numbers)        <span class="cmt">// fixed 在安全代码中——不需要 unsafe</span>
+{
+    <span class="kw">int</span>* current = first;           <span class="cmt">// 指针运算——也不需要 unsafe</span>
+    current += <span class="num">2</span>;                    <span class="cmt">// 移动指针——仍然不需要</span>
+
+    <span class="kw">unsafe</span>                           <span class="cmt">// 只有这里！</span>
+    {
+        Console.WriteLine(*current); <span class="cmt">// 解引用——需要 unsafe</span>
+    }
+}</code></pre>
+
+<p>注意结构：整段代码没有外层的 <code>unsafe { }</code> 包裹——<code>fixed</code> 和指针运算都在安全代码中进行。只有真正读内存的那一行才在 <code>unsafe</code> 块中。这在原始模型下是不可能的。</p>
+
+<h3>2.3 stackalloc 转指针——不再需要 unsafe</h3>
+
+<pre><code><span class="cmt">// C# 7.2+：stackalloc 赋给 Span&lt;T&gt;——安全（已有）</span>
+Span&lt;<span class="kw">int</span>&gt; span = stackalloc <span class="kw">int</span>[<span class="num">64</span>];
+
+<span class="cmt">// C# 15：stackalloc 赋给指针——现在也安全了</span>
+<span class="kw">int</span>* buffer = stackalloc <span class="kw">int</span>[<span class="num">64</span>];  <span class="cmt">// 创建指针——安全</span>
+<span class="kw">unsafe</span> { buffer[<span class="num">0</span>] = <span class="num">42</span>; }          <span class="cmt">// 写入——需要 unsafe</span></code></pre>
+
+<div class="callout callout--info">
+<strong>例外——未初始化 stackalloc 赋给 Span 时收紧：</strong>如果一个 <code>stackalloc</code> 不带初始化器、转为 <code>Span&lt;T&gt;</code>、且方法上有 <code>[SkipLocalsInit]</code>，则在更新模型下需要 <code>unsafe</code> 上下文。因为此时 Span 会暴露未初始化的栈内存——违反 Span 的"安全包装"契约。这是少数<em>收紧</em>而非放松的规则。
+</div>
+
+<h3>2.4 sizeof——任意非托管类型均可</h3>
+
+<pre><code><span class="cmt">// C# 14 之前：sizeof 只对内置类型安全——其他类型需要 unsafe</span>
+<span class="kw">int</span> size1 = <span class="kw">sizeof</span>(<span class="kw">int</span>);         <span class="cmt">// 一直安全</span>
+<span class="kw">int</span> size2 = <span class="kw">sizeof</span>(Guid);        <span class="cmt">// C# 14：需要 unsafe | C# 15：安全 ✓</span>
+<span class="kw">int</span> size3 = <span class="kw">sizeof</span>(DateTime);    <span class="cmt">// C# 14：需要 unsafe | C# 15：安全 ✓</span></code></pre>
+
+<!-- ========================== 3. STILL UNSAFE ========================== -->
+
+<h2>三、仍然需要 unsafe 的操作——真正的危险 <span class="en">What Still Requires unsafe</span></h2>
+
+<p>新模型的核心判断标准：<strong>凡是"读/写指针指向的内存"的操作，仍然需要 <code>unsafe</code> 上下文。</strong></p>
+
+<pre><code><span class="kw">int</span> value = <span class="num">42</span>;
+<span class="kw">int</span>* p = &amp;value;                  <span class="cmt">// ✅ 安全——只是取了地址</span>
+
+<span class="kw">unsafe</span>
+{
+    <span class="kw">int</span> read = *p;                  <span class="cmt">// ❗ 解引用——需要 unsafe</span>
+    p[<span class="num">0</span>] = <span class="num">100</span>;                       <span class="cmt">// ❗ 指针元素访问——需要 unsafe</span>
+}
+
+<span class="kw">struct</span> Point { <span class="kw">int</span> X; <span class="kw">int</span> Y; }
+Point* pp = (Point*)&amp;value;
+<span class="kw">unsafe</span>
+{
+    pp-&gt;X = <span class="num">10</span>;                      <span class="cmt">// ❗ 指针成员访问——需要 unsafe</span>
+}</code></pre>
+
+<p><strong>同样需要 unsafe 的操作：</strong></p>
+
+<table>
+<tr><th>操作</th><th>为什么仍然危险</th></tr>
+<tr><td><strong>指针解引用</strong> <code>*p</code></td><td>直接访问任意内存地址——可能越界、空指针、释放后使用</td></tr>
+<tr><td><strong>指针成员访问</strong> <code>p-&gt;X</code></td><td>本质上是 <code>(*p).X</code>——包含解引用</td></tr>
+<tr><td><strong>指针元素访问</strong> <code>p[i]</code></td><td>本质上是 <code>*(p + i)</code>——可能越界</td></tr>
+<tr><td><strong>函数指针调用</strong></td><td>跳转到任意地址——调用约定不匹配、地址无效</td></tr>
+<tr><td><strong>固定大小缓冲区元素访问</strong></td><td>通过指针访问嵌入 struct 内的缓冲区——同样的解引用风险</td></tr>
+<tr><td><strong>调用 <code>unsafe</code> 标记的方法</strong></td><td>该方法承诺它不安全——调用者必须显式接受审计义务</td></tr>
+</table>
+
+<!-- ========================== 4. CALLER CONTRACT ========================== -->
+
+<h2>四、unsafe 的新角色——从"内部许可"到"调用者契约" <span class="en">Caller Contract</span></h2>
+
+<h3>4.1 旧模型：unsafe 只是一个内部通行证</h3>
+
+<pre><code><span class="cmt">// C# 14：unsafe 修饰符只是让方法内部用指针——对调用者完全透明</span>
+<span class="kw">public static unsafe int</span> ReadInt(<span class="kw">byte</span>* source)
+{
+    <span class="kw">return</span> *(<span class="kw">int</span>*)source;   <span class="cmt">// 内部不安全，但调用者完全不知情</span>
+}
+
+<span class="cmt">// 调用方——不需要 unsafe 上下文，即使传了指针</span>
+<span class="kw">int</span> result = ReadInt(ptr);   <span class="cmt">// C# 14：OK，调用者无感知</span></code></pre>
+
+<h3>4.2 新模型：unsafe 是对调用者的警告</h3>
+
+<pre><code><span class="cmt">// C# 15 更新模型：方法的 unsafe 标记是公开契约——调用者必须负责</span>
+<span class="kw">public static unsafe int</span> ReadInt32(<span class="kw">byte</span>* source)
+{
+    <span class="kw">unsafe</span>                              <span class="cmt">// 注意：方法上的 unsafe 不再建立内部上下文</span>
+    {                                    <span class="cmt">// 需要显式的 unsafe 块来做解引用
+</span>        <span class="kw">return</span> *(<span class="kw">int</span>*)source;
+    }
+}
+
+<span class="cmt">// 调用方——必须包裹在 unsafe 中</span>
+<span class="kw">unsafe</span>
+{
+    <span class="kw">int</span> result = ReadInt32(buffer);  <span class="cmt">// C# 15：调用者必须接受 unsafe 义务</span>
+}</code></pre>
+
+<p><strong>关键时刻：</strong><code>unsafe</code> 修饰符在方法签名上的含义变了：
+旧模型：<strong>"此方法体内可使用指针"</strong>（内部许可）
+新模型：<strong>"此方法有不安全操作——调用者审计"</strong>（公开契约）</p>
+
+<h3>4.3 传播 vs 消除——两条路选一条</h3>
+
+<p>当你调用了 caller-unsafe 方法，你有两个选择：</p>
+
+<pre><code><span class="cmt">// 选择一：传播——把自己也标记为 unsafe，把义务传递给上层调用者</span>
+<span class="kw">public static unsafe int</span> Process(<span class="kw">byte</span>* data)
+{
+    <span class="kw">unsafe</span> { <span class="kw">return</span> ReadInt32(data); }   <span class="cmt">// 传播——我不消除，我的调用者来审</span>
+}
+
+<span class="cmt">// 选择二：消除——用验证逻辑消解掉不安全风险，对外暴露安全接口</span>
+<span class="kw">public static int</span> SumBytes(<span class="kw">byte</span>[] source)   <span class="cmt">// 注意：没有 unsafe 修饰符</span>
+{
+    ArgumentNullException.ThrowIfNull(source);  <span class="cmt">// 验证输入</span>
+
+    <span class="kw">fixed</span> (<span class="kw">byte</span>* first = source)               <span class="cmt">// fixed——安全</span>
+    {
+        <span class="kw">unsafe</span>                                   <span class="cmt">// 只有真正需要的地方</span>
+        {
+            <span class="cmt">// SAFETY: null 检查 + source.Length 确保每次读取都在数组边界内</span>
+            <span class="kw">int</span> total = <span class="num">0</span>;
+            <span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">0</span>; i &lt; source.Length; i++)
+                total += first[i];
+            <span class="kw">return</span> total;
+        }
+    }
+}
+<span class="cmt">// 调用者可以安全使用——不需要 unsafe 上下文</span></code></pre>
+
+<div class="callout callout--good">
+<strong>消除模式是 C# 新模型的精髓：</strong>你在一小片 <code>unsafe</code> 块里做危险的事，用外围的验证逻辑保证安全，然后用"不带 unsafe 修饰符"的签名告诉世界："我处理好了，放心调用。"这和 Rust 的 <code>unsafe</code> 边界概念非常相似——不安全的具体操作被封锁在安全的抽象墙内。
+</div>
+
+<h3>4.4 安全文档——SAFETY 注释</h3>
+
+<pre><code><span class="cmt">// 更新模型鼓励两种注释来记录安全决策：</span>
+
+<span class="cmt">// 1. /// &lt;safety&gt; 文档块——放在方法签名上，说明调用者必须满足的前提条件</span>
+<span class="cmt">// 2. // SAFETY: 行内注释——放在 unsafe 块内，解释为什么这次操作是安全的</span>
+
+<span class="kw">public static unsafe byte</span> ReadByte(IntPtr ptr, <span class="kw">int</span> offset)
+{
+    <span class="kw">byte</span>* address = (<span class="kw">byte</span>*)ptr;
+    <span class="kw">unsafe</span>
+    {
+        <span class="cmt">// SAFETY: 依赖调用者的 /// &lt;safety&gt; 契约——
+        // ptr + offset 必须指向调用者有权读取的一个字节</span>
+        <span class="kw">return</span> address[offset];
+    }
+}</code></pre>
+
+<!-- ========================== 5. UNSAFE EXPRESSION ========================== -->
+
+<h2>五、unsafe 表达式——只包裹一个表达式 <span class="en">unsafe() Expression</span></h2>
+
+<p><code>unsafe { }</code> 块包围语句。但有些语法位置不接受语句——比如 <code>catch</code> 过滤器、字段初始化器、构造函数初始化器。<code>unsafe(expression)</code> 语法解决了这个盲区：</p>
+
+<pre><code><span class="cmt">// 场景一：await 一个 caller-unsafe 方法</span>
+<span class="cmt">// await 不能写在 unsafe { } 块里——所以需要 unsafe 表达式</span>
+<span class="kw">await</span> unsafe(DoUnsafeWork());     <span class="cmt">// unsafe 只包住方法调用，await 在外面</span>
+
+<span class="cmt">// 场景二：catch 过滤器调用 caller-unsafe 方法</span>
+<span class="kw">try</span> { <span class="kw">await</span> DoWork(); }
+<span class="kw">catch</span> (Exception e) <span class="kw">when</span> (unsafe(NowUnsafeCall(e)))  <span class="cmt">// 只包住过滤器表达式</span>
+{ }
+
+<span class="cmt">// 场景三：字段初始化器</span>
+<span class="kw">static int</span> _value = unsafe(ReadFromPointer());
+
+<span class="cmt">// 场景四：构造函数初始化器</span>
+<span class="kw">class</span> C(<span class="kw">int</span> x) : <span class="kw">base</span>(unsafe(GetBaseValue())) { }</code></pre>
+
+<div class="callout callout--info">
+<strong>语义：</strong><code>unsafe(expr)</code> 对括号内的单个表达式建立 <code>unsafe</code> 上下文。上下文不超出右括号。结果类型和值就是内部表达式的类型和值。也需要 <code>AllowUnsafeBlocks</code> 编译选项。
+</div>
+
+<!-- ========================== 6. SAFE KEYWORD ========================== -->
+
+<h2>六、新的 <code>safe</code> 关键字——编译器不知道的，你必须说清楚 <span class="en">The safe Keyword</span></h2>
+
+<p>有两种情况编译器无法判断安全性——必须由开发者显式标注：</p>
+
+<h3>6.1 extern 方法——调用原生代码</h3>
+
+<pre><code><span class="cmt">// C# 15 更新模型：每个 extern 方法必须标记 safe 或 unsafe</span>
+[LibraryImport(<span class="str">"libc"</span>)]
+<span class="kw">internal static safe partial int</span> getpid();    <span class="cmt">// 无参 + 原始类型——作者确认为 safe</span>
+
+[LibraryImport(<span class="str">"libc"</span>, StringMarshalling = StringMarshalling.Utf8)]
+<span class="kw">internal static unsafe partial nint</span> strlen(<span class="kw">byte</span>* str);  <span class="cmt">// 接收指针——标记为 unsafe</span>
+
+<span class="cmt">// 漏标 safe 或 unsafe → 编译错误</span></code></pre>
+
+<h3>6.2 显式布局 struct——字段位置冲突</h3>
+
+<pre><code><span class="cmt">// [StructLayout(LayoutKind.Explicit)] 下，所有字段必须标注 safe 或 unsafe</span>
+[StructLayout(LayoutKind.Explicit)]
+<span class="kw">struct</span> MyUnion
+{
+    [FieldOffset(<span class="num">0</span>)] <span class="kw">internal safe int</span> IntValue;      <span class="cmt">// 正常使用——safe</span>
+    [FieldOffset(<span class="num">0</span>)] <span class="kw">internal unsafe byte</span>* PtrValue; <span class="cmt">// 持有指针——unsafe</span>
+}</code></pre>
+
+<p><code>safe</code> 是一个<strong>上下文关键字</strong>——只在特定位置（<code>extern</code> 方法声明、显式布局字段）被识别为关键字，其他地方仍可用作标识符。在 <code>LangVersion=preview</code> 下启用。</p>
+
+<!-- ========================== 7. MIGRATION ========================== -->
+
+<h2>七、迁移路径——分阶段上路 <span class="en">Incremental Migration</span></h2>
+
+<h3>7.1 第一重——指针宽松（今天就能用）</h3>
+
+<p>只要在 .NET 11 Preview SDK 中设置 <code>&lt;LangVersion&gt;preview&lt;/LangVersion&gt;</code>，指针声明、<code>fixed</code>、<code>stackalloc</code> 转指针、<code>sizeof</code> 就可以从 <code>unsafe</code> 块中解放出来。<strong>这不需要打开任何新的 opt-in 开关。</strong></p>
+
+<p>这意味着你可以逐步把代码中 <code>unsafe</code> 块的范围缩小：</p>
+
+<pre><code><span class="cmt">// 迁移前（原始模型）</span>
+<span class="kw">unsafe</span>
+{
+    <span class="kw">fixed</span> (<span class="kw">int</span>* p = arr) { *p = <span class="num">42</span>; }
+}
+
+<span class="cmt">// 迁移后（指针宽松）</span>
+<span class="kw">fixed</span> (<span class="kw">int</span>* p = arr)
+{
+    <span class="kw">unsafe</span> { *p = <span class="num">42</span>; }
+}
+<span class="cmt">// unsafe 块从 3 行缩为 1 行——范围精确对应唯一的危险操作</span></code></pre>
+
+<h3>7.2 第二重——契约强制（仍在开发）</h3>
+
+<p>完整的调用者契约机制需要一个新的项目级 opt-in 属性。当开启时：</p>
+
+<ul>
+<li>方法上的 <code>unsafe</code> 成为调用者契约——调用方必须处于 <code>unsafe</code> 上下文</li>
+<li><code>unsafe</code> 修饰符不再自动为方法体建立 <code>unsafe</code> 上下文——需要显式 <code>unsafe { }</code> 块</li>
+<li><code>extern</code> 和显式布局字段必须标注 <code>safe</code> 或 <code>unsafe</code></li>
+<li>类型、静态构造器、析构器上的 <code>unsafe</code> 修饰符报错</li>
+</ul>
+
+<p>两重开关独立：</p>
+
+<table>
+<tr><th>Opt-in</th><th>AllowUnsafeBlocks</th><th>效果</th></tr>
+<tr><td>On</td><td>Off（默认）</td><td><strong>最安全配置：</strong>更新规则生效，不允许任何 unsafe 代码</td></tr>
+<tr><td>On</td><td>On</td><td>更新规则生效，允许 unsafe 代码</td></tr>
+<tr><td>Off</td><td>Off</td><td>原始模型，不能使用指针</td></tr>
+<tr><td>Off</td><td>On</td><td>原始模型，可以使用指针（当前默认）</td></tr>
+</table>
+
+<h3>7.3 兼容模式——保护未迁移的程序集</h3>
+
+<pre><code><span class="cmt">// 兼容模式：对于使用旧规则编译的程序集，</span>
+<span class="cmt">// 任何签名中含指针的成员都被视为 caller-unsafe</span>
+<span class="cmt">// 这样旧库不会 silently 失去 unsafe 要求</span>
+
+<span class="cmt">// 旧程序集中的方法：</span>
+<span class="kw">public static unsafe void</span> OldMethod(<span class="kw">int</span>* p);  <span class="cmt">// 签名有指针</span>
+
+<span class="cmt">// 新程序集中的调用方——兼容模式下仍需要 unsafe 上下文</span>
+<span class="kw">unsafe</span> { OldMethod(ptr); }  <span class="cmt">// 即使 OldMethod 来自旧程序集</span></code></pre>
+
+<div class="callout callout--info">
+<strong>设计意图：</strong>保证仅更新 LangVersion 不会造成安全性"回退"——旧库中有指针签名的方法不会因为新的宽松规则突然变成可安全调用。兼容模式在高版本中可能成为唯一模式，最终在跨多个 .NET 版本后移除。
+</div>
+
+<!-- ========================== 8. QUIZ ========================== -->
+
+<h2>八、测验 <span class="en">Quiz</span></h2>
+
+<div class="quiz" id="q1">
+  <h3>1/5 · 模型理解</h3>
+  <p class="question">C# 15 更新模型中，以下哪个操作<strong>不再</strong>需要 <code>unsafe</code> 上下文？</p>
+  <label><input type="radio" name="q1" value="a">A. 指针解引用 <code>*p</code></label>
+  <label><input type="radio" name="q1" value="b">B. 函数指针调用</label>
+  <label><input type="radio" name="q1" value="c">C. <code>fixed</code> 语句钉住变量</label>
+  <label><input type="radio" name="q1" value="d">D. 指针元素访问 <code>p[i]</code></label>
+  <div class="feedback" id="f_q1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>2/5 · 契约方向</h3>
+  <p class="question">更新模型中，你写了一个带 <code>unsafe</code> 修饰符的方法。这对调用者意味着什么？</p>
+  <label><input type="radio" name="q2" value="a">A. 调用者可以安全调用——unsafe 只影响方法内部</label>
+  <label><input type="radio" name="q2" value="b">B. 调用者编译时必须开启 AllowUnsafeBlocks，但不需要 unsafe 上下文</label>
+  <label><input type="radio" name="q2" value="c">C. 调用者必须在 unsafe 上下文中调用——unsafe 是公开契约</label>
+  <label><input type="radio" name="q2" value="d">D. 调用者不能调用这个方法——编译器拒绝访问</label>
+  <div class="feedback" id="f_q2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>3/5 · 消除模式</h3>
+  <p class="question">哪个方法<strong>正确地消除了</strong> unsafe 义务，使调用者可以安全调用？</p>
+  <label><input type="radio" name="q3" value="a">A. <code>public unsafe int Read(int* p) { unsafe { return *p; } }</code></label>
+  <label><input type="radio" name="q3" value="b">B. <code>public int Sum(byte[] arr) { fixed(byte* p=arr) { unsafe { int s=0; for(...) s+=p[i]; return s; } } }</code></label>
+  <label><input type="radio" name="q3" value="c">C. <code>public unsafe void Test() { }</code></label>
+  <label><input type="radio" name="q3" value="d">D. <code>public unsafe int Read(int* p) => *p;</code></label>
+  <div class="feedback" id="f_q3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>4/5 · unsafe 表达式</h3>
+  <p class="question"><code>unsafe(expression)</code> 解决了什么问题？</p>
+  <label><input type="radio" name="q4" value="a">A. 让 unsafe 代码运行更快——表达式比块效率高</label>
+  <label><input type="radio" name="q4" value="b">B. 在 <code>catch</code> 过滤器、字段初始化器等不接受语句的位置精准包裹一个表达式</label>
+  <label><input type="radio" name="q4" value="c">C. 替代所有 <code>unsafe { }</code> 块——是新的推荐语法</label>
+  <label><input type="radio" name="q4" value="d">D. 让指针解引用完全不需要 unsafe 关键字</label>
+  <div class="feedback" id="f_q4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>5/5 · 综合判断</h3>
+  <p class="question">关于 C# 15 的内存安全更新，以下哪个说法<strong>正确</strong>？</p>
+  <label><input type="radio" name="q5" value="a">A. 更新模型完全取代了原始模型——C# 15 中只能使用新规则</label>
+  <label><input type="radio" name="q5" value="b">B. 指针宽松（fixed/stackalloc/& 不需要 unsafe）需要打开 assembly opt-in 才能使用</label>
+  <label><input type="radio" name="q5" value="c">C. 新模型的 unsafe 修饰符做两件事——标记方法为 caller-unsafe，<em>同时</em>自动为方法体建立 unsafe 上下文</label>
+  <label><input type="radio" name="q5" value="d">D. 完整合约强制（caller obligations、safe 关键字）仍在开发中，但指针宽松已可用</label>
+  <div class="feedback" id="f_q5"></div>
+
+  <button onclick="checkAll()">提交全部答案</button>
+  <div class="score" id="score" style="display:none"></div>
+</div>
+
+<!-- ========================== 9. SUMMARY ========================== -->
+
+<h2>九、总结 <span class="en">Summary</span></h2>
+
+<table>
+<tr><th>要点</th><th>一句话</th></tr>
+<tr><td><strong>哲学转变</strong></td><td>指针的存在 ≠ 不安全；解引用指针 = 不安全</td></tr>
+<tr><td><strong>放松的操作</strong></td><td>声明指针、取地址、<code>fixed</code>、<code>stackalloc</code>→指针、<code>sizeof</code>——全部从 unsafe 解放</td></tr>
+<tr><td><strong>保留的操作</strong></td><td>解引用 <code>*p</code> / <code>p-&gt;m</code> / <code>p[i]</code>、函数指针调用、固定缓冲区元素访问——仍需要 unsafe</td></tr>
+<tr><td><strong>调用者契约</strong></td><td>方法上的 <code>unsafe</code> 从"内部许可"变为"调用者必须审计"—传播或消除二选一</td></tr>
+<tr><td><strong>unsafe 表达式</strong></td><td><code>unsafe(expr)</code>—在 await/catch 过滤器/初始化器等语句禁区精准包裹表达式</td></tr>
+<tr><td><strong>safe 关键字</strong></td><td><code>extern</code> 和显式布局字段必须标注 <code>safe</code> 或 <code>unsafe</code>—编译器不替你做判断</td></tr>
+<tr><td><strong>迁移路径</strong></td><td>指针宽松今天就能用（LangVersion=preview）；完整契约强制需要 assembly opt-in，仍在开发</td></tr>
+<tr><td><strong>兼容模式</strong></td><td>旧程序集中签名含指针的成员自动被视为 caller-unsafe—保护未迁移代码</td></tr>
+<tr><td><strong>状态</strong></td><td>.NET 11 Preview 5—指针宽松已实现；完整强制预计 C# 16 / .NET 12 生产就绪</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>最值得记住的三件事：</strong><br>
+1. <strong>现在就能缩小 unsafe 范围：</strong>把大片的 <code>unsafe { fixed(...) { *p } }</code> 变成 <code>fixed(...) { unsafe { *p } }</code>——unsafe 范围精确对应唯一的危险行。<br>
+2. <strong>消除模式是最终目标：</strong>用验证逻辑包围 unsafe 操作，对外暴露安全签名——这是 C# 版本的"安全抽象"哲学。<br>
+3. <strong>这是多版本演进的第一步：</strong>C# 15 搭好地基，C# 16 铺通管道。从"unsafe 是大麻袋"到"unsafe 是精确的审计标记"。
+</div>
+
+<!-- ========================== 10. NEXT ========================== -->
+
+<h2>十、下一步 <span class="en">Next</span></h2>
+
+<p>C# 15 的内存安全故事才刚开始。下节课我们继续 C# 15 系列中的下一个特性：</p>
+
+<div class="triad">
+  <div>
+    <h4>🧵 C# 15 系列已完成</h4>
+    <p>Union Types（L25）→ Closed Hierarchies（L26）→ Collection Expression Args（L27）→ Memory Safety Phase 1（L28）。C# 15 四大特性形成完整矩阵。</p>
+  </div>
+  <div>
+    <h4>📋 C# 15 后续</h4>
+    <p>Dictionary Expressions（<code>["key": value]</code> 字面量）仍在开发中，runtime 团队已介入。其他候选特性根据 Preview 进展跟进。</p>
+  </div>
+  <div>
+    <h4>🏗️ 课程系列回顾</h4>
+    <p>C# 8 → C# 9 → C# 10 → C# 11 → C# 12 → C# 13 → C# 14 → C# 15。从 Framework 4.8 到 .NET 11 的完整进化图景已成型。</p>
+  </div>
+</div>
+
+<p class="mild"><a href="27-csharp15-collection-expression-args.html">← L27: Collection Expression Args</a> · <a href="29-csharp15-dictionary-expressions.html">L29: Dictionary Expressions →</a> · <a href="../../MISSION.md">🎯 回顾 Mission</a></p>
+
+<hr class="section-divider">
+
+<div class="lesson-footer">
+<p><strong>推荐阅读：</strong><a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/unsafe-code">不安全代码语言参考</a> · <a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/proposals/unsafe-evolution">功能规范（完整设计）</a> · <a href="https://github.com/dotnet/csharplang/issues/9704">设计提案 #9704</a> · <a href="https://github.com/dotnet/designs/blob/main/accepted/2025/memory-safety/caller-unsafe.md">生态系统设计文档</a></p>
+<p><strong>课后实操：</strong>找项目中用 <code>unsafe { fixed(...) { ... } }</code> 的地方——把 <code>fixed</code> 移到 <code>unsafe</code> 块外面，只在解引用处保留 <code>unsafe { }</code>。用 <code>unsafe(expr)</code> 替换字段初始化器和构造函数初始化器中的辅助方法。体验"unsafe 范围精确化"的实战感受。</p>
+<p><strong>有问题？</strong>内存安全模型有三个容易混淆的概念：指针宽松（今天可用）vs 调用者契约（opt-in 控制）vs 消除模式（设计模式）。任何不清楚的地方，你的教师（Claude）随时在。</p>
+</div>
+
+<script src="../assets/scripts/quiz.js"></script>
+<script>
+const answers = { q1: 'c', q2: 'c', q3: 'b', q4: 'b', q5: 'd' };
+const explanations = {
+  q1: { correct: '✅ 正确！C——fixed 语句不再需要 unsafe 上下文。声明指针、取地址、stackalloc 转指针、sizeof 也都解放了。解引用 (A)、函数指针调用 (B)、指针元素访问 (D) 仍然需要 unsafe。', wrong: '❌ 答案是 C。fixed 语句在 C# 15 中不再需要 unsafe——只有真正"读/写内存"的操作（A/B/D）还需要。' },
+  q2: { correct: '✅ 正确！C——在新模型中，方法上的 unsafe 修饰符是公开契约：调用者必须处于 unsafe 上下文中。这是最核心的设计转变：旧模型 unsafe 只是内部许可，新模型 unsafe 是调用者义务。', wrong: '❌ 答案是 C。旧模型是 A（内部许可），新模型是 C（公开契约）。调用者必须在 unsafe 上下文中调用——传播义务。' },
+  q3: { correct: '✅ 正确！B——Sum 方法签名没有 unsafe 修饰符，内部用 fixed + 局部 unsafe 块 + 边界检查（for 循环用 source.Length）保证安全，调用者无需 unsafe 上下文。A 和 D 都有 unsafe 修饰符（传播），C 没有消除任何东西。', wrong: '❌ 答案是 B。消除模式的关键：(1) 方法签名没有 unsafe——对外安全；(2) 内部有验证逻辑（null 检查、边界检查）；(3) 只在必要时用 unsafe { } 块。A/D 把义务传播给调用者，C 是空方法。' },
+  q4: { correct: '✅ 正确！B——unsafe(expr) 的核心价值是覆盖 catch 过滤器、字段初始化器、构造函数初始化器、await 操作数等不接受语句块的语法位置。A 错（无性能差异），C 错（不是替代品），D 错（解引用仍然需要 unsafe）。', wrong: '❌ 答案是 B。unsafe(expr) 为 await/catch 过滤器/字段初始化器/构造函数初始化器——这些位置不能写语句块——提供了精准包裹单个表达式的 unsafe 上下文。' },
+  q5: { correct: '✅ 正确！D——指针宽松（声明、fixed、& 等不需要 unsafe）在 LangVersion=preview 下立即可用，但完整契约强制（caller obligations、safe 关键字、opt-in）仍在开发。A 错（原始模型仍是默认），B 错（指针宽松不需要 opt-in），C 错（方法上的 unsafe 不再自动为方法体建立上下文）。', wrong: '❌ 答案是 D。A 错（原始模型仍是默认），B 错（指针宽松只需要 LangVersion=preview），C 错（方法 unsafe 和内部 unsafe 块在更新模型中分离——需要显式 unsafe { } 块）。' },
+};
+function checkAll() { Quiz.checkAll(answers, explanations); }
+</script>
+</body>
+</html>

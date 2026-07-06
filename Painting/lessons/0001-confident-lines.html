@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第1课：自信的线条 — 二次元绘画基础</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<h1>第1课：自信的线条</h1>
+
+<div class="lesson-meta">
+  <span class="lesson-number">Lesson 0001</span>
+  <span>⏱ 阅读 15 分钟 + 练习 20 分钟</span>
+  <span>🎯 技能：线条控制</span>
+</div>
+
+<section>
+<p>
+  你有没有这种感觉：临摹时线条还不错，但一旦自己画，线条就变得抖抖的、断断续续、不敢一笔到位？
+</p>
+<p>
+  这不是你的问题——这恰恰说明你已经到了该迈出下一步的时机。
+  临摹让你熟悉了"画出来"的手感，但<strong>自信的线条来自肌肉记忆和正确的发力方式</strong>，而不是反复描。
+</p>
+<p>
+  在二次元绘画中，<strong>线条质量是区分"看起来像业余"和"看起来很专业"的第一道分水岭</strong>。
+  这是因为二次元风格本身就强调清晰、干净的轮廓。一条自信的线，比十根犹豫的线加起来都有力量。
+</p>
+</section>
+
+<h2>核心知识：什么是"好线条"？</h2>
+
+<section>
+<p>在二次元画法中，一条"好线条"有三个特征：</p>
+
+<ol>
+  <li><strong>流畅</strong> — 一气呵成，没有抖动和疙瘩。弧线应该是平滑的，直线应该是直的。</li>
+  <li><strong>有粗细变化</strong> — 起笔和收笔时轻（细），中间重（粗），线条就有了"呼吸感"。这不是手抖——是<em>刻意控制</em>的结果。</li>
+  <li><strong>闭合</strong> — 线条之间该接上的地方要接上，不留缝隙。二次元上色的"油漆桶"工具依赖闭合线稿来识别填充区域。</li>
+</ol>
+
+<h3>直观对比：好线条 vs 坏线条</h3>
+
+<figure class="figure">
+  <svg width="640" height="260" viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background grid -->
+    <defs>
+      <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e8d5c4" stroke-width="0.3"/>
+      </pattern>
+    </defs>
+    <rect width="640" height="260" fill="#fdfaf5"/>
+    <rect width="640" height="260" fill="url(#grid)"/>
+
+    <!-- Labels -->
+    <text x="160" y="30" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="14" fill="#b33a3a" font-weight="700">❌ 犹豫的线条</text>
+    <text x="480" y="30" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="14" fill="#5a7d4a" font-weight="700">✅ 自信的线条</text>
+
+    <!-- Bad lines - shaky, multi-stroke, uneven -->
+    <g opacity="0.7">
+      <!-- Bad straight line -->
+      <path d="M60 60 L80 59 L100 62 L120 58 L140 61 L160 60 L180 63 L200 59 L220 62 L240 61 L260 60" fill="none" stroke="#b33a3a" stroke-width="1.5"/>
+      <path d="M60 60 L78 58 L100 61 L118 57 L140 60 L158 62 L180 59 L200 61 L220 58 L240 60 L260 60" fill="none" stroke="#b33a3a" stroke-width="0.8"/>
+      <!-- Bad curve -->
+      <path d="M60 100 Q100 60 160 100 Q190 120 200 95 Q215 70 260 100" fill="none" stroke="#b33a3a" stroke-width="1.3"/>
+      <path d="M60 100 Q100 65 160 105 Q192 115 200 98 Q213 72 260 100" fill="none" stroke="#b33a3a" stroke-width="1"/>
+      <!-- Bad S-curve -->
+      <path d="M60 170 Q90 150 120 170 Q150 190 180 170 Q210 150 240 170 Q255 180 260 170" fill="none" stroke="#b33a3a" stroke-width="1.2"/>
+      <!-- Bad hair strand -->
+      <path d="M60 230 Q80 190 100 210 Q110 220 120 200 Q135 190 160 210 Q175 225 200 195 Q220 175 260 210" fill="none" stroke="#b33a3a" stroke-width="1"/>
+
+      <!-- Annotations -->
+      <text x="270" y="68" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#b33a3a">← 断断续续、反复描</text>
+      <text x="270" y="138" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#b33a3a">← 粗细不匀、有疙瘩</text>
+    </g>
+
+    <!-- Good lines - smooth, single stroke, varied weight -->
+    <!-- Good straight line -->
+    <path d="M370 60 Q450 58 580 60" fill="none" stroke="#5a7d4a" stroke-width="2.2" stroke-linecap="round"/>
+    <!-- Good curve -->
+    <path d="M370 100 Q465 55 580 100" fill="none" stroke="#5a7d4a" stroke-width="2.2" stroke-linecap="round"/>
+    <!-- Good S-curve -->
+    <path d="M370 170 Q465 110 580 170" fill="none" stroke="#5a7d4a" stroke-width="2.2" stroke-linecap="round"/>
+    <!-- Good hair strand with pressure -->
+    <path d="M370 240 Q410 175 435 210 Q465 170 495 215 Q520 180 580 210" fill="none" stroke="#5a7d4a" stroke-width="2.5" stroke-linecap="round"/>
+
+    <!-- Annotations -->
+    <text x="590" y="65" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#5a7d4a">一笔到位 →</text>
+    <text x="590" y="140" font-family="Noto Sans SC, sans-serif" font-size="10" fill="#5a7d4a">流畅弧线 →</text>
+
+    <!-- "Willow leaf" shape example: bottom right -->
+    <text x="440" y="255" text-anchor="middle" font-family="Noto Sans SC, sans-serif" font-size="11" fill="#2c2416" font-weight="500">"柳叶"形状（两头尖、中间粗）</text>
+  </svg>
+  <figcaption>上图对比一目了然：左边是初学者常见的"碎线"——反复描、抖动、粗细不稳定；右边是目标——一笔到位、流畅平滑。</figcaption>
+</figure>
+
+<div class="tip">
+  <strong>关键认知：</strong>二次元线稿不是"画出轮廓再描一遍"——高手是<strong>用一笔画出流畅的长线</strong>。学会它，你的线稿将飞跃一个档次。
+</div>
+</section>
+
+<h2>工具准备：打开 Procreate 的稳定功能</h2>
+
+<section>
+<p>iPad 玻璃屏幕比纸张滑，这是所有数字绘画初学者面临的共同挑战。好消息是：Procreate 有内置的辅助工具。</p>
+
+<ol class="step-list">
+  <li>打开 Procreate，点击笔刷图标</li>
+  <li>选择一个你常用的描线笔刷（推荐：工作室笔 / 技术笔 / 墨水渗流）</li>
+  <li>点击笔刷名称进入设置 → <strong>稳定性 (Stabilization)</strong></li>
+  <li>将"流线 (StreamLine)"调到 <strong>30%–50%</strong>（不要超过 60%，否则会失去手感）</li>
+  <li>"稳定性"调到 <strong>15%–25%</strong></li>
+</ol>
+
+<div class="tip">
+  CSP 用户：在工具属性栏找到"抖动修正 (Stabilization)"，设为 <strong>10–20</strong> 即可。
+</div>
+
+<div class="warning">
+  稳定度不要拉满！过高的稳定会让线条"拖沓"，你以为是自己画得好，其实是被软件牵着走。目标是逐步降低稳定度，最终靠自己的手画出干净线条。
+</div>
+</section>
+
+<h2>技能练习：三个手势</h2>
+
+<section>
+<p>二次元的线条控制，核心在于<strong>三个发力关节</strong>的切换：</p>
+
+<table class="data-table">
+  <tr>
+    <th>关节</th>
+    <th>画什么</th>
+    <th>练习方法</th>
+  </tr>
+  <tr>
+    <td><strong>手指</strong></td>
+    <td>细节：眼睛、手指、小装饰</td>
+    <td>画直径 1–2cm 的圆圈和波浪线</td>
+  </tr>
+  <tr>
+    <td><strong>手腕</strong></td>
+    <td>中等线条：头发束、衣褶、耳朵轮廓</td>
+    <td>画 5–10cm 的弧线和椭圆</td>
+  </tr>
+  <tr>
+    <td><strong>手臂/肩</strong></td>
+    <td>长线条：人物轮廓、动态线、披风</td>
+    <td>从肩膀发力，画贯穿全屏的流畅长线</td>
+  </tr>
+</table>
+
+<div class="tip">
+  <strong>iPad 绘画特有技巧：</strong>画长线时，小指轻轻贴在屏幕上作为支点滑动，能大大增加稳定性。试试看！
+</div>
+</section>
+
+<h2>三个核心练习</h2>
+
+<section>
+<h3>练习一：幽灵画线 (Ghosting) — 5 分钟</h3>
+<p>
+  这是从 DrawABox 借来的经典练习。不要直接画到屏幕上：
+</p>
+<ol>
+  <li>在空中（屏幕上方 1–2mm）预演线条的路径，来回 2–3 次</li>
+  <li>感觉轨迹对了，才落笔画下去</li>
+  <li>画完一笔后，不要描！接受结果，继续下一笔</li>
+</ol>
+
+<div class="practice-box">
+  <h3>✏️ 现在就做</h3>
+  <p>在 Procreate 新建一个画布，画 20 条直线（不同角度）、20 条 C 形弧线、20 条 S 形弧线。每条线之前先在空气中预演。关注<strong>流畅度</strong>而非精确到达终点。</p>
+</div>
+
+<h3>练习二：压感控制 — 5 分钟</h3>
+<p>
+  画一条线，笔尖轻触屏幕起笔（细线），逐渐加力到中间（粗线），再逐渐减轻到收笔（细线）。这就是二次元线稿中"发丝"和"衣纹"的基础技法。
+</p>
+
+<div class="practice-box">
+  <h3>✏️ 现在就做</h3>
+  <p>画一整页的"柳叶"形状——两头尖、中间粗。每个 5–8cm 长。目标是铺满一页（大约 30 个左右）。画完后选出最流畅的 5 个，想想它们和其他的有什么区别。</p>
+</div>
+
+<h3>练习三：头发丝 — 10 分钟</h3>
+<p>
+  二次元头发是线条能力的终极检验。找一张你喜欢的成男角色参考图，<strong>放在旁边参考</strong>，但不要描——用眼睛观察头发的走向和弧度，然后用自己的手画出来。重点练头发外轮廓的流畅弧线。
+</p>
+
+<div class="practice-box">
+  <h3>✏️ 现在就做</h3>
+  <p>用肩膀发力，画一整页头发弧线——长 C 形、S 形、前翘的发梢、垂下的发束。每一笔都从轻到重再到轻。不要画完整头部——<strong>只练头发线条</strong>。</p>
+</div>
+</section>
+
+<h2>知识自检</h2>
+
+<div class="quiz">
+  <div class="quiz-q">
+    <p>1. 画二次元头发长弧线时，应该用哪个关节发力？</p>
+    <label><input type="radio" name="q1" value="a"> A. 手指</label>
+    <label><input type="radio" name="q1" value="b"> B. 手腕</label>
+    <label><input type="radio" name="q1" value="c"> C. 手臂/肩膀</label>
+    <label><input type="radio" name="q1" value="d"> D. 手肘</label>
+    <p class="quiz-feedback correct" data-for="c">✅ 正确！长弧线从肩膀发力，才能画出流畅不断的大曲线。</p>
+    <p class="quiz-feedback incorrect" data-for="a">手指发力只能画出细节线条，长线会抖。</p>
+    <p class="quiz-feedback incorrect" data-for="b">手腕适合中等长度的线，头发外轮廓太长，手腕画不完。</p>
+    <p class="quiz-feedback incorrect" data-for="d">手肘画长线不错，但肩膀更好——活动范围更大。</p>
+  </div>
+
+  <div class="quiz-q">
+    <p>2. 为什么二次元线稿要求线条"闭合"？</p>
+    <label><input type="radio" name="q2" value="a"> A. 为了看起来更工整</label>
+    <label><input type="radio" name="q2" value="b"> B. 为了让油漆桶工具能正确识别填充区域</label>
+    <label><input type="radio" name="q2" value="c"> C. 为了打印时不出现断线</label>
+    <label><input type="radio" name="q2" value="d"> D. 因为老师这么说的</label>
+    <p class="quiz-feedback correct" data-for="b">✅ 正确！闭合线条确保填充工具不会漏到画面其他地方。这是二次元上色的基础前提。</p>
+    <p class="quiz-feedback incorrect" data-for="a">工整不是核心原因。主要是功能性需求。</p>
+    <p class="quiz-feedback incorrect" data-for="c">有一部分道理，但数字绘画的核心原因是填充工具。</p>
+    <p class="quiz-feedback incorrect" data-for="d">肯定有更好的理由！😄</p>
+  </div>
+
+  <div class="quiz-q">
+    <p>3. Procreate 的 StreamLine（流线）稳定度建议设为多少？</p>
+    <label><input type="radio" name="q3" value="a"> A. 100%——越稳定越好</label>
+    <label><input type="radio" name="q3" value="b"> B. 0%——不开稳定才是真本事</label>
+    <label><input type="radio" name="q3" value="c"> C. 30%–50%——辅助但不依赖</label>
+    <label><input type="radio" name="q3" value="d"> D. 完全不用管，默认就好</label>
+    <p class="quiz-feedback correct" data-for="c">✅ 正确！30%–50% 足够平滑手抖，但不过度——你能保持控制感。</p>
+    <p class="quiz-feedback incorrect" data-for="a">100% 线条会严重滞后，你画完线还在追光标。无法培养真实手感。</p>
+    <p class="quiz-feedback incorrect" data-for="b">新手阶段完全不开稳定等于给自己加难度。先用辅助，逐步降低。</p>
+    <p class="quiz-feedback incorrect" data-for="d">知道为什么用这个设置比"默认就行"更重要。</p>
+  </div>
+</div>
+
+<h2>本节课练习任务</h2>
+
+<section>
+<p>下次画画时（30 分钟）：</p>
+<ol class="step-list">
+  <li><strong>热身：</strong>一页幽灵直线 + 弧线（5 分钟）</li>
+  <li><strong>压感：</strong>一页"柳叶"线条，尽可能流畅（5 分钟）</li>
+  <li><strong>主题：</strong>临摹一个你喜欢的成男角色<strong>只用线稿</strong>，但这次要求：<strong>每条轮廓线尽量一笔完成，不反复描</strong>（15 分钟）</li>
+  <li><strong>检查：</strong>放大画布，检查每条线——哪些是流畅的？哪些断断续续？用红色圈出需要改进的线条（5 分钟）</li>
+</ol>
+
+<div class="warning">
+  这个练习的关键不是画得"像"，而是画得"干净"。哪怕比例不太对，只要线条流畅自信，就是一次成功的练习。
+</div>
+</section>
+
+<h2>推荐深入阅读</h2>
+
+<ul>
+  <li>📺 <a href="https://www.youtube.com/@naoki_saito">さいとうなおき (Naoki Saito) 的 YouTube 频道</a> — 日本职业插画师，观看他的"修正"系列，看他是如何批评和改进线条的。搜索 "Naoki Saito 線画" 或 "さいとうなおき 修正"。</li>
+  <li>📖 <a href="https://drawabox.com/lesson/1">DrawABox Lesson 1: Lines, Ellipses and Boxes</a> — 免费的线条基础训练（英文），第一课完全适用于任何绘画风格。核心练习"Ghosting"就来自这里。</li>
+  <li>📖 参考 <a href="../reference/glossary.md">术语表</a> 中的"线稿"、"勾线"、"控笔"、"稳定器"条目。</li>
+</ul>
+
+<nav class="lesson-nav">
+  <span>← 这是第一课</span>
+  <a href="0002-construction-head.html">第2课：头部构建 →</a>
+</nav>
+
+<div class="course-footer">
+  <p>有问题吗？直接向你的 AI 老师提问——"为什么我画的长线总是抖？""怎么练弧线？""我的线条没有粗细变化怎么办？"——什么都可以问。</p>
+  <p style="margin-top:0.4rem;">
+    <a href="../MISSION.md">← Mission</a> ·
+    <a href="../reference/glossary.md">术语表</a> ·
+    <a href="../RESOURCES.md">资源列表</a>
+  </p>
+</div>
+
+<script>
+// Quiz interaction — hide all feedback initially, show on selection
+document.querySelectorAll('.quiz-q').forEach(qDiv => {
+  qDiv.querySelectorAll('.quiz-feedback').forEach(fb => fb.classList.remove('visible'));
+});
+document.querySelectorAll('.quiz-q input[type="radio"]').forEach(input => {
+  input.addEventListener('change', function() {
+    const qDiv = this.closest('.quiz-q');
+    qDiv.querySelectorAll('.quiz-feedback').forEach(fb => fb.classList.remove('visible'));
+    const selected = qDiv.querySelector('input:checked');
+    if (selected) {
+      const fb = qDiv.querySelector(`.quiz-feedback[data-for="${selected.value}"]`);
+      if (fb) fb.classList.add('visible');
+    }
+  });
+});
+</script>
+
+</body>
+</html>

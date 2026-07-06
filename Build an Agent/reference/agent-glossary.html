@@ -85,10 +85,21 @@
   <span class="aka">流程：查询 → Embedding → 向量检索 → 拼入 Prompt → LLM 生成。</span>
 </dd>
 
-<dt>Semantic Kernel</dt>
+<dt>Semantic Kernel (SK)</dt>
 <dd>
   Microsoft 开源的 <strong>AI Agent 编排框架</strong>（C# / Python / Java），核心概念：Kernel（编排引擎）、Plugins（工具）、Memory（记忆）、Agents（ChatCompletionAgent 等）。对 C# 开发者是自然选择。<br>
-  <span class="aka">对比：LangChain（Python 生态）、AutoGen（多 Agent 侧重）。</span>
+  <span class="aka">⚠️ 2026 年 4 月起进入维护模式，其 Agent 构建功能已被 <a href="#maf">Microsoft Agent Framework</a> 正式继承和取代。SK 仍适合学习 Agent 内部机制（API 更透明），但新项目应优先考虑 MAF。</span>
+</dd>
+
+<dt id="maf">Microsoft Agent Framework (MAF)</dt>
+<dd>
+  Semantic Kernel 的<strong>正式继任者</strong>（v1.0 GA: 2026.4），融合了 SK 的企业工程基础与 AutoGen 的多 Agent 编排研究。核心变化：<br>
+  · 统一 Agent 类型——<code>chatClient.AsAIAgent(instructions)</code><br>
+  · 原生基于 <code>Microsoft.Extensions.AI</code>（IChatClient）<br>
+  · 多 Agent 是一等公民（群聊、Handoff、Magentic-One）<br>
+  · 内置 MCP + A2A 支持、OpenTelemetry 链路追踪<br>
+  · NuGet: <code>Microsoft.Agents.AI</code>；PyPI: <code>agent-framework</code><br>
+  <span class="aka">本课程前几课用 SK 教学（API 更透明），后续迁移到 MAF。迁移指南见 learn.microsoft.com。</span>
 </dd>
 
 <dt>Kernel</dt>

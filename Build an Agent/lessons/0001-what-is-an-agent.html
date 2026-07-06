@@ -24,6 +24,7 @@
   <span class="tag">Agent Loop</span>
   <span class="tag">Tool Use</span>
   <span class="tag">Semantic Kernel</span>
+  <span class="tag">Claude API / DeepSeek</span>
   <span class="tag">C#</span>
 </div>
 
@@ -142,7 +143,15 @@
 cd MyFirstAgent
 dotnet add package Microsoft.SemanticKernel --prerelease
 dotnet add package Microsoft.SemanticKernel.Agents.Core --prerelease
-dotnet add package Microsoft.SemanticKernel.Connectors.OpenAI --prerelease</code></pre>
+dotnet add package Anthropic.SDK --prerelease</code></pre>
+
+<div class="card">
+  <strong>为什么选 Anthropic 协议 + DeepSeek？</strong><br>
+  · Semantic Kernel 官方的 Anthropic 连接器仅支持 AWS Bedrock（需要 AWS 账号）<br>
+  · <code>Anthropic.SDK</code>（~150万下载）支持直接 Anthropic API 调用，且通过 <code>ApiUrlFormat</code> 可指向任意兼容端点<br>
+  · <strong>DeepSeek 提供 Anthropic Messages API 兼容端点</strong>（<code>api.deepseek.com/anthropic</code>）——用的 Anthropic 协议，跑的是 DeepSeek 模型<br>
+  · 便宜、国内可直接访问、Function Calling 可用。一键切回真正的 Claude 也只需删掉 <code>ApiUrlFormat</code> 那行
+</div>
 
 <h3>Step 2: 定义一个工具（Plugin）</h3>
 
@@ -169,32 +178,55 @@ public class TimePlugin
 }</code></pre>
 
 <div class="card">
-  <strong>关键点：</strong> <code>[Description]</code> 特性不是给人看的——是给 LLM 看的。LLM 通过读取函数的名称和描述来决定「这个工具能不能帮用户完成当前任务」。写得越清楚，Agent 判断越准。
+  <strong>关键点 ①：</strong> <code>[Description]</code> 特性不是给人看的——是给 LLM 看的。LLM 通过读取函数的名称和描述来决定「这个工具能不能帮用户完成当前任务」。写得越清楚，Agent 判断越准。
+</div>
+
+<div class="card">
+  <strong>关键点 ②：<code>[Description]</code> 用中文还是英文？</strong><br>
+  LLM 靠语义匹配做工具选择——中文或英文都能理解。但有一个微妙点：如果你的 Instructions 和 ChatHistory 都是中文，Description 用英文会让 LLM 在同一个 context window 里做<strong>跨语言语义匹配</strong>——它能做到，只是多了一丁点推理开销，实践中几乎感知不到差异。<br><br>
+  <strong>建议：</strong>和 Instructions 保持同一种语言。Agent 整体是中文的 → Description 用中文。一致性比中英文选择本身更重要。如果工具名已经是英文的（如 <code>get_current_time</code>），Description 写中文完全没问题——两者不冲突。
 </div>
 
 <h3>Step 3: 创建 Agent 并运行</h3>
 
-<pre><code>using Microsoft.SemanticKernel;
+<pre><code>using System.ComponentModel;
+using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.Agents.Chat;
 using Microsoft.SemanticKernel.ChatCompletion;
-using Microsoft.SemanticKernel.Connectors.OpenAI;
+using Anthropic.SDK;
+using Anthropic.SDK.Common;
 
-// 1. 构建 Kernel —— Agent 的"底盘"
+// ——— 步骤 A：创建 Anthropic 客户端，指向 DeepSeek ———
+// DeepSeek 提供 Anthropic Messages API 兼容端点
+// 将 Anthropic SDK 的 URL 指向 api.deepseek.com/anthropic 即可
+var anthropicClient = new AnthropicClient(
+    new APIAuthentication(
+        Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")!
+    )
+)
+{
+    ApiUrlFormat = "https://api.deepseek.com/anthropic/{0}/{1}"
+};
+
+// ChatClientBuilder 将其包装为 Semantic Kernel 能识别的 IChatClient
+// .UseFunctionInvocation() 是关键——启用 Tool Use（Function Calling）
+IChatClient chatClient = new ChatClientBuilder(anthropicClient.Messages)
+    .UseFunctionInvocation()
+    .Build();
+
+// ——— 步骤 B：构建 Kernel —— Agent 的"底盘" ———
 var builder = Kernel.CreateBuilder();
 
-// 使用 OpenAI（你需要一个 API key）
-builder.AddOpenAIChatCompletion(
-    modelId: "gpt-4o-mini",
-    apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY")!
-);
+// 将 IChatClient 注册到 Kernel 的服务容器中
+builder.Services.AddSingleton(chatClient);
 
 // 注册我们的工具
 builder.Plugins.AddFromType&lt;TimePlugin&gt;();
 
 Kernel kernel = builder.Build();
 
-// 2. 创建 Agent
+// ——— 步骤 C：创建 Agent ———
 var agent = new ChatCompletionAgent
 {
     Name = "TimeAssistant",
@@ -205,9 +237,9 @@ var agent = new ChatCompletionAgent
     Kernel = kernel
 };
 
-// 3. 运行对话循环
+// ——— 步骤 D：运行对话循环 ———
 var history = new ChatHistory();
-Console.WriteLine("=== 你的第一个 Agent 已就绪 ===");
+Console.WriteLine("=== 你的第一个 Agent 已就绪（DeepSeek 驱动，Anthropic 协议）===");
 Console.WriteLine("输入 'exit' 退出\n");
 
 while (true)
@@ -228,14 +260,22 @@ while (true)
 
 <h3>Step 4: 配置 API Key 并运行</h3>
 
-<pre><code># PowerShell
-$env:OPENAI_API_KEY = "sk-your-key-here"
+<pre><code># PowerShell — 设置 DeepSeek API Key
+$env:DEEPSEEK_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 dotnet run
 
 # 试试这些输入：
 # "现在几点了？"
 # "今天是几号？"
-# "现在是早上还是下午？"</code></pre>
+# "现在是早上还是下午？"
+
+# ——— 如果你有 Anthropic API Key，这样切换 ———
+# $env:ANTHROPIC_API_KEY = "sk-ant-xxxxxxxxxxxxx"
+# 然后把代码中的 ApiUrlFormat 改回默认值（删除那一行即可）</code></pre>
+
+<div class="card">
+  <strong>发生了什么？</strong>你的 C# 代码用的是 <strong>Anthropic 协议</strong>（Messages API），但请求实际发到了 DeepSeek 的服务器。DeepSeek 的 Anthropic 兼容端点会自动将 Claude 模型名映射到对应规格的 DeepSeek 模型（如 <code>claude-sonnet-*</code> → <code>deepseek-v4-flash</code>，<code>claude-opus-*</code> → <code>deepseek-v4-pro</code>）。如果你用的是 Anthropic 原生 API Key，删掉 <code>ApiUrlFormat</code> 那行就能切回真正的 Claude。
+</div>
 
 <!-- ============ OBSERVE WHAT HAPPENS ============ -->
 <h2>发生了什么？—— 追踪 Agent Loop 的实际运作</h2>

@@ -1,6 +1,6 @@
 # 📘 Learning Lessons
 
-一套覆盖现代 C# 语言演进、维京历史、VS Code 扩展开发、GitHub Actions 自动化与 AI Agent 构建的技术/人文课程合集。五个课程分别深挖 .NET 从 C# 8 到 C# 15 的每一次语法升级、冰海战纪背后的真实维京时代、从零构建一个 VS Code 扩展的工程全流程、用 GitHub 标签触发 AI 工作流的自动化实践，以及 AI Agent 的核心概念与构建方法。虽主题各异，但共享同一方法论——从表层 API 下沉到内部机制，从孤立知识点串成系统认知。
+一套覆盖现代 C# 语言演进、维京历史、VS Code 扩展开发、GitHub Actions 自动化、AI Agent 构建与二次元绘画入门的技术/人文课程合集。六个课程分别深挖 .NET 从 C# 8 到 C# 15 的每一次语法升级、冰海战纪背后的真实维京时代、从零构建一个 VS Code 扩展的工程全流程、用 GitHub 标签触发 AI 工作流的自动化实践、AI Agent 的核心概念与构建方法，以及二次元绘画的线条基础训练。虽主题各异，但共享同一方法论——从表层 API 下沉到内部机制，从孤立知识点串成系统认知。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
@@ -35,6 +35,7 @@
 | 25 | [Lesson 25: C# 15 — Union 类型](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/25-csharp15-union-types.html) | 探索 C# 15 的 union 类型语法，以类型安全方式表达多选一的数据结构 |
 | 26 | [Lesson 26: C# 15 — Closed Hierarchies（封闭继承层次）](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/26-csharp15-closed-hierarchies.html) | 讲解 C# 15 封闭继承层次，限制类型派生以确保 API 的完整性与可预测性 |
 | 27 | [Lesson 27: C# 15 — 集合表达式参数](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/27-csharp15-collection-expression-args.html) | 解析 C# 15 集合表达式作为方法参数的语法增强，进一步统一集合传递方式 |
+| 28 | [Lesson 28: C# 15 — 内存安全第一阶段](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/28-csharp15-memory-safety.html) | 探索 C# 15 引入的内存安全机制，利用类型系统在编译期消除常见内存错误 |
 
 **参考资料：**
 - [异步流速查 · Async Streams · C# 8](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/async-streams-cheatsheet.html) — IAsyncEnumerable 消费、取消与配置速查
@@ -66,6 +67,7 @@
 | 11 | [Lesson 0011 — 维京长船：设计、航海与海洋帝国](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0011-viking-longship.html) | 深入维京长船的设计原理、航海技术与建造工艺，揭示北欧海洋帝国赖以崛起的工程基础 |
 | 12 | [Lesson 0012 — 冰岛萨迦：口传、书写与历史的炼金术](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0012-icelandic-sagas.html) | 解读冰岛萨迦文学如何将口传记忆转化为书写文本，探讨其作为历史素材的可信度与局限 |
 | 13 | [Lesson 0013 — 维京时代的女性：钥匙、法律与萨迦中的女人](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0013-viking-women.html) | 还原维京女性的法律地位、家庭权力与社会角色，从萨迦中重新发现北欧妇女的真实面貌 |
+| 14 | [Lesson 0014 — 维京人的宗教与仪式：Blót、Seiðr 与不设教会的信仰](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0014-viking-religion.html) | 深入维京人的宗教实践，探索祭祀、占卜与不依赖制度化教会的北欧异教信仰体系 |
 
 **参考资料：**
 - [🗡️ 中国古代佩剑传统参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/chinese-sword-tradition.html) — 中国古代佩剑文化传统与维京武器的跨文化对照
@@ -73,6 +75,7 @@
 - [⚖️ 冰岛共和国：无国王、有法律](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/icelandic-commonwealth-law.html) — 冰岛自由邦的独特法律体系与议会制度
 - [📖 冰岛识字率：中世纪欧洲的异类](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/icelandic-literacy.html) — 中世纪冰岛异乎寻常的高识字率及其对萨迦文化的影响
 - [🏛 诺曼起源争议参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/normanist-debate.html) — 诺曼起源争议学术背景与关键论据
+- [北欧宗教实践参考 — 诸神、仪式、术语与来源](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/norse-religion-practices.html) — 北欧异教的神祇体系、祭祀仪式与关键术语速查
 - [🧬 斯堪的纳维亚人起源参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/scandinavian-origins.html) — 斯堪的纳维亚人的民族起源、迁徙与遗传谱系学术参考
 - [维京时代大事年表](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-age-timeline.html) — Vinland Saga 历史时间线参考
 - [⚔️ 维京劫掠驱动因素参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-raid-causes.html) — 维京劫掠的经济、人口与技术驱动因素分析
@@ -123,5 +126,14 @@
 
 **参考资料：**
 - [Agent Glossary · Reference](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/reference/agent-glossary.html) — AI Agent 领域核心术语速查
+
+## Painting
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [第1课：自信的线条 — 二次元绘画基础](https://JayYa.github.io/LearningLessons/Painting/lessons/0001-confident-lines.html) | 从线条控制入手，讲解二次元绘画的起稿技法与手部稳定性训练 |
+
+**参考资料：**
+- [glossary.md](https://JayYa.github.io/LearningLessons/Painting/reference/glossary.md) — 绘画术语词汇表
 
 *自动生成*

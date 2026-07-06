@@ -223,6 +223,64 @@ HashSet&lt;<span class="kw">string</span>&gt; names = [with(StringComparer.Ordin
 <strong>设计哲学总结：</strong>一个只有 6 个字符的 <code>with()</code>——语法着色下 <code>with</code> 关键字高亮、<code>()</code> 内的参数正常着色——视觉上不容忽视，语义上"先构造再填充"的直觉对应，扩展性上不限制未来新增参数类型。
 </div>
 
+<!-- ========================== 6.2 RECORD WITH COMPARISON ========================== -->
+
+<h3>6.2 与 record 的 <code>with</code>——同一个关键词、两种语义 <span class="en">Collection with() vs Record with</span></h3>
+
+<p>学 C# 9 <code>record</code> 时见过 <code>with</code>。现在集合表达式里也出现了 <code>with</code>——它们是同一个关键词，但做的事不同：</p>
+
+<table>
+<tr><th></th><th>Record <code>with</code>（C# 9）</th><th>集合 <code>with()</code>（C# 15）</th></tr>
+<tr><td><strong>语法</strong></td><td><code>person with { Name = "A" }</code></td><td><code>[with(capacity: 10), 1, 2, 3]</code></td></tr>
+<tr><td><strong>语义</strong></td><td>复制已有实例，改动指定属性</td><td>创建新实例，指定构造参数</td></tr>
+<tr><td><strong>位置</strong></td><td>在实例<em>之后</em>，<code>{ }</code> 包裹属性赋值</td><td>在 <code>[ ]</code> <em>之内</em>，必须是第一个元素</td></tr>
+<tr><td><strong>参数去往……</strong></td><td><code>init</code> setter——属性赋值</td><td>构造函数 / 工厂方法 / 接口预设签名</td></tr>
+<tr><td><strong>复制原有数据？</strong></td><td><strong>是</strong>——所有字段先拷贝再修改</td><td><strong>否</strong>——从零开始构造</td></tr>
+<tr><td><strong>必须带参数？</strong></td><td>否——<code>person with { }</code> 合法（全量拷贝）</td><td>否——<code>[with(), 1, 2]</code> 合法（调用无参构造）</td></tr>
+</table>
+
+<p><strong>共同点：</strong>两者共享一个核心语义——<strong>"给我一个东西，with（带有/附上）一些额外设定"</strong>。Record 是"给我 person 的副本，<em>with</em> 名字改成 Smith"；集合是"给我一个 List，<em>with</em> 预分配 100 个位置的容量"。它们都是<strong>声明式构造</strong>——在创建的那一刻就说清楚"我要的新东西长什么样子"，而不是一步一步命令式地 <code>new</code> + <code>Add</code>。</p>
+
+<p>这也是 C# 演进的一条暗线：从命令式构造走向声明式——<code>with</code> 在这两种场景里都是那条分界线：<strong>它左边是"原型/基础"，它右边是"我要改/加的地方"</strong>。</p>
+
+<div class="callout callout--info">
+<strong>记忆技巧：</strong>把 <code>with</code> 读作英语介词——<code>person with { Name = "A" }</code> → "a person <strong>with</strong> name A"；<code>[with(capacity: 10), 1, 2]</code> → "a list <strong>with</strong> capacity 10, containing 1 and 2"。英语里是同一个词，C# 里也是——因为它表达的正是同一个关系："这个东西<strong>附带</strong>这些特性"。
+</div>
+
+<!-- ========================== 6.3 SEMANTIC CONSISTENCY ========================== -->
+
+<h3>6.3 方括号内的语义——<code>with()</code> 为什么"不像元素" <span class="en">The Semantic Inconsistency</span></h3>
+
+<p>一个诚实的观感：<code>with(...)</code> 在方括号里<strong>看起来像一个元素，但它不是</strong>。<code>[1, 2, 3]</code> 中每个逗号分隔的是"值"，<code>[with(capacity: 10), 1, 2]</code> 中第一个逗号分隔的却是"关于容器的声明"。语义上它们不是同一层的东西——这种不适感是真实的。</p>
+
+<p>但这个"不一致"并非第一次出现。<strong><code>.. spread</code> 已经开了先例：</strong></p>
+
+<pre><code>List&lt;<span class="kw">int</span>&gt; x = [.. source, <span class="num">1</span>, <span class="num">2</span>];
+<span class="cmt">//        ↑ 这不是一个"元素"——它是一个操作符</span></code></pre>
+
+<p><code>.. source</code> 视觉差异足够大（两个点 + 变量名），你不容易把它误解为集合成员。而 <code>with(capacity: 10)</code> 长得像方法调用——确实容易产生"返回值被放进集合"的错觉（C# 14 中这段代码还真是这个意思——<code>with</code> 被解析为方法调用）。</p>
+
+<p>设计团队重新审视了所有候选方案，每个都有硬伤：</p>
+
+<table>
+<tr><th>方案</th><th>为什么不够好</th></tr>
+<tr><td><code>[capacity: 10; 1, 2]</code>（分号分隔）</td><td>看起来最干净——但 <code>[1; 2]</code> vs <code>[1, 2]</code> 一个分号之差，写错是<strong>静默 bug</strong>：对 <code>List&lt;int&gt;</code>，<code>1</code> 被当 capacity，集合里只有 <code>2</code></td></tr>
+<tr><td><code>new List&lt;int&gt;(capacity: 10) [1, 2]</code></td><td>构造参数和元素分属两处——且 <code>[CollectionBuilder]</code> 类型不走 <code>new</code>，语义对不上</td></tr>
+<tr><td><code>[capacity: 10, 1, 2]</code>（第一个元素有时是元数据）</td><td>更糟——同一个位置，有时候是"值"，有时候是"参数"，何时切换全看类型，读者没有任何视觉线索</td></tr>
+</table>
+
+<p><strong>更好的心智模型：</strong>不要把方括号看成一个纯列表字面量。把它看成一个<strong>完整的创建表达式</strong>——<code>[...]</code> 内描述了"我想要什么样的集合"：</p>
+
+<pre><code>[with(capacity: <span class="num">100</span>), <span class="str">"a"</span>, <span class="str">"b"</span>, .. more]
+ ────────────────  ────────────────────
+  容器怎么造          里面装什么</code></pre>
+
+<p><code>with()</code> 是构造参数区，逗号不是"列表分隔符"而是"构造声明和内容之间的分隔符"——只是语法上恰好用的是同一个 <code>,</code>。设计取舍的核心：<strong>6 个字符的 <code>with()</code> 带来的务实收益（不需要跳出方括号去写 <code>new T(capacity) { }</code>）超过了它在审美上的代价。</strong>大部分开发者在看过一次后就适应了——和当年 <code>.. spread</code> 一样。</p>
+
+<div class="callout callout--info">
+<strong>防错机制补偿了"不够干净"：</strong><code>with</code> 是关键字，IDE 里高亮、不容易看漏；位置固定在第一位，不会藏在元素堆里找不到；写错类型（如对 <code>int[]</code> 写 <code>with()</code>）编译器直接报错。这三道防线让"看起来怪怪的"并没有变成"容易写错的"。
+</div>
+
 <!-- ========================== 7. QUIZ ========================== -->
 
 <h2>七、测验 <span class="en">Quiz</span></h2>
