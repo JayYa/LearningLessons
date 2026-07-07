@@ -134,6 +134,6 @@
 | 1 | [第1课：自信的线条 — 二次元绘画基础](https://JayYa.github.io/LearningLessons/Painting/lessons/0001-confident-lines.html) | 从线条控制入手，讲解二次元绘画的起稿技法与手部稳定性训练 |
 
 **参考资料：**
-- [glossary.md](https://JayYa.github.io/LearningLessons/Painting/reference/glossary.md) — 绘画术语词汇表
+- [二次元绘画术语表 — Glossary](https://JayYa.github.io/LearningLessons/Painting/reference/glossary.html) — 二次元绘画核心术语速查
 
 *自动生成*
