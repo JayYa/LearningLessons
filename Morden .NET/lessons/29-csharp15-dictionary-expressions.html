@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 29: C# 15 — 字典表达式</title>
+<link rel="stylesheet" href="../assets/styles/lesson.css">
+</head>
+<body>
+
+<h1>Lesson 29: C# 15 — 字典表达式 <span class="en">Dictionary Expressions</span></h1>
+<p class="subtitle">.NET 11 目标 · <code>["key": value]</code> 字面量 · 索引器语义 · 仍在特性分支开发中</p>
+
+<div class="callout callout--info">
+<strong>前置：</strong>已完成 <a href="28-csharp15-memory-safety.html">Lesson 28（内存安全）</a> 和 <a href="27-csharp15-collection-expression-args.html">Lesson 27（集合表达式参数）</a>；理解 C# 12 的集合表达式 <code>[1, 2, 3]</code> 即可。<br>
+<strong>状态：</strong>Roslyn 特性分支 <code>features/dictionary-expressions</code> 开发中 <span class="badge badge--draft">Draft</span>——<strong>尚未合入任何 Preview</strong>。LDM 已就索引器语义、接口转换、自然类型做出决议；比较器传参仍在讨论。<br>
+<strong>阅读：</strong><a href="https://github.com/dotnet/csharplang/blob/main/proposals/dictionary-expressions.md">功能规范</a> ·
+<a href="https://github.com/dotnet/csharplang/discussions/8658">提案讨论 #8658</a> ·
+<a href="https://github.com/dotnet/roslyn/issues/81860">实现跟踪 #81860</a>
+</div>
+
+<!-- ========================== 0. HOOK ========================== -->
+
+<h2>〇、字典初始化——二十年的语法债 <span class="en">The Problem</span></h2>
+
+<p>C# 3.0 引入了集合初始化器，让字典初始化有了第一种语法：</p>
+
+<pre><code><span class="cmt">// C# 3.0 集合初始化器（2007）——用花括号 + 大括号</span>
+<span class="kw">var</span> ages = <span class="kw">new</span> Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt;
+{
+    { <span class="str">"Alice"</span>, <span class="num">30</span> },
+    { <span class="str">"Bob"</span>, <span class="num">25</span> },
+    { <span class="str">"Charlie"</span>, <span class="num">35</span> }
+};
+<span class="cmt">// 问题：{key, value} 和元素语法长得一模一样——它不是"键值对"，是"两个参数的 Add"</span></code></pre>
+
+<p>C# 6.0 加了索引器初始化器，好歹有了更像字典的写法：</p>
+
+<pre><code><span class="cmt">// C# 6.0 索引器初始化器（2015）——稍微好一点</span>
+<span class="kw">var</span> ages = <span class="kw">new</span> Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt;
+{
+    [<span class="str">"Alice"</span>] = <span class="num">30</span>,
+    [<span class="str">"Bob"</span>] = <span class="num">25</span>,
+};
+<span class="cmt">// 好了一些——但还是要写 new Dictionary&lt;string, int&gt;，类型推断不了</span></code></pre>
+
+<p>但 C# 12 的<strong>集合表达式</strong>（<code>[1, 2, 3]</code>）把这件事推到了临界点：</p>
+
+<pre><code><span class="cmt">// C# 12：数组、列表、Span——全用同一种简洁语法</span>
+<span class="kw">int</span>[] arr = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];
+List&lt;<span class="kw">int</span>&gt; list = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];
+Span&lt;<span class="kw">int</span>&gt; span = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];
+
+<span class="cmt">// 但是字典呢？还是老样子：</span>
+<span class="kw">var</span> dict = <span class="kw">new</span> Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; { [<span class="str">"a"</span>] = <span class="num">1</span> };
+<span class="cmt">// 🤔 为什么集合有 [] 语法，字典没有？</span></code></pre>
+
+<div class="callout callout--bad">
+<strong>字典是唯一没有</strong>集合表达式语法的常用集合类型。C# 12 的设计团队承认这只是一个时间问题——字典表达式原本计划随集合表达式一起发布，但因复杂性推迟。经过 C# 13、C# 14 两轮跳票，C# 15 终于开始实际开发。
+</div>
+
+<p><strong>字典表达式要解决的问题就一个：让字典和其他集合一样，有干净的字面量语法。</strong></p>
+
+<!-- ========================== 1. SYNTAX ========================== -->
+
+<h2>一、基本语法——<code>k: v</code> 在方括号里 <span class="en">Basic Syntax</span></h2>
+
+<pre><code><span class="cmt">// 字典表达式：键值对用冒号分隔，整体用方括号</span>
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; ages = [
+    <span class="str">"Alice"</span>:   <span class="num">30</span>,
+    <span class="str">"Bob"</span>:     <span class="num">25</span>,
+    <span class="str">"Charlie"</span>: <span class="num">35</span>
+];
+
+<span class="cmt">// 和 C# 12 集合表达式放在一起看——同一个括号，不同的元素</span>
+List&lt;<span class="kw">int</span>&gt;              numbers = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>];        <span class="cmt">// 普通元素</span>
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; dict   = [<span class="str">"a"</span>: <span class="num">1</span>, <span class="str">"b"</span>: <span class="num">2</span>];  <span class="cmt">// 键值对元素</span></code></pre>
+
+<p>核心语法规则只有两条：</p>
+
+<div class="callout callout--good">
+<strong>1.</strong> 键值对写成 <code>expression : expression</code>——冒号左边是键，右边是值。<br>
+<strong>2.</strong> 键值对元素<strong>只能</strong>出现在字典表达式的目标类型上下文中——你不能写 <code>var x = "a": 1;</code>，冒号语法只在方括号内有效。
+</div>
+
+<p>可选尾随逗号：</p>
+
+<pre><code><span class="cmt">// 尾随逗号——和集合表达式一样，允许、推荐（方便 git diff）</span>
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">string</span>&gt; config = [
+    <span class="str">"host"</span>: <span class="str">"localhost"</span>,
+    <span class="str">"port"</span>: <span class="str">"5432"</span>,          <span class="cmt">// ← 尾随逗号 OK</span>
+];</code></pre>
+
+<!-- ========================== 2. SEMANTICS ========================== -->
+
+<h2>二、语义——索引器赋值，不是 <code>Add</code> <span class="en">Indexer Semantics</span></h2>
+
+<p>这是字典表达式<strong>最核心</strong>的设计决策。先看旧语法的两套行为：</p>
+
+<table>
+<tr><th>语法</th><th>重复键行为</th><th>底层调用</th></tr>
+<tr><td>集合初始化器 <code>{ {"a",1}, {"a",2} }</code></td><td>💥 <strong>抛出 ArgumentException</strong></td><td><code>dict.Add(key, value)</code></td></tr>
+<tr><td>索引器初始化器 <code>{ ["a"]=1, ["a"]=2 }</code></td><td>✅ <strong>覆盖</strong>（第二个值胜出）</td><td><code>dict[key] = value</code></td></tr>
+<tr><td><strong>字典表达式</strong> <code>["a": 1, "a": 2]</code></td><td>✅ <strong>覆盖</strong>（第二个值胜出）</td><td><code>dict[key] = value</code></td></tr>
+</table>
+
+<p>LDM 选择索引器语义的理由很实际：</p>
+
+<div class="callout callout--good">
+<strong>最不意外的选择：</strong>集合表达式 <code>[1, 2, 3]</code> 允许重复元素——List、数组都接受。字典表达式也应该对称：允许重复键，后者覆盖前者。如果抛异常，会让你在"看起来能工作"的代码上突然崩溃——比如来自两个数据源的合并：<code>[..defaults, ..overrides]</code>，overrides 故意重复 defaults 的键来覆盖。抛异常反而破坏了最常见的用法。
+</div>
+
+<p>编译器生成的代码相当于：</p>
+
+<pre><code><span class="cmt">// 你写的：</span>
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; ages = [<span class="str">"Alice"</span>: <span class="num">30</span>, <span class="str">"Bob"</span>: <span class="num">25</span>];
+
+<span class="cmt">// 编译器生成的等价代码（伪代码）：</span>
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; __result = <span class="kw">new</span>();
+__result[<span class="str">"Alice"</span>] = <span class="num">30</span>;   <span class="cmt">// 索引器赋值——不是 Add()</span>
+__result[<span class="str">"Bob"</span>] = <span class="num">25</span>;
+<span class="kw">return</span> __result;</code></pre>
+
+<h3>求值顺序：键先于值</h3>
+
+<pre><code><span class="cmt">// 对于每个 k:v 元素：先求 k，再求 v，最后赋值 result[k] = v</span>
+<span class="kw">int</span> counter = <span class="num">0</span>;
+Dictionary&lt;<span class="kw">int</span>, <span class="kw">string</span>&gt; d = [
+    counter++: (counter++).ToString()   <span class="cmt">// 键 = 0, 值 = "1"</span>
+];
+<span class="cmt">// 顺序：① 求键表达式 → counter = 1, 键 = 0</span>
+<span class="cmt">//       ② 求值表达式 → counter = 2, 值 = "1"</span>
+<span class="cmt">//       ③ 赋值 d[0] = "1"</span></code></pre>
+
+<!-- ========================== 3. TARGET TYPES ========================== -->
+
+<h2>三、目标类型——哪些类型能接住字典表达式 <span class="en">Target Types</span></h2>
+
+<p>字典表达式是<strong>目标类型推导</strong>——方括号里不声明类型，由左边变量类型或方法参数类型决定生成哪个具体类型的字典。</p>
+
+<h3>3.1 具体字典类型——字典表达式直接构造</h3>
+
+<pre><code><span class="cmt">// 标准字典（性能优先）</span>
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; d1 = [<span class="str">"a"</span>: <span class="num">1</span>, <span class="str">"b"</span>: <span class="num">2</span>];
+
+<span class="cmt">// 并发字典</span>
+ConcurrentDictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; d2 = [<span class="str">"x"</span>: <span class="num">10</span>, <span class="str">"y"</span>: <span class="num">20</span>];
+
+<span class="cmt">// 不可变字典（通过 CollectionBuilder）</span>
+ImmutableDictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; d3 = [<span class="str">"pi"</span>: <span class="num">314</span>];
+
+<span class="cmt">// 冻结字典</span>
+FrozenDictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; d4 = [<span class="str">"const"</span>: <span class="num">42</span>];</code></pre>
+
+<h3>3.2 字典的"资格"条件</h3>
+
+<p>一个类型被视为<strong>字典类型</strong>需要满足两个条件：</p>
+
+<div class="callout callout--info">
+<strong>1. 元素类型是 <code>KeyValuePair&lt;TKey, TValue&gt;</code></strong>（实现了 <code>IEnumerable&lt;KeyValuePair&lt;TKey, TValue&gt;&gt;</code>）<br>
+<strong>2. 有可读写的索引器 <code>TValue this[TKey] { get; set; }</code></strong>
+</div>
+
+<p>满足这两个条件的，字典表达式就用<strong>索引器赋值</strong>。不满足的（如只有 getter 的只读字典），走其他通路（见第六节）。</p>
+
+<h3>3.3 接口目标类型</h3>
+
+<pre><code><span class="cmt">// IDictionary&lt;TKey, TValue&gt; → 保证生成 Dictionary&lt;TKey, TValue&gt;</span>
+IDictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; d1 = [<span class="str">"a"</span>: <span class="num">1</span>];
+<span class="cmt">// d1 运行时类型就是 Dictionary&lt;string, int&gt;——可以安全转型</span>
+
+<span class="cmt">// IReadOnlyDictionary&lt;TKey, TValue&gt; → 编译器生成合规只读类型</span>
+IReadOnlyDictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; d2 = [<span class="str">"a"</span>: <span class="num">1</span>, <span class="str">"b"</span>: <span class="num">2</span>];
+<span class="cmt">// 运行时类型由编译器决定——不保证是 Dictionary</span>
+<span class="cmt">// 但保证：IsReadOnly = true，所有写操作抛异常</span></code></pre>
+
+<table>
+<tr><th>接口目标类型</th><th>运行时具体类型</th><th>可变？</th></tr>
+<tr><td><code>IDictionary&lt;K,V&gt;</code></td><td><strong>一定是</strong> <code>Dictionary&lt;K,V&gt;</code></td><td>✅ 是</td></tr>
+<tr><td><code>IReadOnlyDictionary&lt;K,V&gt;</code></td><td>编译器选择（可能是 FrozenDictionary 或合成类型）</td><td>❌ 否</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>设计理由：</strong>LDM 为 <code>IDictionary&lt;,&gt;</code> 选择"保证 Dictionary"是因为：第一，Dictionary 是 .NET 投入最多优化的字典类型；第二，和集合表达式中 <code>IList&lt;T&gt;</code> → <code>List&lt;T&gt;</code> 的保证对齐。为 <code>IReadOnlyDictionary&lt;,&gt;</code> 选择"编译器自决"是为了给未来优化留空间——编译器今天可能用 FrozenDictionary，明天可能换成更高效的内部类型。
+</div>
+
+<h3>3.4 非字典集合类型——存入 KVP 列表</h3>
+
+<pre><code><span class="cmt">// 键值对元素也可以填入普通的 KVP 集合</span>
+List&lt;KeyValuePair&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt;&gt; pairs = [<span class="str">"a"</span>: <span class="num">1</span>, <span class="str">"b"</span>: <span class="num">2</span>];
+<span class="cmt">// 每个 k:v 元素包装成 new KeyValuePair&lt;string, int&gt;("a", 1)</span>
+<span class="cmt">// 然后用 Add() 加入列表</span></code></pre>
+
+<!-- ========================== 4. NATURAL TYPE ========================== -->
+
+<h2>四、自然类型推断——<code>var</code> 也能用 <span class="en">Natural Type</span></h2>
+
+<p>和 C# 12 集合表达式一样，字典表达式支持 <code>var</code> 自然类型推断：</p>
+
+<pre><code><span class="cmt">// var 推断为 Dictionary&lt;string, string&gt;</span>
+<span class="kw">var</span> d1 = [<span class="str">"a"</span>: <span class="str">"b"</span>, <span class="str">"c"</span>: <span class="str">"d"</span>];
+<span class="cmt">// d1 的类型是 Dictionary&lt;string, string&gt;——编译器推断键和值的最佳公共类型</span>
+
+<span class="cmt">// 对 null 字面量也能推断</span>
+<span class="kw">var</span> d2 = [<span class="str">"a"</span>: <span class="str">"hello"</span>, <span class="kw">null</span>: <span class="kw">null</span>];
+<span class="cmt">// d2 的类型是 Dictionary&lt;string?, string?&gt;</span></code></pre>
+
+<p>自然类型推断的规则：</p>
+
+<table>
+<tr><th>元素</th><th>对类型推断的贡献</th></tr>
+<tr><td><code>k: v</code> 元素</td><td>键表达式→推断 K；值表达式→推断 V</td></tr>
+<tr><td><code>..spread</code> 展开元素</td><td>被展开集合的 K<sub>i</sub>→K 和 V<sub>i</sub>→V 提供下界推断</td></tr>
+<tr><td>普通表达式元素（KVP）</td><td>表达式类型的键值类型→K 和 V</td></tr>
+</table>
+
+<p>自然类型始终是 <code>Dictionary&lt;K, V&gt;</code>——和集合表达式自然类型为 <code>List&lt;T&gt;</code> 的设计保持一致。</p>
+
+<!-- ========================== 5. SPREADS AND MIXED ========================== -->
+
+<h2>五、展开元素与混合元素 <span class="en">Spreads &amp; Mixed Elements</span></h2>
+
+<h3>5.1 展开现有字典</h3>
+
+<pre><code><span class="cmt">// 合并两个字典——后者覆盖前者（索引器语义）</span>
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; defaults = [<span class="str">"timeout"</span>: <span class="num">30</span>, <span class="str">"retries"</span>: <span class="num">3</span>];
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; overrides = [<span class="str">"timeout"</span>: <span class="num">60</span>];
+
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; merged = [
+    ..defaults,     <span class="cmt">// 先展开默认值</span>
+    ..overrides,    <span class="cmt">// 再展开覆盖值——相同的键（timeout）会被覆盖</span>
+    <span class="str">"debug"</span>: <span class="num">1</span>    <span class="cmt">// 还可以追加新键</span>
+];
+<span class="cmt">// 结果：{ "timeout": 60, "retries": 3, "debug": 1 }</span></code></pre>
+
+<div class="callout callout--good">
+<strong>展开 + 覆盖模式：</strong>这是字典表达式最自然的使用场景之一。配置合并——先展开默认值，再展开覆盖值，后者自动覆盖前者相同的键。如果字典表达式用 <code>Add()</code> 语义，这个模式会直接抛异常——索引器语义让它变得优雅。
+</div>
+
+<h3>5.2 混合元素——KVP 和 k:v 混用</h3>
+
+<pre><code><span class="cmt">// 混合：手动 KeyValuePair + 键值对语法</span>
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; mixed = [
+    KeyValuePair.Create(<span class="str">"a"</span>, <span class="num">1</span>),   <span class="cmt">// KVP 表达式元素</span>
+    <span class="str">"b"</span>: <span class="num">2</span>,                              <span class="cmt">// 键值对元素</span>
+    <span class="str">"c"</span>: <span class="num">3</span>
+];
+
+<span class="cmt">// 混合：来自列表的 KVP + 追加的 k:v</span>
+List&lt;KeyValuePair&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt;&gt; source = GetPairs();
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; result = [
+    ..source,           <span class="cmt">// 展开 KVP 列表</span>
+    <span class="str">"extra"</span>: <span class="num">99</span>      <span class="cmt">// 追加新键值对</span>
+];</code></pre>
+
+<!-- ========================== 6. INTERFACE TRANSLATION ========================== -->
+
+<h2>六、接口转换细节 <span class="en">Interface Translation</span></h2>
+
+<h3>6.1 IDictionary&lt;TKey, TValue&gt;——Dictionary 保证</h3>
+
+<pre><code><span class="cmt">// 编译时类型是接口，运行时一定是 Dictionary</span>
+IDictionary&lt;<span class="kw">string</span>, <span class="kw">object</span>&gt; dict = [
+    <span class="str">"name"</span>: <span class="str">"Alice"</span>,
+    <span class="str">"age"</span>: <span class="num">30</span>
+];
+
+<span class="cmt">// 安全转型——LDM 保证</span>
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">object</span>&gt; concrete = (Dictionary&lt;<span class="kw">string</span>, <span class="kw">object</span>&gt;)dict;
+
+<span class="cmt">// 你甚至可以依赖 Dictionary 特有的 API</span>
+concrete.EnsureCapacity(<span class="num">100</span>);
+concrete.TrimExcess();</code></pre>
+
+<h3>6.2 IReadOnlyDictionary&lt;TKey, TValue&gt;——真只读保证</h3>
+
+<pre><code><span class="cmt">// 只读字典——运行时类型不透明，但行为有保证</span>
+IReadOnlyDictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; readOnly = [
+    <span class="str">"pi"</span>: <span class="num">314159</span>,
+    <span class="str">"e"</span>:  <span class="num">271828</span>
+];
+
+<span class="cmt">// 保证：</span>
+<span class="cmt">// - ((ICollection&lt;KVP&gt;)readOnly).IsReadOnly == true</span>
+<span class="cmt">// - Add / Remove / Clear → 抛 NotSupportedException</span>
+<span class="cmt">// - 通过任何接口视图都无法修改</span>
+
+<span class="cmt">// 也实现了非泛型 IDictionary（用于数据绑定/动态场景）</span>
+System.Collections.IDictionary nongeneric = (System.Collections.IDictionary)readOnly;
+<span class="kw">bool</span> isFixed = nongeneric.IsFixedSize;  <span class="cmt">// true</span></code></pre>
+
+<div class="callout callout--info">
+<strong>为什么非泛型 IDictionary？</strong>这是为了兼容数据绑定场景——WPF、WinForms 和一些旧库通过 <code>IDictionary</code> 接口做运行时内省。如果只读字典不实现它，这些框架会在运行时崩溃。
+</div>
+
+<!-- ========================== 7. OPEN QUESTIONS ========================== -->
+
+<h2>七、开放问题——比较器、构造参数与时间线 <span class="en">Open Questions</span></h2>
+
+<h3>7.1 比较器传参——最大的未决议题</h3>
+
+<p>你怎么在字典表达式中指定 <code>StringComparer.OrdinalIgnoreCase</code>？</p>
+
+<pre><code><span class="cmt">// 理想语法（尚未确定）：</span>
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; d = [
+    <span class="str">"Alice"</span>: <span class="num">30</span>,
+    <span class="str">"Bob"</span>:   <span class="num">25</span>
+] with (StringComparer.OrdinalIgnoreCase);   <span class="cmt">// ← 这个 with 还在讨论</span>
+
+<span class="cmt">// 或者用集合表达式参数的 with() 前缀（L27 学过）：</span>
+Dictionary&lt;<span class="kw">string</span>, <span class="kw">int</span>&gt; d = [
+    with(StringComparer.OrdinalIgnoreCase),   <span class="cmt">// ← 这个也在讨论</span>
+    <span class="str">"Alice"</span>: <span class="num">30</span>,
+    <span class="str">"Bob"</span>:   <span class="num">25</span>
+];</code></pre>
+
+<p>两种语法各有问题：后缀 <code>with</code> 违反求值顺序（键值已经求完了才发现比较器）；前缀 <code>with()</code> 和键值对元素混在一起显得杂乱。LDM 在 2025 年 4 月的会议上只做了初步讨论，<strong>尚未形成决议</strong>。</p>
+
+<h3>7.2 当前状态——诚实的时间线</h3>
+
+<table>
+<tr><th>里程碑</th><th>状态</th></tr>
+<tr><td>LDM 索引器语义决议</td><td>✅ 2024 年 3 月已决议</td></tr>
+<tr><td>LDM 接口转换决议</td><td>✅ 2025 年 4 月已决议</td></tr>
+<tr><td>LDM 自然类型决议</td><td>✅ 已决议</td></tr>
+<tr><td>Roslyn 特性分支</td><td>🔄 <code>features/dictionary-expressions</code> 开发中</td></tr>
+<tr><td>合入 .NET 11 Preview</td><td>❌ 尚未——无里程碑版本</td></tr>
+<tr><td>比较器/构造参数决议</td><td>❓ 讨论中——尚未决议</td></tr>
+<tr><td>GA 发布</td><td>🎯 目标 C# 15 / .NET 11（2026.11），但<strong>有跳票风险</strong></td></tr>
+</table>
+
+<div class="callout callout--bad">
+<strong>最大的不确定性：</strong>字典表达式是 C# 12 时代就计划好的特性——经过 C# 13、C# 14 两次跳票后才在 C# 15 开始实际开发。和本系列前面四个特性不同，它<strong>还没有进入任何 .NET 11 Preview</strong>。CyrusNajmabadi（LDM 成员）在社区讨论中表示"hopefully C# 15"，但这个表态不是承诺。
+</div>
+
+<h3>7.3 现在就学是不是太早了？</h3>
+
+<p>一个诚实的评估：</p>
+
+<ul>
+<li><strong>如果你现在就要写代码：</strong>用索引器初始化器 <code>{ ["a"] = 1 }</code>。字典表达式还没得用。</li>
+<li><strong>如果你在准备面试：</strong>知道语法设计（<code>k:v</code>）、索引器语义（覆盖非抛异常）、接口保证（IDictionary→Dictionary）——这些是"问不倒"的层次。</li>
+<li><strong>如果你在追踪 .NET 设计方向：</strong>字典表达式是集合表达式战略的收官之战——一旦完成，C# 的集合字面量体系就完整了（数组/列表/Span/字典全用 <code>[...]</code>）。</li>
+</ul>
+
+<!-- ========================== 8. QUIZ ========================== -->
+
+<h2>八、测验 <span class="en">Quiz</span></h2>
+
+<div class="quiz" id="q1">
+  <h3>1/5 · 基本语法</h3>
+  <p class="question">以下哪个是正确的字典表达式语法？</p>
+  <label><input type="radio" name="q1" value="a">A. <code>new Dictionary {"a" => 1}</code></label>
+  <label><input type="radio" name="q1" value="b">B. <code>["a": 1, "b": 2]</code></label>
+  <label><input type="radio" name="q1" value="c">C. <code>{"a": 1, "b": 2}</code></label>
+  <label><input type="radio" name="q1" value="d">D. <code>["a" -> 1, "b" -> 2]</code></label>
+  <div class="feedback" id="f_q1"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>2/5 · 重复键行为</h3>
+  <p class="question">以下代码的结果是什么？</p>
+  <pre><code>Dictionary&lt;string, int&gt; d = ["a": 1, "a": 2];</code></pre>
+  <label><input type="radio" name="q2" value="a">A. 编译错误——不允许重复键</label>
+  <label><input type="radio" name="q2" value="b">B. 运行时抛出 ArgumentException</label>
+  <label><input type="radio" name="q2" value="c">C. <code>d["a"]</code> 的值是 2——后覆盖前</label>
+  <label><input type="radio" name="q2" value="d">D. <code>d["a"]</code> 的值是 1——先胜出</label>
+  <div class="feedback" id="f_q2"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>3/5 · 目标类型</h3>
+  <p class="question"><code>IDictionary&lt;string, int&gt; d = ["a": 1];</code>——运行时 <code>d</code> 的类型是什么？</p>
+  <label><input type="radio" name="q3" value="a">A. 不透明——不能依赖具体类型</label>
+  <label><input type="radio" name="q3" value="b">B. <code>Dictionary&lt;string, int&gt;</code>——LDM 保证</label>
+  <label><input type="radio" name="q3" value="c">C. <code>SortedDictionary&lt;string, int&gt;</code></label>
+  <label><input type="radio" name="q3" value="d">D. 编译器合成的内部类型</label>
+  <div class="feedback" id="f_q3"></div>
+</div>
+
+<div class="quiz" id="q4">
+  <h3>4/5 · 展开 + 覆盖</h3>
+  <p class="question">以下代码 <code>merged["key"]</code> 的值是什么？</p>
+  <pre><code>var a = ["key": 1]; var b = ["key": 2];
+var merged = [..a, ..b];</code></pre>
+  <label><input type="radio" name="q4" value="a">A. 1——先展开的胜出</label>
+  <label><input type="radio" name="q4" value="b">B. 2——后展开的覆盖</label>
+  <label><input type="radio" name="q4" value="c">C. 编译错误</label>
+  <label><input type="radio" name="q4" value="d">D. 运行时异常</label>
+  <div class="feedback" id="f_q4"></div>
+</div>
+
+<div class="quiz" id="q5">
+  <h3>5/5 · 当前状态</h3>
+  <p class="question">关于字典表达式的当前状态，哪一项<strong>正确</strong>？</p>
+  <label><input type="radio" name="q5" value="a">A. 已在 .NET 11 Preview 5 中可用——设置 LangVersion=preview 即可使用</label>
+  <label><input type="radio" name="q5" value="b">B. 已在 C# 14 中发布——是 .NET 10 LTS 的一部分</label>
+  <label><input type="radio" name="q5" value="c">C. 仍在 Roslyn 特性分支开发中——尚未合入任何 Preview，目标 C# 15 但有跳票风险</label>
+  <label><input type="radio" name="q5" value="d">D. 已被 LDM 否决——不会进入任何 C# 版本</label>
+  <div class="feedback" id="f_q5"></div>
+
+  <button onclick="checkAll()">提交全部答案</button>
+  <div class="score" id="score" style="display:none"></div>
+</div>
+
+<!-- ========================== 9. SUMMARY ========================== -->
+
+<h2>九、总结 <span class="en">Summary</span></h2>
+
+<table>
+<tr><th>要点</th><th>一句话</th></tr>
+<tr><td><strong>解决的问题</strong></td><td>字典是唯一没有集合表达式语法的常用集合——C# 15 补齐最后一块拼图</td></tr>
+<tr><td><strong>语法</strong></td><td><code>["key": value, ...]</code>——冒号分隔键值，方括号包裹</td></tr>
+<tr><td><strong>语义</strong></td><td><strong>索引器赋值</strong>（<code>dict[key] = value</code>），不是 <code>Add()</code>——重复键覆盖非抛异常</td></tr>
+<tr><td><strong>求值顺序</strong></td><td>每个元素：先求键，再求值，最后赋值 <code>result[key] = value</code></td></tr>
+<tr><td><strong>目标类型</strong></td><td>Dictionary、ConcurrentDictionary、ImmutableDictionary、FrozenDictionary、IDictionary、IReadOnlyDictionary、List&lt;KVP&gt;</td></tr>
+<tr><td><strong>接口保证</strong></td><td><code>IDictionary&lt;,&gt;</code> → 一定是 <code>Dictionary&lt;,&gt;</code>；<code>IReadOnlyDictionary&lt;,&gt;</code> → 真只读</td></tr>
+<tr><td><strong>自然类型</strong></td><td><code>var d = ["a": 1]</code> → <code>Dictionary&lt;string, int&gt;</code></td></tr>
+<tr><td><strong>展开元素</strong></td><td><code>[..defaults, ..overrides]</code>——后者覆盖前者，完美匹配配置合并模式</td></tr>
+<tr><td><strong>开放问题</strong></td><td>比较器/构造参数传参语法尚未决议——<code>with</code> 后缀 vs 前缀仍在讨论</td></tr>
+<tr><td><strong>状态</strong></td><td>Roslyn 特性分支开发中——尚未合入任何 Preview；目标 C# 15 但有跳票风险</td></tr>
+</table>
+
+<div class="callout callout--good">
+<strong>最值得记住的三件事：</strong><br>
+1. <strong>索引器语义是灵魂：</strong>字典表达式用 <code>dict[key] = value</code>，不是 <code>dict.Add()</code>。重复键覆盖不抛异常——这让 <code>[..defaults, ..overrides]</code> 模式自然工作。<br>
+2. <strong>K:V 语法只活在方括号里：</strong><code>"a": 1</code> 本身不是表达式——只有在字典表达式 <code>[...]</code> 中才有意义。这是目标类型推导的一部分。<br>
+3. <strong>还没得用——但设计已成型：</strong>语法、语义、接口保证三大核心决策已锁定。剩下的是实现工作和比较器传参的收尾设计。现在学不亏——等它上线时你已经懂了。
+</div>
+
+<!-- ========================== 10. NEXT ========================== -->
+
+<h2>十、下一步 <span class="en">Next</span></h2>
+
+<p>字典表达式是 C# 15 系列中计划内的第五个特性，也是集合表达式战略的最后一块拼图。至此 C# 15 主要特性已全部覆盖：</p>
+
+<div class="triad">
+  <div>
+    <h4>🧵 C# 15 系列全貌</h4>
+    <p>Union Types（L25）→ Closed Hierarchies（L26）→ Collection Expression Args（L27）→ Memory Safety Phase 1（L28）→ Dictionary Expressions（L29）。五个特性，从类型系统到集合语法到内存模型——C# 15 的完整图景。</p>
+  </div>
+  <div>
+    <h4>📋 已发布 vs 开发中</h4>
+    <p>前四个特性已在 .NET 11 Preview 中可用；字典表达式仍在内部分支。这种"部分可用"是 Preview 的常态——知道边界在哪比知道语法更重要。</p>
+  </div>
+  <div>
+    <h4>🏗️ 课程系列进展</h4>
+    <p>C# 8 → 15 共 29 课。从 Nullable Reference Types 到 Dictionary Expressions——Framework 4.8 到 .NET 11 的完整进化路径已全部呈现。</p>
+  </div>
+</div>
+
+<p class="mild"><a href="28-csharp15-memory-safety.html">← L28: Memory Safety Phase 1</a> · <a href="../../MISSION.md">🎯 回顾 Mission</a></p>
+
+<hr class="section-divider">
+
+<div class="lesson-footer">
+<p><strong>推荐阅读：</strong><a href="https://github.com/dotnet/csharplang/blob/main/proposals/dictionary-expressions.md">功能规范（完整设计）</a> · <a href="https://github.com/dotnet/csharplang/discussions/8658">提案讨论 #8658</a> · <a href="https://github.com/dotnet/roslyn/issues/81860">Roslyn 实现跟踪 #81860</a> · <a href="https://github.com/dotnet/csharplang/blob/main/meetings/2025/LDM-2025-04-09.md">LDM 2025-04-09 会议记录</a></p>
+<p><strong>课后实操：</strong>暂时无法实操——字典表达式尚未在任何 Preview 中可用。但可以在现有代码中找找机会：找出所有 <code>new Dictionary { {"key", val} }</code> 和 <code>new Dictionary { ["key"] = val }</code>——想想用 <code>["key": val]</code> 会简洁多少。回顾 L27（Collection Expression Args）——思考 <code>with()</code> 语法如何同时服务于集合和字典。</p>
+<p><strong>有问题？</strong>字典表达式的设计还在变动中——规范、LDM 决议、实现进度都在演进。任何不清楚的地方，你的教师（Claude）随时在。</p>
+</div>
+
+<script src="../assets/scripts/quiz.js"></script>
+<script>
+const answers = { q1: 'b', q2: 'c', q3: 'b', q4: 'b', q5: 'c' };
+const explanations = {
+  q1: { correct: '✅ 正确！B——<code>["a": 1, "b": 2]</code>。冒号分隔键值，方括号包裹整体。和 C# 12 集合表达式用相同的方括号，但元素是 K:V 而非单个表达式。A 用了 =>（Lambda 箭头），C 没有外面方括号，D 用了 ->（指针访问）。', wrong: '❌ 答案是 B。<code>["a": 1, "b": 2]</code>——冒号分隔键值，方括号包裹。A 错在用 =>，C 没有外层方括号（那是 JSON 语法），D 错在用 ->（指针成员访问运算符）。' },
+  q2: { correct: '✅ 正确！C——后覆盖前，d["a"] == 2。字典表达式使用索引器赋值（<code>dict[key] = value</code>），不是 Add()。重复键不会抛异常——这是和旧集合初始化器（<code>{ {"a",1}, {"a",2} }</code>）最大的行为差异。', wrong: '❌ 答案是 C。字典表达式用索引器语义——<code>d["a"] = 1; d["a"] = 2;</code>，后者覆盖前者。旧集合初始化器 <code>{ {"a",1}, {"a",2} }</code> 才会抛 ArgumentException（因为它用 Add()）。' },
+  q3: { correct: '✅ 正确！B——运行时类型一定是 <code>Dictionary&lt;string, int&gt;</code>。LDM 对此做了明确保证：<code>IDictionary&lt;,&gt;</code> 目标类型一定生成 Dictionary——和 <code>IList&lt;T&gt;</code> 生成 List&lt;T&gt; 的设计对齐。可以安全转型并调用 Dictionary 特有的 API。', wrong: '❌ 答案是 B。<code>IDictionary&lt;string, int&gt;</code> → 运行时一定是 <code>Dictionary&lt;string, int&gt;</code>——LDM 明确保证。这和 <code>IList&lt;T&gt;</code> → <code>List&lt;T&gt;</code> 的保证对称。A 适用于 IReadOnlyDictionary，C/D 不是任何接口目标的运行时类型。' },
+  q4: { correct: '✅ 正确！B——<code>merged["key"] == 2</code>。先展开 a（key=1），后展开 b（key=2），都用索引器赋值，后者覆盖前者。这就是索引器语义的最大价值——<code>[..defaults, ..overrides]</code> 配置合并模式自然工作，不用手动处理重复键。', wrong: '❌ 答案是 B。展开顺序是先 a 后 b——先 key=1，后 key=2 覆盖。索引器语义让 [..defaults, ..overrides] 配置合并模式天然成立。如果是 Add() 语义（A）会抛异常。编译错误（C）和运行时异常（D）都不对。' },
+  q5: { correct: '✅ 正确！C——仍在 Roslyn 特性分支开发中，尚未合入任何 Preview。A 错（和 Union/Closed/Memory Safety 不同，字典表达式不在 Preview 5 中），B 错（C# 14 没有字典表达式），D 错（LDM 没有否决，只是推迟）。目标 C# 15 但诚实地说有跳票风险。', wrong: '❌ 答案是 C。字典表达式是 C# 15 系列中唯一尚未进入 Preview 的特性——仍在 Roslyn 内部分支开发。A 不对（只有前四个特性在 Preview 中），B 不对（从未进入 C# 14），D 不对（没有被否决，只是多次推迟）。' },
+};
+function checkAll() { Quiz.checkAll(answers, explanations); }
+</script>
+</body>
+</html>

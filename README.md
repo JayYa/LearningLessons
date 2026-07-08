@@ -1,6 +1,6 @@
 # 📘 Learning Lessons
 
-一套覆盖现代 C# 语言演进、维京历史、VS Code 扩展开发、GitHub Actions 自动化、AI Agent 构建与二次元绘画入门的技术/人文课程合集。六个课程分别深挖 .NET 从 C# 8 到 C# 15 的每一次语法升级、冰海战纪背后的真实维京时代、从零构建一个 VS Code 扩展的工程全流程、用 GitHub 标签触发 AI 工作流的自动化实践、AI Agent 的核心概念与构建方法，以及二次元绘画的线条基础训练。虽主题各异，但共享同一方法论——从表层 API 下沉到内部机制，从孤立知识点串成系统认知。
+一套覆盖现代 C# 语言演进、维京历史、VS Code 扩展开发、GitHub Actions 自动化、AI Agent 构建与二次元绘画入门的技术/人文课程合集。六个课程分别深挖 .NET 从 C# 8 到 C# 15 每一次语法升级的内部机制、冰海战纪背后的真实维京世界、从零构建 VS Code 扩展的工程全流程、用 GitHub 标签触发 AI 工作流的自动化实践、AI Agent 核心概念与工具扩展机制，以及二次元绘画的线条基础训练。虽主题各异，但共享同一方法论——从表层 API 下沉到底层机制，从孤立知识点串成系统认知。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
@@ -36,6 +36,7 @@
 | 26 | [Lesson 26: C# 15 — Closed Hierarchies（封闭继承层次）](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/26-csharp15-closed-hierarchies.html) | 讲解 C# 15 封闭继承层次，限制类型派生以确保 API 的完整性与可预测性 |
 | 27 | [Lesson 27: C# 15 — 集合表达式参数](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/27-csharp15-collection-expression-args.html) | 解析 C# 15 集合表达式作为方法参数的语法增强，进一步统一集合传递方式 |
 | 28 | [Lesson 28: C# 15 — 内存安全第一阶段](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/28-csharp15-memory-safety.html) | 探索 C# 15 引入的内存安全机制，利用类型系统在编译期消除常见内存错误 |
+| 29 | [Lesson 29: C# 15 — 字典表达式](https://JayYa.github.io/LearningLessons/Morden%20.NET/lessons/29-csharp15-dictionary-expressions.html) | 讲解字典表达式语法，以声明式字面量简化键值对集合的初始化与操作 |
 
 **参考资料：**
 - [异步流速查 · Async Streams · C# 8](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/async-streams-cheatsheet.html) — IAsyncEnumerable 消费、取消与配置速查
@@ -68,6 +69,7 @@
 | 12 | [Lesson 0012 — 冰岛萨迦：口传、书写与历史的炼金术](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0012-icelandic-sagas.html) | 解读冰岛萨迦文学如何将口传记忆转化为书写文本，探讨其作为历史素材的可信度与局限 |
 | 13 | [Lesson 0013 — 维京时代的女性：钥匙、法律与萨迦中的女人](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0013-viking-women.html) | 还原维京女性的法律地位、家庭权力与社会角色，从萨迦中重新发现北欧妇女的真实面貌 |
 | 14 | [Lesson 0014 — 维京人的宗教与仪式：Blót、Seiðr 与不设教会的信仰](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0014-viking-religion.html) | 深入维京人的宗教实践，探索祭祀、占卜与不依赖制度化教会的北欧异教信仰体系 |
+| 15 | [Lesson 0015 — 维京人的艺术与美学：从 Oseberg 到 Urnes 的六种风格](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0015-viking-art.html) | 系统梳理维京艺术六种风格的演变脉络，从动物纹饰到木雕金属工艺的美学解读 |
 
 **参考资料：**
 - [🗡️ 中国古代佩剑传统参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/chinese-sword-tradition.html) — 中国古代佩剑文化传统与维京武器的跨文化对照
@@ -78,10 +80,21 @@
 - [北欧宗教实践参考 — 诸神、仪式、术语与来源](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/norse-religion-practices.html) — 北欧异教的神祇体系、祭祀仪式与关键术语速查
 - [🧬 斯堪的纳维亚人起源参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/scandinavian-origins.html) — 斯堪的纳维亚人的民族起源、迁徙与遗传谱系学术参考
 - [维京时代大事年表](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-age-timeline.html) — Vinland Saga 历史时间线参考
+- [维京艺术风格参考 — 六种风格的快速识别](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-art-styles.html) — Broa、Oseberg、Borre、Jelling、Mammen、Ringerike、Urnes 风格速查
 - [⚔️ 维京劫掠驱动因素参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-raid-causes.html) — 维京劫掠的经济、人口与技术驱动因素分析
 - [📐 维京战船与 Portage 参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-ships-and-portage.html) — 维京长船设计与陆地运船技术参考
 - [🪙 维京白银经济参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-silver-economy.html) — 维京时代白银贸易与经济体系参考
 - [角色-史实对照表](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/vinland-saga-character-reference.html) — Vinland Saga 漫画角色与历史原型速查
+
+## Build an Agent
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [Lesson 01 · What is an Agent](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0001-what-is-an-agent.html) | 从零认识 AI Agent 的核心概念，理解 Agent 与普通 LLM 调用的本质区别 |
+| 2 | [Lesson 02 · Tools & Plugins](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0002-tools-and-plugins.html) | 讲解 Agent 的工具调用与插件扩展机制，理解如何赋予 Agent 与外部世界交互的能力 |
+
+**参考资料：**
+- [Agent Glossary · Reference](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/reference/agent-glossary.html) — AI Agent 领域核心术语速查
 
 ## Claude Context Bar
 
@@ -117,15 +130,6 @@
 **参考资料：**
 - [Reference — Agent-Runner 契约速查表](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/reference/agent-runner-contract.html) — Agent-Runner 接口契约与集成规范速查
 - [Reference: 标签触发工作流语法速查表](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/reference/github-actions-label-workflow-syntax.html) — 标签触发工作流的事件类型、条件筛选与作业配置语法速查
-
-## Build an Agent
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [Lesson 01 · What is an Agent](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0001-what-is-an-agent.html) | 从零认识 AI Agent 的核心概念，理解 Agent 与普通 LLM 调用的本质区别 |
-
-**参考资料：**
-- [Agent Glossary · Reference](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/reference/agent-glossary.html) — AI Agent 领域核心术语速查
 
 ## Painting
 

@@ -90,7 +90,7 @@
 </dl>
 
 <!-- ============ THE AGENT LOOP ============ -->
-<h2>核心机制：Agent Loop</h2>
+<h2 id="loop">核心机制：Agent Loop</h2>
 
 <p>所有 Agent 共享同一个底层循环：</p>
 
@@ -258,6 +258,17 @@ while (true)
     Console.WriteLine("\n");
 }</code></pre>
 
+<div class="card">
+  <strong>💡 <code>ApiUrlFormat</code> 中的 <code>{0}</code> / <code>{1}</code> 是什么？</strong><br>
+  这是 C# 的 <code>string.Format()</code> 占位符，SDK 内部在构建实际请求 URL 时做参数替换：<br>
+  <code>string.Format(ApiUrlFormat, "v1", "messages")</code><br>
+  → <code>https://api.deepseek.com/anthropic/v1/messages</code><br><br>
+  <strong>映射关系：</strong><br>
+  · <code>{0}</code> = API 版本号（<code>v1</code>）<br>
+  · <code>{1}</code> = 端点路径（<code>messages</code>、<code>completions</code> 等）<br>
+  SDK 默认值是 <code>https://api.anthropic.com/{0}/{1}</code>——我们只把主机地址换成 DeepSeek 的，协议格式完全不变。这就是"Anthropic 协议兼容"的实现方式：<strong>代码不变，只换地址</strong>。
+</div>
+
 <h3>Step 4: 配置 API Key 并运行</h3>
 
 <pre><code># PowerShell — 设置 DeepSeek API Key
@@ -305,6 +316,74 @@ dotnet run
 
 <div class="card card--success">
   <strong>你已经做到了：</strong> 你构建的系统不再只是「输入→输出」的对话——它有了 <strong>感知→推理→行动→观察→再推理</strong> 的完整闭环。这就是 Agent。
+</div>
+
+<!-- ============ DEEP DIVE: INSTRUCTIONS DESIGN ============ -->
+<h2>深入理解：专用 vs 通用 Agent 的 Instructions 设计</h2>
+
+<p>
+  本课的 Agent Instructions 是高度<strong>专用</strong>的——它只处理时间相关的请求。但现实中大多数 Agent 需要面对各种未知请求。这就引出一个核心设计问题：<strong>通用 Agent 的 Instructions 应该怎么写？</strong>
+</p>
+
+<div class="card card--highlight">
+  <strong>核心洞察：</strong> 专用 Instructions = 写 <strong>SOP</strong>（标准操作流程，告诉 Agent「遇到 X 就做 Y」）；通用 Instructions = 写<strong>宪法</strong>（原则 + 边界 + 决策框架，告诉 Agent「如何思考」）。不要告诉 Agent <strong>做什么</strong>——告诉它 <strong>如何判断</strong>。
+</div>
+
+<h3>模式一：定义角色和边界，而不是具体行为</h3>
+
+<pre><code>你是一个乐于助人的 AI 助手。你可以使用提供的工具来完成用户请求的任务。
+如果一个请求超出了你工具的能力范围，诚实地告诉用户，并建议替代方案。
+不要编造信息——如果你不确定，就说你不确定。</code></pre>
+
+<p>关键：<strong>告诉 Agent 怎么判断，而不是判断什么。</strong>这条规则是通用的——无论用户明天问什么新问题，它都适用。</p>
+
+<h3>模式二：描述决策原则，而不是决策结果</h3>
+
+<pre><code>当面对一个任务时：
+1. 先理解用户真正想要什么（目标）
+2. 检查是否有工具可以帮助完成这个目标
+3. 如果有多个工具可用，选择最直接的那个
+4. 每一步只调用一个工具，观察结果后再决定下一步
+5. 如果工具调用失败，尝试另一种方式或告知用户</code></pre>
+
+<p>
+  这和 <a href="#loop">Agent Loop</a> 的机制是对应的——Instructions 本质上是在给 LLM 设定<strong>循环中"推理"这一步的思维框架</strong>。
+</p>
+
+<h3>模式三：常见场景用「如果有 X 则 Y」模式</h3>
+
+<pre><code>工作原则：
+· 用户问事实类问题 → 先尝试用工具查找，而非凭记忆回答
+· 用户要求执行操作（发邮件、创建文件等）→ 必须先确认再执行
+· 用户问"你能做什么" → 列出你拥有的工具及其用途
+· 用户闲聊 → 友好回应，无需强行使用工具
+· 用户的问题中有歧义 → 先澄清再行动</code></pre>
+
+<h3>通用 Agent Instructions 模板</h3>
+
+<pre><code>你是一个通用 AI 助手，名叫 [Name]。
+你的目标是帮助用户高效完成任务。
+
+【核心原则】
+- 用工具获取信息，不要凭记忆猜测
+- 如果工具返回的信息不足以回答用户，告诉用户你还需要什么
+- 操作类请求（删除、发送、修改外部数据）需要用户二次确认
+- 用中文回复，保持简洁
+
+【可用工具】
+你有以下工具可用。每个请求到来时，先扫描一遍你的工具列表，
+判断是否有合适的工具。如果工具描述不足以判断，可以先问用户。
+
+【边界】
+以下事情你不能做：
+- 你无法浏览网页（除非你有搜索工具）
+- 你无法访问用户本地文件（除非你有文件工具）
+- 你只有当前对话的上下文，不记得之前的对话（除非有长期记忆）
+
+如果用户问的问题你确实无法处理，说明原因并提供你能做的替代方案。</code></pre>
+
+<div class="card">
+  <strong>📐 设计原则：</strong> 这个模板遵循了 Anthropic 在 <a href="https://docs.anthropic.com/en/docs/agents-and-tools/building-effective-agents" target="_blank">Building Effective Agents</a> 中的核心建议——<strong>不要让 Agent 的 Instructions 变成一份详尽的 checklist，而是给它清晰的判断标准，让它自己推理</strong>。Agent 的价值就在于它的自主决策能力——过度详细的行为规则反而会削弱这种能力。
 </div>
 
 <!-- ============ QUIZ ============ -->

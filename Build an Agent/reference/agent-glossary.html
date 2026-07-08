@@ -150,6 +150,18 @@
   <span class="aka">不是所有场景都该用默认值——根据步骤而非整个 Agent 调整。</span>
 </dd>
 
+<dt>Tool Chaining（工具链式调用）</dt>
+<dd>
+  Agent 在一个对话回合中<strong>连续调用多个工具</strong>，每个工具的返回结果作为后续决策的上下文输入。不是硬编码的 pipeline——LLM 在每一步<strong>重新推理</strong>下一步该调用哪个工具。<br>
+  <span class="aka">示例：「计算 15×23 并保存」→ 先调 calculate → 拿到结果 → 再调 save_note。底层是多次 Agent Loop 迭代。</span>
+</dd>
+
+<dt>Parameter Extraction（参数提取）</dt>
+<dd>
+  LLM 从用户的<strong>自然语言</strong>中推断工具调用所需参数值的能力。不仅做文本匹配——LLM 会<strong>在对话历史中搜索线索</strong>（如之前提到的文件名），利用参数类型信息（string/int/bool）做值映射。<br>
+  <span class="aka">这是 Agent 交互体验「自然」的关键——用户不需要精确指定每个参数。但也可能猜错，关键操作需确认。</span>
+</dd>
+
 </dl>
 
 <div class="lesson-footer" style="margin-top:3rem;">

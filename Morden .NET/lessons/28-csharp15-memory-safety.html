@@ -46,6 +46,50 @@ C# 15 的 <code>unsafe</code> 从"标记所有指针操作"转向"标记真正�
 
 <p>这不仅是语法上的放松——它是 C# 对内存安全的根本性反思。设计团队甚至提出了一个长达多版本的路线图。我们来看看第一步。</p>
 
+<!-- ========================== 0.5. MOTIVATION ========================== -->
+
+<h2>〇·五、为什么是现在？——三层动机 <span class="en">Why Now?</span></h2>
+
+<p>你可能会问：二十多年没变的东西，为什么现在要改？是对性能的追求吗？</p>
+
+<p>答案是：<strong>性能是推手之一，但不是唯一的推手，甚至不是最主要的推手。</strong></p>
+
+<h3>第一层：性能——"我们需要指针，但不要 unsafe 的代价"</h3>
+
+<p>现代 .NET 越来越多地涉足高性能场景——P/Invoke 互操作、零开销序列化、SIMD 向量化、栈上大块内存分配。这些场景<strong>必须</strong>用指针，没有替代方案。但旧模型下，一行解引用就要把整段代码塞进 <code>unsafe { }</code> 大麻袋——十行代码只有一行危险，却要全部标记为不安全。这让代码审查无法聚焦真正的风险点。</p>
+
+<h3>第二层：正确性——"unsafe 应该是有意义的信号"</h3>
+
+<p>这是 C# 15 <strong>最主要</strong>的动机。旧模型下，<code>unsafe</code> 是一个"大范围广播"——它告诉你"这一大片代码里有不安全的东西"，但不告诉你"具体是哪一行"。代码审查时，你不得不通读整个 <code>unsafe</code> 块。新模型让 <code>unsafe</code> 精确到行——审查者一眼就能定位到真正的危险操作。这不是性能问题，是<strong>工程文化问题</strong>：关键字必须承载真正有意义的信息。</p>
+
+<div class="callout callout--good">
+<strong>Rust 的影响：</strong>Rust 的 <code>unsafe</code> 块就是精确的——只包裹真正需要绕过编译器检查的操作。C# 15 的新模型明确借鉴了这个思路：<code>unsafe</code> 的范围应该精确对应危险操作的边界，而不是一大片区域的全有/全无开关。
+</div>
+
+<h3>第三层：生态位——"安全语言的舒适 + 系统语言的锋利"</h3>
+
+<p>.NET 的竞争对手不只是 Java，还有 Rust、Go、Zig。在高性能服务端、游戏引擎、云原生基础设施领域，完全托管的内存模型有天然的上限。.NET 的策略不是变成 Rust，而是：</p>
+
+<p><strong>用安全的抽象（<code>Span&lt;T&gt;</code>、<code>ref struct</code>、<code>ref readonly</code>）覆盖 90% 的高性能场景；然后对剩下 10% 真正需要指针的场景，把安全模型打磨到极致精确。</strong></p>
+
+<p>C# 15 这项变化属于后半部分——为那 10% 打磨工具。</p>
+
+<h3>长线视角：承认指针的合法地位</h3>
+
+<p>回顾 C# 7.2~15 跟内存相关的演进，能看到一条清晰的弧线：</p>
+
+<pre><code>C# 7.2   → ref struct, Span&lt;T&gt;        ← "给你安全的指针替代品"
+C# 7.3   → stackalloc 改进              ← "栈分配更容易"
+C# 12    → ref readonly, inline arrays   ← "更多零开销安全抽象"
+C# 13    → ref struct 实现接口           ← "ref struct 成为一等公民"
+C# 15    → 指针无需 unsafe 声明          ← "真正指针的安全模型精细化"</code></pre>
+
+<p>这条弧线的名字叫：<strong>承认指针的合法地位</strong>。二十年前 C# 的态度是"指针是危险的，关在 unsafe 笼子里"。现在的态度是"指针是工具，用对的地方就行，但我们要确保你知道什么时候在做危险的事"。</p>
+
+<div class="callout callout--good">
+<strong>一句话：</strong>不是因为性能而放松安全，而是因为要更好地服务于性能场景，所以把安全模型做得更精确。<code>unsafe</code> 关键字从中世纪的"黑魔法印章"变成现代的"精确审计标记"。
+</div>
+
 <!-- ========================== 1. TWO MODELS ========================== -->
 
 <h2>一、两套模型——一张表看懂什么变了 <span class="en">Two Models at a Glance</span></h2>
@@ -358,6 +402,33 @@ Point* pp = (Point*)&amp;value;
 <strong>设计意图：</strong>保证仅更新 LangVersion 不会造成安全性"回退"——旧库中有指针签名的方法不会因为新的宽松规则突然变成可安全调用。兼容模式在高版本中可能成为唯一模式，最终在跨多个 .NET 版本后移除。
 </div>
 
+<!-- ========================== 7.5. IMPACT ========================== -->
+
+<h2>七·五、对你意味着什么？——不同角色的影响 <span class="en">Who Benefits?</span></h2>
+
+<p>学完这么多内容，一个诚实的问题：<strong>作为普通应用开发者，这项改动对你变化大吗？</strong></p>
+
+<table>
+<tr><th>角色</th><th>影响程度</th><th>说明</th></tr>
+<tr><td><strong>框架作者</strong><br><small>ASP.NET Core、EF Core、System.Text.Json</small></td><td>🟢 巨大</td><td>这些库内部充斥着 <code>fixed</code>、指针运算、<code>stackalloc</code>。新模型让它们的 <code>unsafe</code> 块精确缩小——代码审查效率大幅提升。Microsoft 自己就是最大的 <code>unsafe</code> 用户。</td></tr>
+<tr><td><strong>库作者</strong><br><small>序列化库、网络库、图形库</small></td><td>🟡 显著</td><td>如果你写高性能 NuGet 包，这项改动让你能在安全代码中持有和传递指针，只在解引用时才进入 <code>unsafe</code>——接口设计更干净。</td></tr>
+<tr><td><strong>应用开发者</strong><br><small>Web API + 业务逻辑 + CRUD</small></td><td>⚪ 几乎为零</td><td>你不会写 <code>unsafe</code>。但在 GitHub 上读框架源码时，你不会被"<code>fixed</code> 为什么不在 <code>unsafe</code> 里"困惑。它不是你的日常工具，但是你的认知底盘。</td></tr>
+</table>
+
+<div class="callout callout--info">
+<strong>类比：</strong>这就像 <code>Span&lt;T&gt;</code> 和 <code>ref struct</code>——你日常不写，但知道它们的存在，理解为什么这是趋势，面试能说出设计动机。这三者属于同一类知识：<strong>不是你的日常工具，但是你的认知底盘。</strong>
+</div>
+
+<p>在你的知识体系中，这项改动的定位：</p>
+
+<ul>
+<li><strong>优先级：低。</strong>不值得专门花时间练习指针代码。</li>
+<li><strong>认知价值：高。</strong>它揭示了 .NET 团队的核心思路——在不牺牲安全的前提下逼近原生性能。这个思路贯穿了 C# 7~15 的整个演进。</li>
+<li><strong>面试价值：中。</strong>如果你被问到"<code>unsafe</code> 在 C# 15 有什么变化"，你能说清楚"指针声明不需要 <code>unsafe</code> 了，但解引用还需要；<code>unsafe</code> 从内部许可变成了调用者契约"——这比 90% 的候选人强。</li>
+</ul>
+
+<p><strong>一句话：知道它存在、知道它为什么存在、知道它对你依赖的框架意味着什么。然后继续写你的业务代码。</strong></p>
+
 <!-- ========================== 8. QUIZ ========================== -->
 
 <h2>八、测验 <span class="en">Quiz</span></h2>
@@ -429,14 +500,17 @@ Point* pp = (Point*)&amp;value;
 <tr><td><strong>safe 关键字</strong></td><td><code>extern</code> 和显式布局字段必须标注 <code>safe</code> 或 <code>unsafe</code>—编译器不替你做判断</td></tr>
 <tr><td><strong>迁移路径</strong></td><td>指针宽松今天就能用（LangVersion=preview）；完整契约强制需要 assembly opt-in，仍在开发</td></tr>
 <tr><td><strong>兼容模式</strong></td><td>旧程序集中签名含指针的成员自动被视为 caller-unsafe—保护未迁移代码</td></tr>
+<tr><td><strong>为什么是现在</strong></td><td>性能是推手之一，但<strong>最主要</strong>的动机是让 <code>unsafe</code> 成为有意义的审计信号——精确到行，而非大范围广播</td></tr>
+<tr><td><strong>对你的影响</strong></td><td>日常不写，但能读懂框架源码；低优先级、高认知价值、中面试价值</td></tr>
 <tr><td><strong>状态</strong></td><td>.NET 11 Preview 5—指针宽松已实现；完整强制预计 C# 16 / .NET 12 生产就绪</td></tr>
 </table>
 
 <div class="callout callout--good">
-<strong>最值得记住的三件事：</strong><br>
+<strong>最值得记住的四件事：</strong><br>
 1. <strong>现在就能缩小 unsafe 范围：</strong>把大片的 <code>unsafe { fixed(...) { *p } }</code> 变成 <code>fixed(...) { unsafe { *p } }</code>——unsafe 范围精确对应唯一的危险行。<br>
 2. <strong>消除模式是最终目标：</strong>用验证逻辑包围 unsafe 操作，对外暴露安全签名——这是 C# 版本的"安全抽象"哲学。<br>
-3. <strong>这是多版本演进的第一步：</strong>C# 15 搭好地基，C# 16 铺通管道。从"unsafe 是大麻袋"到"unsafe 是精确的审计标记"。
+3. <strong>性能不是唯一的动机：</strong>让 <code>unsafe</code> 成为有意义的审计信号——这才是 C# 15 最主要的设计目标。指针的存在 ≠ 不安全；解引用指针 = 不安全。<br>
+4. <strong>这项改动对你意味着什么：</strong>日常不写，但能读懂框架源码。低优先级、高认知价值。知道它存在、知道它为什么存在，然后继续写业务代码。
 </div>
 
 <!-- ========================== 10. NEXT ========================== -->

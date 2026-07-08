@@ -19,8 +19,13 @@
    ============================================================ */
 
 function checkQuiz(questionNum, correctValue, correctText, incorrectText) {
-  var feedback = document.getElementById('f' + questionNum);
+  var feedback = document.getElementById('r' + questionNum);
   var selected = document.querySelector('input[name="q' + questionNum + '"]:checked');
+
+  if (!feedback) {
+    console.error('checkQuiz: 找不到反馈元素 #r' + questionNum);
+    return;
+  }
 
   if (!selected) {
     feedback.className = 'feedback incorrect';
@@ -28,7 +33,8 @@ function checkQuiz(questionNum, correctValue, correctText, incorrectText) {
     return;
   }
 
-  if (selected.value === correctValue) {
+  // 宽松比较——radio 的 value 始终是字符串
+  if (selected.value == correctValue) {
     feedback.className = 'feedback correct';
     feedback.textContent = '✅ ' + correctText;
   } else {

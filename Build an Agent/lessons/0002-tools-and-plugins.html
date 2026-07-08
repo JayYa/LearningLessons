@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 02 · Tools & Plugins</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<div class="lesson-meta">
+  <span class="lesson-number">Lesson 02</span>
+  <span>Agent Academy</span>
+  <span>·</span>
+  <span>~25 min</span>
+</div>
+
+<h1>Tools & Plugins：让 Agent 真正"做事"</h1>
+<p style="font-size:1.1rem;color:var(--text-muted);margin-top:0;">
+  从单一工具到多工具协作——理解 LLM 如何选择工具、提取参数、串联调用，并掌握工具设计五原则。
+</p>
+
+<div style="margin:1.5rem 0;">
+  <span class="tag">Tool Design</span>
+  <span class="tag">Function Calling</span>
+  <span class="tag">Multi-Tool</span>
+  <span class="tag">Parameter Extraction</span>
+  <span class="tag">Semantic Kernel</span>
+  <span class="tag">C#</span>
+</div>
+
+<hr style="border:none;border-top:1px solid var(--border);margin:2rem 0;">
+
+<!-- ============ MOTIVATION ============ -->
+<h2>Lesson 01 的 Agent 少了什么？</h2>
+
+<p>
+  在 <a href="0001-what-is-an-agent.html">Lesson 01</a> 中，你构建的 TimeAssistant 只有一个工具——获取时间。它能做的事很有限。现实中的 Agent 需要<strong>多种工具</strong>：查数据库、调 API、读写文件、发邮件、执行代码……
+</p>
+
+<p>
+  但工具多了，新问题就出现了：
+</p>
+
+<ul style="margin:1rem 0 1rem 1.5rem;color:var(--text-muted);">
+  <li>LLM 怎么知道<strong>该选哪个工具</strong>？</li>
+  <li>工具需要参数——LLM 怎么从自然语言中<strong>提取参数</strong>？</li>
+  <li>多个工具怎么<strong>串联</strong>完成一个任务？</li>
+  <li>工具执行失败了——Agent 怎么<strong>优雅处理</strong>？</li>
+</ul>
+
+<p>本课逐一回答这些问题，并让你构建一个拥有<strong>三个工具、能链式调用</strong>的 Agent。</p>
+
+<!-- ============ KNOWLEDGE ============ -->
+<h2>心智模型：工具的解剖结构</h2>
+
+<p>在 Agent 的世界里，一个工具由四个部分组成。LLM 通过这四个部分来"理解"你的工具：</p>
+
+<div class="diagram">
+┌─────────────────────────────────────────────┐
+│               TOOL / PLUGIN                  │
+│                                              │
+│  ① Name        "save_note"                  │
+│     ↓                                        │
+│  ② Description "将文本保存到文件…"           │
+│     ↓                                        │
+│  ③ Parameters  filename: string             │
+│                content: string               │
+│     ↓                                        │
+│  ④ Return      "已保存到 note.txt，共 42 字符"│
+│     Value       (一个字符串)                  │
+└─────────────────────────────────────────────┘
+</div>
+
+<h3>四个部分，各有职责</h3>
+
+<dl style="margin:1rem 0;">
+  <dt style="font-weight:600;margin-top:0.75rem;">① Name（函数名）</dt>
+  <dd style="margin-left:1.5rem;color:var(--text-muted);">LLM 用它做<strong>初步筛选</strong>。动词开头、描述性强——<code>get_weather</code> 比 <code>f1</code> 好 100 倍。LLM 通过函数名进行语义匹配，名字本身就是最重要的 Description。</dd>
+
+  <dt style="font-weight:600;margin-top:0.75rem;">② Description（描述）</dt>
+  <dd style="margin-left:1.5rem;color:var(--text-muted);">这是 LLM 判断「该不该用这个工具」的<strong>唯一依据</strong>。要写清楚：工具做什么、什么时候该用它、什么时候<strong>不该</strong>用它、参数含义、返回格式。这不是给人看的注释——这是你和 LLM 之间的 <strong>API 契约</strong>。</dd>
+
+  <dt style="font-weight:600;margin-top:0.75rem;">③ Parameters（参数）</dt>
+  <dd style="margin-left:1.5rem;color:var(--text-muted);">LLM 从用户的自然语言中<strong>提取参数值</strong>。用户说「把结果存到 result.txt」→ LLM 推断 filename="result.txt"。参数类型（string/int/bool/enum）帮助 LLM 做正确的值映射。</dd>
+
+  <dt style="font-weight:600;margin-top:0.75rem;">④ Return Value（返回值）</dt>
+  <dd style="margin-left:1.5rem;color:var(--text-muted);">工具返回的内容会作为<strong>新的上下文</strong>拼入 LLM 的输入。所以返回值必须是<strong>人类可读的字符串</strong>——LLM 要能理解它、基于它做下一步推理。返回 JSON 也行，但你得在 Description 里告诉 LLM 怎么解读。</dd>
+</dl>
+
+<!-- ============ TOOL SELECTION MECHANISM ============ -->
+<h2>核心机制：LLM 如何选择工具</h2>
+
+<p>当你的 Agent 拥有多个工具时，LLM 在每个推理步骤都会面临一个选择题：</p>
+
+<div class="diagram">
+用户: "帮我把计算结果存到 result.txt"
+                │
+                ▼
+┌──────────────────────────────────┐
+│ 可用工具列表（序列化为 JSON）      │
+│                                  │
+│ { name: "save_note",            │
+│   description: "将文本保存到…",  │
+│   parameters: { filename,       │
+│                content } }      │
+│                                  │
+│ { name: "read_note",            │
+│   description: "读取文件…",      │
+│   parameters: { filename } }    │
+│                                  │
+│ { name: "calculate",            │
+│   description: "计算数学…",      │
+│   parameters: { expression } }  │
+└──────────────────────────────────┘
+                │
+                ▼
+        ┌──────────────┐
+        │   LLM 推理    │
+        │              │
+        │ "用户想存结果 │
+        │  → 需要 save  │
+        │  _note"       │
+        └──────┬───────┘
+               │
+               ▼
+        ┌──────────────┐
+        │ 输出 tool_call │
+        │ name:"save_   │
+        │ note"         │
+        │ args:{        │
+        │  filename:    │
+        │  "result.txt",│
+        │  content:     │
+        │  "3588"}      │
+        └──────────────┘
+</div>
+
+<p style="font-size:0.9rem;color:var(--text-muted);margin-top:0.5rem;">
+  关键点：LLM <strong>不执行代码</strong>——它只输出「我想调用 save_note，参数是这些」。框架（Semantic Kernel）截获这个请求，实际执行你的 C# 方法，然后把返回值拼回对话。
+</p>
+
+<!-- ============ TOOL DESIGN PRINCIPLES ============ -->
+<h2>工具设计五原则</h2>
+
+<p>好的工具让 Agent 聪明；差的工具让 Agent 变成傻子。记住这五条：</p>
+
+<div class="card card--highlight">
+  <strong>原则 ①：名称即文档</strong><br>
+  用 <code>verb_noun</code> 格式，动词开头。<code>get_weather</code>、<code>save_note</code>、<code>search_customer</code>。<br>
+  ❌ <code>f1</code>、<code>helper</code>、<code>do_stuff</code>——LLM 完全猜不到这些是干什么的。
+</div>
+
+<div class="card">
+  <strong>原则 ②：Description 是 API 契约</strong><br>
+  写清楚五个 W：<strong>W</strong>hat（做什么）、<strong>W</strong>hen（何时用）、<strong>W</strong>hen NOT（何时<em>不要</em>用）、参数含义、返回值格式。LLM 只能看到 Description，看不到你的 C# 代码。<br>
+  <span style="color:var(--text-muted);">好的 Description 示例见下方 Step 2 的代码。</span>
+</div>
+
+<div class="card">
+  <strong>原则 ③：一个工具只做一件事</strong><br>
+  不要写"保存或读取文件"的万能工具。拆成 <code>save_note</code> 和 <code>read_note</code> 两个。LLM 更容易选对，出错也更容易定位。<br>
+  <span style="color:var(--text-muted);">类比：REST API 的单一职责原则。</span>
+</div>
+
+<div class="card">
+  <strong>原则 ④：返回字符串，而非抛出异常</strong><br>
+  工具执行失败时，<strong>不要 throw</strong>——返回一个描述错误的字符串。LLM 会读到这个错误信息，并尝试换一种方式完成任务。<br>
+  <span style="color:var(--text-muted);">「文件不存在」比一个 500 Internal Server Error 有用 1000 倍——LLM 能读懂前者。</span>
+</div>
+
+<div class="card card--success">
+  <strong>原则 ⑤：把参数类型作为隐式约束</strong><br>
+  LLM 会看你定义的参数类型（string、int、bool、enum）来推断该传什么值。如果是 enum，LLM 会从选项中选；如果是 int，LLM 会尝试提取数字。利用类型系统减少 LLM 的猜测空间。
+</div>
+
+<!-- ============ SKILL ============ -->
+<h2>动手构建：文件助手 Agent</h2>
+
+<p>
+  现在构建一个<strong>拥有三个工具、能链式调用</strong>的 Agent——FileAssistant。
+  它能帮你做数学计算、保存结果到文件、再随时读回来。
+</p>
+
+<div class="card card--highlight">
+  <strong>本课产出：</strong> 一个 Agent，能根据自然语言请求自动选择工具（save / read / calculate），在多工具间切换，甚至串联多个工具完成一个复合任务。这是所有实用 Agent 的核心能力。
+</div>
+
+<h3>Step 1: 创建项目</h3>
+
+<pre><code>dotnet new console -n FileAssistant
+cd FileAssistant
+dotnet add package Microsoft.SemanticKernel --prerelease
+dotnet add package Microsoft.SemanticKernel.Agents.Core --prerelease
+dotnet add package Anthropic.SDK --prerelease</code></pre>
+
+<h3>Step 2: 定义三个工具</h3>
+
+<p>创建 <code>FilePlugin.cs</code>——包含保存和读取两个工具：</p>
+
+<pre><code>using System.ComponentModel;
+using Microsoft.SemanticKernel;
+
+public class FilePlugin
+{
+    [KernelFunction("save_note")]
+    [Description("将文本内容保存到文件中。" +
+                 "filename: 要保存的文件名（不含路径，保存在当前目录）。" +
+                 "content: 要写入文件的完整文本内容。" +
+                 "使用场景：用户说「保存」「存起来」「记下来」「写到文件」等。" +
+                 "注意：如果文件已存在会被覆盖。")]
+    public string SaveNote(string filename, string content)
+    {
+        var path = Path.Combine(Directory.GetCurrentDirectory(), filename);
+        File.WriteAllText(path, content);
+        return $"已保存到 {filename}，共写入 {content.Length} 个字符。";
+    }
+
+    [KernelFunction("read_note")]
+    [Description("读取之前用 save_note 保存的文件内容。" +
+                 "filename: 要读取的文件名。" +
+                 "使用场景：用户说「读取」「看看」「打开」「之前存的」等。" +
+                 "注意：只能读取 save_note 创建的文件。如果文件不存在，返回错误提示而非崩溃。")]
+    public string ReadNote(string filename)
+    {
+        var path = Path.Combine(Directory.GetCurrentDirectory(), filename);
+        if (!File.Exists(path))
+            return $"文件 {filename} 不存在。请确认文件名是否正确，或者是否已经保存过。";
+        var content = File.ReadAllText(path);
+        return $"—— {filename} 的内容 ——\n{content}\n—— 文件结束 ——";
+    }
+}</code></pre>
+
+<p>创建 <code>CalculatorPlugin.cs</code>——数学计算工具：</p>
+
+<pre><code>using System.ComponentModel;
+using System.Data;
+using Microsoft.SemanticKernel;
+
+public class CalculatorPlugin
+{
+    [KernelFunction("calculate")]
+    [Description("计算数学表达式的值。" +
+                 "expression: 数学表达式字符串，如 '15 * 23'、'(100 + 50) / 3'。" +
+                 "支持运算符：+ - * / % ^ 和括号 ()。" +
+                 "使用场景：用户说「计算」「算一下」「等于多少」「求值」等。" +
+                 "注意：仅支持纯数学运算，不能处理变量或复杂函数。计算失败时返回错误描述。")]
+    public string Calculate(string expression)
+    {
+        try
+        {
+            var result = new DataTable().Compute(expression, null);
+            return $"{expression} = {result}";
+        }
+        catch (Exception ex)
+        {
+            return $"计算「{expression}」时出错：{ex.Message}。请检查表达式格式是否正确。";
+        }
+    }
+}</code></pre>
+
+<div class="card">
+  <strong>🔍 观察 Description 的写法：</strong> 每个 Description 都包含了<strong>功能说明 + 参数解释 + 使用场景 + 边界条件</strong>。LLM 通过阅读这一段文本来决定「用户说"存起来"→ 应该用 save_note」。如果你的 Description 只写"保存文件"四个字，LLM 在多个工具之间会犹豫不决——它没有足够的信息做判断。
+</div>
+
+<h3>Step 3: 创建 FileAssistant Agent</h3>
+
+<pre><code>using System.ComponentModel;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Agents;
+using Microsoft.SemanticKernel.Agents.Chat;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Anthropic.SDK;
+using Anthropic.SDK.Common;
+
+// ——— A：创建 Anthropic 客户端（指向 DeepSeek）———
+var anthropicClient = new AnthropicClient(
+    new APIAuthentication(
+        Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")!
+    )
+)
+{
+    ApiUrlFormat = "https://api.deepseek.com/anthropic/{0}/{1}"
+};
+
+IChatClient chatClient = new ChatClientBuilder(anthropicClient.Messages)
+    .UseFunctionInvocation()
+    .Build();
+
+// ——— B：构建 Kernel + 注册工具 ———
+var builder = Kernel.CreateBuilder();
+builder.Services.AddSingleton(chatClient);
+
+// 注册两个 Plugin 类——每个类里的 [KernelFunction] 方法自动成为工具
+builder.Plugins.AddFromType&lt;FilePlugin&gt;();
+builder.Plugins.AddFromType&lt;CalculatorPlugin&gt;();
+
+Kernel kernel = builder.Build();
+
+// ——— C：创建 Agent ———
+var agent = new ChatCompletionAgent
+{
+    Name = "FileAssistant",
+    Instructions = """
+        你是一个文件助手，可以帮助用户完成以下任务：
+        - 计算数学表达式
+        - 将文本内容保存到文件
+        - 读取之前保存的文件内容
+
+        工作原则：
+        - 当用户要求「计算并保存」时，先调用 calculate 计算结果，
+          再调用 save_note 保存结果。不要一步完成——先算再存。
+        - 当用户要求读取文件时，先确认文件是否存在。
+        - 当用户给出的文件名没有扩展名时，默认加上 .txt。
+        - 用中文回复，简洁友好。
+        - 如果工具返回了错误信息，分析原因并建议用户如何修正。
+        """,
+    Kernel = kernel
+};
+
+// ——— D：对话循环 ———
+var history = new ChatHistory();
+Console.WriteLine("=== FileAssistant 已就绪 —— 3 个工具：计算 / 保存 / 读取 ===");
+Console.WriteLine("输入 'exit' 退出\n");
+Console.WriteLine("试试这些：");
+Console.WriteLine("  · 帮我算一下 156 * 23 + 100");
+Console.WriteLine("  · 把计算结果存到 result.txt");
+Console.WriteLine("  · 帮我算 256 * 1024 并保存到 memory_size.txt");
+Console.WriteLine("  · 读取 result.txt\n");
+
+while (true)
+{
+    Console.Write("你: ");
+    var input = Console.ReadLine();
+    if (input?.ToLower() == "exit") break;
+
+    history.Add(new ChatMessageContent(AuthorRole.User, input!));
+
+    Console.Write("Agent: ");
+    await foreach (var chunk in agent.InvokeStreamingAsync(history))
+    {
+        Console.Write(chunk.Content);
+    }
+    Console.WriteLine("\n");
+}</code></pre>
+
+<div class="card">
+  <strong>📐 Instructions 设计的要点：</strong> 注意这里用了 <a href="0001-what-is-an-agent.html#instructions-design">Lesson 01 中学到的通用 Instructions 模式</a>——告诉 Agent <strong>工作原则</strong>而非具体流程。比如「当用户要求计算并保存时，先调用 calculate 再调用 save_note」是一条决策原则，不是硬编码的 if-else。Agent 会基于这条原则自行判断何时适用。
+</div>
+
+<h3>Step 4: 运行并测试</h3>
+
+<pre><code># PowerShell
+$env:DEEPSEEK_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+dotnet run</code></pre>
+
+<!-- ============ OBSERVE ============ -->
+<h2>发生了什么？—— 追踪一次链式调用</h2>
+
+<p>当你说「<strong>帮我算 156 × 23 并保存到 result.txt</strong>」时，Agent Loop 实际转了两圈：</p>
+
+<ol class="steps">
+  <li>
+    <strong>第一轮推理</strong>：LLM 读取系统提示 + 用户请求 + 三个工具的 Definition。判断——「用户要计算 → 用 calculate 工具，参数 expression="156 * 23"」
+  </li>
+  <li>
+    <strong>框架拦截并执行</strong>：Semantic Kernel 截获 tool_call 请求，执行 <code>CalculatorPlugin.Calculate("156 * 23")</code>，返回 <code>"156 * 23 = 3588"</code>
+  </li>
+  <li>
+    <strong>结果回填</strong>：将 tool result（<code>"156 * 23 = 3588"</code>）作为一条 Tool 消息拼入对话上下文
+  </li>
+  <li>
+    <strong>第二轮推理</strong>：LLM 看到「用户要求<em>保存</em>」+「计算结果 = 3588」。判断——「用 save_note 工具，filename="result.txt"，content="156 * 23 = 3588"」
+  </li>
+  <li>
+    <strong>再次拦截执行</strong>：执行 <code>FilePlugin.SaveNote("result.txt", "156 * 23 = 3588")</code>
+  </li>
+  <li>
+    <strong>结果再次回填</strong>：<code>"已保存到 result.txt，共写入 18 个字符。"</code>
+  </li>
+  <li>
+    <strong>第三轮推理</strong>：LLM 判断——「任务完成。生成最终回复。」→ <em>"已经帮你算好了：156 × 23 = 3588，结果已保存到 result.txt。"</em>
+  </li>
+</ol>
+
+<div class="card card--success">
+  <strong>你刚刚见证的是 Agent 的核心超能力：</strong>不是一次调用一个工具——而是<strong>基于上一步的结果，自主决定下一步该调用哪个工具</strong>。这不是代码逻辑，是 LLM 在每一步重新推理。「计算→保存」的链式调用，和「读取→计算→保存→发邮件」的多步编排，底层是完全相同的机制——LLM 每次看到累积上下文，做出下一步决策。
+</div>
+
+<!-- ============ DEEP DIVE: PARAMETER EXTRACTION ============ -->
+<h2>深入理解：LLM 如何从自然语言中提取参数</h2>
+
+<p>这是最容易被低估的能力。看几个例子：</p>
+
+<div class="diagram">
+用户说：                         LLM 提取为：
+
+"保存到 hello.txt"        →     save_note(
+                                  filename: "hello.txt",
+                                  content: ??? → 问用户要内容)
+
+"算 15 乘以 23"           →     calculate(
+                                  expression: "15 * 23")
+
+"把 3588 存起来"          →     save_note(
+                                  filename: ??? → 可能问，可能用默认值
+                                  content: "3588")
+
+"读一下刚才那个文件"       →     read_note(
+                                  filename: ??? → LLM 查对话历史，找到
+                                  之前提到的文件名 "result.txt")
+</div>
+
+<p style="font-size:0.9rem;color:var(--text-muted);margin-top:0.5rem;">
+  <strong>关键洞察：</strong> LLM 不仅是"匹配"参数——它会在对话历史中<strong>搜索线索</strong>。第三个例子中，LLM 回顾上下文，找到之前提到的文件名 "result.txt"，自动填入参数。这种上下文感知能力使得 Agent 的对话体验非常自然——用户不需要精确指定每个参数。
+</p>
+
+<div class="card card--warning">
+  <strong>⚠️ 注意：参数提取不是 100% 可靠。</strong> LLM 可能猜错参数值，特别是在歧义情况下。对于关键操作（如删除、发送），建议让 Agent 先<strong>确认参数</strong>再执行。这个设计模式会在后续课程中详细展开。
+</div>
+
+<!-- ============ QUIZ ============ -->
+<h2>检索练习</h2>
+<p style="color:var(--text-muted);">回忆刚学的内容来回答——这比反复阅读更能加深记忆。</p>
+
+<div class="quiz" id="q1">
+  <div class="quiz-question">1. 在工具设计中，<code>[Description]</code> 特性最重要的作用是什么？</div>
+  <button class="quiz-option" data-answer="wrong">生成更美观的代码文档</button>
+  <button class="quiz-option" data-answer="correct">作为 LLM 判断是否调用该工具的唯一依据——Description 是 LLM 眼中的 API 契约</button>
+  <button class="quiz-option" data-answer="wrong">让 Semantic Kernel 自动注册依赖注入</button>
+  <button class="quiz-option" data-answer="wrong">控制函数的执行线程优先级</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <div class="quiz-question">2. 为什么工具执行失败时应该<strong>返回错误字符串</strong>而不是 throw 异常？</div>
+  <button class="quiz-option" data-answer="wrong">throw 会让 Semantic Kernel 崩溃</button>
+  <button class="quiz-option" data-answer="wrong">错误字符串执行速度更快</button>
+  <button class="quiz-option" data-answer="correct">LLM 能读懂错误字符串，并基于它尝试替代方案——而异常只会让框架中断循环</button>
+  <button class="quiz-option" data-answer="wrong">C# 不支持在工具方法中 throw</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <div class="quiz-question">3. 用户说「把 3588 存起来」时，LLM 怎么知道 filename 参数填什么？</div>
+  <button class="quiz-option" data-answer="wrong">LLM 随机生成一个文件名</button>
+  <button class="quiz-option" data-answer="wrong">LLM 调用操作系统的文件选择对话框</button>
+  <button class="quiz-option" data-answer="correct">LLM 在对话历史中搜索之前提到的文件名；如果找不到，通常会反问用户或使用默认值</button>
+  <button class="quiz-option" data-answer="wrong">LLM 拒绝执行——参数不完整就不能调用</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<script>
+document.querySelectorAll('.quiz').forEach(quiz => {
+  quiz.querySelectorAll('.quiz-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (quiz.dataset.answered) return;
+      quiz.dataset.answered = 'true';
+
+      const fb = quiz.querySelector('.quiz-feedback');
+      quiz.querySelectorAll('.quiz-option').forEach(b => b.style.pointerEvents = 'none');
+      btn.classList.add('selected');
+
+      if (btn.dataset.answer === 'correct') {
+        btn.classList.add('correct');
+        fb.textContent = '✓ 正确！';
+        fb.className = 'quiz-feedback correct';
+      } else {
+        btn.classList.add('incorrect');
+        fb.textContent = '✗ 不太对。回顾一下工具设计原则和 LLM 的工作原理？';
+        fb.className = 'quiz-feedback incorrect';
+        quiz.querySelectorAll('.quiz-option').forEach(b => {
+          if (b.dataset.answer === 'correct') b.classList.add('correct');
+        });
+      }
+    });
+  });
+});
+</script>
+
+<!-- ============ PRACTICE CHALLENGE ============ -->
+<h2>挑战练习</h2>
+
+<div class="card">
+  <p style="margin:0 0 0.75rem;"><strong>🛠️ 扩展你的 FileAssistant：</strong></p>
+  <ol style="margin:0 0 0 1.5rem;color:var(--text-muted);">
+    <li><strong>添加一个 list_notes 工具</strong>——列出当前目录下所有 .txt 文件。Description 怎么写才能让 LLM 用对？</li>
+    <li><strong>添加一个 delete_note 工具</strong>——删除指定文件。但要求 Agent 在删除前<strong>先向用户确认</strong>。这和原则 ② 有什么关系？</li>
+    <li><strong>测试边界情况</strong>：试试「删除一个不存在的文件」「计算 100/0」「读取一个从未保存过的文件名」。观察 Agent 如何处理。</li>
+  </ol>
+</div>
+
+<!-- ============ NEXT STEPS ============ -->
+<h2>下一步</h2>
+
+<div class="card">
+  <p style="margin:0;">
+    <strong>推荐阅读：</strong>
+    <a href="https://learn.microsoft.com/en-us/semantic-kernel/concepts/plugins/" target="_blank">Semantic Kernel: Plugins 概念文档</a>
+    —— 官方对 Plugin 设计、参数序列化、返回类型的最佳实践指南。
+  </p>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <p style="margin:0;">
+    <strong>深入参考：</strong>
+    <a href="https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview" target="_blank">Anthropic: Tool Use 完整文档</a>
+    —— Tool Use 是 Anthropic Messages API 的核心能力。理解 LLM 端如何处理工具定义，才能写出更好的 Description。
+  </p>
+</div>
+
+<p style="margin-top:1.5rem;">
+  📖 <strong>相关参考：</strong> <a href="../reference/agent-glossary.html">Agent 术语表</a>——Review「Tool / Plugin」「Function Calling」「ReAct」三条。
+</p>
+
+<p style="margin-top:0.5rem;">
+  📂 <strong>下节课预告：</strong> <a href="0003-memory-and-context.html">Lesson 03: Memory & Context</a>——当对话变长、文件变多，Agent 如何管理上下文？短期记忆 vs 长期记忆的实战。
+</p>
+
+<div class="ask-followup">
+  <strong>💡 有问题？</strong> 直接在当前对话中向你的 AI 老师提问。比如：<br>
+  · 「工具参数可以用复杂类型吗（class/struct），还是只能用基础类型？」<br>
+  · 「如果两个工具的 Description 很相似，LLM 会怎么选？」<br>
+  · 「能帮我 review 一下我写的 Plugin 吗？」<br>
+  你的老师就是当前正在和你对话的 Claude Agent——充分利用它。
+</div>
+
+<div class="lesson-footer">
+  <nav>
+    <a href="0001-what-is-an-agent.html">← 上一课：What is an Agent</a>
+    <a href="0003-memory-and-context.html">下一课：Memory & Context →</a>
+  </nav>
+</div>
+
+</body>
+</html>
