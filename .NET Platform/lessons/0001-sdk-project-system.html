@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 1 课：SDK 风格项目系统 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>第 1 课：SDK 风格项目系统</h1>
+<div class="lesson-meta">
+  模块：SDK 项目系统 &nbsp;|&nbsp; 预计阅读/练习时间：15 分钟
+</div>
+
+<p>
+  如果你来自 .NET Framework 4.8，打开现代 .NET 项目文件的第一反应可能是：
+  <strong>"这个 csproj 怎么只剩 5 行了？"</strong>
+  这是你在现代 .NET 中遇到的第一块基石，也是最直观的变化。
+</p>
+
+<h2>为什么这很重要？</h2>
+
+<div class="summary">
+  <ul>
+    <li>现代 .NET 项目文件 <strong>简洁 10–50×</strong>，靠约定而非配置</li>
+    <li><code>packages.config</code> 已死——<code>PackageReference</code> 统治一切</li>
+    <li>共享配置（<code>Directory.Build.props</code>）替代复制粘贴</li>
+    <li>每个后续模块（DI、配置、日志）都依赖 SDK 风格项目中的 NuGet 包引用</li>
+  </ul>
+</div>
+
+<h2>对比：Framework 4.8 vs 现代 .NET</h2>
+
+<p>这是一模一样的控制台应用的项目文件，左右对比：</p>
+
+<div class="cmp">
+  <div class="cmp-col">
+    <div class="cmp-col__head cmp-col__head--old">.NET Framework 4.8</div>
+    <div class="cmp-col__body">
+<pre>&lt;?xml version="1.0" encoding="utf-8"?&gt;
+&lt;Project ToolsVersion="15.0"
+  xmlns="http://schemas.microsoft.com/
+    developer/msbuild/2003"&gt;
+  &lt;Import Project=
+    "$(MSBuildExtensionsPath)\
+    $(MSBuildToolsVersion)\
+    Microsoft.Common.props" /&gt;
+  &lt;PropertyGroup&gt;
+    &lt;Configuration&gt;Debug&lt;/Configuration&gt;
+    &lt;Platform&gt;AnyCPU&lt;/Platform&gt;
+    &lt;ProjectGuid&gt;
+      {A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
+    &lt;/ProjectGuid&gt;
+    &lt;OutputType&gt;Exe&lt;/OutputType&gt;
+    &lt;AppDesignerFolder&gt;
+      Properties
+    &lt;/AppDesignerFolder&gt;
+    &lt;RootNamespace&gt;
+      MyApp
+    &lt;/RootNamespace&gt;
+    &lt;AssemblyName&gt;MyApp&lt;/AssemblyName&gt;
+    &lt;TargetFrameworkVersion&gt;
+      v4.8
+    &lt;/TargetFrameworkVersion&gt;
+    &lt;FileAlignment&gt;512&lt;/FileAlignment&gt;
+  &lt;/PropertyGroup&gt;
+  &lt;PropertyGroup
+    Condition="'$(Configuration)|
+    $(Platform)'=='Debug|AnyCPU'"&gt;
+    &lt;DebugSymbols&gt;true&lt;/DebugSymbols&gt;
+    &lt;DebugType&gt;full&lt;/DebugType&gt;
+    &lt;Optimize&gt;false&lt;/Optimize&gt;
+  &lt;/PropertyGroup&gt;
+  &lt;ItemGroup&gt;
+    &lt;Reference Include="System"/&gt;
+    &lt;Reference Include="System.Core"/&gt;
+    &lt;Reference Include="System.Xml"/&gt;
+  &lt;/ItemGroup&gt;
+  &lt;ItemGroup&gt;
+    &lt;Compile Include="Program.cs" /&gt;
+    &lt;Compile Include="Properties\
+      AssemblyInfo.cs" /&gt;
+  &lt;/ItemGroup&gt;
+  &lt;Import Project=
+    "$(MSBuildToolsPath)\
+    Microsoft.CSharp.targets" /&gt;
+&lt;/Project&gt;</pre>
+    </div>
+  </div>
+  <div class="cmp-col">
+    <div class="cmp-col__head cmp-col__head--new">现代 .NET (net9.0+)</div>
+    <div class="cmp-col__body">
+<pre>&lt;Project Sdk="Microsoft.NET.Sdk"&gt;
+
+  &lt;PropertyGroup&gt;
+    &lt;OutputType&gt;Exe&lt;/OutputType&gt;
+    &lt;TargetFramework&gt;net9.0&lt;/TargetFramework&gt;
+    &lt;Nullable&gt;enable&lt;/Nullable&gt;
+    &lt;ImplicitUsings&gt;enable&lt;/ImplicitUsings&gt;
+  &lt;/PropertyGroup&gt;
+
+&lt;/Project&gt;</pre>
+    </div>
+  </div>
+</div>
+
+<p>现代版本<strong>没有 GUID、没有程序集引用列表、没有逐个列举 .cs 文件、没有 Debug/Release 配置块</strong>。SDK 自动推断一切。</p>
+
+<div class="callout callout--info">
+  <strong>💡 核心原则：约定优于配置。</strong>SDK 说"默认把项目里所有 <code>*.cs</code> 都编译"，你就不用写 <code>&lt;Compile Include="..." /&gt;</code>。文件系统 <em>就是</em> 项目结构。
+</div>
+
+<h2>三大关键变化</h2>
+
+<h3>1. <code>PackageReference</code> 替代 <code>packages.config</code></h3>
+
+<div class="cmp">
+  <div class="cmp-col">
+    <div class="cmp-col__head cmp-col__head--old">packages.config</div>
+    <div class="cmp-col__body">
+<pre>&lt;?xml version="1.0"?&gt;
+&lt;packages&gt;
+  &lt;package id="Newtonsoft.Json"
+    version="13.0.1"
+    targetFramework="net48" /&gt;
+  &lt;package id="Serilog"
+    version="2.10.0"
+    targetFramework="net48" /&gt;
+&lt;/packages&gt;</pre>
+    </div>
+  </div>
+  <div class="cmp-col">
+    <div class="cmp-col__head cmp-col__head--new">PackageReference（写在 csproj 中）</div>
+    <div class="cmp-col__body">
+<pre>&lt;ItemGroup&gt;
+  &lt;PackageReference
+    Include="Newtonsoft.Json"
+    Version="13.0.1" /&gt;
+  &lt;PackageReference
+    Include="Microsoft.Extensions.Hosting"
+    Version="9.0.0" /&gt;
+&lt;/ItemGroup&gt;</pre>
+    </div>
+  </div>
+</div>
+
+<p>优势：</p>
+<ul>
+  <li>包里嵌套的依赖<strong>自动传递解析</strong>（你引用 A，A 依赖 B 和 C——你不用管）</li>
+  <li>多个项目共享依赖时，用 <code>Directory.Packages.props</code> 统一管理版本</li>
+  <li><code>dotnet restore</code> 替代 NuGet.exe 手动还原</li>
+</ul>
+
+<h3>2. <code>ImplicitUsings</code> —— 告别 using 地狱</h3>
+
+<p>Framework 4.8 中你每个文件开头都要写：</p>
+<pre><code>using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;</code></pre>
+
+<p>现代 .NET 开启 <code>&lt;ImplicitUsings&gt;enable&lt;/ImplicitUsings&gt;</code> 后，编译器根据 SDK 类型<strong>自动导入</strong>常用命名空间。控制台应用默认获得 <code>System</code>、<code>System.Linq</code>、<code>System.Threading.Tasks</code> 等。你打开 <code>obj/Debug/net9.0/</code> 下的 <code>.GlobalUsings.g.cs</code> 就能看到生成了什么。</p>
+
+<div class="callout callout--warn">
+  ⚠️ <strong>Framework 用户的常见困惑：</strong>你可能会在教程里看到 <code>using System;</code> 没写但代码能编译——不是魔法，是 SDK 帮你 implicit 了。你仍然可以显式写 using。
+</div>
+
+<h3>3. 共享配置：<code>Directory.Build.props</code></h3>
+
+<p>如果解决方案有 20 个项目，每个都写 <code>&lt;Nullable&gt;enable&lt;/Nullable&gt;</code> 很蠢。在仓库根目录放一个 <code>Directory.Build.props</code>，MSBuild 会<strong>自动向上查找并导入</strong>：</p>
+
+<pre><code>&lt;!-- 仓库根目录 /Directory.Build.props --&gt;
+&lt;Project&gt;
+  &lt;PropertyGroup&gt;
+    &lt;TargetFramework&gt;net9.0&lt;/TargetFramework&gt;
+    &lt;Nullable&gt;enable&lt;/Nullable&gt;
+    &lt;ImplicitUsings&gt;enable&lt;/ImplicitUsings&gt;
+    &lt;TreatWarningsAsErrors&gt;true&lt;/TreatWarningsAsErrors&gt;
+  &lt;/PropertyGroup&gt;
+&lt;/Project&gt;</code></pre>
+
+<p>之后每个项目的 csproj 可以精简到：</p>
+<pre><code>&lt;Project Sdk="Microsoft.NET.Sdk"&gt;
+  &lt;PropertyGroup&gt;
+    &lt;OutputType&gt;Exe&lt;/OutputType&gt;
+  &lt;/PropertyGroup&gt;
+&lt;/Project&gt;</code></pre>
+
+<h2>动手验证</h2>
+
+<p>用以下命令亲手创建一个项目，打开 csproj 看看：</p>
+<pre><code>dotnet new console -n HelloPlatform
+cd HelloPlatform
+cat HelloPlatform.csproj     # Windows: type HelloPlatform.csproj
+dotnet run</code></pre>
+
+<p>你应该看到 5 行配置 + 一个能跑的控制台。这就是后面所有课程的基础。</p>
+
+<h2>检查理解</h2>
+
+<div class="quiz" id="quiz">
+  <div class="quiz__q">❓ Framework 4.8 的 csproj 中，哪个东西在现代 .NET 中不再需要？</div>
+  <div class="quiz__opt" data-answer="wrong">PackageReference</div>
+  <div class="quiz__opt" data-answer="correct">ProjectGuid</div>
+  <div class="quiz__opt" data-answer="wrong">TargetFramework</div>
+  <div class="quiz__opt" data-answer="wrong">OutputType</div>
+  <div class="quiz__feedback" id="quiz-feedback"></div>
+</div>
+
+<script>
+(function() {
+  const opts = document.querySelectorAll('#quiz .quiz__opt');
+  const feedback = document.getElementById('quiz-feedback');
+  let answered = false;
+  opts.forEach(opt => {
+    opt.addEventListener('click', () => {
+      if (answered) return;
+      answered = true;
+      const isCorrect = opt.dataset.answer === 'correct';
+      opt.classList.add(isCorrect ? 'quiz__opt--correct' : 'quiz__opt--wrong');
+      opts.forEach(o => {
+        if (o.dataset.answer === 'correct' && o !== opt) o.classList.add('quiz__opt--correct');
+      });
+      feedback.textContent = isCorrect
+        ? '✅ 正确！ProjectGuid（GUID）是 Framework 时代的产物，SDK 风格项目不需要它。'
+        : '❌ 不对。ProjectGuid 是 Framework 项目特有的 GUID 标识符，SDK 风格项目不再需要它。';
+      feedback.classList.add('quiz__feedback--show');
+    });
+  });
+})();
+</script>
+
+<h2>关键术语</h2>
+
+<dl>
+  <dt><strong>SDK 风格项目</strong></dt>
+  <dd>以 <code>&lt;Project Sdk="..."&gt;</code> 开头的项目文件格式。自 .NET Core 1.0 引入，现在是唯一推荐的格式。</dd>
+  <dt><strong>PackageReference</strong></dt>
+  <dd>在 csproj 中以内联方式声明 NuGet 依赖，替代独立的 <code>packages.config</code> 文件。</dd>
+  <dt><strong>Directory.Build.props</strong></dt>
+  <dd>放置在目录树中的 MSBuild 属性文件，被该目录及其子目录下所有项目自动导入。</dd>
+</dl>
+
+<h2>推荐阅读</h2>
+
+<p>📖 <strong>首选参考：</strong><a href="https://learn.microsoft.com/en-us/dotnet/core/project-sdk/overview">Microsoft Learn — .NET project SDK overview</a></p>
+
+<p>📖 如果你还维护着 Framework 项目：<a href="https://learn.microsoft.com/en-us/dotnet/core/porting/">Port from .NET Framework to .NET</a></p>
+
+<h2>接下来</h2>
+
+<p>
+  下一课将进入 <strong>运行时架构</strong>：CoreCLR 替了什么？GC 模式有什么不同？JIT、R2R、NativeAOT 各自是什么场景用？← 这些是 Framework 4.8 中<em>完全不存在</em>的概念。
+</p>
+
+<div class="callout callout--info">
+  💬 <strong>有问题？</strong> 直接问我！我也是你的老师——可以对任何不懂的地方追问，或者要求更深入的例子。
+</div>
+
+<div class="lesson-nav">
+  <span></span>
+  <a href="0002-coreclr-runtime-architecture.html">下一课：运行时架构 →</a>
+</div>
+
+</body>
+</html>

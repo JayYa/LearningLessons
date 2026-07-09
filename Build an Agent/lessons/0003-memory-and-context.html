@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 03 · Memory & Context</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<div class="lesson-meta">
+  <span class="lesson-number">Lesson 03</span>
+  <span>Agent Academy</span>
+  <span>·</span>
+  <span>~40 min</span>
+</div>
+
+<h1>Memory & Context：让 Agent 不再"失忆"</h1>
+<p style="font-size:1.1rem;color:var(--text-muted);margin-top:0;">
+  从对话历史到长期记忆——理解上下文窗口的限制，掌握三种记忆管理策略，并构建一个能跨会话记住信息的 Agent。
+</p>
+
+<div style="margin:1.5rem 0;">
+  <span class="tag">Context Window</span>
+  <span class="tag">Short-term Memory</span>
+  <span class="tag">Long-term Memory</span>
+  <span class="tag">RAG</span>
+  <span class="tag">ChatHistory</span>
+  <span class="tag">Semantic Kernel</span>
+  <span class="tag">C#</span>
+</div>
+
+<hr style="border:none;border-top:1px solid var(--border);margin:2rem 0;">
+
+<!-- ============ MOTIVATION ============ -->
+<h2>FileAssistant 藏了一个 bug</h2>
+
+<p>
+  你在 <a href="0002-tools-and-plugins.html">Lesson 02</a> 构建的 FileAssistant 工作得很好——但有一个隐藏的定时炸弹。试试这个场景：
+</p>
+
+<ol style="margin:1rem 0 1rem 1.5rem;color:var(--text-muted);">
+  <li>连续和它对话 50 轮</li>
+  <li>每次让它计算不同的表达式并保存到不同文件</li>
+  <li>到第 51 轮，问它「我们第一轮算的是什么？」</li>
+</ol>
+
+<p>
+  会发生什么？取决于模型和上下文窗口大小，可能出现三件事之一：
+</p>
+
+<div class="diagram">
+第 51 轮时 ChatHistory 里塞了：
+
+  System Prompt (~200 tokens)
++ 第 1 轮: 用户消息 + tool_call + tool_result + Agent 回复 (~200 tokens)
++ 第 2 轮: ... (~200 tokens)
++ ...
++ 第 50 轮: ... (~200 tokens)
+─────────────────────────────────
+= 200 + 50 × 200 = <strong>~10,200 tokens</strong>
+
+如果上下文窗口是 8K → 💥 最早的消息被截断，Agent "失忆"
+</div>
+
+<p>
+  这就是 <strong>上下文窗口（Context Window）</strong>——LLM 一次能"看到"的最大 token 数量。ChatHistory 会无限增长，但窗口是固定的。超出窗口的消息会被截断，Agent 就会"忘记"早期的对话。
+</p>
+
+<div class="card card--highlight">
+  <strong>核心矛盾：</strong> 对话越长 → ChatHistory 越大 → 越接近上下文窗口上限 → Agent 越容易失忆。每一条新消息都在把最老的记忆推出窗口。这不是 bug——这是 LLM 的物理定律。
+</div>
+
+<!-- ============ KNOWLEDGE ============ -->
+<h2>心智模型：Agent 的"记忆系统"</h2>
+
+<p>
+  回到 <a href="0001-what-is-an-agent.html">Lesson 01</a> 中 Agent 的四组件——Memory 就是其中之一。但"记忆"不是一块铁板，它分三层：
+</p>
+
+<div class="diagram">
+┌──────────────────────────────────────────────────────────┐
+│                   AGENT MEMORY SYSTEM                     │
+│                                                           │
+│  ┌─────────────────────────────────────────────────┐     │
+│  │  ① WORKING MEMORY (Short-term)                   │     │
+│  │     = ChatHistory                                │     │
+│  │     自动记录所有对话消息                           │     │
+│  │     ⚠ 有 Token 上限——超出窗口的部分会被截断        │     │
+│  │     ⚡ 速度：即时（在 LLM 输入里）                  │     │
+│  └─────────────────────────────────────────────────┘     │
+│                         │                                  │
+│              ┌──────────┴──────────┐                       │
+│              ▼                     ▼                       │
+│  ┌──────────────────────┐ ┌──────────────────────┐       │
+│  │ ② EXPLICIT MEMORY    │ │ ③ VECTOR MEMORY      │       │
+│  │  (Long-term, 文件)    │ │  (Long-term, RAG)     │       │
+│  │                      │ │                      │       │
+│  │  Agent 主动调用       │ │  嵌入 → 向量库        │       │
+│  │  remember/recall     │ │  语义检索 → Top-K     │       │
+│  │  存到 JSON 文件       │ │  注入 Prompt          │       │
+│  │                      │ │                      │       │
+│  │  ⚡ 速度：毫秒        │ │  ⚡ 速度：毫秒~几十ms  │       │
+│  │  📦 容量：MB~GB      │ │  📦 容量：无限         │       │
+│  │  🔍 检索：精确匹配    │ │  🔍 检索：语义相似     │       │
+│  └──────────────────────┘ └──────────────────────┘       │
+└──────────────────────────────────────────────────────────┘
+</div>
+
+<h3>三层记忆，各有用途</h3>
+
+<dl style="margin:1rem 0;">
+  <dt style="font-weight:600;margin-top:0.75rem;">① Working Memory — ChatHistory（工作记忆）</dt>
+  <dd style="margin-left:1.5rem;color:var(--text-muted);">
+    你已经在用了——每次 <code>history.Add()</code> 和 <code>agent.InvokeStreamingAsync(history)</code> 就是工作记忆。它<strong>自动</strong>记录所有对话，LLM 在每次推理时都能看到。<br>
+    <strong>局限：</strong> Token 有上限。DeepSeek V3 是 128K，Claude Sonnet 是 200K——看起来很大，但如果你每条消息 200 tokens、聊 500 轮，128K 也满了。
+  </dd>
+
+  <dt style="font-weight:600;margin-top:0.75rem;">② Explicit Memory — 显式记忆（本课重点）</dt>
+  <dd style="margin-left:1.5rem;color:var(--text-muted);">
+    Agent <strong>主动调用工具</strong>来存储和检索信息。就像人类「用笔记记住重要的事」——Agent 判断哪些信息值得长期保存，调用 <code>remember</code> 工具存下来，以后用 <code>recall</code> 工具取回。<br>
+    <strong>优势：</strong> 不受上下文窗口限制，跨会话持久化。Agent 重启后还能"记得"。
+  </dd>
+
+  <dt style="font-weight:600;margin-top:0.75rem;">③ Vector Memory — 向量记忆（后续课程）</dt>
+  <dd style="margin-left:1.5rem;color:var(--text-muted);">
+    将所有记忆转换成向量（embeddings），存入向量数据库。检索时用<strong>语义相似度</strong>而非关键词匹配——「天气不错」能匹配到「今天阳光明媚」。这就是 RAG（检索增强生成）的核心。<br>
+    <strong>本课只讲概念，实战放在后续课程。</strong>
+  </dd>
+</dl>
+
+<!-- ============ CONTEXT WINDOW DEEP DIVE ============ -->
+<h2>核心机制：上下文窗口是"记忆预算"</h2>
+
+<p>
+  把上下文窗口想象成一个<strong>固定大小的桌子</strong>。你可以在桌上放文件（消息），但桌面就那么大。放新文件时，最旧的文件会被挤下去。
+</p>
+
+<h3>Token 怎么算？</h3>
+
+<div class="diagram">
+粗略估算（实际因模型而异）：
+
+英文：~1 token ≈ 0.75 个单词 ≈ 4 个字符
+中文：~1 token ≈ 1-2 个汉字 ≈ 2-4 个字符
+代码：~1 token ≈ 3-4 个字符（运算符和标点各占 1 token）
+
+示例：
+"Hello, how are you?"  → ~6 tokens
+"你好，最近怎么样？"    → ~8 tokens
+"var x = 42;"          → ~7 tokens
+</div>
+
+<div class="card">
+  <strong>📐 精确计数：</strong> 粗略估算够用于设计，但生产环境应使用模型专属的 tokenizer（如 <code>tiktoken</code> for OpenAI, <code>claude-tokenizer</code> for Anthropic）。SK 中没有内置 token 计数，你可以用 <code>Microsoft.ML.Tokenizers</code> NuGet 包。
+</div>
+
+<h3>三种管理策略</h3>
+
+<div class="card card--highlight">
+  <strong>策略一：Sliding Window（滑动窗口）——最简单</strong><br>
+  只保留最近 N 条消息，老消息直接丢弃。<br>
+  ✅ 简单、确定、零成本<br>
+  ❌ 丢掉的可能是关键信息。Agent 突然"忘记"你 10 分钟前说过的话。<br>
+  <span style="color:var(--text-muted);">适用场景：短期任务型 Agent（如单次数据分析），不需要跨轮记忆。</span>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <strong>策略二：Summarization（摘要压缩）——本课实现</strong><br>
+  当 ChatHistory 接近窗口上限时，让 LLM 将老消息<strong>总结成一段摘要</strong>，用摘要替代原始消息。<br>
+  ✅ 保留关键信息的"大意"，压缩比 10:1 以上<br>
+  ❌ 细节会丢失（摘要不是原文），多一次 LLM 调用（有成本和延迟）<br>
+  <span style="color:var(--text-muted);">适用场景：长对话 Agent（客服、辅导、项目协作），需要记住"聊过什么"但不需要逐字回忆。</span>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <strong>策略三：RAG with Vector Search（向量检索）——最强大</strong><br>
+  将所有记忆编码为向量存入向量库。每次 LLM 推理前，用当前问题做语义检索，只把<strong>最相关的 Top-K 条记忆</strong>注入 Prompt。<br>
+  ✅ 容量无限，按需检索，语义匹配<br>
+  ❌ 需要向量数据库（Qdrant / Milvus / pgvector），需要 embedding 模型，架构复杂度高<br>
+  <span style="color:var(--text-muted);">适用场景：知识库 Agent、客服系统、企业级 Agent 产品。</span>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <strong>实际工程中通常是组合使用：</strong> 近期对话用 ChatHistory（策略一 + 二），历史知识用 RAG（策略三）。本节教你实现策略二。
+</div>
+
+<!-- ============ SKILL ============ -->
+<h2>动手构建：有记忆的 Agent</h2>
+
+<p>
+  现在构建一个 <strong>MemoryAssistant</strong>——它不仅能计算和保存文件，还能<strong>记住你告诉它的事实</strong>，并在之后的对话中<strong>主动回想</strong>。即使关闭程序重新启动，它仍然"记得"之前的事。
+</p>
+
+<div class="card card--highlight">
+  <strong>本课产出：</strong> 一个 Agent，具备显式长期记忆——能通过 <code>remember</code> / <code>recall</code> 工具存储和检索信息，数据持久化到 JSON 文件。这是从"单次对话工具"到"持续陪伴助手"的关键跃迁。
+</div>
+
+<h3>Step 1: 创建项目</h3>
+
+<pre><code>dotnet new console -n MemoryAssistant
+cd MemoryAssistant
+dotnet add package Microsoft.SemanticKernel --prerelease
+dotnet add package Microsoft.SemanticKernel.Agents.Core --prerelease
+dotnet add package Anthropic.SDK --prerelease</code></pre>
+
+<h3>Step 2: 定义 MemoryPlugin</h3>
+
+<p>这就是本课的核心——一个 JSON 文件作为"大脑"，四个工具操作它：</p>
+
+<pre><code>using System.ComponentModel;
+using System.Text.Json;
+using Microsoft.SemanticKernel;
+
+public class MemoryPlugin
+{
+    private readonly string _storePath;
+    private Dictionary&lt;string, string&gt; _store;
+
+    public MemoryPlugin(string? storePath = null)
+    {
+        _storePath = storePath ?? Path.Combine(
+            Directory.GetCurrentDirectory(), "agent_memory.json");
+        _store = Load();
+    }
+
+    // ——— 持久化 ——
+    private Dictionary&lt;string, string&gt; Load()
+    {
+        if (File.Exists(_storePath))
+        {
+            var json = File.ReadAllText(_storePath);
+            return JsonSerializer.Deserialize&lt;Dictionary&lt;string, string&gt;&gt;(json)
+                   ?? new();
+        }
+        return new();
+    }
+
+    private void Save()
+    {
+        var json = JsonSerializer.Serialize(_store,
+            new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(_storePath, json);
+    }
+
+    // ——— 四个记忆工具 ——
+
+    [KernelFunction("remember")]
+    [Description("将一条信息存入长期记忆。" +
+                 "key: 记忆的唯一标识，用英文下划线命名（如 user_name、project_deadline）。" +
+                 "info: 要记住的具体内容。" +
+                 "使用场景：用户说「记住...」「帮我记一下...」「别忘了...」等。" +
+                 "注意：如果 key 已存在，新内容会覆盖旧内容。返回确认信息。")]
+    public string Remember(string key, string info)
+    {
+        _store[key] = info;
+        Save();
+        return $"已记住 [{key}]: {info}";
+    }
+
+    [KernelFunction("recall")]
+    [Description("根据 key 从长期记忆中检索信息。" +
+                 "key: 要检索的记忆标识。" +
+                 "使用场景：用户问「之前记的...」「回忆一下...」或者你需要某个之前存过的信息。" +
+                 "注意：如果 key 不存在，返回提示信息而非报错——这是正常的（可能没记过）。")]
+    public string Recall(string key)
+    {
+        if (_store.TryGetValue(key, out var info))
+            return $"记忆 [{key}]: {info}";
+        return $"没有找到关于 [{key}] 的记忆。可用 list_memories 查看所有已存储的记忆标识。";
+    }
+
+    [KernelFunction("list_memories")]
+    [Description("列出长期记忆中所有已存储的记忆标识（key）和对应的内容摘要。" +
+                 "使用场景：用户问「我记得什么」「有哪些记忆」「你记了哪些东西」等。" +
+                 "不需要参数。")]
+    public string ListMemories()
+    {
+        if (_store.Count == 0)
+            return "目前没有任何长期记忆。你可以用 remember 工具来存储一些信息。";
+
+        var lines = _store.Select(kv =>
+            $"  · {kv.Key}: {kv.Value}");
+        return $"共 {_store.Count} 条记忆：\n{string.Join("\n", lines)}";
+    }
+
+    [KernelFunction("forget")]
+    [Description("从长期记忆中删除指定 key 的信息。" +
+                 "key: 要删除的记忆标识。" +
+                 "使用场景：用户说「忘掉...」「删除记忆...」「不用记住...」等。" +
+                 "注意：删除前<strong>必须先向用户确认</strong>。如果 key 不存在，告知用户。")]
+    public string Forget(string key)
+    {
+        if (_store.Remove(key))
+        {
+            Save();
+            return $"已删除记忆 [{key}]。";
+        }
+        return $"记忆 [{key}] 不存在，无需删除。";
+    }
+}</code></pre>
+
+<div class="card">
+  <strong>🔍 观察模式：</strong> MemoryPlugin 和 Lesson 02 的 FilePlugin 结构完全相同——一个类 + <code>[KernelFunction]</code> + <code>[Description]</code>。区别只在于<strong>存储的内容</strong>：FilePlugin 存任意文本文件，MemoryPlugin 存结构化键值对。<br><br>
+  <strong>关键设计决策：</strong> <code>_store</code> 用 <code>Dictionary&lt;string, string&gt;</code> 而非 <code>Dictionary&lt;string, object&gt;</code>——值也是 string。为什么？回到 <a href="0002-tools-and-plugins.html">Lesson 02 原则 ⑤</a>：LLM 更容易生成基础类型的参数。如果值类型太复杂（嵌套对象），LLM 填参准确率会下降。<br><br>
+  另外，注意 <code>forget</code> 的 Description 里有一句"删除前必须向用户确认"——这是 <a href="0002-tools-and-plugins.html">Lesson 02 原则 ②</a>（Description 是 API 契约）的直接应用。LLM 读到这句话后会主动先确认再调用。
+</div>
+
+<h3>Step 3: 创建 MemoryAssistant Agent</h3>
+
+<pre><code>using System.ComponentModel;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Agents;
+using Microsoft.SemanticKernel.Agents.Chat;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Anthropic.SDK;
+using Anthropic.SDK.Common;
+
+// ——— A：创建 Anthropic 客户端（指向 DeepSeek）———
+var anthropicClient = new AnthropicClient(
+    new APIAuthentication(
+        Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")!
+    )
+)
+{
+    ApiUrlFormat = "https://api.deepseek.com/anthropic/{0}/{1}"
+};
+
+IChatClient chatClient = new ChatClientBuilder(anthropicClient.Messages)
+    .UseFunctionInvocation()
+    .Build();
+
+// ——— B：构建 Kernel + 注册工具 ———
+var builder = Kernel.CreateBuilder();
+builder.Services.AddSingleton(chatClient);
+
+// 注册 MemoryPlugin——Agent 现在有了"记忆"能力
+builder.Plugins.AddFromType&lt;MemoryPlugin&gt;();
+
+Kernel kernel = builder.Build();
+
+// ——— C：创建 Agent ———
+var agent = new ChatCompletionAgent
+{
+    Name = "MemoryAssistant",
+    Instructions = """
+        你是一个拥有长期记忆的智能助手，名叫「小记」。
+
+        你的核心能力：
+        - 记住用户告诉你的任何事实、偏好、计划（使用 remember 工具）
+        - 当用户提到之前记过的内容时，主动使用 recall 检索
+        - 管理记忆——列出、删除（必须先确认）
+
+        工作原则：
+        - <strong>主动记忆</strong>：当用户分享个人信息、偏好、计划、决策时，
+          主动判断是否值得记住。如果是，调用 remember 存下来，
+          并简短告知用户「我记住了」。
+        - <strong>主动回想</strong>：当用户的问题涉及过去的信息，
+          先用 recall 检索相关记忆，再基于记忆回答。
+          不要只依赖当前对话——去查你的记忆库。
+        - <strong>记忆组织</strong>：key 用英文下划线命名（如 user_name、
+          user_preference_theme、project_deadline），
+          让 key 本身就能描述内容。
+        - <strong>删除确认</strong>：在调用 forget 之前，先向用户确认
+          「确定要删除关于 X 的记忆吗？」。
+        - <strong>不确定时</strong>：如果用户没有明确要求记住但你觉得有用，
+          可以说「要不要我帮你记下来？」。
+
+        用中文回复，温暖简洁。
+        """,
+    Kernel = kernel
+};
+
+// ——— D：对话循环 ———
+var history = new ChatHistory();
+Console.WriteLine("=== MemoryAssistant 已就绪 —— 拥有长期记忆 ===");
+Console.WriteLine("输入 'exit' 退出\n");
+Console.WriteLine("试试这些：");
+Console.WriteLine("  · 我叫小明，我喜欢蓝色");
+Console.WriteLine("  · 我的项目截止日期是 7 月 20 号");
+Console.WriteLine("  · 你还记得我的名字吗？");
+Console.WriteLine("  · 你都记了些什么？\n");
+
+while (true)
+{
+    Console.Write("你: ");
+    var input = Console.ReadLine();
+    if (input?.ToLower() == "exit") break;
+
+    history.Add(new ChatMessageContent(AuthorRole.User, input!));
+
+    Console.Write("Agent: ");
+    await foreach (var chunk in agent.InvokeStreamingAsync(history))
+    {
+        Console.Write(chunk.Content);
+    }
+    Console.WriteLine("\n");
+}</code></pre>
+
+<div class="card">
+  <strong>📐 Instructions 设计分析：</strong> 注意 Instructions 中有明确的分层：<strong>核心能力</strong>（Agent 是什么）+ <strong>工作原则</strong>（Agent 怎么做）。其中「主动记忆」「主动回想」「记忆组织」「删除确认」「不确定时」五条原则，每一条都对应 MemoryPlugin 中的一个工具或设计约束。<br><br>
+  特别关注「主动记忆」原则——"当用户分享个人信息、偏好、计划、决策时，主动判断是否值得记住"。这利用了 LLM 的<strong>判断力</strong>——不是每条信息都存，而是像人类一样有选择地记忆。这种「自主判断 + 工具执行」的模式，是所有高级 Agent 行为的基础。
+</div>
+
+<h3>Step 4: 运行并测试</h3>
+
+<pre><code># PowerShell
+$env:DEEPSEEK_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+dotnet run
+
+# 试试完整流程：
+# 1. "我叫小明，我喜欢蓝色"
+#    → Agent 主动调用 remember("user_name", "小明")
+#       + remember("user_preference_color", "蓝色")
+# 2. "我的项目截止日期是 7 月 20 号"
+#    → Agent 调用 remember("project_deadline", "2025-07-20")
+# 3. 关闭程序，重新启动
+# 4. "你还记得我的名字和喜欢的颜色吗？"
+#    → Agent 调用 recall("user_name") + recall("user_preference_color")
+#    → 回复 "你叫小明，喜欢蓝色！"
+# 5. "我记了哪些事？"
+#    → Agent 调用 list_memories()
+# 6. "忘掉我喜欢的颜色吧"
+#    → Agent 先确认 "确定要删除关于颜色偏好的记忆吗？"
+#    → 你说"确定"→ Agent 调用 forget("user_preference_color")</code></pre>
+
+<div class="card">
+  <strong>💡 跨会话持久化：</strong> 注意第 3-4 步——你关闭程序后重启，Agent 仍然记得小明和他的偏好。因为 <code>MemoryPlugin</code> 把数据存在了 <code>agent_memory.json</code> 文件中。这就是<strong>长期记忆的最简实现</strong>——不需要向量数据库，不需要 embedding，一个 JSON 文件就够了。<br><br>
+  当你后续学了 RAG（向量记忆），这个 MemoryPlugin 的<strong>接口完全不需要变</strong>——<code>remember</code> / <code>recall</code> / <code>list_memories</code> / <code>forget</code> 四个方法签名不变，只是把 <code>Dictionary</code> 替换成向量数据库。这就是好的 API 设计——接口稳定，实现可替换。
+</div>
+
+<!-- ============ OBSERVE ============ -->
+<h2>发生了什么？—— 追踪一次记忆操作</h2>
+
+<p>当你说「<strong>我叫小明，我喜欢蓝色</strong>」时，Agent Loop 内部发生了这些事：</p>
+
+<ol class="steps">
+  <li>
+    <strong>LLM 推理</strong>：读取 Instructions（"主动记忆：当用户分享个人信息时…"）+ 用户消息。判断——「用户分享了姓名和偏好，我应该记住。用 remember 工具存两条」。
+  </li>
+  <li>
+    <strong>第一次 tool_call</strong>：<code>remember(key: "user_name", info: "小明")</code>
+  </li>
+  <li>
+    <strong>第二次 tool_call</strong>：<code>remember(key: "user_preference_color", info: "蓝色")</code>
+  </li>
+  <li>
+    <strong>MemoryPlugin 执行</strong>：写入 <code>agent_memory.json</code>：
+    <pre><code>{
+  "user_name": "小明",
+  "user_preference_color": "蓝色"
+}</code></pre>
+    返回 <code>"已记住 [user_name]: 小明"</code> 和 <code>"已记住 [user_preference_color]: 蓝色"</code>
+  </li>
+  <li>
+    <strong>LLM 生成回复</strong>：「好的，我记住了——你叫小明，喜欢蓝色！以后有需要随时可以问我。」
+  </li>
+</ol>
+
+<p>下次你重启程序问「还记得我吗？」，LLM 的推理链是：</p>
+
+<div class="diagram">
+用户: "还记得我吗？"
+        ↓
+LLM:  用户问过去的个人信息
+      → 我应该查记忆库
+      → 调用 recall("user_name")
+        ↓
+MemoryPlugin: "记忆 [user_name]: 小明"
+        ↓
+LLM:  "用户叫小明。还有其他信息吗？"
+      → 继续调用 recall("user_preference_color")
+        ↓
+MemoryPlugin: "记忆 [user_preference_color]: 蓝色"
+        ↓
+LLM:  生成回复 "当然记得！你叫小明，喜欢蓝色。"
+</div>
+
+<div class="card card--success">
+  <strong>关键洞察：</strong> Agent 在这里展现了两种高级行为：<br>
+  ① <strong>主动存储</strong>——LLM 基于 Instructions 中的原则，自主判断「这条信息值得记住」，无需用户说"帮我记下来"。<br>
+  ② <strong>链式检索</strong>——LLM 调用一次 recall 后，基于返回结果自主决定是否继续检索更多相关信息。这和 Lesson 02 的"计算→保存"是同一机制——只是工具从 calculate/save 变成了 recall/recall。
+</div>
+
+<!-- ============ DEEP DIVE: TOKEN MATH ============ -->
+<h2>深入理解：你的 ChatHistory 还能撑多久？</h2>
+
+<p>
+  MemoryPlugin 解决了<strong>长期</strong>记忆问题，但<strong>工作记忆</strong>（ChatHistory）仍然有上限。来算一笔账：
+</p>
+
+<div class="diagram">
+你的 Agent 每次对话的 token 消耗：
+
+System Prompt     ~300 tokens  (Instructions)
+每轮对话：
+  User Message     ~50 tokens  (用户输入)
+  Tool Call × N   ~100 tokens  (每次 tool call + result)
+  Agent Response   ~80 tokens  (Agent 回复)
+  ─────────────────────────
+  每轮合计        ~230 tokens
+
+如果平均每轮 ~230 tokens：
+  DeepSeek V3 (128K)：~550 轮之后开始截断
+  Claude Sonnet (200K)：~870 轮之后开始截断
+
+但这不包括 tool definition（每次请求都要带上所有工具定义）！
+3 个工具 × ~150 tokens/工具 = ~450 tokens 的固定开销/轮
+</div>
+
+<p style="font-size:0.9rem;color:var(--text-muted);margin-top:0.5rem;">
+  <strong>实际数字更小。</strong> 因为 tool definition 每轮都要完整发送（LLM 需要知道当前有哪些工具可用）。如果你的 Agent 有 10 个工具，仅工具定义就占 ~1500 tokens——相当于 6 轮对话的预算。
+</p>
+
+<div class="card card--warning">
+  <strong>⚠️ 实用建议：</strong><br>
+  · 保持 Instructions 简洁——每个字都在消耗 token 预算<br>
+  · 工具别注册太多——只给 Agent 当前任务真正需要的工具<br>
+  · 长期对话（>100 轮）需要实现摘要压缩策略——这是下一节的内容<br>
+  · 监控 token 使用——在代码中加简单计数：<code>history.Sum(m => m.Content?.Length ?? 0) / 4</code> 作为粗略估计
+</div>
+
+<h3>实操：给你的 Agent 加一个 Token 计数器</h3>
+
+<p>不需要三方库，一个简单的扩展方法做粗略估算：</p>
+
+<pre><code>public static class ChatHistoryExtensions
+{
+    /// &lt;summary&gt;
+    /// 粗略估算 ChatHistory 中的 token 数。
+    /// 中文 ~2 chars/token, 英文 ~4 chars/token。取 3 作为折中。
+    /// &lt;/summary&gt;
+    public static int EstimateTokens(this ChatHistory history)
+    {
+        int total = 0;
+        foreach (var msg in history)
+        {
+            var text = msg.Content ?? "";
+            // 简单统计：中文字符按 2 chars/token，非中文按 4 chars/token
+            int chineseChars = text.Count(c => c >= 0x4E00 &amp;&amp; c &lt;= 0x9FFF);
+            int otherChars = text.Length - chineseChars;
+            total += chineseChars / 2 + otherChars / 4 + 1; // +1 保底
+        }
+        return total;
+    }
+}</code></pre>
+
+<p style="font-size:0.9rem;color:var(--text-muted);margin-top:0.5rem;">
+  把这个加到你的对话循环里，每次打印估计 token 数。当接近 80% 上下文窗口时（约 102K for 128K 窗口），触发警告或自动摘要。自动摘要的实现见下面挑战练习。
+</p>
+
+<!-- ============ QUIZ ============ -->
+<h2>检索练习</h2>
+<p style="color:var(--text-muted);">回忆刚学的内容来回答——这比反复阅读更能加深记忆。</p>
+
+<div class="quiz" id="q1">
+  <div class="quiz-question">1. 为什么 ChatHistory 不能无限增长？</div>
+  <button class="quiz-option" data-answer="wrong">因为 C# 的 List 有最大容量限制</button>
+  <button class="quiz-option" data-answer="correct">因为 LLM 的上下文窗口有 token 上限——超出窗口的消息会被截断，Agent 会"失忆"</button>
+  <button class="quiz-option" data-answer="wrong">因为 Semantic Kernel 的内存管理会自动清理旧消息</button>
+  <button class="quiz-option" data-answer="wrong">因为 JSON 序列化在大数据量下会失败</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <div class="quiz-question">2. MemoryPlugin 中的 <code>remember</code> 和 ChatHistory 中的消息，本质区别是什么？</div>
+  <button class="quiz-option" data-answer="wrong">remember 使用 JSON 格式，ChatHistory 使用 XML 格式</button>
+  <button class="quiz-option" data-answer="wrong">remember 比 ChatHistory 速度更快</button>
+  <button class="quiz-option" data-answer="correct">remember 是显式的跨会话长期记忆（文件持久化），ChatHistory 是自动的会话内短期记忆（有 token 上限）</button>
+  <button class="quiz-option" data-answer="wrong">两者没有本质区别，都是存储对话内容</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <div class="quiz-question">3. 在 Instructions 中写「主动记忆：当用户分享个人信息时，判断是否值得记住」，这体现了什么设计理念？</div>
+  <button class="quiz-option" data-answer="wrong">让 Agent 记住所有用户说过的话，越大越好</button>
+  <button class="quiz-option" data-answer="wrong">让用户手动管理所有记忆，Agent 不参与判断</button>
+  <button class="quiz-option" data-answer="wrong">在 C# 代码里硬编码所有需要记忆的场景</button>
+  <button class="quiz-option" data-answer="correct">利用 LLM 的判断力——不存所有信息，而是像人类一样有选择地记忆——给出原则让 Agent 自主判断</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<script>
+document.querySelectorAll('.quiz').forEach(quiz => {
+  quiz.querySelectorAll('.quiz-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (quiz.dataset.answered) return;
+      quiz.dataset.answered = 'true';
+
+      const fb = quiz.querySelector('.quiz-feedback');
+      quiz.querySelectorAll('.quiz-option').forEach(b => b.style.pointerEvents = 'none');
+      btn.classList.add('selected');
+
+      if (btn.dataset.answer === 'correct') {
+        btn.classList.add('correct');
+        fb.textContent = '✓ 正确！';
+        fb.className = 'quiz-feedback correct';
+      } else {
+        btn.classList.add('incorrect');
+        fb.textContent = '✗ 不太对。回顾一下上下文窗口的机制和 Agent 记忆系统的设计理念？';
+        fb.className = 'quiz-feedback incorrect';
+        quiz.querySelectorAll('.quiz-option').forEach(b => {
+          if (b.dataset.answer === 'correct') b.classList.add('correct');
+        });
+      }
+    });
+  });
+});
+</script>
+
+<!-- ============ PRACTICE CHALLENGE ============ -->
+<h2>挑战练习</h2>
+
+<div class="card">
+  <p style="margin:0 0 0.75rem;"><strong>🛠️ 扩展你的 MemoryAssistant：</strong></p>
+  <ol style="margin:0 0 0 1.5rem;color:var(--text-muted);">
+    <li>
+      <strong>实现自动摘要（策略二）</strong>：在对话循环中加入 token 监控。当估算 token 超过上限的 80% 时，自动让 Agent 生成一段「对话摘要」，用摘要替换前 50% 的 ChatHistory 消息。提示：你需要新增一个 <code>summarize_conversation</code> 工具，或者直接在循环中截断 ChatHistory 并插入摘要消息。
+    </li>
+    <li>
+      <strong>富文本记忆</strong>：把 MemoryPlugin 的 value 从 string 扩展为支持更丰富的结构——比如记忆的创建时间、标签（tag）、重要性（priority）。然后实现 <code>recall_by_tag(tag)</code> 工具。思考：这会增加 LLM 填参难度吗？
+    </li>
+    <li>
+      <strong>测试上下文窗口边界</strong>：写一个脚本自动和 Agent 对话 200 轮（每轮说不同的内容），观察 Agent 在第几轮开始"忘记"早期对话。然后用你实现的自动摘要功能重新测试，看效果如何。
+    </li>
+  </ol>
+</div>
+
+<!-- ============ NEXT STEPS ============ -->
+<h2>下一步</h2>
+
+<div class="card">
+  <p style="margin:0;">
+    <strong>推荐阅读：</strong>
+    <a href="https://docs.anthropic.com/en/docs/build-with-claude/context-windows" target="_blank">Anthropic: Context Windows 文档</a>
+    —— 理解上下文窗口的工作原理、token 计数、以及如何管理长对话。
+  </p>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <p style="margin:0;">
+    <strong>深入参考：</strong>
+    <a href="https://learn.microsoft.com/en-us/semantic-kernel/concepts/memories/" target="_blank">Semantic Kernel: Memories 概念文档</a>
+    —— 官方对 Memory 系统的分层设计、向量存储集成、以及 RAG 模式的最佳实践。
+  </p>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <p style="margin:0;">
+    <strong>视频推荐：</strong>
+    <a href="https://www.youtube.com/watch?v=Y4XQJhTtyRQ" target="_blank">Building Memory for AI Agents — Sam Witteveen</a>
+    —— 实操讲解 Agent 记忆系统的三层架构（Working / Episodic / Semantic），从简单 key-value 到向量 RAG 的渐进演进。
+  </p>
+</div>
+
+<p style="margin-top:1.5rem;">
+  📖 <strong>相关参考：</strong> <a href="../reference/agent-glossary.html">Agent 术语表</a>——Review「Memory / Context」「RAG」「ChatHistory」「Token」四条。
+</p>
+
+<p style="margin-top:0.5rem;">
+  📂 <strong>下节课预告：</strong> <a href="0004-planning-and-orchestration.html">Lesson 04: Planning & Orchestration</a>——当任务复杂到需要多步规划，Agent 如何自己制定执行计划？Function Calling Step-by-Step vs ReAct vs Plan-and-Execute 的对比实战。
+</p>
+
+<div class="ask-followup">
+  <strong>💡 有问题？</strong> 直接在当前对话中向你的 AI 老师提问。比如：<br>
+  · 「自动摘要和 RAG 各自适合什么场景？我能两个都用吗？」<br>
+  · 「MemoryPlugin 换成 SQLite 或 Redis 应该怎么改？」<br>
+  · 「能帮我 review 一下我实现的自动摘要逻辑吗？」<br>
+  你的老师就是当前正在和你对话的 Claude Agent——充分利用它。
+</div>
+
+<div class="lesson-footer">
+  <nav>
+    <a href="0002-tools-and-plugins.html">← 上一课：Tools & Plugins</a>
+    <a href="0004-planning-and-orchestration.html">下一课：Planning & Orchestration →</a>
+  </nav>
+</div>
+
+</body>
+</html>

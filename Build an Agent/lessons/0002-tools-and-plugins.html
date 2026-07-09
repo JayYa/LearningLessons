@@ -12,7 +12,7 @@
   <span class="lesson-number">Lesson 02</span>
   <span>Agent Academy</span>
   <span>·</span>
-  <span>~25 min</span>
+  <span>~35 min</span>
 </div>
 
 <h1>Tools & Plugins：让 Agent 真正"做事"</h1>
@@ -153,8 +153,21 @@
 
 <div class="card">
   <strong>原则 ②：Description 是 API 契约</strong><br>
-  写清楚五个 W：<strong>W</strong>hat（做什么）、<strong>W</strong>hen（何时用）、<strong>W</strong>hen NOT（何时<em>不要</em>用）、参数含义、返回值格式。LLM 只能看到 Description，看不到你的 C# 代码。<br>
+  写清楚这五个要素：<strong>做什么</strong>（功能）、<strong>何时用</strong>（触发场景）、<strong>何时<em>不要</em>用</strong>（边界条件）、<strong>参数含义</strong>（每个参数填什么）、<strong>返回格式</strong>（返回值长什么样）。LLM 只能看到 Description，看不到你的 C# 代码。<br>
   <span style="color:var(--text-muted);">好的 Description 示例见下方 Step 2 的代码。</span>
+</div>
+
+<div class="card" style="border-left: 3px solid var(--accent);">
+  <strong>🤔 追问：如果两个工具的 Description 很相似，LLM 会怎么选？</strong><br><br>
+  LLM 不做精确匹配，做的是<strong>语义相似度排序</strong>。Description 越相似，概率分布就越平——LLM 在两个工具之间会「犹豫」。比如用户说「把这个报告存到文件里」，同时存在 <code>save_note</code>（保存文本）和 <code>save_report</code>（保存报告），两者的语义匹配度可能非常接近（比如 0.61 vs 0.58），LLM 可能选错。<br><br>
+  <strong>但核心问题不是 LLM 的选择算法——而是两个工具为什么需要相似到让 LLM 困惑的 Description。</strong> 如果人类开发者看你的 API 文档都会搞混，LLM 一样会搞混。这说明<strong>工具职责边界没划清楚</strong>。<br><br>
+  <strong>解法：在 Description 里刻意制造差异。</strong> 同时写清楚「什么时候该用我」<em>和</em>「什么时候该用别的工具」：<br>
+  <span style="color:var(--text-muted);">
+  ❌ save_note: "保存文本到文件" / save_report: "保存报告到文件" → 太像<br>
+  ✅ save_note: "保存用户口述的零散文本为 .txt" &nbsp;+&nbsp; "如果要保存的是结构化报告，请使用 save_report 工具"<br>
+  ✅ save_report: "保存结构化报告为 .json" &nbsp;+&nbsp; "如果用户只是想存零散文本，请使用 save_note 工具"<br>
+  </span><br>
+  另外，即使选错了也不必担心——原则 ④ 的兜底机制可以让工具返回错误提示并建议正确的工具，LLM 下一轮会自行修正。这也是为什么 Agent 开发里，<strong>工具设计质量 &gt; LLM 推理能力</strong>。
 </div>
 
 <div class="card">
@@ -415,6 +428,81 @@ dotnet run</code></pre>
   <strong>关键洞察：</strong> LLM 不仅是"匹配"参数——它会在对话历史中<strong>搜索线索</strong>。第三个例子中，LLM 回顾上下文，找到之前提到的文件名 "result.txt"，自动填入参数。这种上下文感知能力使得 Agent 的对话体验非常自然——用户不需要精确指定每个参数。
 </p>
 
+<h3>放大看：expression 参数是谁生成的？</h3>
+
+<p>
+  回到 <code>CalculatorPlugin</code>——你可能注意到它的参数是一个 <code>string expression</code>，不是两个 <code>int</code>。这个 <strong>expression 字符串完全是 LLM 自己生成的</strong>。完整链路：
+</p>
+
+<div class="diagram">
+用户: "帮我算 15 乘以 23"
+
+        ↓  LLM 推理
+
+LLM:  用户想计算 → 用 calculate 工具
+      calculate 需要 expression 参数（数学表达式字符串）
+      "15 × 23" 翻译成数学表达式 → "15 * 23"
+
+        ↓  输出 tool_call
+
+tool_call: calculate(expression: "15 * 23")
+
+        ↓  框架执行 C# 代码
+
+DataTable.Compute("15 * 23") → 345
+</div>
+
+<p style="font-size:0.9rem;color:var(--text-muted);margin-top:0.5rem;">
+  <strong>LLM 做了"翻译"，不是"计算"。</strong> LLM 不执行 <code>15 * 23</code> 的数学运算——它只负责把自然语言翻译成一个合法的表达式字符串。真正算出 345 的是你的 C# <code>DataTable.Compute()</code>。<br><br>
+  更复杂的例子：用户说「一百五十六乘以二十三加一百」→ LLM 同时完成<strong>数字转换</strong>（中文→阿拉伯）、<strong>运算符翻译</strong>（"乘以"→*）、<strong>优先级保持</strong>，最终输出 <code>expression: "156 * 23 + 100"</code>。这不需要你写任何正则或 parser——LLM 的语言理解能力免费完成了这一切。<br><br>
+  这也是为什么 Description 里写了 <code>"如 '15 * 23'、'(100 + 50) / 3'"</code>——它在教 LLM 应该输出什么格式。Agent 开发者常说「LLM 是最好的输入解析器」，就是这个意思。
+</p>
+
+<h3>拓展：参数只能用基础类型吗？</h3>
+
+<p>
+  技术上<strong>支持</strong>复杂类型（class/struct）——Semantic Kernel 会通过反射将其序列化为嵌套的 JSON Schema，LLM 填好 JSON 后再反序列化回对象。链路是通的。
+</p>
+
+<p>但实践中，<strong>越复杂的类型，LLM 填参准确率越低</strong>：</p>
+
+<div class="diagram">
+参数复杂度            LLM 准确率
+
+string, int, bool     ████████████████  ~95%+
+enum                  ██████████████    ~90%（偶尔生成不存在的枚举值）
+string[]              █████████████     ~85%
+扁平 DTO（2-4 字段）   ████████████      ~80%
+嵌套对象（2 层+）      ██████████        ~60-70%（字段名拼错、层级搞混）
+嵌套 + 数组混合        ████████         &lt;60%（不可靠）
+</div>
+
+<p style="font-size:0.9rem;color:var(--text-muted);margin-top:0.5rem;">
+  <strong>核心问题：</strong> 每多一层嵌套，LLM 生成出错概率就递增。而出错的体验很差——用户说一句话，Agent 静默填错了某个嵌套字段，你很难排查。
+</p>
+
+<p><strong>实战建议——三个替代方案：</strong></p>
+
+<div class="card">
+  <strong>方案 A：拆成多个基础类型参数（首选）</strong><br>
+  不传 <code>Search(SearchFilter filter)</code>，而是 <code>Search(string keyword, int maxResults = 10, string? category = null)</code>。参数扁平化后，LLM 直接填基础值而非构造嵌套 JSON。准确率大幅提升。<br>
+  <span style="color:var(--text-muted);">这也是原则 ③（单一职责）的延伸——如果参数太多拆不平，说明这个工具做的事太多了。</span>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <strong>方案 B：用 string 接收 JSON，C# 里自己解析</strong><br>
+  参数声明为 <code>string filterJson</code>，Description 里给出 JSON 格式示例。好处：如果 LLM 生成的 JSON 有问题，你可以在 C# 里 try/catch 并返回清晰的错误信息——LLM 看到报错可能自行修正（原则 ④ 的延伸）。
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <strong>方案 C：多个小工具代替一个大工具</strong><br>
+  用 <code>search_by_keyword(kw)</code> + <code>search_by_category(cat, maxResults)</code> 代替一个万能的 <code>search(kw, cat, max, sortBy, filter, …)</code>。工具越聚焦，参数越简单。
+</div>
+
+<p style="font-size:0.9rem;color:var(--text-muted);margin-top:1rem;">
+  <strong>底线：</strong> 能用基础类型就不用 DTO，能拆参数就不嵌套，能拆工具就不堆参数。这和 REST API 设计是同一逻辑——好的 API 签名扁而窄，差的 API 深而宽。LLM 就是你的 API 消费者。
+</p>
+
 <div class="card card--warning">
   <strong>⚠️ 注意：参数提取不是 100% 可靠。</strong> LLM 可能猜错参数值，特别是在歧义情况下。对于关键操作（如删除、发送），建议让 Agent 先<strong>确认参数</strong>再执行。这个设计模式会在后续课程中详细展开。
 </div>
@@ -518,10 +606,10 @@ document.querySelectorAll('.quiz').forEach(quiz => {
 </p>
 
 <div class="ask-followup">
-  <strong>💡 有问题？</strong> 直接在当前对话中向你的 AI 老师提问。比如：<br>
-  · 「工具参数可以用复杂类型吗（class/struct），还是只能用基础类型？」<br>
-  · 「如果两个工具的 Description 很相似，LLM 会怎么选？」<br>
+  <strong>💡 有问题？</strong> 直接在当前对话中向你的 AI 老师提问。课程已覆盖了你可能好奇的扩展话题（参数生成、复杂类型、相似 Description），但还有更多值得追问：<br>
+  · 「多轮 Tool Calling 有最大次数限制吗？LLM 会不会无限循环？」<br>
   · 「能帮我 review 一下我写的 Plugin 吗？」<br>
+  · 「Semantic Kernel 的 Plugin 和 REST API 到底应该怎么分工？」<br>
   你的老师就是当前正在和你对话的 Claude Agent——充分利用它。
 </div>
 

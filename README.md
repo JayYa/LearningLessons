@@ -1,8 +1,14 @@
 # 📘 Learning Lessons
 
-一套覆盖现代 C# 语言演进、维京历史、VS Code 扩展开发、GitHub Actions 自动化、AI Agent 构建与二次元绘画入门的技术/人文课程合集。六个课程分别深挖 .NET 从 C# 8 到 C# 15 每一次语法升级的内部机制、冰海战纪背后的真实维京世界、从零构建 VS Code 扩展的工程全流程、用 GitHub 标签触发 AI 工作流的自动化实践、AI Agent 核心概念与工具扩展机制，以及二次元绘画的线条基础训练。虽主题各异，但共享同一方法论——从表层 API 下沉到底层机制，从孤立知识点串成系统认知。
+一套覆盖现代 C# 语言演进、.NET 平台基础、维京历史、VS Code 扩展开发、GitHub Actions 自动化、AI Agent 构建与二次元绘画入门的技术/人文课程合集。七个课程分别深挖 .NET 从 C# 8 到 C# 15 每一次语法升级的内部机制、SDK 风格项目系统的设计理念、冰海战纪背后的真实维京世界、从零构建 VS Code 扩展的工程全流程、用 GitHub 标签触发 AI 工作流的自动化实践、AI Agent 核心概念与工具扩展机制，以及二次元绘画的线条基础训练。虽主题各异，但共享同一方法论——从表层 API 下沉到底层机制，从孤立知识点串成系统认知。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
+
+## .NET Platform
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [第 1 课：SDK 风格项目系统 — .NET 平台基础](https://JayYa.github.io/LearningLessons/.NET%20Platform/lessons/0001-sdk-project-system.html) | 从传统 .csproj 格式到 SDK 风格项目系统的演进，理解 .NET 平台的项目组织与构建基础 |
 
 ## Morden .NET
 
@@ -70,6 +76,7 @@
 | 13 | [Lesson 0013 — 维京时代的女性：钥匙、法律与萨迦中的女人](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0013-viking-women.html) | 还原维京女性的法律地位、家庭权力与社会角色，从萨迦中重新发现北欧妇女的真实面貌 |
 | 14 | [Lesson 0014 — 维京人的宗教与仪式：Blót、Seiðr 与不设教会的信仰](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0014-viking-religion.html) | 深入维京人的宗教实践，探索祭祀、占卜与不依赖制度化教会的北欧异教信仰体系 |
 | 15 | [Lesson 0015 — 维京人的艺术与美学：从 Oseberg 到 Urnes 的六种风格](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0015-viking-art.html) | 系统梳理维京艺术六种风格的演变脉络，从动物纹饰到木雕金属工艺的美学解读 |
+| 16 | [Lesson 0016 — 维京时代的终结：1066 与瓦解一个世界的四种力量](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0016-end-of-viking-age.html) | 剖析导致维京时代终结的四种历史力量，以 1066 年为转折点理解北欧世界的转型 |
 
 **参考资料：**
 - [🗡️ 中国古代佩剑传统参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/chinese-sword-tradition.html) — 中国古代佩剑文化传统与维京武器的跨文化对照
@@ -92,6 +99,7 @@
 |---|------|------|
 | 1 | [Lesson 01 · What is an Agent](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0001-what-is-an-agent.html) | 从零认识 AI Agent 的核心概念，理解 Agent 与普通 LLM 调用的本质区别 |
 | 2 | [Lesson 02 · Tools & Plugins](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0002-tools-and-plugins.html) | 讲解 Agent 的工具调用与插件扩展机制，理解如何赋予 Agent 与外部世界交互的能力 |
+| 3 | [Lesson 03 · Memory & Context](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0003-memory-and-context.html) | 探索 Agent 的记忆与上下文管理机制，理解如何让 Agent 跨多轮对话保持状态与连贯性 |
 
 **参考资料：**
 - [Agent Glossary · Reference](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/reference/agent-glossary.html) — AI Agent 领域核心术语速查
