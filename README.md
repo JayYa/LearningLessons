@@ -16,46 +16,11 @@
 **参考资料：**
 - [Agent Glossary · Reference](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/reference/agent-glossary.html) — AI Agent 领域核心术语速查
 
-## Claude Context Bar
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [Lesson 0001 — VS Code 扩展的解剖结构](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0001-extension-anatomy.html) | 拆解 VS Code 扩展的 manifest、激活事件与代码骨架，理解扩展生命周期 |
-| 2 | [Lesson 0002 — 激活与生命周期](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0002-activation-lifecycle.html) | 深入 VS Code 扩展的激活事件类型与生命周期管理机制 |
-| 3 | [Lesson 0003 — StatusBarItem：状态栏 UI 原语](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0003-statusbar-api.html) | 解析 StatusBarItem API 的设计与用法，掌握状态栏 UI 元素的创建与控制 |
-| 4 | [Lesson 0004 — findActiveSessions：数据引擎](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0004-find-active-sessions.html) | 揭示 findActiveSessions 数据引擎如何扫描 git 仓库与终端会话，驱动扩展的上下文感知 |
-| 5 | [Lesson 0005 — refreshAllSessions：从数据到 UI](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0005-refresh-all-sessions.html) | 串联数据引擎与状态栏 UI，完成从轮询数据源到刷新显示的完整数据闭环 |
-| 6 | [Lesson 0006 — debug.ts：独立调试管线](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0006-debug-harness.html) | 构建扩展的独立调试环境，不依赖 VS Code 运行时可快速验证核心逻辑 |
-| 7 | [Lesson 0007 — 单元测试：从 fixture 设计到安全重构](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0007-unit-tests.html) | 构建扩展的单元测试体系，从 fixture 设计原则到安全重构策略，确保代码可维护性 |
-| 8 | [Lesson 0008 — CI 集成：用 GitHub Actions 自动运行测试](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0008-ci-integration.html) | 在 GitHub Actions 中配置跨平台测试矩阵与自动发布流程，实现 CI/CD 集成 |
-| 9 | [Lesson 0009 — 打包与发布：从代码到 Marketplace](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0009-packaging-and-publishing.html) | 讲解 VS Code 扩展的打包配置、版本管理与 Marketplace 发布流程，完成从开发到上线的最后一公里 |
-
-**参考资料：**
-- [参考：数据格式速查](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/data-formats.html) — Claude Context Bar 内部数据结构的序列化格式速查
-- [参考：术语表](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/glossary.html) — VS Code 扩展开发核心术语速查
-- [参考：npm 包命名规则](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/npm-package-naming-rules.html) — npm 包名称约束、作用域包与命名最佳实践
-- [参考：Node.js 测试框架对比](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/testing-frameworks.html) — Node.js 主流测试框架（Mocha、Jest、Vitest、Node Test Runner）对比分析
-- [参考：VS Code 扩展 API 基础](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/vscode-extension-api-basics.html) — 扩展清单、贡献点与核心 API 速查
-
 ## DotNET Platform
 
 | # | 课程 | 描述 |
 |---|------|------|
 | 1 | [第 1 课：SDK 风格项目系统 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0001-sdk-project-system.html) | 从传统 .csproj 格式到 SDK 风格项目系统的演进，理解 .NET 平台的项目组织与构建基础 |
-
-## GitHub and SandCastle
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [Lesson 0001 — 你的第一个标签触发工作流](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0001-your-first-label-triggered-workflow.html) | 从零搭建第一个标签触发工作流，理解 GitHub Actions 的事件驱动模型 |
-| 2 | [Lesson 0002 — 标签状态机](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0002-the-label-state-machine.html) | 将标签工作流抽象为状态机，掌握工作流编排的工程化思维 |
-| 3 | [Lesson 0003 — 高级模式：链式触发、预检、形状检测与 PRD 链式推进](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0003-advanced-patterns.html) | 探索链式触发、预检与形状检测等高级模式，解决真实场景中的复杂自动化需求 |
-| 4 | [Lesson 0004 — AI 分析 Issue：第一个 AI 驱动的工作流](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0004-ai-analyze-issue.html) | 将 AI 能力集成到 GitHub Actions 工作流中，实现 Issue 内容的智能分析与自动处理 |
-| 5 | [Lesson 0005 — 从 YAML 内联到 TypeScript 脚本：迈向 Sandcastle 架构](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0005-from-yaml-to-typescript.html) | 将 YAML 内联脚本重构为 TypeScript 模块，为 Sandcastle 可扩展架构奠定基础 |
-
-**参考资料：**
-- [Reference — Agent-Runner 契约速查表](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/reference/agent-runner-contract.html) — Agent-Runner 接口契约与集成规范速查
-- [Reference: 标签触发工作流语法速查表](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/reference/github-actions-label-workflow-syntax.html) — 标签触发工作流的事件类型、条件筛选与作业配置语法速查
 
 ## Morden .NET
 
@@ -104,14 +69,40 @@
 - [yield return 同步迭代器 · 速查表](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/sync-iterators-cheatsheet.html) — IEnumerable\<T\> 与 yield 状态机速查
 - [SynchronizationContext & await 续延调度](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/synchronizationcontext-cheatsheet.html) — ConfigureAwait、调度上下文与执行流转速查
 
-## Painting
+## Claude Context Bar
 
 | # | 课程 | 描述 |
 |---|------|------|
-| 1 | [第1课：自信的线条 — 二次元绘画基础](https://JayYa.github.io/LearningLessons/Painting/lessons/0001-confident-lines.html) | 从线条控制入手，讲解二次元绘画的起稿技法与手部稳定性训练 |
+| 1 | [Lesson 0001 — VS Code 扩展的解剖结构](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0001-extension-anatomy.html) | 拆解 VS Code 扩展的 manifest、激活事件与代码骨架，理解扩展生命周期 |
+| 2 | [Lesson 0002 — 激活与生命周期](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0002-activation-lifecycle.html) | 深入 VS Code 扩展的激活事件类型与生命周期管理机制 |
+| 3 | [Lesson 0003 — StatusBarItem：状态栏 UI 原语](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0003-statusbar-api.html) | 解析 StatusBarItem API 的设计与用法，掌握状态栏 UI 元素的创建与控制 |
+| 4 | [Lesson 0004 — findActiveSessions：数据引擎](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0004-find-active-sessions.html) | 揭示 findActiveSessions 数据引擎如何扫描 git 仓库与终端会话，驱动扩展的上下文感知 |
+| 5 | [Lesson 0005 — refreshAllSessions：从数据到 UI](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0005-refresh-all-sessions.html) | 串联数据引擎与状态栏 UI，完成从轮询数据源到刷新显示的完整数据闭环 |
+| 6 | [Lesson 0006 — debug.ts：独立调试管线](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0006-debug-harness.html) | 构建扩展的独立调试环境，不依赖 VS Code 运行时可快速验证核心逻辑 |
+| 7 | [Lesson 0007 — 单元测试：从 fixture 设计到安全重构](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0007-unit-tests.html) | 构建扩展的单元测试体系，从 fixture 设计原则到安全重构策略，确保代码可维护性 |
+| 8 | [Lesson 0008 — CI 集成：用 GitHub Actions 自动运行测试](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0008-ci-integration.html) | 在 GitHub Actions 中配置跨平台测试矩阵与自动发布流程，实现 CI/CD 集成 |
+| 9 | [Lesson 0009 — 打包与发布：从代码到 Marketplace](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0009-packaging-and-publishing.html) | 讲解 VS Code 扩展的打包配置、版本管理与 Marketplace 发布流程，完成从开发到上线的最后一公里 |
 
 **参考资料：**
-- [二次元绘画术语表 — Glossary](https://JayYa.github.io/LearningLessons/Painting/reference/glossary.html) — 二次元绘画核心术语速查
+- [参考：数据格式速查](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/data-formats.html) — Claude Context Bar 内部数据结构的序列化格式速查
+- [参考：术语表](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/glossary.html) — VS Code 扩展开发核心术语速查
+- [参考：npm 包命名规则](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/npm-package-naming-rules.html) — npm 包名称约束、作用域包与命名最佳实践
+- [参考：Node.js 测试框架对比](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/testing-frameworks.html) — Node.js 主流测试框架（Mocha、Jest、Vitest、Node Test Runner）对比分析
+- [参考：VS Code 扩展 API 基础](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/vscode-extension-api-basics.html) — 扩展清单、贡献点与核心 API 速查
+
+## GitHub and SandCastle
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [Lesson 0001 — 你的第一个标签触发工作流](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0001-your-first-label-triggered-workflow.html) | 从零搭建第一个标签触发工作流，理解 GitHub Actions 的事件驱动模型 |
+| 2 | [Lesson 0002 — 标签状态机](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0002-the-label-state-machine.html) | 将标签工作流抽象为状态机，掌握工作流编排的工程化思维 |
+| 3 | [Lesson 0003 — 高级模式：链式触发、预检、形状检测与 PRD 链式推进](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0003-advanced-patterns.html) | 探索链式触发、预检与形状检测等高级模式，解决真实场景中的复杂自动化需求 |
+| 4 | [Lesson 0004 — AI 分析 Issue：第一个 AI 驱动的工作流](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0004-ai-analyze-issue.html) | 将 AI 能力集成到 GitHub Actions 工作流中，实现 Issue 内容的智能分析与自动处理 |
+| 5 | [Lesson 0005 — 从 YAML 内联到 TypeScript 脚本：迈向 Sandcastle 架构](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0005-from-yaml-to-typescript.html) | 将 YAML 内联脚本重构为 TypeScript 模块，为 Sandcastle 可扩展架构奠定基础 |
+
+**参考资料：**
+- [Reference — Agent-Runner 契约速查表](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/reference/agent-runner-contract.html) — Agent-Runner 接口契约与集成规范速查
+- [Reference: 标签触发工作流语法速查表](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/reference/github-actions-label-workflow-syntax.html) — 标签触发工作流的事件类型、条件筛选与作业配置语法速查
 
 ## Vinland Saga
 
@@ -148,5 +139,14 @@
 - [📐 维京战船与 Portage 参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-ships-and-portage.html) — 维京长船设计与陆地运船技术参考
 - [🪙 维京白银经济参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-silver-economy.html) — 维京时代白银贸易与经济体系参考
 - [角色-史实对照表](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/vinland-saga-character-reference.html) — Vinland Saga 漫画角色与历史原型速查
+
+## Painting
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [第1课：自信的线条 — 二次元绘画基础](https://JayYa.github.io/LearningLessons/Painting/lessons/0001-confident-lines.html) | 从线条控制入手，讲解二次元绘画的起稿技法与手部稳定性训练 |
+
+**参考资料：**
+- [二次元绘画术语表 — Glossary](https://JayYa.github.io/LearningLessons/Painting/reference/glossary.html) — 二次元绘画核心术语速查
 
 *自动生成*
