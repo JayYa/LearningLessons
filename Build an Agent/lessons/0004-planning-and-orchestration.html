@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 04 · Planning & Orchestration</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<div class="lesson-meta">
+  <span class="lesson-number">Lesson 04</span>
+  <span>Agent Academy</span>
+  <span>·</span>
+  <span>~45 min</span>
+</div>
+
+<h1>Planning & Orchestration：让 Agent 自己制定执行计划</h1>
+<p style="font-size:1.1rem;color:var(--text-muted);margin-top:0;">
+  从单步工具调用到多步自主规划——理解 Agent 的三种规划策略，构建一个能分解复杂任务并逐步执行的 Planner Agent。
+</p>
+
+<div style="margin:1.5rem 0;">
+  <span class="tag">Planning</span>
+  <span class="tag">ReAct</span>
+  <span class="tag">Plan-and-Execute</span>
+  <span class="tag">Function Calling Loop</span>
+  <span class="tag">Orchestration</span>
+  <span class="tag">C#</span>
+</div>
+
+<hr style="border:none;border-top:1px solid var(--border);margin:2rem 0;">
+
+<!-- ============ MOTIVATION ============ -->
+<h2>当「一步一个工具」不够用时</h2>
+
+<p>
+  你在 <a href="0002-tools-and-plugins.html">Lesson 02</a> 的 FileAssistant 能「计算 15×23 并保存结果」，在 <a href="0003-memory-and-context.html">Lesson 03</a> 的 MemoryAssistant 能「记住用户偏好并在之后回想」。这些 Agent 的共同特点是：
+</p>
+
+<div class="card">
+  <strong>每次只走一步。</strong> LLM 在当前状态下判断「下一步该调哪个工具」，执行，拿到结果，再判断下一步。链条是：<br>
+  <code>推理 → 调工具 → 拿到结果 → 推理 → 调工具 → ...</code><br>
+  每一步都是<strong>局部最优</strong>——没有全局视角。
+</div>
+
+<p>
+  现在想象一个真正的复杂任务：
+</p>
+
+<div class="diagram">
+用户: "分析项目中所有 C# 文件的代码行数，
+       生成一份汇总报告，保存到 report.txt，
+       然后把关键数据记到记忆里。"
+
+这不是"调一个工具"能解决的——
+它需要 5+ 步，每步依赖前一步的结果。
+</div>
+
+<p>
+  这种场景下，Agent 需要的不只是「会调工具」——它需要<strong>会规划</strong>：把大任务拆成有依赖关系的小步骤，按正确顺序执行，遇到意外时调整。
+</p>
+
+<div class="card card--highlight">
+  <strong>核心跃迁：</strong> 从 Tool Use（工具使用）到 Planning（规划）——Agent 不再是"接到指令 → 调一个工具"，而是"接到目标 → 自主分解 → 多步执行 → 验证结果"。这是从"工具人"到"项目助理"的飞跃。
+</div>
+
+<!-- ============ KNOWLEDGE ============ -->
+<h2>心智模型：Agent Loop 就是隐式的"规划器"</h2>
+
+<p>
+  先破一个概念：<strong>Planning 不是一个独立组件</strong>——它是 Agent Loop 在复杂度上的自然延伸。回到 <a href="0001-what-is-an-agent.html">Lesson 01</a> 的 Agent Loop：
+</p>
+
+<div class="diagram">
+┌──────────────────────────────────────────────┐
+│              AGENT LOOP                       │
+│                                               │
+│   用户输入 → LLM 推理 → 调工具？               │
+│                ↑          ↓Yes                │
+│                │     执行工具                   │
+│                │       ↓                       │
+│                └── 返回结果                    │
+│                  (继续推理)                     │
+│                    ↓No                         │
+│                 返回最终回复                    │
+└──────────────────────────────────────────────┘
+
+当任务需要 1 步  →  这就是"Tool Use"（Lesson 02）
+当任务需要 5+ 步 →  这就变成了"Planning"（本课）
+
+同一个 Loop，不同的复杂度。
+</div>
+
+<p>
+  也就是说：<strong>Agent 不是先学了 Tool Use 再学 Planning——Planning 就是复杂版的 Tool Use。</strong>区别只在于 LLM 需要在多轮迭代中保持目标一致、不迷失方向、处理步骤间的依赖。
+</p>
+
+<div class="card">
+  <strong>📐 历史注记：</strong> Semantic Kernel 早期有独立的"Planner"组件（Stepwise Planner、Handlebars Planner），但它们<strong>已被官方废弃</strong>。原因？现代 LLM（GPT-4、Claude、DeepSeek V3）的函数调用能力足够强，<strong>迭代式 Function Calling 本身就是规划器</strong>——不需要额外的规划层。理解这一点很重要：你不会看到本课引入额外的"Planner"NuGet 包。一切都在 Agent Loop + Instructions 设计中完成。
+</div>
+
+<h2>三种规划策略</h2>
+
+<p>
+  同样是 Agent Loop，但<strong>怎么让 LLM 在循环中不迷路</strong>？三种策略，复杂度递增：
+</p>
+
+<h3>策略一：Implicit Planning（隐式规划，即 Function Calling Loop）</h3>
+
+<div class="card">
+  <strong>你已经在用了。</strong> Lesson 02 和 03 的 Agent 用的就是隐式规划。LLM 每轮基于当前 ChatHistory 判断下一步该调什么工具，不预先规划。<br><br>
+  <strong>原理：</strong> LLM 在每轮迭代中看到了「原始目标 + 已完成的步骤 + 当前状态」，自然就能推断下一步。它不需要一个独立的"计划文档"——<strong>ChatHistory 本身就是计划的状态载体</strong>。<br><br>
+  ✅ 简单、自然、适合 80% 的场景<br>
+  ❌ 无全局视角——第 10 步可能和第 2 步矛盾<br>
+  ❌ 容易在长链中"忘记"初始目标（和 <a href="0003-memory-and-context.html">Lesson 03</a> 的"失忆"是同一机制）<br>
+  <span style="color:var(--text-muted);">适用场景：2-5 步的线性任务，步骤间依赖简单。</span>
+</div>
+
+<h3>策略二：ReAct（Reasoning + Acting）——本课实现</h3>
+
+<div class="card card--highlight">
+  <strong>让推理显式化。</strong> LLM 在每个行动前<strong>先写出思考过程</strong>（Thought），然后再行动（Action），拿到结果后观察（Observation），再进入下一轮思考。<br><br>
+  <div class="diagram" style="margin:0.75rem 0;">
+  Thought: 我需要先知道项目里有哪些 C# 文件
+  Action: list_files("*.cs")
+  Observation: [Program.cs, Utils.cs, Models.cs]
+
+  Thought: 有 3 个文件，需要逐个统计行数
+  Action: count_lines("Program.cs")
+  Observation: Program.cs: 142 行
+
+  Thought: 继续统计剩余文件...
+  Action: count_lines("Utils.cs")
+  Observation: Utils.cs: 89 行
+
+  ...
+  Final Answer: 共 3 个文件，总计 345 行，报告已保存到 report.txt
+  </div>
+  ✅ 推理过程可审计——你能看到 Agent "在想什么"<br>
+  ✅ 自我纠错——Observation 不符合预期时，Thought 会调整方向<br>
+  ❌ 每步多了 Thought 的 token 消耗（约 +30% token）<br>
+  ❌ 结构化约束可能限制灵活性（LLM 有时候"想太多"）<br>
+  <span style="color:var(--text-muted);">适用场景：3-10 步的中等复杂任务，需要可解释性。</span>
+</div>
+
+<h3>策略三：Plan-and-Execute（先规划再执行）</h3>
+
+<div class="card">
+  <strong>分两阶段。</strong> 第一阶段：LLM 生成完整的执行计划（JSON 步骤列表）。第二阶段：按计划逐步执行（可以人工确认后再执行，也可以自动执行）。<br><br>
+  <div class="diagram" style="margin:0.75rem 0;">
+  —— 阶段 1: Plan ——
+  LLM 生成:
+  [
+    {"step":1, "tool":"list_files", "args":{"pattern":"*.cs"}},
+    {"step":2, "tool":"count_lines", "args":{"file":"$step1[0]"}},
+    {"step":3, "tool":"count_lines", "args":{"file":"$step1[1]"}},
+    {"step":4, "tool":"write_file", "args":{"path":"report.txt","content":"..."}},
+    {"step":5, "tool":"remember", "args":{"key":"total_loc","info":"..."}}
+  ]
+
+  —— 阶段 2: Execute ——
+  逐步执行每个 step，step.args 中的 $step1[0] 被替换为上一步的实际结果
+  </div>
+  ✅ 全局视角——执行前就能发现步骤冲突<br>
+  ✅ 可审核——人可以在执行前批准/修改计划<br>
+  ❌ 计划基于"预判"——如果第 2 步的实际结果和预期不同，整个计划可能失效<br>
+  ❌ 两阶段 = 两轮 LLM 调用 = 更高延迟和成本<br>
+  <span style="color:var(--text-muted);">适用场景：10+ 步的复杂任务，需要人工审核，或步骤间有复杂依赖。</span>
+</div>
+
+<h3>策略对比</h3>
+
+<table style="width:100%;margin:1rem 0;font-size:0.92rem;">
+  <tr><th style="text-align:left;padding:0.4rem 0.5rem;">维度</th><th style="text-align:left;padding:0.4rem 0.5rem;">Implicit (FC Loop)</th><th style="text-align:left;padding:0.4rem 0.5rem;">ReAct</th><th style="text-align:left;padding:0.4rem 0.5rem;">Plan-and-Execute</th></tr>
+  <tr><td style="padding:0.4rem 0.5rem;">推理可见性</td><td style="padding:0.4rem 0.5rem;">❌ 不可见</td><td style="padding:0.4rem 0.5rem;">✅ Thought 显式</td><td style="padding:0.4rem 0.5rem;">✅ 计划文档显式</td></tr>
+  <tr><td style="padding:0.4rem 0.5rem;">Token 效率</td><td style="padding:0.4rem 0.5rem;">⭐⭐⭐ 最省</td><td style="padding:0.4rem 0.5rem;">⭐⭐ 中等</td><td style="padding:0.4rem 0.5rem;">⭐ 最费（两阶段）</td></tr>
+  <tr><td style="padding:0.4rem 0.5rem;">自我纠错</td><td style="padding:0.4rem 0.5rem;">⭐ 弱</td><td style="padding:0.4rem 0.5rem;">⭐⭐⭐ 强</td><td style="padding:0.4rem 0.5rem;">⭐⭐ 中（需 re-plan）</td></tr>
+  <tr><td style="padding:0.4rem 0.5rem;">人工可审核</td><td style="padding:0.4rem 0.5rem;">❌</td><td style="padding:0.4rem 0.5rem;">⚠ 事后</td><td style="padding:0.4rem 0.5rem;">✅ 执行前</td></tr>
+  <tr><td style="padding:0.4rem 0.5rem;">实现复杂度</td><td style="padding:0.4rem 0.5rem;">⭐⭐⭐ 零额外代码</td><td style="padding:0.4rem 0.5rem;">⭐⭐ Instructions 设计</td><td style="padding:0.4rem 0.5rem;">⭐ 需两阶段协调代码</td></tr>
+  <tr><td style="padding:0.4rem 0.5rem;">适合步数</td><td style="padding:0.4rem 0.5rem;">2-5 步</td><td style="padding:0.4rem 0.5rem;">3-10 步</td><td style="padding:0.4rem 0.5rem;">10+ 步</td></tr>
+</table>
+
+<div class="card card--highlight">
+  <strong>实际工程中的选择：</strong> 不是三选一，而是<strong>根据任务复杂度动态切换</strong>。大多数 Agent 用策略一（隐式）就够了——ChatHistory + Function Calling Loop 对 80% 的任务足够。当任务明显复杂（用户说"帮我做 X、Y、Z，然后..."），升级到策略二（ReAct）。当任务有审核需求或步骤超过 10 步，用策略三（Plan-and-Execute）。<br><br>
+  <strong>本课教你实现策略二和策略三。</strong>
+</div>
+
+<!-- ============ SKILL ============ -->
+<h2>动手构建：PlannerAgent</h2>
+
+<p>
+  构建一个 <strong>PlannerAgent</strong>——它能接收复杂的多步任务，分解并执行。我们会用同一个任务分别跑<strong>隐式规划</strong>和<strong>ReAct</strong>两种模式，观察差异。
+</p>
+
+<div class="card card--highlight">
+  <strong>本课产出：</strong> 一个具备多步规划能力的 Agent，配有文件分析工具集（list_files / read_file / count_lines / write_file），能通过 ReAct 模式自主分解并执行「分析项目 → 生成报告 → 记忆关键数据」这类复杂任务。
+</div>
+
+<h3>Step 1: 创建项目和工具集</h3>
+
+<pre><code>dotnet new console -n PlannerAgent
+cd PlannerAgent
+dotnet add package Microsoft.SemanticKernel --prerelease
+dotnet add package Microsoft.SemanticKernel.Agents.Core --prerelease
+dotnet add package Anthropic.SDK --prerelease</code></pre>
+
+<p>首先，创建一组比以往更丰富的工具——四个文件分析工具，模拟真实项目中的操作：</p>
+
+<pre><code>using System.ComponentModel;
+using Microsoft.SemanticKernel;
+
+// ——— 工具 1: 列出文件 ———
+public class FileAnalysisPlugin
+{
+    private readonly string _basePath;
+
+    public FileAnalysisPlugin(string? basePath = null)
+    {
+        _basePath = basePath ?? Directory.GetCurrentDirectory();
+    }
+
+    [KernelFunction("list_files")]
+    [Description("列出指定目录下匹配模式的所有文件。" +
+                 "pattern: 文件匹配模式（如 \"*.cs\"、\"*.md\"、\"*.*\"）。" +
+                 "返回匹配的文件路径列表（每行一个），包含文件大小。")]
+    public string ListFiles(string pattern)
+    {
+        var files = Directory.GetFiles(_basePath, pattern, SearchOption.AllDirectories)
+            .Take(50)  // 限制数量，避免 token 爆炸
+            .Select(f =>
+            {
+                var info = new FileInfo(f);
+                var relative = Path.GetRelativePath(_basePath, f);
+                return $"  {relative} ({info.Length} bytes)";
+            });
+
+        if (!files.Any())
+            return $"在 {_basePath} 中没有找到匹配 \"{pattern}\" 的文件。";
+
+        return $"找到 {files.Count()} 个文件:\n" + string.Join("\n", files);
+    }
+
+    [KernelFunction("read_file")]
+    [Description("读取指定文件的内容。" +
+                 "filepath: 相对于工作目录的文件路径。" +
+                 "返回文件内容。如果文件不存在或过大（>50KB），返回错误提示。")]
+    public string ReadFile(string filepath)
+    {
+        var fullPath = Path.Combine(_basePath, filepath);
+
+        if (!File.Exists(fullPath))
+            return $"错误：文件 \"{filepath}\" 不存在。可用 list_files 查看文件列表。";
+
+        var info = new FileInfo(fullPath);
+        if (info.Length > 50_000)
+            return $"错误：文件 \"{filepath}\" 过大（{info.Length} bytes），请用更精确的模式。";
+
+        var content = File.ReadAllText(fullPath);
+        var lines = content.Split('\n').Length;
+        return $"=== {filepath} ({lines} 行, {info.Length} bytes) ===\n{content}";
+    }
+
+    [KernelFunction("count_lines")]
+    [Description("统计指定文件中代码行、空行和注释行的数量。" +
+                 "filepath: 相对于工作目录的文件路径。" +
+                 "返回该文件的代码行/空行/注释行统计。不支持的文件类型返回提示。")]
+    public string CountLines(string filepath)
+    {
+        var fullPath = Path.Combine(_basePath, filepath);
+
+        if (!File.Exists(fullPath))
+            return $"错误：文件 \"{filepath}\" 不存在。";
+
+        var lines = File.ReadAllLines(fullPath);
+        var ext = Path.GetExtension(filepath).ToLower();
+
+        int code = 0, blank = 0, comment = 0;
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (string.IsNullOrEmpty(trimmed)) { blank++; continue; }
+
+            // 简单判断注释（C# / JS / Python 通用）
+            if (ext is ".cs" or ".js" or ".ts" or ".java" or ".cpp" or ".c" or ".h")
+            {
+                if (trimmed.StartsWith("//") || trimmed.StartsWith("/*") || trimmed.StartsWith("*"))
+                    { comment++; continue; }
+            }
+            else if (ext is ".py" || ext is ".rb" || ext is ".sh")
+            {
+                if (trimmed.StartsWith("#")) { comment++; continue; }
+            }
+
+            code++;
+        }
+
+        return $"=== {filepath} ===\n" +
+               $"  总行数: {lines.Length}\n" +
+               $"  代码行: {code}\n" +
+               $"  空行:   {blank}\n" +
+               $"  注释行: {comment}";
+    }
+
+    [KernelFunction("write_file")]
+    [Description("将内容写入指定文件。如果文件已存在则覆盖。" +
+                 "filepath: 相对于工作目录的文件路径。" +
+                 "content: 要写入的内容。返回确认信息。")]
+    public string WriteFile(string filepath, string content)
+    {
+        var fullPath = Path.Combine(_basePath, filepath);
+        var dir = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            Directory.CreateDirectory(dir);
+
+        File.WriteAllText(fullPath, content);
+        return $"已写入: {filepath} ({content.Length} 字符)";
+    }
+}</code></pre>
+
+<div class="card">
+  <strong>🔍 工具设计观察：</strong> 注意 <code>list_files</code> 加了 <code>.Take(50)</code> 限制。为什么？回忆 <a href="0003-memory-and-context.html">Lesson 03</a> 的 token 预算——如果目录有 500 个文件，原始列表可能占 15,000+ tokens，直接吃掉一大块上下文窗口。每个返回结果都在消耗预算，工具设计时必须考虑<strong>返回值的 token 成本</strong>。
+</div>
+
+<h3>Step 2: 创建 ReAct Agent</h3>
+
+<p>
+  ReAct 的核心在 <strong>Instructions</strong>。不需要额外代码——通过在 Instructions 中定义 Thought/Action/Observation 格式，让 LLM 在每次回复时先推理再行动：
+</p>
+
+<pre><code>using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Agents;
+using Microsoft.SemanticKernel.Agents.Chat;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Anthropic.SDK;
+using Anthropic.SDK.Common;
+
+// ——— A：创建客户端 ———
+var anthropicClient = new AnthropicClient(
+    new APIAuthentication(
+        Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")!
+    )
+) { ApiUrlFormat = "https://api.deepseek.com/anthropic/{0}/{1}" };
+
+IChatClient chatClient = new ChatClientBuilder(anthropicClient.Messages)
+    .UseFunctionInvocation()
+    .Build();
+
+// ——— B：构建 Kernel + 注册工具 ———
+var builder = Kernel.CreateBuilder();
+builder.Services.AddSingleton(chatClient);
+
+// 注册文件分析工具 + 记忆工具
+builder.Plugins.AddFromType&lt;FileAnalysisPlugin&gt;();
+builder.Plugins.AddFromType&lt;MemoryPlugin&gt;();  // 复用 Lesson 03 的 MemoryPlugin！
+
+Kernel kernel = builder.Build();
+
+// ——— C：ReAct Agent ———
+var reactAgent = new ChatCompletionAgent
+{
+    Name = "PlannerAssistant",
+    Instructions = """
+        你是一个项目分析助手，具备多步规划和执行能力。
+
+        你的工作方式——ReAct 模式：
+        每当需要多步完成任务时，你必须按以下格式工作：
+
+        1. Thought（思考）：分析当前状态，判断下一步该做什么。
+           考虑：目标是什么？已完成哪些？下一步需要什么信息？
+        2. Action（行动）：调用合适的工具。如果多个工具可以并行调用
+           （相互之间不依赖结果），可以同时调用。
+        3. Observation（观察）：工具返回结果后，判断是否符合预期。
+           如果不符合——调整计划，尝试其他方法。
+        4. 重复 1-3，直到目标达成。
+        5. Final Answer（最终回复）：总结完成了什么、结果是什么。
+
+        可用的工具：
+        · list_files(pattern)    — 列出文件
+        · read_file(filepath)   — 读取文件内容
+        · count_lines(filepath)  — 统计代码行数
+        · write_file(filepath, content) — 写入文件
+        · remember(key, info)   — 存储重要信息到长期记忆
+        · recall(key)           — 从长期记忆检索
+        · list_memories()       — 列出所有已存储的记忆
+
+        工作原则：
+        · 收到复杂任务后，先在 Thought 中拆解步骤，再逐步执行
+        · 每个步骤的结果是下一步的输入——先 list_files 知道有哪些文件，
+          再逐个 count_lines，最后汇总 write_file
+        · 如果某个步骤失败（文件不存在、格式不对），不要放弃——
+          在 Thought 中分析原因，调整方法
+        · 完成后，关键指标（总行数、文件数等）用 remember 存下来
+        · 在 Final Answer 中清晰汇报完成了什么
+
+        用中文回复，思维过程也使用中文。
+        """,
+    Kernel = kernel
+};
+
+// ——— D：对比模式——隐式规划 Agent（相同工具，不同 Instructions）———
+var implicitAgent = new ChatCompletionAgent
+{
+    Name = "SimpleAssistant",
+    Instructions = """
+        你是一个项目分析助手。用可用的工具完成用户的任务。
+        如果任务复杂，分步完成。用中文回复，简洁高效。
+        """,
+    Kernel = kernel
+};
+
+// ——— E：对话循环 ———
+var history = new ChatHistory();
+Console.WriteLine("=== PlannerAgent 已就绪 ===\n");
+Console.WriteLine("当前工作目录: " + Directory.GetCurrentDirectory());
+Console.WriteLine("输入 'exit' 退出，输入 'switch react'/'switch implicit' 切换模式\n");
+Console.WriteLine("试试这个复杂任务:");
+Console.WriteLine("  \"分析本项目的代码结构——列出所有 .cs 文件，");
+Console.WriteLine("   统计每个文件的代码行数，生成一份摘要报告保存到");
+Console.WriteLine("   code_report.txt，然后把总行数和文件数记到记忆里。\"\n");
+
+string mode = "react";  // 默认用 ReAct
+var currentAgent = reactAgent;
+
+while (true)
+{
+    Console.Write($"[{mode}] 你: ");
+    var input = Console.ReadLine();
+    if (input?.ToLower() == "exit") break;
+
+    if (input?.ToLower() == "switch react")
+    {
+        mode = "react";
+        currentAgent = reactAgent;
+        Console.WriteLine("已切换到 ReAct 模式。\n");
+        continue;
+    }
+    if (input?.ToLower() == "switch implicit")
+    {
+        mode = "implicit";
+        currentAgent = implicitAgent;
+        Console.WriteLine("已切换到 隐式规划 模式。\n");
+        continue;
+    }
+
+    history.Add(new ChatMessageContent(AuthorRole.User, input!));
+
+    Console.Write($"Agent: ");
+    await foreach (var chunk in currentAgent.InvokeStreamingAsync(history))
+    {
+        Console.Write(chunk.Content);
+    }
+    Console.WriteLine("\n");
+}</code></pre>
+
+<div class="card">
+  <strong>💡 关键设计：同一个 Kernel，两个 Agent，不同的 Instructions。</strong> 注意 <code>implicitAgent</code> 和 <code>reactAgent</code> 用的是完全相同的 Kernel 和工具集。唯一的区别是 Instructions 中是否包含 ReAct 格式要求。这证明了 <a href="0002-tools-and-plugins.html">Lesson 02 的原则 ①</a>（Instructions 决定了 Agent 的行为模式）在规划层面的适用性——<strong>规划策略是 Instructions 设计的延伸，不是独立组件的职责</strong>。<br><br>
+  另注意 MemoryPlugin 的复用——直接把 Lesson 03 的代码文件复制过来（或 <code>dotnet add reference</code>），一行不改即可工作。这就是好的工具接口设计——<strong>工具和规划解耦</strong>，同样的工具可以被不同的规划策略驱动。
+</div>
+
+<h3>Step 3: 运行并对比两种模式</h3>
+
+<pre><code># 创建一些测试文件让 Agent 有东西分析：
+echo "using System; class Program { static void Main() { Console.WriteLine(\"Hello\"); } }" > Program.cs
+echo "public static class MathUtils { public static int Add(int a, int b) => a + b; public static int Multiply(int a, int b) => a * b; }" > Utils.cs
+echo "public class User { public string Name { get; set; } public string Email { get; set; } }" > Models.cs
+
+# 运行
+$env:DEEPSEEK_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+dotnet run
+
+# ——— 观察 ReAct 模式 ———
+# [react] 你: 分析项目代码结构，统计所有 .cs 文件的代码行，生成报告
+# Agent:
+# Thought: 需要先知道项目里有哪些 .cs 文件
+# Action: list_files("*.cs")
+# Observation: Program.cs (142 bytes), Utils.cs (180 bytes), Models.cs (105 bytes)
+#
+# Thought: 有 3 个文件。需要逐个统计行数。
+# Action: count_lines("Program.cs")
+# Observation: Program.cs: 总行数 4, 代码行 4, 空行 0, 注释行 0
+#
+# Thought: 继续统计剩余两个文件...
+# Action: count_lines("Utils.cs"), count_lines("Models.cs")
+# Observation: Utils.cs: 总行数 3, 代码行 3, 空行 0, 注释行 0
+# Observation: Models.cs: 总行数 4, 代码行 4, 空行 0, 注释行 0
+#
+# Thought: 汇总：3 个文件，总计 11 行代码。写报告并记住关键数据。
+# Action: write_file("code_report.txt", "...")
+# Action: remember("total_loc", "11"), remember("total_files", "3")
+#
+# Final Answer: 分析完成！3 个 C# 文件，共 11 行代码。报告已保存到 code_report.txt，关键数据已存入记忆。
+
+# ——— 然后切换到隐式模式对比 ———
+# switch implicit
+# [implicit] 你: 再统计一遍，但这次生成 JSON 格式的报告
+# Agent: (直接调用 list_files → count_lines × 3 → write_file)
+#       没有 Thought 过程，但结果相同。更简洁，但你不知道它"怎么想的"。</code></pre>
+
+<div class="card card--success">
+  <strong>关键差异：</strong><br>
+  · ReAct 的 <code>Thought</code> 让你能<strong>审计</strong> Agent 的决策——它为什么会选择那个工具？哪里判断错了？<br>
+  · 隐式规划更快（少了 Thought 文本的 token），但<strong>出问题时你没法调试</strong>——你不知道它是"忘了"还是"误判"<br>
+  · 生产环境中，ReAct 的 Thought 日志是<strong>调试 Agent 行为的主要工具</strong>——和程序员的 log 语句一样重要<br>
+  · 两种模式<strong>都正确地完成了任务</strong>——因为任务本身（3 步线性）对隐式规划来说足够简单
+</div>
+
+<!-- ============ DEEP DIVE: PLAN-AND-EXECUTE ============ -->
+<h2>进阶：实现 Plan-and-Execute</h2>
+
+<p>
+  当任务超过 10 步，或者需要<strong>人工在执行前审核计划</strong>时，用 Plan-and-Execute 模式。不同于 ReAct（边想边做），Plan-and-Execute 把「计划」和「执行」分成两个独立的阶段。
+</p>
+
+<h3>架构</h3>
+
+<div class="diagram">
+┌─────────────────────────────────────────────────────┐
+│              PLAN-AND-EXECUTE                        │
+│                                                      │
+│  阶段 1: PLAN（计划）                                 │
+│  ┌─────────────────────────────────────────────┐    │
+│  │ 用户目标 → LLM → 生成 JSON 步骤列表           │    │
+│  │           → 展示给用户 → 用户确认/修改         │    │
+│  └─────────────────────────────────────────────┘    │
+│                      ↓                               │
+│  阶段 2: EXECUTE（执行）                              │
+│  ┌─────────────────────────────────────────────┐    │
+│  │ 遍历步骤列表 → 逐条执行 → 结果注入下一步       │    │
+│  │              → 如失败 → 可选 re-plan          │    │
+│  └─────────────────────────────────────────────┘    │
+│                      ↓                               │
+│  阶段 3: SUMMARIZE（汇总）                            │
+│  ┌─────────────────────────────────────────────┐    │
+│  │ 所有步骤结果 → LLM → 生成最终回复              │    │
+│  └─────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────┘
+</div>
+
+<h3>实现</h3>
+
+<p>在 Program.cs 中添加 Plan-and-Execute 模式。核心是将"生成计划"和"执行计划"拆成两个独立的 LLM 调用：</p>
+
+<pre><code>// ====== Plan-and-Execute 模式 ======
+
+// 阶段 1: 生成计划
+async Task&lt;string&gt; GeneratePlanAsync(IChatClient client, string goal, string toolsDescription)
+{
+    var planHistory = new ChatHistory();
+    planHistory.Add(new ChatMessageContent(AuthorRole.User, $"""
+        你是一个任务规划器。请为以下目标制定一个执行计划。
+
+        可用工具：
+        {toolsDescription}
+
+        目标：
+        {goal}
+
+        请生成一个 JSON 数组格式的执行计划。每个步骤包含：
+        - step: 步骤编号（从 1 开始）
+        - description: 步骤的简短描述（中文）
+        - tool: 要调用的工具名
+        - args: 工具参数（JSON 对象）
+
+        规则：
+        - 步骤之间如果有数据依赖（步骤 3 需要步骤 1 的结果），在 description 中说明
+        - 可以并行执行的步骤放在相邻位置
+        - 只生成 JSON，不要额外交代
+
+        ```json
+        [
+          {{"step": 1, "description": "...", "tool": "...", "args": {{...}}}},
+          ...
+        ]
+        ```
+        """));
+
+    var response = await client.GetResponseAsync(planHistory);
+    return response.Message.Content ?? "[]";
+}
+
+// 阶段 2: 执行计划
+async Task&lt;string&gt; ExecutePlanAsync(
+    ChatCompletionAgent agent, ChatHistory executionHistory, string planJson)
+{
+    // 解析计划
+    var steps = JsonSerializer.Deserialize&lt;List&lt;PlanStep&gt;&gt;(planJson) ?? new();
+
+    var results = new List&lt;string&gt;();
+    foreach (var step in steps)
+    {
+        Console.WriteLine($"\n  📋 执行步骤 {step.Step}: {step.Description}");
+
+        // 构造执行指令
+        var instruction = $"""
+            执行计划中的第 {step.Step} 步：
+            {step.Description}
+            使用工具: {step.Tool}
+            参数: {JsonSerializer.Serialize(step.Args)}
+
+            只需要执行这一步。完成后汇报结果，不要做其他步骤。
+            """;
+
+        executionHistory.Add(new ChatMessageContent(AuthorRole.User, instruction));
+
+        var stepResult = "";
+        await foreach (var chunk in agent.InvokeStreamingAsync(executionHistory))
+        {
+            stepResult += chunk.Content;
+            Console.Write(chunk.Content);
+        }
+
+        results.Add($"步骤{step.Step}: {stepResult}");
+    }
+
+    return string.Join("\n", results);
+}
+
+// 数据结构
+public class PlanStep
+{
+    public int Step { get; set; }
+    public string Description { get; set; } = "";
+    public string Tool { get; set; } = "";
+    public JsonElement Args { get; set; }
+}
+
+// ====== 使用 ======
+Console.WriteLine("\n--- Plan-and-Execute 模式 ---");
+
+var toolsDesc = """
+    · list_files(pattern)      — 列出文件
+    · read_file(filepath)      — 读取文件
+    · count_lines(filepath)    — 统计代码行数
+    · write_file(filepath, content) — 写入文件
+    · remember(key, info)      — 存储到记忆
+    """;
+
+Console.Write("输入目标: ");
+var goal = Console.ReadLine();
+
+// 1. 生成计划
+Console.WriteLine("\n📝 生成执行计划...");
+var planJson = await GeneratePlanAsync(chatClient, goal!, toolsDesc);
+Console.WriteLine(planJson);
+
+// 2. 用户确认
+Console.Write("\n是否执行此计划？(y/n): ");
+if (Console.ReadLine()?.ToLower() != "y")
+{
+    Console.WriteLine("已取消。");
+    return;
+}
+
+// 3. 执行
+Console.WriteLine("\n⚡ 执行计划...");
+var execHistory = new ChatHistory();
+var summary = await ExecutePlanAsync(currentAgent!, execHistory, planJson);
+
+// 4. 汇总
+Console.WriteLine($"\n\n✅ 全部完成。执行摘要:\n{summary}");</code></pre>
+
+<div class="card">
+  <strong>📐 设计分析：两阶段分离的好处</strong><br>
+  · <strong>成本优化</strong>：计划生成可以用便宜的模型（如 DeepSeek V3），执行可以用更强的模型——两个阶段的模型可以不同<br>
+  · <strong>安全控制</strong>：人工确认点在计划和执行之间——危险操作（删除文件、发送邮件）可以让用户先审核<br>
+  · <strong>可恢复性</strong>：如果执行到第 7 步失败，可以从第 7 步重试，不需要重新执行前 6 步<br>
+  · <strong>可缓存</strong>：类似目标的计划可以缓存复用——"分析项目代码"的计划对所有项目都适用<br><br>
+  <strong>代价</strong>：两阶段 = 至少两次 LLM 调用（plan + summarize），执行中的每一步可能还有额外调用。相比隐式规划（一次调用链完成），延迟和成本都更高。
+</div>
+
+<h3>Plan-and-Execute 的致命弱点</h3>
+
+<div class="card card--warning">
+  <strong>⚠️ 计划是"盲人摸象"：</strong> 计划阶段，LLM <strong>还不知道</strong>每个工具的实际返回结果。它只能根据工具描述猜测——"我应该先 list_files，然后对每个文件 count_lines"。但如果 list_files 返回了 100 个文件而不是预期的 5 个？计划里写了"逐个统计"，但 100 个文件逐个统计会消耗大量 token 和时间。<br><br>
+  <strong>这就是为什么策略二（ReAct）在实践中往往更实用：</strong> 它每步基于实际观察结果做决策，而不是基于预判。ReAct 看到 100 个文件后可以调整——"太多了，我只统计最大的 10 个"，而 Plan-and-Execute 的预设计划里没有这个灵活性。<br><br>
+  <strong>解决方案（混合策略）：</strong> 生成高层计划（"分析代码 → 生成报告 → 记忆数据"），但每个高层步骤内部用 ReAct 执行。这样既有全局视角，又有局部灵活性。这是大多数生产 Agent 的实际做法。
+</div>
+
+<!-- ============ OBSERVE ============ -->
+<h2>发生了什么？—— 追踪一次 ReAct 规划</h2>
+
+<p>当用户说「<strong>分析项目代码，生成报告，记住数据</strong>」时，ReAct Agent 的完整思维链：</p>
+
+<ol class="steps">
+  <li>
+    <strong>Thought: 拆解目标</strong>——「这个任务分四步：(1) 找出所有 .cs 文件 (2) 统计每个文件的代码行 (3) 汇总生成报告文件 (4) 记住关键数字」
+  </li>
+  <li>
+    <strong>Thought → Action: list_files("*.cs")</strong>——「先获取文件列表，才知道要分析哪些文件」
+  </li>
+  <li>
+    <strong>Observation: 3 个文件</strong>——「Program.cs, Utils.cs, Models.cs。数量不多，可以逐个统计」
+  </li>
+  <li>
+    <strong>Thought → Action: 并行调用三个 count_lines</strong>——「这三个调用相互独立（不依赖彼此的结果），可以同时发出」
+  </li>
+  <li>
+    <strong>Observation: 各文件的统计结果</strong>——「总计 11 行代码。数据收集完毕」
+  </li>
+  <li>
+    <strong>Thought → Action: write_file + remember</strong>——「汇总数据写入报告，关键数字存入记忆」
+  </li>
+  <li>
+    <strong>Final Answer</strong>——「分析完成！3 个 C# 文件，共 11 行代码。报告保存至 code_report.txt，总行数和文件数已存入长期记忆。」
+  </li>
+</ol>
+
+<div class="card card--success">
+  <strong>关键洞察：</strong> Agent 展现了三种高级规划行为：<br>
+  ① <strong>目标分解</strong>——把"分析项目"这个模糊目标拆成 4 个具体步骤<br>
+  ② <strong>并行优化</strong>——识别出三个 count_lines 调用相互独立，可以同时执行（这是 Function Calling 的内置能力——当 LLM 在一次回复中返回多个 tool_call 时，框架会自动并行执行）<br>
+  ③ <strong>结果综合</strong>——把多个工具返回的结果汇总成一封完整的报告<br><br>
+  注意：这些行为<strong>不是硬编码的</strong>——LLM 在 Instructions 的引导下自主完成了全部规划。这就是为什么 Instructions 设计是 Agent 工程最重要的技能。
+</div>
+
+<!-- ============ QUIZ ============ -->
+<h2>检索练习</h2>
+<p style="color:var(--text-muted);">回忆刚学的内容来回答——这比反复阅读更能加深记忆。</p>
+
+<div class="quiz" id="q1">
+  <div class="quiz-question">1. Implicit Planning、ReAct、Plan-and-Execute 三种策略的本质区别是什么？</div>
+  <button class="quiz-option" data-answer="wrong">它们使用不同的 NuGet 包来实现规划功能</button>
+  <button class="quiz-option" data-answer="wrong">Implicit 用 C# 代码规划，ReAct 用 Python，Plan-and-Execute 用 JSON</button>
+  <button class="quiz-option" data-answer="correct">推理的显式程度和时序不同——Implicit 不显式推理、ReAct 边想边做、Plan-and-Execute 先想全再做</button>
+  <button class="quiz-option" data-answer="wrong">它们是三个不同的 Semantic Kernel 类，需要分别实例化</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <div class="quiz-question">2. 为什么 Semantic Kernel 废弃了独立的 Stepwise/Handlebars Planner？</div>
+  <button class="quiz-option" data-answer="wrong">因为它们是用 Python 写的，.NET 版本不兼容</button>
+  <button class="quiz-option" data-answer="correct">因为现代 LLM 的函数调用能力足够强，迭代式 Function Calling Loop 本身就是规划器——不需要额外的规划抽象层</button>
+  <button class="quiz-option" data-answer="wrong">因为它们只支持 OpenAI 模型，不支持 DeepSeek 和 Claude</button>
+  <button class="quiz-option" data-answer="wrong">因为微软决定将所有规划功能移入 Azure 云服务</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <div class="quiz-question">3. 同一个 Kernel + 工具集，Instructions 里加了 ReAct 格式要求后 Agent 的行为大不相同。这说明了什么？</div>
+  <button class="quiz-option" data-answer="wrong">Agent 的行为主要由 C# 代码控制，Instructions 只是装饰</button>
+  <button class="quiz-option" data-answer="wrong">ReAct 需要使用特殊的 Kernel 配置才能生效</button>
+  <button class="quiz-option" data-answer="wrong">工具集需要针对 ReAct 模式重新设计接口</button>
+  <button class="quiz-option" data-answer="correct">规划策略是 Instructions 设计的延伸——同样的工具集可以被不同的规划策略驱动，工具和规划是解耦的</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<script>
+document.querySelectorAll('.quiz').forEach(quiz => {
+  quiz.querySelectorAll('.quiz-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (quiz.dataset.answered) return;
+      quiz.dataset.answered = 'true';
+
+      const fb = quiz.querySelector('.quiz-feedback');
+      quiz.querySelectorAll('.quiz-option').forEach(b => b.style.pointerEvents = 'none');
+      btn.classList.add('selected');
+
+      if (btn.dataset.answer === 'correct') {
+        btn.classList.add('correct');
+        fb.textContent = '✓ 正确！';
+        fb.className = 'quiz-feedback correct';
+      } else {
+        btn.classList.add('incorrect');
+        fb.textContent = '✗ 不太对。回顾一下三种策略的本质区别和规划与工具的关系？';
+        fb.className = 'quiz-feedback incorrect';
+        quiz.querySelectorAll('.quiz-option').forEach(b => {
+          if (b.dataset.answer === 'correct') b.classList.add('correct');
+        });
+      }
+    });
+  });
+});
+</script>
+
+<!-- ============ PRACTICE CHALLENGE ============ -->
+<h2>挑战练习</h2>
+
+<div class="card">
+  <p style="margin:0 0 0.75rem;"><strong>🛠️ 扩展你的 PlannerAgent：</strong></p>
+  <ol style="margin:0 0 0 1.5rem;color:var(--text-muted);">
+    <li>
+      <strong>实现 Plan Validation（计划验证）</strong>：在 Plan-and-Execute 的 Plan 阶段之后，加一个验证步骤——让 LLM 检查计划是否有明显错误（如步骤依赖不存在的步骤结果、循环依赖等）。验证通过后才进入 Execute。
+    </li>
+    <li>
+      <strong>实现 Re-Plan（重新规划）</strong>：在 Execute 阶段，如果某个步骤失败（工具返回错误），自动触发重新规划——把已完成步骤的结果和失败信息发给 LLM，让它生成修订后的剩余步骤。
+    </li>
+    <li>
+      <strong>设计一个真正复杂的任务</strong>：比"分析代码文件"更复杂——比如"找出项目中所有 TODO 注释，按优先级分类，为每个 TODO 创建对应的任务文件，最后生成一个总览"。观察三种策略在这个任务上的表现差异。哪种策略在哪个环节出了问题？
+    </li>
+  </ol>
+</div>
+
+<!-- ============ NEXT STEPS ============ -->
+<h2>下一步</h2>
+
+<div class="card">
+  <p style="margin:0;">
+    <strong>推荐阅读：</strong>
+    <a href="https://arxiv.org/abs/2210.03629" target="_blank">ReAct: Synergizing Reasoning and Acting in Language Models (Yao et al., 2022)</a>
+    —— ReAct 模式的原始论文。理解 Thought/Action/Observation 循环为什么能提升推理准确性，以及 ReAct + CoT 结合的最佳实践。
+  </p>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <p style="margin:0;">
+    <strong>深入参考：</strong>
+    <a href="https://learn.microsoft.com/en-us/semantic-kernel/concepts/planning/" target="_blank">Semantic Kernel: Planning 概念文档</a>
+    —— 官方对 Function Calling Loop 的详细解释，以及为什么废弃了旧的 Planner 组件。
+  </p>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <p style="margin:0;">
+    <strong>视频推荐：</strong>
+    <a href="https://www.youtube.com/watch?v=DWf2mXHrW1w" target="_blank">Andrew Ng: AI Agentic Design Patterns — Planning</a>
+    —— Andrew Ng 讲解 Agent 四种设计模式（Reflection / Tool Use / Planning / Multi-agent），Planning 部分的直观解释。
+  </p>
+</div>
+
+<p style="margin-top:1.5rem;">
+  📖 <strong>相关参考：</strong> <a href="../reference/agent-glossary.html">Agent 术语表</a>——Review「Agent Loop」「ReAct」「Function Calling」「Tool Chaining」四条。
+</p>
+
+<p style="margin-top:0.5rem;">
+  📂 <strong>下节课预告：</strong> <a href="0005-multi-agent.html">Lesson 05: Multi-Agent Collaboration</a>——当一个 Agent 不够用时，如何让多个 Agent 分工协作？Group Chat、Handoff、Debate 模式的对比实战。
+</p>
+
+<div class="ask-followup">
+  <strong>💡 有问题？</strong> 直接在当前对话中向你的 AI 老师提问。比如：<br>
+  · 「ReAct 和 Plan-and-Execute 能混合使用吗？什么场景适合混合？」<br>
+  · 「并行 tool call 和顺序 tool call 怎么控制？Agent 怎么知道哪些可以并行？」<br>
+  · 「能帮我 review 一下我实现的 Re-Plan 逻辑吗？」<br>
+  你的老师就是当前正在和你对话的 Claude Agent——充分利用它。
+</div>
+
+<div class="lesson-footer">
+  <nav>
+    <a href="0003-memory-and-context.html">← 上一课：Memory & Context</a>
+    <a href="0005-multi-agent.html">下一课：Multi-Agent Collaboration →</a>
+  </nav>
+</div>
+
+</body>
+</html>

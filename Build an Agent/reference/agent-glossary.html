@@ -129,8 +129,26 @@
 
 <dt>ReAct（Reasoning + Acting）</dt>
 <dd>
-  最基础的 Agent 模式：LLM 交替进行<strong>推理（思考下一步）</strong>和<strong>行动（调用工具）</strong>。每个推理步骤基于前一次行动的结果。90% 的 Agent 应用都基于此模式。<br>
-  <span class="aka">对比：Plan-and-Execute（先规划好全部步骤再执行）。</span>
+  Agent 模式：LLM 交替进行<strong>推理（Thought）→ 行动（Action）→ 观察（Observation）</strong>的循环。每个推理步骤基于前一次行动的实际结果——而非预判。相比纯 Function Calling Loop（隐式规划），ReAct 的推理过程<strong>显式可见</strong>，可审计、可调试。Yao et al., 2022 提出。<br>
+  <span class="aka">对比：Implicit Planning（不显式推理，直接调工具）；Plan-and-Execute（先规划好全部步骤再执行）。实际工程中三者常混合使用。</span>
+</dd>
+
+<dt>Planning（规划）</dt>
+<dd>
+  Agent 将复杂任务<strong>分解为有依赖关系的多个步骤</strong>并按正确顺序执行的能力。不是独立组件——它是 Agent Loop（Function Calling Loop）在复杂度上的自然延伸。三种策略：(1) Implicit Planning（隐式，FC Loop 直接驱动）；(2) ReAct（显式 Thought/Action/Observation）；(3) Plan-and-Execute（两阶段：先生成完整计划，再逐步执行）。<br>
+  <span class="aka">SK 废弃了 Stepwise/Handlebars Planner——现代 LLM 的 Function Calling 本身就是规划器。</span>
+</dd>
+
+<dt>Plan-and-Execute（先规划再执行）</dt>
+<dd>
+  两阶段规划策略：<strong>阶段 1</strong>——LLM 生成完整的 JSON 步骤列表（Plan）；<strong>阶段 2</strong>——按列表逐步执行（Execute），执行结果可汇总（Summarize）。优势是全局视角 + 人工可审核（在 Plan 和 Execute 之间插入确认点），代价是计划基于预判而非实际数据——第 3 步的实际结果可能与第 1 步的计划假设不符，导致整个计划失效。<br>
+  <span class="aka">适用场景：10+ 步的复杂任务、需要人工审批的危险操作、步骤可缓存的重复性任务。</span>
+</dd>
+
+<dt>Planning Loop（规划循环）</dt>
+<dd>
+  即 Function Calling Loop 在复杂任务中的表现：<strong>LLM 推理 → 调工具 → 拿到结果 → 基于结果继续推理 → 调工具 → …</strong>，直到任务完成。每一步的结果是下一步决策的输入。ChatHistory 是这个循环的状态载体——LLM 从中读取"已完成什么"和"还差什么"。<br>
+  <span class="aka">同义：Agent Loop、ReAct Loop、Function Calling Loop。本课程的基石概念。</span>
 </dd>
 
 <dt>Multi-Agent（多 Agent 系统）</dt>

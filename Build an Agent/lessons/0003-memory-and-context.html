@@ -67,6 +67,29 @@
   这就是 <strong>上下文窗口（Context Window）</strong>——LLM 一次能"看到"的最大 token 数量。ChatHistory 会无限增长，但窗口是固定的。超出窗口的消息会被截断，Agent 就会"忘记"早期的对话。
 </p>
 
+<div class="card card--highlight" id="truncation-detail">
+  <strong>🔍 "截断"的精确含义：FIFO，但有细节</strong><br><br>
+  最朴素的实现确实是<strong>按消息顺序先进先出（FIFO）</strong>——最早的消息最先被丢弃，和排队一样：<br><br>
+  <code>[Msg1] [Msg2] [Msg3] … [Msg99] [Msg100]</code><br>
+  <code>&nbsp;↑ 最先被丢弃</code>&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;<code>↑ 最新，保留</code><br><br>
+  伪代码就是：<br>
+  <pre><code>while (history.EstimateTokens() > maxTokens)
+  {
+      history.RemoveAt(0);  // 删第一条 → FIFO
+  }</code></pre>
+  但实际框架比这精细，关键区别在三个维度：<br><br>
+  <strong>① System Prompt 不参与 FIFO：</strong> Instructions 是 Agent 的"身份"，截断时<strong>永远保留</strong>。只删对话消息，不动系统提示。如果你有 200 tokens 的 System Prompt 和 8K 窗口，对话消息只能用 7.8K。<br><br>
+  <strong>② 截断粒度不同：</strong><br>
+  <table style="width:100%;margin-top:0.5rem;">
+    <tr><th style="text-align:left;padding:0.3rem 0.5rem;">粒度</th><th style="text-align:left;padding:0.3rem 0.5rem;">做法</th><th style="text-align:left;padding:0.3rem 0.5rem;">风险</th></tr>
+    <tr><td style="padding:0.3rem 0.5rem;"><strong>消息级</strong></td><td style="padding:0.3rem 0.5rem;">整条消息为单位丢弃</td><td style="padding:0.3rem 0.5rem;">可能丢弃包含关键 tool_call 结果的短消息</td></tr>
+    <tr><td style="padding:0.3rem 0.5rem;"><strong>Token 级</strong></td><td style="padding:0.3rem 0.5rem;">按 token 数精确切割</td><td style="padding:0.3rem 0.5rem;">可能截断最后一条消息——tool_call JSON 被截半 → 解析报错 💥</td></tr>
+  </table>
+  <br>
+  大多数生产级框架（包括 Semantic Kernel）用<strong>消息级</strong>截断——它安全，不会产生格式损坏的消息。<br><br>
+  <strong>③ FIFO 的致命缺陷：</strong> 它不管内容是"今天天气真好"还是"我的银行账号是 XXX"，<strong>一律按时间顺序丢弃</strong>。这就是为什么需要策略二（摘要）和策略三（RAG）——保护关键信息不被 FIFO 吞掉。
+</div>
+
 <div class="card card--highlight">
   <strong>核心矛盾：</strong> 对话越长 → ChatHistory 越大 → 越接近上下文窗口上限 → Agent 越容易失忆。每一条新消息都在把最老的记忆推出窗口。这不是 bug——这是 LLM 的物理定律。
 </div>
@@ -158,10 +181,12 @@
 <h3>三种管理策略</h3>
 
 <div class="card card--highlight">
-  <strong>策略一：Sliding Window（滑动窗口）——最简单</strong><br>
-  只保留最近 N 条消息，老消息直接丢弃。<br>
+  <strong>策略一：Sliding Window（滑动窗口，即 FIFO）——最简单</strong><br>
+  只保留最近 N 条消息，老消息<strong>按时间顺序（FIFO）</strong>直接丢弃——详见上文<a href="#truncation-detail">截断机制详解</a>。<br>
+  这是大多数框架（包括 Semantic Kernel）的默认行为，使用<strong>消息级</strong>截断（整条消息为单位，System Prompt 除外）。<br>
   ✅ 简单、确定、零成本<br>
   ❌ 丢掉的可能是关键信息。Agent 突然"忘记"你 10 分钟前说过的话。<br>
+  ❌ 不管内容重要性，一律按时间顺序丢弃——"我的银行卡号"和"今天天气真好"同等对待。<br>
   <span style="color:var(--text-muted);">适用场景：短期任务型 Agent（如单次数据分析），不需要跨轮记忆。</span>
 </div>
 
@@ -304,6 +329,56 @@ public class MemoryPlugin
   <strong>🔍 观察模式：</strong> MemoryPlugin 和 Lesson 02 的 FilePlugin 结构完全相同——一个类 + <code>[KernelFunction]</code> + <code>[Description]</code>。区别只在于<strong>存储的内容</strong>：FilePlugin 存任意文本文件，MemoryPlugin 存结构化键值对。<br><br>
   <strong>关键设计决策：</strong> <code>_store</code> 用 <code>Dictionary&lt;string, string&gt;</code> 而非 <code>Dictionary&lt;string, object&gt;</code>——值也是 string。为什么？回到 <a href="0002-tools-and-plugins.html">Lesson 02 原则 ⑤</a>：LLM 更容易生成基础类型的参数。如果值类型太复杂（嵌套对象），LLM 填参准确率会下降。<br><br>
   另外，注意 <code>forget</code> 的 Description 里有一句"删除前必须向用户确认"——这是 <a href="0002-tools-and-plugins.html">Lesson 02 原则 ②</a>（Description 是 API 契约）的直接应用。LLM 读到这句话后会主动先确认再调用。
+</div>
+
+<div class="card card--highlight">
+  <strong>🔑 设计深入：Agent 怎么生成和匹配 key？</strong><br><br>
+  看上面的代码，<code>remember(key, info)</code> 的 key 是 LLM 自己填的——没有哈希函数，没有查表，没有规则引擎。<strong>那两次对话生成的 key 怎么保证一致？</strong><br><br>
+  答案是：<strong>没有硬保证，全靠 LLM 的语义理解 + 约束引导。</strong>这是一个用自然语言契约替代程序逻辑的经典案例。<br><br>
+
+  <strong>存储时的推理链（remember）：</strong><br>
+  <div class="diagram" style="margin:0.5rem 0;">
+  用户："我叫小明，我喜欢蓝色"<br>
+  &emsp;↓<br>
+  LLM 读 Instructions：「主动记忆——key 用英文下划线命名」<br>
+  &emsp;↓<br>
+  LLM 语义理解："名字" → <code>"user_name"</code><br>
+  &emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;"颜色偏好" → <code>"user_preference_color"</code><br>
+  &emsp;↓<br>
+  调用 remember("user_name", "小明")<br>
+  调用 remember("user_preference_color", "蓝色")
+  </div><br>
+
+  <strong>检索时的推理链（recall）：</strong><br>
+  <div class="diagram" style="margin:0.5rem 0;">
+  用户："还记得我的名字吗？"<br>
+  &emsp;↓<br>
+  LLM 读 Instructions：「主动回想——先用 recall 检索相关记忆」<br>
+  &emsp;↓<br>
+  LLM 语义猜测："名字" → 之前存的 key 应该是 <code>"user_name"</code><br>
+  &emsp;↓<br>
+  调用 recall("user_name")
+  </div><br>
+
+  <strong>为什么能"大概对"？三层机制：</strong><br>
+  <table style="width:100%;margin:0.5rem 0;">
+    <tr><th style="text-align:left;padding:0.3rem 0.5rem;">层</th><th style="text-align:left;padding:0.3rem 0.5rem;">机制</th><th style="text-align:left;padding:0.3rem 0.5rem;">作用</th></tr>
+    <tr><td style="padding:0.3rem 0.5rem;"><strong>Instructions 约束</strong></td><td style="padding:0.3rem 0.5rem;"><code>"key 用英文下划线命名，让 key 能描述内容"</code></td><td style="padding:0.3rem 0.5rem;">缩小命名空间——不会出现 <code>k1</code>、<code>a</code>、<code>我的名字</code></td></tr>
+    <tr><td style="padding:0.3rem 0.5rem;"><strong>Description 示例</strong></td><td style="padding:0.3rem 0.5rem;"><code>"如 user_name、project_deadline"</code></td><td style="padding:0.3rem 0.5rem;">给出 few-shot 范式——LLM 模仿 <code>category_specific</code> 模式</td></tr>
+    <tr><td style="padding:0.3rem 0.5rem;"><strong>LLM 语义恒定性</strong></td><td style="padding:0.3rem 0.5rem;">同一模型对同一语义的映射趋于稳定</td><td style="padding:0.3rem 0.5rem;">"名字"→<code>user_name</code> 是高概率路径（编程惯例 + 样例共指）</td></tr>
+  </table><br>
+
+  <strong>但这不是 100% 可靠——三个常见失败场景：</strong><br>
+  <table style="width:100%;margin:0.5rem 0;">
+    <tr><th style="text-align:left;padding:0.3rem 0.5rem;">场景</th><th style="text-align:left;padding:0.3rem 0.5rem;">现象</th><th style="text-align:left;padding:0.3rem 0.5rem;">本设计的应对</th></tr>
+    <tr><td style="padding:0.3rem 0.5rem;"><strong>A. 同义不同 key</strong></td><td style="padding:0.3rem 0.5rem;">两次存相同信息用了不同 key：<br><code>user_name</code> vs <code>name</code> → 记忆分裂</td><td style="padding:0.3rem 0.5rem;">Instructions + Description 示例缩小命名空间，降低概率</td></tr>
+    <tr><td style="padding:0.3rem 0.5rem;"><strong>B. recall 猜错</strong></td><td style="padding:0.3rem 0.5rem;">存在 <code>user_preference_color</code><br>LLM 猜 <code>favorite_color</code> → 返回"没找到"</td><td style="padding:0.3rem 0.5rem;">recall 的返回信息引导 LLM 去调 <code>list_memories</code> 做 fallback</td></tr>
+    <tr><td style="padding:0.3rem 0.5rem;"><strong>C. list 做纠错</strong></td><td style="padding:0.3rem 0.5rem;">LLM 不确定 key → 先调 <code>list_memories()</code> 看有哪些 key → 发现 <code>user_preference_color</code> → 再调 recall</td><td style="padding:0.3rem 0.5rem;"><code>list_memories</code> 就是为 self-correction 设计的</td></tr>
+  </table><br>
+
+  这正是 <code>list_memories</code> 工具存在的深层原因——不只是"列出记忆"，更是<strong>LLM 自我纠错的 fallback 机制</strong>。recall 返回"没找到"时的那句<em>「可用 list_memories 查看所有已存储的记忆标识」</em>，本质上是<strong>在引导 LLM 走向正确的恢复路径</strong>。<br><br>
+
+  <strong>本质提炼：</strong> 传统编程中，key 的一致性由哈希函数或数据库约束保证——那是<strong>硬契约</strong>。在 Agent 系统中，key 的一致性由自然语言描述 + LLM 语义理解保证——那是<strong>软契约</strong>。软契约不完美，但在足够好的约束下（命名规范 + few-shot 示例 + fallback 机制），实际可用性很高。这是所有 Agent 系统设计的核心权衡。
 </div>
 
 <h3>Step 3: 创建 MemoryAssistant Agent</h3>
