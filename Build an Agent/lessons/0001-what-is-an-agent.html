@@ -24,7 +24,7 @@
   <span class="tag">Agent Loop</span>
   <span class="tag">Tool Use</span>
   <span class="tag">Semantic Kernel</span>
-  <span class="tag">Claude API / DeepSeek</span>
+  <span class="tag">OpenAI 协议 / DeepSeek</span>
   <span class="tag">C#</span>
 </div>
 
@@ -143,14 +143,15 @@
 cd MyFirstAgent
 dotnet add package Microsoft.SemanticKernel --prerelease
 dotnet add package Microsoft.SemanticKernel.Agents.Core --prerelease
-dotnet add package Anthropic.SDK --prerelease</code></pre>
+</code></pre>
 
 <div class="card">
-  <strong>为什么选 Anthropic 协议 + DeepSeek？</strong><br>
-  · Semantic Kernel 官方的 Anthropic 连接器仅支持 AWS Bedrock（需要 AWS 账号）<br>
-  · <code>Anthropic.SDK</code>（~150万下载）支持直接 Anthropic API 调用，且通过 <code>ApiUrlFormat</code> 可指向任意兼容端点<br>
-  · <strong>DeepSeek 提供 Anthropic Messages API 兼容端点</strong>（<code>api.deepseek.com/anthropic</code>）——用的 Anthropic 协议，跑的是 DeepSeek 模型<br>
-  · 便宜、国内可直接访问、Function Calling 可用。一键切回真正的 Claude 也只需删掉 <code>ApiUrlFormat</code> 那行
+  <strong>为什么选 OpenAI 协议 + DeepSeek？</strong><br>
+  · Semantic Kernel 的 <code>AddOpenAIChatCompletion</code> 是官方最稳定、文档最全的连接方式<br>
+  · DeepSeek API 兼容 OpenAI 协议——直接用 OpenAI 连接器即可，无需第三方 SDK<br>
+  · 相比 Anthropic 协议路径（需 <code>Anthropic.SDK</code> + <code>ChatClientBuilder</code>），OpenAI 路径在 SK 中对 Function Calling 支持更完整<br>
+  · 便宜、国内可直接访问、Function Calling 稳定可用<br>
+  · 未来学习 Microsoft Agent Framework 时再尝试 Anthropic 原生协议
 </div>
 
 <h3>Step 2: 定义一个工具（Plugin）</h3>
@@ -192,81 +193,81 @@ public class TimePlugin
 <pre><code>using System.ComponentModel;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Agents;
-using Microsoft.SemanticKernel.Agents.Chat;
 using Microsoft.SemanticKernel.ChatCompletion;
-using Anthropic.SDK;
-using Anthropic.SDK.Common;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 
-// ——— 步骤 A：创建 Anthropic 客户端，指向 DeepSeek ———
-// DeepSeek 提供 Anthropic Messages API 兼容端点
-// 将 Anthropic SDK 的 URL 指向 api.deepseek.com/anthropic 即可
-var anthropicClient = new AnthropicClient(
-    new APIAuthentication(
-        Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")!
-    )
-)
-{
-    ApiUrlFormat = "https://api.deepseek.com/anthropic/{0}/{1}"
-};
-
-// ChatClientBuilder 将其包装为 Semantic Kernel 能识别的 IChatClient
-// .UseFunctionInvocation() 是关键——启用 Tool Use（Function Calling）
-IChatClient chatClient = new ChatClientBuilder(anthropicClient.Messages)
-    .UseFunctionInvocation()
-    .Build();
-
-// ——— 步骤 B：构建 Kernel —— Agent 的"底盘" ———
+// ——— 步骤 A：构建 Kernel —— Agent 的"底盘" ———
 var builder = Kernel.CreateBuilder();
 
-// 将 IChatClient 注册到 Kernel 的服务容器中
-builder.Services.AddSingleton(chatClient);
+// 接入 DeepSeek 模型（兼容 OpenAI 协议）
+builder.AddOpenAIChatCompletion(
+    "deepseek-v4-flash",
+    new Uri("https://api.deepseek.com"),
+    Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")!);
 
 // 注册我们的工具
 builder.Plugins.AddFromType&lt;TimePlugin&gt;();
 
 Kernel kernel = builder.Build();
 
-// ——— 步骤 C：创建 Agent ———
+// ——— 步骤 B：创建 Agent 并开启 Function Calling ———
+// Arguments 中设置 FunctionChoiceBehavior.Auto()，模型会自行判断是否需要调用工具
 var agent = new ChatCompletionAgent
 {
+    Kernel = kernel,
     Name = "TimeAssistant",
     Instructions = """
         你是一个时间助手。当用户询问时间或日期时，使用提供的工具获取准确信息。
         回答时请用中文。如果用户问的时间是早上，请附加一句问候。
         """,
-    Kernel = kernel
+    Arguments = new KernelArguments(
+        new OpenAIPromptExecutionSettings
+        {
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+        })
 };
 
-// ——— 步骤 D：运行对话循环 ———
+// ——— 步骤 C：对话循环 ———
 var history = new ChatHistory();
-Console.WriteLine("=== 你的第一个 Agent 已就绪（DeepSeek 驱动，Anthropic 协议）===");
+Console.WriteLine("=== 你的第一个 Agent 已就绪（DeepSeek 驱动，OpenAI 协议）===");
 Console.WriteLine("输入 'exit' 退出\n");
 
 while (true)
 {
-    Console.Write("你: ");
+    Console.Write("你：");
     var input = Console.ReadLine();
     if (input?.ToLower() == "exit") break;
 
-    history.Add(new ChatMessageContent(AuthorRole.User, input!));
+    history.AddUserMessage(input!);
 
     Console.Write("Agent: ");
-    await foreach (var chunk in agent.InvokeStreamingAsync(history))
+    string agentResponse = "";
+    await foreach (var item in agent.InvokeStreamingAsync(history))
     {
-        Console.Write(chunk.Content);
+        string itemMessage = item.Message.Content!;
+        Console.Write(itemMessage);
+        agentResponse += itemMessage;
     }
+    history.AddAssistantMessage(agentResponse);
     Console.WriteLine("\n");
 }</code></pre>
 
 <div class="card">
-  <strong>💡 <code>ApiUrlFormat</code> 中的 <code>{0}</code> / <code>{1}</code> 是什么？</strong><br>
-  这是 C# 的 <code>string.Format()</code> 占位符，SDK 内部在构建实际请求 URL 时做参数替换：<br>
-  <code>string.Format(ApiUrlFormat, "v1", "messages")</code><br>
-  → <code>https://api.deepseek.com/anthropic/v1/messages</code><br><br>
-  <strong>映射关系：</strong><br>
-  · <code>{0}</code> = API 版本号（<code>v1</code>）<br>
-  · <code>{1}</code> = 端点路径（<code>messages</code>、<code>completions</code> 等）<br>
-  SDK 默认值是 <code>https://api.anthropic.com/{0}/{1}</code>——我们只把主机地址换成 DeepSeek 的，协议格式完全不变。这就是"Anthropic 协议兼容"的实现方式：<strong>代码不变，只换地址</strong>。
+  <strong>🔧 API 变更说明（2025 年 5 月起）：</strong><br>
+  Semantic Kernel 移除了旧版 <code>InvokeStreamingAsync(ChatHistory)</code> 重载（已于 2025.5.1 生效）。<br>
+  <strong>新 API 的核心变化：</strong> 返回值从 <code>StreamingChatMessageContent</code> 变为 <code>AgentResponseItem&lt;StreamingChatMessageContent&gt;</code>——多了一层包装。<br>
+  · 因此 <code>chunk.Content</code> → <code>item.Message.Content</code>（<code>AgentResponseItem</code> 没有 <code>Content</code> 属性，需要先 <code>.Message</code> 拿到实际消息）<br>
+  · <code>InvokeStreamingAsync</code> 新增了 <code>thread</code> 和 <code>options</code> 参数，但都是可选的——课程场景不需要，省略即可
+</div>
+
+<div class="card">
+  <strong>💡 <code>FunctionChoiceBehavior.Auto()</code> 是什么？</strong><br>
+  <code>OpenAIPromptExecutionSettings</code> 中的 <code>FunctionChoiceBehavior.Auto()</code> 告诉模型：<strong>你自己判断是否需要调用工具</strong>。这是 Function Calling 的总开关——不设置它，模型只会生成文本，不会调用任何工具。<br><br>
+  <strong>三种可选模式：</strong><br>
+  · <strong>Auto</strong>（本课使用）：模型自行判断是否需要调用工具，以及调用哪个<br>
+  · <strong>Required</strong>：强制模型必须调用至少一个工具——用于你必须让 Agent 执行操作的场景<br>
+  · <strong>None</strong>：禁用 Function Calling——Agent 退化为普通聊天机器人<br><br>
+  <strong>注意：</strong> <code>FunctionChoiceBehavior</code> 必须通过 <code>Arguments</code>（即 <code>KernelArguments</code>）传给 Agent，不能放在 Instructions 里。它是框架级别的配置，不是自然语言指令。
 </div>
 
 <h3>Step 4: 配置 API Key 并运行</h3>
@@ -280,12 +281,11 @@ dotnet run
 # "今天是几号？"
 # "现在是早上还是下午？"
 
-# ——— 如果你有 Anthropic API Key，这样切换 ———
-# $env:ANTHROPIC_API_KEY = "sk-ant-xxxxxxxxxxxxx"
-# 然后把代码中的 ApiUrlFormat 改回默认值（删除那一行即可）</code></pre>
+# ——— 如果想切换到其他 OpenAI 兼容模型（如 OpenAI 官方、Ollama 本地模型等）———
+# 只需改 AddOpenAIChatCompletion 的第一个参数（模型名）和第二个参数（端点 URL）</code></pre>
 
 <div class="card">
-  <strong>发生了什么？</strong>你的 C# 代码用的是 <strong>Anthropic 协议</strong>（Messages API），但请求实际发到了 DeepSeek 的服务器。DeepSeek 的 Anthropic 兼容端点会自动将 Claude 模型名映射到对应规格的 DeepSeek 模型（如 <code>claude-sonnet-*</code> → <code>deepseek-v4-flash</code>，<code>claude-opus-*</code> → <code>deepseek-v4-pro</code>）。如果你用的是 Anthropic 原生 API Key，删掉 <code>ApiUrlFormat</code> 那行就能切回真正的 Claude。
+  <strong>发生了什么？</strong>你的 C# 代码用的是 <strong>OpenAI 协议</strong>（Chat Completions API），请求发到 DeepSeek 的服务器。DeepSeek 的 API 完全兼容 OpenAI 协议格式——<code>AddOpenAIChatCompletion</code> 这一行是 Semantic Kernel 中最标准的模型接入方式。模型名直接使用 DeepSeek 的（如 <code>deepseek-v4-flash</code>），不需要任何模型名映射。如果你有 OpenAI 官方的 API Key，只需把 URL 改成 <code>https://api.openai.com</code> 并换模型名即可。
 </div>
 
 <!-- ============ OBSERVE WHAT HAPPENS ============ -->

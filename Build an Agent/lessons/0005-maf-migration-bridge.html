@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 05 · MAF Migration Bridge</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<div class="lesson-meta">
+  <span class="lesson-number">Lesson 05</span>
+  <span>Agent Academy</span>
+  <span>·</span>
+  <span>~30 min</span>
+</div>
+
+<h1>MAF 迁移桥梁：从 Semantic Kernel 到 Microsoft Agent Framework</h1>
+<p style="font-size:1.1rem;color:var(--text-muted);margin-top:0;">
+  你已经理解了 Agent 的所有核心概念——这一课只做一件事：把你知道的 SK 写法映射到 MAF。
+</p>
+
+<div style="margin:1.5rem 0;">
+  <span class="tag">MAF v1.0</span>
+  <span class="tag">AIAgent</span>
+  <span class="tag">IChatClient</span>
+  <span class="tag">AIFunctionFactory</span>
+  <span class="tag">AgentSession</span>
+  <span class="tag">SK→MAF</span>
+  <span class="tag">C#</span>
+</div>
+
+<hr style="border:none;border-top:1px solid var(--border);margin:2rem 0;">
+
+<!-- ============ MOTIVATION ============ -->
+<h2>为什么现在迁？</h2>
+
+<p>
+  2026 年 4 月 3 日，Microsoft Agent Framework (MAF) v1.0 正式 GA。它不是 Semantic Kernel 的"下一个版本"——它是 AutoGen 和 Semantic Kernel <strong>两支团队合并后的统一框架</strong>。
+</p>
+
+<div class="diagram">
+Semantic Kernel (2023–2026)     AutoGen (2023–2026)
+        \                          /
+         \                        /
+          Microsoft Agent Framework v1.0 (2026.4 GA)
+                     |
+         统一 Agent 抽象、多模型中立、原生 Multi-Agent
+</div>
+
+<p>
+  对学习者意味着什么？前四节课你用 SK 看到了 Agent 的「骨头」——手动管理 Kernel、Plugin、ChatHistory。这些概念 <strong>100% 通用</strong>。MAF 只是换了 API 语法和结构，<strong>概念体系不变</strong>。
+</p>
+
+<div class="card card--highlight">
+  <strong>你在用最有效的学习路径：</strong> SK 教了你 Agent 内部怎么运转（底层），MAF 教你怎么在生产中构建 Agent（工程化）。两者不是竞争关系——是教学上的前后衔接。<br><br>
+  <strong>本课产出：</strong> 把 Lesson 03 的 MemoryAssistant 用 MAF 重写一遍。同一个 Agent、同一个概念、不同的 API——对比中理解 MAF 的设计哲学。
+</div>
+
+<!-- ============ KNOWLEDGE ============ -->
+<h2>心智模型：五层架构</h2>
+
+<p>MAF 是一个五层架构——你写的 Agent 在 L4，底层 L1-L3 对你是透明的：</p>
+
+<div class="diagram">
+┌────────────────────────────────────────────────────────┐
+│  L5  Workflow & Orchestration                          │
+│      ┌──────────────────────────────────────────┐     │
+│  L4  │ AIAgent — 你的 Agent（这一层是你的代码）     │     │
+│      └──────────────────────────────────────────┘     │
+│  L3  Semantic Kernel (插件、过滤器、Prompt 模板)      │
+│  L2  IChatClient / IEmbeddingGenerator (MEAI 抽象)    │
+│  L1  Service Connectors (OpenAI / Claude / Gemini)    │
+└────────────────────────────────────────────────────────┘
+
+你在 SK 里做的事分布在 L3+L4。在 MAF 里，L3 退到幕后，
+L2 的 IChatClient 是新的「模型中立方」。
+</div>
+
+<p>
+  注意 L3 仍然存在——Semantic Kernel 变成了 MAF 的<strong>内部依赖</strong>，提供 Plugin、Filter、Prompt Template 等能力。但你不需要显式构建 <code>Kernel</code> 了。MAF 把 SK 从"你关心的东西"变成了"框架自己用的东西"。
+</p>
+
+<h2>SK → MAF：六个核心映射</h2>
+
+<p>你已知的每一个 SK 概念在 MAF 中都有直接对应。先看这张表，然后逐个写代码验证：</p>
+
+<table style="width:100%;margin:1rem 0;font-size:0.92rem;">
+  <tr><th style="text-align:left;padding:0.5rem;">你关心的</th><th style="text-align:left;padding:0.5rem;">Semantic Kernel (前 4 课)</th><th style="text-align:left;padding:0.5rem;">MAF v1.0 (本课起)</th></tr>
+
+  <tr>
+    <td style="padding:0.5rem;"><strong>① 模型接入</strong></td>
+    <td style="padding:0.5rem;"><code>Kernel.CreateBuilder().AddOpenAIChatCompletion(model, endpoint, key)</code></td>
+    <td style="padding:0.5rem;"><code>new OpenAIClient(key).GetChatClient(model).AsIChatClient()</code></td>
+  </tr>
+
+  <tr>
+    <td style="padding:0.5rem;"><strong>② Agent 创建</strong></td>
+    <td style="padding:0.5rem;"><code>new ChatCompletionAgent { Kernel, Name, Instructions }</code></td>
+    <td style="padding:0.5rem;"><code>chatClient.AsAIAgent(name, instructions, tools)</code></td>
+  </tr>
+
+  <tr>
+    <td style="padding:0.5rem;"><strong>③ 工具定义</strong></td>
+    <td style="padding:0.5rem;"><code>[KernelFunction("name")][Description("desc")]</code> 写在 Plugin 类里</td>
+    <td style="padding:0.5rem;"><code>[Description("desc")]</code> 写在方法上，用 <code>AIFunctionFactory.Create(method)</code> 注册</td>
+  </tr>
+
+  <tr>
+    <td style="padding:0.5rem;"><strong>④ 工具注册</strong></td>
+    <td style="padding:0.5rem;"><code>builder.Plugins.AddFromType&lt;MyPlugin&gt;()</code></td>
+    <td style="padding:0.5rem;"><code>AsAIAgent(tools: [AIFunctionFactory.Create(Method)])</code> ——扁平数组，无 Plugin 层级</td>
+  </tr>
+
+  <tr>
+    <td style="padding:0.5rem;"><strong>⑤ 对话历史</strong></td>
+    <td style="padding:0.5rem;"><code>new ChatHistory()</code> + 手动 AddUserMessage / AddAssistantMessage</td>
+    <td style="padding:0.5rem;"><code>await agent.CreateSessionAsync()</code> ——自动管理，<strong>你不需要碰历史</strong></td>
+  </tr>
+
+  <tr>
+    <td style="padding:0.5rem;"><strong>⑥ 调用方法</strong></td>
+    <td style="padding:0.5rem;"><code>agent.InvokeAsync(history)</code> / <code>.InvokeStreamingAsync(history)</code></td>
+    <td style="padding:0.5rem;"><code>agent.RunAsync(prompt, session)</code> / <code>.RunStreamingAsync(prompt, session)</code></td>
+  </tr>
+</table>
+
+<div class="card card--highlight">
+  <strong>最关键的三个变化：</strong><br>
+  ① <strong>没有 Kernel 了</strong>——模型接入通过 <code>IChatClient</code>，一个纯接口<br>
+  ② <strong>没有 Plugin 层级了</strong>——工具直接以 AIFunction 数组注入 Agent，没有 Kernel → Plugin → Function 三级嵌套<br>
+  ③ <strong>手动 ChatHistory → 自动 AgentSession</strong>——这是最大的工程改进。你不再需要 <code>history.AddUserMessage(input)</code>、<code>history.AddAssistantMessage(response)</code> 这种样板代码
+</div>
+
+<!-- ============ SKILL ============ -->
+<h2>动手构建：用 MAF 重写 MemoryAssistant</h2>
+
+<p>
+  以下是 Lesson 03 的 MemoryAssistant 的 MAF 版本。<strong>并列对比</strong>——左边是你写过的 SK 代码，右边是等价的 MAF 代码。功能完全一致。
+</p>
+
+<h3>Step 1: 创建项目和安装包</h3>
+
+<pre><code>dotnet new console -n MemoryAssistant
+cd MemoryAssistant
+dotnet add package Microsoft.Agents.AI --version 1.0.0
+dotnet add package OpenAI --version 2.*
+</code></pre>
+
+<div class="card">
+  <strong>📦 包说明：</strong><br>
+  · <code>Microsoft.Agents.AI</code> — 核心包，包含 <code>AIAgent</code>、<code>ChatClientAgent</code> 等<br>
+  · <code>OpenAI</code> — OpenAI 官方 SDK（DeepSeek 兼容 OpenAI 协议，所以也用这个）<br>
+  · 不需要 <code>Microsoft.SemanticKernel</code> ——MAF 内部依赖它，但你不直接引用
+</div>
+
+<h3>Step 2: MemoryPlugin 的 MAF 版本</h3>
+
+<p>对比：左边 SK，右边 MAF。</p>
+
+<table style="width:100%;margin:1rem 0;font-size:0.82rem;">
+  <tr><th style="text-align:left;padding:0.4rem;width:50%;">SK（Lesson 03）</th><th style="text-align:left;padding:0.4rem;width:50%;">MAF（本课）</th></tr>
+  <tr>
+    <td style="padding:0.4rem;vertical-align:top;">
+<pre style="margin:0;font-size:0.8rem;"><code>using Microsoft.SemanticKernel;
+using System.ComponentModel;
+
+public class MemoryPlugin
+{
+    private readonly Dictionary&lt;string, string&gt;
+        _store = new();
+
+    [KernelFunction("remember")]
+    [Description("存储信息到长期记忆。" +
+        "key: 记忆的唯一标识。" +
+        "info: 要存储的信息内容。")]
+    [return: Description("存储确认信息")]
+    public string Remember(string key, string info)
+    {
+        _store[key] = info;
+        return $"已记住 [{key}]: {info}";
+    }
+}</code></pre>
+    </td>
+    <td style="padding:0.4rem;vertical-align:top;">
+<pre style="margin:0;font-size:0.8rem;"><code>using System.ComponentModel;
+
+public class MemoryPlugin
+{
+    private readonly Dictionary&lt;string, string&gt;
+        _store = new();
+
+    [Description("存储信息到长期记忆。" +
+        "key: 记忆的唯一标识。" +
+        "info: 要存储的信息内容。")]
+    public string Remember(string key, string info)
+    {
+        _store[key] = info;
+        return $"已记住 [{key}]: {info}";
+    }
+}</code></pre>
+    </td>
+  </tr>
+</table>
+
+<div class="card">
+  <strong>🔍 变化观察：</strong><br>
+  · <strong>少了一个 Attribute</strong>——MAF 不需要 <code>[KernelFunction("remember")]</code>，只需要 <code>[Description]</code><br>
+  · <strong>少了一个 using</strong>——不需要 <code>using Microsoft.SemanticKernel</code><br>
+  · <strong>方法的签名、逻辑、返回类型完全不变</strong>——工具本身不感知框架差异<br>
+  · <strong>去掉了 [return: Description]</strong>——MAF 目前不看返回值的 Description（方法的 Description 描述整体功能就够了）
+</div>
+
+<p>完整的 MemoryPlugin（三个方法）：</p>
+
+<pre><code>using System.ComponentModel;
+
+public class MemoryPlugin
+{
+    private readonly Dictionary&lt;string, string&gt; _store = new();
+
+    [Description("存储信息到长期记忆。" +
+                 "key: 记忆的唯一标识。info: 要存储的信息内容。")]
+    public string Remember(string key, string info)
+    {
+        _store[key] = info;
+        return $"已记住 [{key}]: {info}";
+    }
+
+    [Description("从长期记忆中检索信息。" +
+                 "key: 要检索的记忆标识。")]
+    public string Recall(string key)
+    {
+        if (_store.TryGetValue(key, out var info))
+            return $"回忆 [{key}]: {info}";
+        return $"没有找到 key=\"${key}\" 的记忆。";
+    }
+
+    [Description("列出所有已存储的记忆键和内容。")]
+    public string ListMemories()
+    {
+        if (_store.Count == 0)
+            return "当前没有任何记忆。";
+
+        var items = _store.Select(kv => $"  [{kv.Key}] {kv.Value}");
+        return $"共 {_store.Count} 条记忆:\n" + string.Join("\n", items);
+    }
+}
+</code></pre>
+
+<h3>Step 3: 创建 Agent + 注册工具</h3>
+
+<p>这是 MAF 和 SK 差异最大的部分——Agent 创建和工具注册：</p>
+
+<pre><code>using System.ComponentModel;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using OpenAI;
+
+// ——— A：接入 DeepSeek（OpenAI 兼容协议）———
+var apiKey = Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")
+    ?? throw new InvalidOperationException("请设置 DEEPSEEK_API_KEY 环境变量");
+
+var openAIClient = new OpenAIClient(
+    new System.ClientModel.ApiKeyCredential(apiKey),
+    new OpenAIClientOptions
+    {
+        Endpoint = new Uri("https://api.deepseek.com/v1")
+    });
+
+// IChatClient 是 MAF 的模型抽象层——任何兼容 OpenAI 协议的模型都通过它接入
+var chatClient = openAIClient
+    .GetChatClient("deepseek-v4-flash")
+    .AsIChatClient();
+
+// ——— B：创建工具 ———
+var memory = new MemoryPlugin();
+var tools = new[]
+{
+    AIFunctionFactory.Create(memory.Remember),
+    AIFunctionFactory.Create(memory.Recall),
+    AIFunctionFactory.Create(memory.ListMemories),
+};
+
+// ——— C：创建 Agent ———
+var agent = chatClient.AsAIAgent(
+    name: "MemoryAssistant",
+    instructions: """
+        你是一个带记忆功能的助手。
+        每次对话开始时，先使用 list_memories 检查是否有过去的记忆。
+        当用户分享信息或偏好时，用 remember 存储。
+        当用户问到过去的事情时，用 recall 检索。
+        用中文回复，简洁友好。
+        """,
+    tools: tools
+);</code></pre>
+
+<div class="card card--highlight">
+  <strong>💡 和 SK 的核心差异——三重简化：</strong><br><br>
+  <strong>扁平注册：</strong> SK 是 <code>Plugin 类 → Kernel → Agent</code> 三层嵌套。MAF 是「方法 → AIFunction → Agent 数组」——一级扁平。你不再需要把一个类标记为 Plugin 然后注册到 Kernel，直接 <code>AIFunctionFactory.Create(方法)</code> 就完了。<br><br>
+  <strong>一行配好模型：</strong> SK 需要 <code>Kernel.CreateBuilder().AddOpenAIChatCompletion(...).Build()</code> 三步链式调用 + 单独的 <code>KernelArguments</code> 配置 Function Calling 行为。MAF 只用「创建 OpenAI 客户端 → 包装 IChatClient → 传给 Agent」——模型、端点、API Key 一次性解决。<br><br>
+  <strong>无显式 Function Calling 配置：</strong> 在 SK 中你需要 <code>new OpenAIPromptExecutionSettings { FunctionChoiceBehavior = ... }</code>。在 MAF 中，只要传了 <code>tools</code> 数组，Agent 自动启用 Function Calling——不需要额外配置。
+</div>
+
+<h3>Step 4: 多轮对话——AgentSession 替代 ChatHistory</h3>
+
+<p>这是你作为开发者<strong>最直接的体感变化</strong>：</p>
+
+<table style="width:100%;margin:1rem 0;font-size:0.82rem;">
+  <tr><th style="text-align:left;padding:0.4rem;width:50%;">SK（手动管理历史）</th><th style="text-align:left;padding:0.4rem;width:50%;">MAF（自动管理 Session）</th></tr>
+  <tr>
+    <td style="padding:0.4rem;vertical-align:top;">
+<pre style="margin:0;font-size:0.8rem;"><code>var history = new ChatHistory();
+
+while (true)
+{
+    Console.Write("你: ");
+    var input = Console.ReadLine();
+    if (input == "exit") break;
+
+    // 手动添加用户消息
+    history.AddUserMessage(input);
+
+    Console.Write("Agent: ");
+    await foreach (var item in
+        agent.InvokeStreamingAsync(history))
+    {
+        Console.Write(item.Message.Content);
+    }
+    // 手动添加助手消息
+    history.AddAssistantMessage(response);
+    Console.WriteLine("\n");
+}</code></pre>
+    </td>
+    <td style="padding:0.4rem;vertical-align:top;">
+<pre style="margin:0;font-size:0.8rem;"><code>// 创建一个 Session —— 历史自动管理
+var session = await agent.CreateSessionAsync();
+
+while (true)
+{
+    Console.Write("你: ");
+    var input = Console.ReadLine();
+    if (input == "exit") break;
+
+    Console.Write("Agent: ");
+    await foreach (var update in
+        agent.RunStreamingAsync(input, session))
+    {
+        Console.Write(update.Text);
+    }
+    Console.WriteLine("\n");
+}</code></pre>
+    </td>
+  </tr>
+</table>
+
+<div class="card card--success">
+  <strong>观察：少了两行关键代码。</strong> 在 SK 中，你每次对话必须手动 <code>history.AddUserMessage(input)</code> 和 <code>history.AddAssistantMessage(response)</code>——漏掉一行，LLM 就看不到之前的对话。MAF 的 <code>AgentSession</code> 在 <code>RunStreamingAsync</code> 内部自动记录每一轮——你只需要把 session 传进去。<br><br>
+  <strong>对比 Lesson 03 的"失忆"问题：</strong> Lesson 03 中 Agent 在长对话中"忘记"初始目标，根因是 ChatHistory 膨胀到了上下文窗口上限。MAF 的 Session 在此基础上提供了<strong>内置的序列化支持</strong>——session 可以保存到磁盘、恢复、甚至在应用重启后继续：
+</div>
+
+<pre><code>// 保存 session 到磁盘
+var serialized = agent.SerializeSession(session);
+File.WriteAllText("session.json", serialized);
+
+// 下次运行时恢复
+var saved = File.ReadAllText("session.json");
+var resumed = await agent.DeserializeSessionAsync(saved);
+var response = await agent.RunAsync("上次我们聊到哪了？", resumed);</code></pre>
+
+<h3>Step 5: 完整 Program.cs</h3>
+
+<p>将以上内容组装成完整的交互式 Agent：</p>
+
+<pre><code>using System.ComponentModel;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using OpenAI;
+
+// ——— MemoryPlugin（同 Step 2）———
+var memory = new MemoryPlugin();
+
+// ——— 模型接入（DeepSeek）———
+var apiKey = Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")!;
+var openAIClient = new OpenAIClient(
+    new System.ClientModel.ApiKeyCredential(apiKey),
+    new OpenAIClientOptions { Endpoint = new Uri("https://api.deepseek.com/v1") });
+
+var chatClient = openAIClient
+    .GetChatClient("deepseek-v4-flash")
+    .AsIChatClient();
+
+// ——— 创建 Agent ———
+var agent = chatClient.AsAIAgent(
+    name: "MemoryAssistant",
+    instructions: """
+        你是一个带记忆功能的助手。
+        每次对话开始时，先用 list_memories 检查是否有过去的记忆。
+        当用户分享信息或偏好时，用 remember 存储。
+        当用户问到过去的事情时，用 recall 检索。
+        用中文回复，简洁友好。
+        """,
+    tools: [
+        AIFunctionFactory.Create(memory.Remember),
+        AIFunctionFactory.Create(memory.Recall),
+        AIFunctionFactory.Create(memory.ListMemories),
+    ]);
+
+// ——— 对话循环 ———
+var session = await agent.CreateSessionAsync();
+Console.WriteLine("=== MAF MemoryAssistant 已就绪 ===\n");
+
+while (true)
+{
+    Console.Write("你: ");
+    var input = Console.ReadLine();
+    if (input?.ToLower() == "exit") break;
+
+    Console.Write("Agent: ");
+    await foreach (var update in agent.RunStreamingAsync(input!, session))
+    {
+        Console.Write(update.Text);
+    }
+    Console.WriteLine("\n");
+}
+
+// ——— MemoryPlugin 类 ———
+public class MemoryPlugin
+{
+    private readonly Dictionary&lt;string, string&gt; _store = new();
+
+    [Description("存储信息到长期记忆。key: 记忆的唯一标识。info: 要存储的信息内容。")]
+    public string Remember(string key, string info)
+    {
+        _store[key] = info;
+        return $"已记住 [{key}]: {info}";
+    }
+
+    [Description("从长期记忆中检索信息。key: 要检索的记忆标识。")]
+    public string Recall(string key)
+    {
+        if (_store.TryGetValue(key, out var info))
+            return $"回忆 [{key}]: {info}";
+        return $"没有找到 key=\"{key}\" 的记忆。";
+    }
+
+    [Description("列出所有已存储的记忆键和内容。")]
+    public string ListMemories()
+    {
+        if (_store.Count == 0) return "当前没有任何记忆。";
+        var items = _store.Select(kv => $"  [{kv.Key}] {kv.Value}");
+        return $"共 {_store.Count} 条记忆:\n" + string.Join("\n", items);
+    }
+}</code></pre>
+
+<pre><code># 运行
+$env:DEEPSEEK_API_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+dotnet run
+
+# === 交互示例 ===
+# 你: 我叫小明，我喜欢用 #C 开发
+# Agent: 已记住你的名字是"小明"，偏好 C# 开发。
+#        有什么需要我帮忙的吗？
+#
+# 你: 能帮我回想一下我之前说过什么吗？
+# Agent: 让我查一下记忆...
+#        [Recall + ListMemories 被自动调用]
+#        根据记录：你的名字是"小明"，偏好 C# 开发。
+#
+# 你: exit
+# (下次重新运行 dotnet run，如果加载了 saved session，Agent 仍然记得)</code></pre>
+
+<!-- ============ DEEP DIVE ============ -->
+<h2>深入理解：Kernel 去哪了？</h2>
+
+<p>
+  你可能会问——SK 时代的 Kernel 是 Agent 的心脏，MAF 里它消失了，那 Plugin、Filter、Prompt Template 这些能力怎么办？
+</p>
+
+<div class="card">
+  <strong>Kernel 没有消失——它变成了框架的内部实现细节。</strong> 回忆 MAF 五层架构：L3 仍然是 Semantic Kernel，但 MAF 把它包裹在了 L4 的 <code>AIAgent</code> 下面。你不再需要显式创建 Kernel，因为 <code>chatClient.AsAIAgent(...)</code> 内部自动完成了这些。<br><br>
+  这意味着：<br>
+  · <strong>基本场景</strong>（90%）：你只需要 <code>AIAgent</code> + <code>tools</code> + <code>AgentSession</code>——足够了<br>
+  · <strong>高级场景</strong>（10%）：如果将来 Kernel 的高级特性（如 Filter 管道、Prompt Template 引擎）对你有用，MAF 允许你通过 <code>ChatClientAgentOptions</code> 暴露底层的 SK Kernel，按需深度定制<br><br>
+  这正是"渐进式抽象"——默认路径极简，深度路径不走弯路。
+</div>
+
+<h2>Planning 在 MAF 中怎么实现？</h2>
+
+<div class="card card--highlight">
+  <strong>同样的事情。</strong> 你在 <a href="0004-planning-and-orchestration.html">Lesson 04</a> 中学到的核心洞察——<strong>规划策略是 Instructions 的延伸，不是独立组件的职责</strong>——在 MAF 中<strong>完全不变</strong>。<br><br>
+  想用 ReAct？在 <code>instructions</code> 参数里写清楚 Thought/Action/Observation 格式。<br>
+  想用 Plan-and-Execute？写两段 Instructions——一段给 Planner，一段给 Executor。<br><br>
+  唯一的差异是语法：Agent 创建方式从 <code>new ChatCompletionAgent { Instructions = "..." }</code> 变成了 <code>chatClient.AsAIAgent(instructions: "...")</code>，工具注册从 <code>[KernelFunction]</code> 变成了 <code>[Description] + AIFunctionFactory.Create()</code>。<strong>Instruction 仍然是 Agent 行为的唯一可编程接口。</strong>（见 <a href="../learning-records/0008-instruction-is-the-operating-system.md">学习记录 0008</a>）
+</div>
+
+<!-- ============ QUIZ ============ -->
+<h2>检索练习</h2>
+<p style="color:var(--text-muted);">回忆刚学的内容来回答——SK 和 MAF 的差异不是"概念级"的，而是"API 级"的。</p>
+
+<div class="quiz" id="q1">
+  <div class="quiz-question">1. 在 MAF 中，Agent 的多轮对话历史由谁管理？</div>
+  <button class="quiz-option" data-answer="wrong">开发者手动管理 ChatHistory 对象，在每轮对话后 AddUserMessage 和 AddAssistantMessage</button>
+  <button class="quiz-option" data-answer="correct">AgentSession 自动管理——你创建 Session 后传给 RunAsync/RunStreamingAsync，框架自动记录每一轮</button>
+  <button class="quiz-option" data-answer="wrong">LLM 自己管理——通过 Prompt 告诉 LLM "请记住之前说过的内容"</button>
+  <button class="quiz-option" data-answer="wrong">由 Semantic Kernel 的 Kernel 对象管理</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <div class="quiz-question">2. MAF 的工具注册和 SK 相比，最大的变化是什么？</div>
+  <button class="quiz-option" data-answer="wrong">MAF 不再支持自定义工具，只能使用内置的工具类型</button>
+  <button class="quiz-option" data-answer="wrong">MAF 要求所有工具必须是异步方法（async Task）</button>
+  <button class="quiz-option" data-answer="wrong">MAF 的工具必须通过 REST API 暴露为 HTTP 端点</button>
+  <button class="quiz-option" data-answer="correct">从三层嵌套（Plugin类→Kernel→Agent）变为扁平数组——AIFunctionFactory.Create(方法) 直接注入 Agent</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <div class="quiz-question">3. SK 的 Kernel 在 MAF 中变成了什么？</div>
+  <button class="quiz-option" data-answer="wrong">Kernel 完全被删除——MAF 从零重写了所有功能</button>
+  <button class="quiz-option" data-answer="wrong">Kernel 变成了 AgentSession，负责对话历史管理</button>
+  <button class="quiz-option" data-answer="wrong">Kernel 仍然需要显式创建——和 SK 时代一样，必须有 Kernel 才能运行 Agent</button>
+  <button class="quiz-option" data-answer="correct">Kernel 退到框架内部（L3 层）——默认场景下你不需要创建它，但深度定制时可以通过 ChatClientAgentOptions 暴露</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<script>
+document.querySelectorAll('.quiz').forEach(quiz => {
+  quiz.querySelectorAll('.quiz-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (quiz.dataset.answered) return;
+      quiz.dataset.answered = 'true';
+
+      const fb = quiz.querySelector('.quiz-feedback');
+      quiz.querySelectorAll('.quiz-option').forEach(b => b.style.pointerEvents = 'none');
+      btn.classList.add('selected');
+
+      if (btn.dataset.answer === 'correct') {
+        btn.classList.add('correct');
+        fb.textContent = '✓ 正确！';
+        fb.className = 'quiz-feedback correct';
+      } else {
+        btn.classList.add('incorrect');
+        fb.textContent = '✗ 不太对。回顾一下 AgentSession、AIFunctionFactory 和 IChatClient 各自解决了什么问题？';
+        fb.className = 'quiz-feedback incorrect';
+        quiz.querySelectorAll('.quiz-option').forEach(b => {
+          if (b.dataset.answer === 'correct') b.classList.add('correct');
+        });
+      }
+    });
+  });
+});
+</script>
+
+<!-- ============ PRACTICE CHALLENGE ============ -->
+<h2>挑战练习</h2>
+
+<div class="card">
+  <p style="margin:0 0 0.75rem;"><strong>🛠️ 迁移你的 Lesson 04 PlannerAgent：</strong></p>
+  <ol style="margin:0 0 0 1.5rem;color:var(--text-muted);">
+    <li>
+      <strong>迁移 FileAnalysisPlugin：</strong> 把 Lesson 04 的 FileAnalysisPlugin 的四个方法（list_files / read_file / count_lines / write_file）从 SK 的 <code>[KernelFunction("name")]</code> + <code>[Description]</code> 改成 MAF 的纯 <code>[Description]</code> 写法。移除继承的 <code>using Microsoft.SemanticKernel</code>。
+    </li>
+    <li>
+      <strong>创建 ReAct Agent（MAF 版）：</strong> 用 <code>chatClient.AsAIAgent(instructions: "..." , tools: [...])</code> 创建 Lesson 04 的 ReAct Agent。注意——Instructions 中的 ReAct 格式要求<strong>完全不变</strong>（Thought/Action/Observation/Final Answer），变的只是 Agent 和工具的创建方式。
+    </li>
+    <li>
+      <strong>对比 AgentSession vs 手动 ChatHistory：</strong> 写一个简单脚本——同一个对话，先用 SK 的 ChatHistory 方式跑一遍，再用 MAF 的 AgentSession 跑一遍。数一数多少行代码是 MAF 帮你省掉的。这些省掉的代码就是"框架帮你做了但之前你需要手动管理的事情"。
+    </li>
+  </ol>
+</div>
+
+<!-- ============ NEXT STEPS ============ -->
+<h2>下一步</h2>
+
+<div class="card">
+  <p style="margin:0;">
+    <strong>官方文档：</strong>
+    <a href="https://learn.microsoft.com/en-gb/agent-framework/overview/?pivots=programming-language-csharp" target="_blank">Microsoft Agent Framework Overview</a>
+    —— 框架的官方入口，五层架构详解，以及每个 NuGet 包的职责说明。
+  </p>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <p style="margin:0;">
+    <strong>快速入门：</strong>
+    <a href="https://learn.microsoft.com/en-za/agent-framework/get-started/your-first-agent?pivots=programming-language-csharp" target="_blank">Step 1: Your First Agent</a>
+    ·
+    <a href="https://learn.microsoft.com/en-za/agent-framework/get-started/add-tools?pivots=programming-language-csharp" target="_blank">Step 2: Add Tools</a>
+    ·
+    <a href="https://learn.microsoft.com/en-za/agent-framework/get-started/multi-turn?pivots=programming-language-csharp" target="_blank">Step 3: Multi-Turn Conversations</a>
+    —— 官方三篇入门教程，对应本课的三个核心步骤。
+  </p>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <p style="margin:0;">
+    <strong>深度参考：</strong>
+    <a href="https://www.devleader.ca/2026/02/21/microsoft-agent-framework-in-c-complete-developer-guide" target="_blank">Microsoft Agent Framework in C#: Complete Developer Guide (Dev Leader)</a>
+    —— 社区最详细的 MAF 实战指南，覆盖 AIAgent、ChatClientAgent、工具注册、会话管理。
+  </p>
+</div>
+
+<p style="margin-top:1.5rem;">
+  📖 <strong>相关参考：</strong> <a href="../reference/agent-glossary.html">Agent 术语表</a>——新增 MAF 核心术语：「AIAgent」「IChatClient」「AIFunctionFactory」「AgentSession」。
+</p>
+
+<p style="margin-top:0.5rem;">
+  📂 <strong>下节课预告：</strong> <a href="0006-multi-agent-collaboration.html">Lesson 06: Multi-Agent Collaboration</a>——MAF 真正的杀手锏。AgentGroupChat、Handoff、SelectionStrategy——让多个 Agent 分工协作，这是 SK 做不到的原生能力。
+</p>
+
+<div class="ask-followup">
+  <strong>💡 有问题？</strong> 直接在当前对话中向你的 AI 老师提问。比如：<br>
+  · 「迁移代码遇到编译错误，能帮我看看吗？」<br>
+  · 「MAF 的 AIFunctionFactory 和 SK 的 KernelFunction 在 LLM 视角下有区别吗？模型能感知到框架换了？」<br>
+  · 「要不要先把 Lesson 02 和 03 的代码用 MAF 重写一遍练手？」<br>
+  你的老师就是当前正在和你对话的 Claude Agent——充分利用它。
+</div>
+
+<div class="lesson-footer">
+  <nav>
+    <a href="0004-planning-and-orchestration.html">← 上一课：Planning & Orchestration</a>
+    <a href="0006-multi-agent-collaboration.html">下一课：Multi-Agent Collaboration →</a>
+  </nav>
+</div>
+
+</body>
+</html>

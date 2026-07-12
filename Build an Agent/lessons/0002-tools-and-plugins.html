@@ -205,7 +205,7 @@
 cd FileAssistant
 dotnet add package Microsoft.SemanticKernel --prerelease
 dotnet add package Microsoft.SemanticKernel.Agents.Core --prerelease
-dotnet add package Anthropic.SDK --prerelease</code></pre>
+</code></pre>
 
 <h3>Step 2: 定义三个工具</h3>
 
@@ -281,28 +281,17 @@ public class CalculatorPlugin
 <pre><code>using System.ComponentModel;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Agents;
-using Microsoft.SemanticKernel.Agents.Chat;
 using Microsoft.SemanticKernel.ChatCompletion;
-using Anthropic.SDK;
-using Anthropic.SDK.Common;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 
-// ——— A：创建 Anthropic 客户端（指向 DeepSeek）———
-var anthropicClient = new AnthropicClient(
-    new APIAuthentication(
-        Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")!
-    )
-)
-{
-    ApiUrlFormat = "https://api.deepseek.com/anthropic/{0}/{1}"
-};
-
-IChatClient chatClient = new ChatClientBuilder(anthropicClient.Messages)
-    .UseFunctionInvocation()
-    .Build();
-
-// ——— B：构建 Kernel + 注册工具 ———
+// ——— A：构建 Kernel + 接入 DeepSeek ———
 var builder = Kernel.CreateBuilder();
-builder.Services.AddSingleton(chatClient);
+
+// DeepSeek 兼容 OpenAI 协议
+builder.AddOpenAIChatCompletion(
+    "deepseek-v4-flash",
+    new Uri("https://api.deepseek.com"),
+    Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")!);
 
 // 注册两个 Plugin 类——每个类里的 [KernelFunction] 方法自动成为工具
 builder.Plugins.AddFromType&lt;FilePlugin&gt;();
@@ -310,9 +299,10 @@ builder.Plugins.AddFromType&lt;CalculatorPlugin&gt;();
 
 Kernel kernel = builder.Build();
 
-// ——— C：创建 Agent ———
+// ——— B：创建 Agent 并开启 Function Calling ———
 var agent = new ChatCompletionAgent
 {
+    Kernel = kernel,
     Name = "FileAssistant",
     Instructions = """
         你是一个文件助手，可以帮助用户完成以下任务：
@@ -328,10 +318,14 @@ var agent = new ChatCompletionAgent
         - 用中文回复，简洁友好。
         - 如果工具返回了错误信息，分析原因并建议用户如何修正。
         """,
-    Kernel = kernel
+    Arguments = new KernelArguments(
+        new OpenAIPromptExecutionSettings
+        {
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+        })
 };
 
-// ——— D：对话循环 ———
+// ——— C：对话循环 ———
 var history = new ChatHistory();
 Console.WriteLine("=== FileAssistant 已就绪 —— 3 个工具：计算 / 保存 / 读取 ===");
 Console.WriteLine("输入 'exit' 退出\n");
@@ -347,13 +341,17 @@ while (true)
     var input = Console.ReadLine();
     if (input?.ToLower() == "exit") break;
 
-    history.Add(new ChatMessageContent(AuthorRole.User, input!));
+    history.AddUserMessage(input!);
 
     Console.Write("Agent: ");
-    await foreach (var chunk in agent.InvokeStreamingAsync(history))
+    string agentResponse = "";
+    await foreach (var item in agent.InvokeStreamingAsync(history))
     {
-        Console.Write(chunk.Content);
+        string itemMessage = item.Message.Content!;
+        Console.Write(itemMessage);
+        agentResponse += itemMessage;
     }
+    history.AddAssistantMessage(agentResponse);
     Console.WriteLine("\n");
 }</code></pre>
 

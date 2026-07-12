@@ -109,6 +109,30 @@
   <span class="aka">本课程前几课用 SK 教学（API 更透明），后续迁移到 MAF。迁移指南见 learn.microsoft.com。</span>
 </dd>
 
+<dt id="aiagent">AIAgent</dt>
+<dd>
+  MAF 中的核心 Agent 抽象类型。通过 <code>chatClient.AsAIAgent(name, instructions, tools)</code> 创建——传入 <code>IChatClient</code>、系统指令、工具数组即可获得一个完整的 Agent。替代了 SK 中的 <code>ChatCompletionAgent</code>。<br>
+  <span class="aka">SK 等价物：<code>new ChatCompletionAgent { Kernel, Name, Instructions }</code></span>
+</dd>
+
+<dt id="ichatclient">IChatClient</dt>
+<dd>
+  <code>Microsoft.Extensions.AI</code> 定义的<strong>厂商中立聊天模型抽象接口</strong>。任何兼容 OpenAI 协议（或通过适配器桥接）的模型都通过 <code>IChatClient</code> 接入 MAF。创建方式：<code>new OpenAIClient(key).GetChatClient(model).AsIChatClient()</code>。<br>
+  <span class="aka">SK 等价物：<code>Kernel.CreateBuilder().AddOpenAIChatCompletion(...).Build()</code>。IChatClient 让模型选择从"Kernel 的配置步骤"变成了"一个可替换的接口实现"。</span>
+</dd>
+
+<dt id="aifunctionfactory">AIFunctionFactory</dt>
+<dd>
+  MAF 中<strong>将 C# 方法转换为 LLM 可调用工具</strong>的工厂类。使用方式：<code>AIFunctionFactory.Create(method)</code>——传入一个带有 <code>[Description]</code> 特性的方法，返回一个 <code>AIFunction</code> 对象，可直接注入 Agent 的 tools 数组。替代了 SK 的 <code>[KernelFunction]</code> + <code>KernelPlugin</code> 注册流程。<br>
+  <span class="aka">对比：SK 需要 Plugin 类（标记 [KernelFunction]）→ Plugins.AddFromType → Kernel；MAF 只需 [Description] + AIFunctionFactory.Create → tools 数组。扁平一级，无 Plugin 层级。</span>
+</dd>
+
+<dt id="agentsession">AgentSession</dt>
+<dd>
+  MAF 中<strong>自动管理多轮对话历史</strong>的会话对象。通过 <code>await agent.CreateSessionAsync()</code> 创建，传给 <code>RunAsync(prompt, session)</code> 或 <code>RunStreamingAsync(prompt, session)</code>。框架在内部自动记录每轮用户/助手消息（包括 tool_call 和 tool_result），你不再需要手动 <code>history.AddUserMessage()</code> / <code>history.AddAssistantMessage()</code>。<br>
+  <span class="aka">支持序列化：<code>agent.SerializeSession(session)</code> → 存盘 → <code>agent.DeserializeSessionAsync(saved)</code> 恢复。SK 等价物：手动管理的 <code>ChatHistory</code> 对象。</span>
+</dd>
+
 <dt>Kernel</dt>
 <dd>
   Semantic Kernel 的<strong>中央编排器</strong>。管理 AI 服务连接、注册 Plugins、协调 Agent 执行。每个 Agent 关联一个 Kernel 实例。<br>

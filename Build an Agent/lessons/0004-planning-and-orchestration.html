@@ -203,7 +203,7 @@
 cd PlannerAgent
 dotnet add package Microsoft.SemanticKernel --prerelease
 dotnet add package Microsoft.SemanticKernel.Agents.Core --prerelease
-dotnet add package Anthropic.SDK --prerelease</code></pre>
+</code></pre>
 
 <p>首先，创建一组比以往更丰富的工具——四个文件分析工具，模拟真实项目中的操作：</p>
 
@@ -331,25 +331,17 @@ public class FileAnalysisPlugin
 
 <pre><code>using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Agents;
-using Microsoft.SemanticKernel.Agents.Chat;
 using Microsoft.SemanticKernel.ChatCompletion;
-using Anthropic.SDK;
-using Anthropic.SDK.Common;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 
-// ——— A：创建客户端 ———
-var anthropicClient = new AnthropicClient(
-    new APIAuthentication(
-        Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")!
-    )
-) { ApiUrlFormat = "https://api.deepseek.com/anthropic/{0}/{1}" };
-
-IChatClient chatClient = new ChatClientBuilder(anthropicClient.Messages)
-    .UseFunctionInvocation()
-    .Build();
-
-// ——— B：构建 Kernel + 注册工具 ———
+// ——— A：构建 Kernel + 接入 DeepSeek ———
 var builder = Kernel.CreateBuilder();
-builder.Services.AddSingleton(chatClient);
+
+// DeepSeek 兼容 OpenAI 协议
+builder.AddOpenAIChatCompletion(
+    "deepseek-v4-flash",
+    new Uri("https://api.deepseek.com"),
+    Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")!);
 
 // 注册文件分析工具 + 记忆工具
 builder.Plugins.AddFromType&lt;FileAnalysisPlugin&gt;();
@@ -357,9 +349,17 @@ builder.Plugins.AddFromType&lt;MemoryPlugin&gt;();  // 复用 Lesson 03 的 Memo
 
 Kernel kernel = builder.Build();
 
-// ——— C：ReAct Agent ———
+// 共享的 Function Calling 配置
+var executionSettings = new KernelArguments(
+    new OpenAIPromptExecutionSettings
+    {
+        FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
+    });
+
+// ——— B：ReAct Agent ———
 var reactAgent = new ChatCompletionAgent
 {
+    Kernel = kernel,
     Name = "PlannerAssistant",
     Instructions = """
         你是一个项目分析助手，具备多步规划和执行能力。
@@ -396,21 +396,22 @@ var reactAgent = new ChatCompletionAgent
 
         用中文回复，思维过程也使用中文。
         """,
-    Kernel = kernel
+    Arguments = executionSettings
 };
 
-// ——— D：对比模式——隐式规划 Agent（相同工具，不同 Instructions）———
+// ——— C：对比模式——隐式规划 Agent（相同工具，不同 Instructions）———
 var implicitAgent = new ChatCompletionAgent
 {
+    Kernel = kernel,
     Name = "SimpleAssistant",
     Instructions = """
         你是一个项目分析助手。用可用的工具完成用户的任务。
         如果任务复杂，分步完成。用中文回复，简洁高效。
         """,
-    Kernel = kernel
+    Arguments = executionSettings
 };
 
-// ——— E：对话循环 ———
+// ——— D：对话循环 ———
 var history = new ChatHistory();
 Console.WriteLine("=== PlannerAgent 已就绪 ===\n");
 Console.WriteLine("当前工作目录: " + Directory.GetCurrentDirectory());
@@ -444,13 +445,17 @@ while (true)
         continue;
     }
 
-    history.Add(new ChatMessageContent(AuthorRole.User, input!));
+    history.AddUserMessage(input!);
 
-    Console.Write($"Agent: ");
-    await foreach (var chunk in currentAgent.InvokeStreamingAsync(history))
+    Console.Write("Agent: ");
+    string agentResponse = "";
+    await foreach (var item in currentAgent.InvokeStreamingAsync(history))
     {
-        Console.Write(chunk.Content);
+        string itemMessage = item.Message.Content!;
+        Console.Write(itemMessage);
+        agentResponse += itemMessage;
     }
+    history.AddAssistantMessage(agentResponse);
     Console.WriteLine("\n");
 }</code></pre>
 
@@ -544,11 +549,15 @@ dotnet run
 
 <pre><code>// ====== Plan-and-Execute 模式 ======
 
+// 从 Kernel 获取聊天服务（用于生成计划——不需要工具调用）
+var chatService = kernel.GetRequiredService&lt;IChatCompletionService&gt;();
+
 // 阶段 1: 生成计划
-async Task&lt;string&gt; GeneratePlanAsync(IChatClient client, string goal, string toolsDescription)
+async Task&lt;string&gt; GeneratePlanAsync(
+    IChatCompletionService chat, string goal, string toolsDescription)
 {
     var planHistory = new ChatHistory();
-    planHistory.Add(new ChatMessageContent(AuthorRole.User, $"""
+    planHistory.AddUserMessage($"""
         你是一个任务规划器。请为以下目标制定一个执行计划。
 
         可用工具：
@@ -574,10 +583,10 @@ async Task&lt;string&gt; GeneratePlanAsync(IChatClient client, string goal, stri
           ...
         ]
         ```
-        """));
+        """);
 
-    var response = await client.GetResponseAsync(planHistory);
-    return response.Message.Content ?? "[]";
+    var response = await chat.GetChatMessageContentsAsync(planHistory);
+    return response[^1].Content ?? "[]";
 }
 
 // 阶段 2: 执行计划
@@ -602,14 +611,16 @@ async Task&lt;string&gt; ExecutePlanAsync(
             只需要执行这一步。完成后汇报结果，不要做其他步骤。
             """;
 
-        executionHistory.Add(new ChatMessageContent(AuthorRole.User, instruction));
+        executionHistory.AddUserMessage(instruction);
 
         var stepResult = "";
-        await foreach (var chunk in agent.InvokeStreamingAsync(executionHistory))
+        await foreach (var item in agent.InvokeStreamingAsync(executionHistory))
         {
-            stepResult += chunk.Content;
-            Console.Write(chunk.Content);
+            string msg = item.Message.Content!;
+            stepResult += msg;
+            Console.Write(msg);
         }
+        executionHistory.AddAssistantMessage(stepResult);
 
         results.Add($"步骤{step.Step}: {stepResult}");
     }
@@ -642,7 +653,7 @@ var goal = Console.ReadLine();
 
 // 1. 生成计划
 Console.WriteLine("\n📝 生成执行计划...");
-var planJson = await GeneratePlanAsync(chatClient, goal!, toolsDesc);
+var planJson = await GeneratePlanAsync(chatService, goal!, toolsDesc);
 Console.WriteLine(planJson);
 
 // 2. 用户确认
