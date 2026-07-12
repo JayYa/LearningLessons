@@ -8,11 +8,11 @@
 
 | # | 课程 | 描述 |
 |---|------|------|
-| 1 | [Lesson 05 · MAF Migration Bridge](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0005-maf-migration-bridge.html) | 讲解 MAF（Multi-Agent Framework）迁移桥接层设计，理解如何在不同 Agent 框架之间实现互操作与平滑过渡 |
-| 2 | [Lesson 01 · What is an Agent](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0001-what-is-an-agent.html) | 从零认识 AI Agent 的核心概念，理解 Agent 与普通 LLM 调用的本质区别 |
-| 3 | [Lesson 02 · Tools & Plugins](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0002-tools-and-plugins.html) | 讲解 Agent 的工具调用与插件扩展机制，理解如何赋予 Agent 与外部世界交互的能力 |
-| 4 | [Lesson 03 · Memory & Context](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0003-memory-and-context.html) | 探索 Agent 的记忆与上下文管理机制，理解如何让 Agent 跨多轮对话保持状态与连贯性 |
-| 5 | [Lesson 04 · Planning & Orchestration](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0004-planning-and-orchestration.html) | 深入 Agent 的任务规划与编排能力，理解如何将复杂目标拆解为可执行的子任务链 |
+| 1 | [Lesson 01 · What is an Agent](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0001-what-is-an-agent.html) | 从零认识 AI Agent 的核心概念，理解 Agent 与普通 LLM 调用的本质区别 |
+| 2 | [Lesson 02 · Tools & Plugins](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0002-tools-and-plugins.html) | 讲解 Agent 的工具调用与插件扩展机制，理解如何赋予 Agent 与外部世界交互的能力 |
+| 3 | [Lesson 03 · Memory & Context](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0003-memory-and-context.html) | 探索 Agent 的记忆与上下文管理机制，理解如何让 Agent 跨多轮对话保持状态与连贯性 |
+| 4 | [Lesson 04 · Planning & Orchestration](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0004-planning-and-orchestration.html) | 深入 Agent 的任务规划与编排能力，理解如何将复杂目标拆解为可执行的子任务链 |
+| 5 | [Lesson 05 · MAF Migration Bridge](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0005-maf-migration-bridge.html) | 讲解 MAF（Multi-Agent Framework）迁移桥接层设计，理解如何在不同 Agent 框架之间实现互操作与平滑过渡 |
 
 **参考资料：**
 - [Agent Glossary · Reference](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/reference/agent-glossary.html) — AI Agent 领域核心术语速查
