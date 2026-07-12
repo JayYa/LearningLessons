@@ -1,8 +1,20 @@
 # 📘 Learning Lessons
 
-本仓库汇集了七门独立课程，覆盖现代 .NET 语言演进、AI Agent 构建、VS Code 扩展开发、GitHub Actions 自动化工作流、维京历史文化与二次元绘画入门。编程方向以 C# 从 8 到 15 每一次语法升级为主线，深入语言机制与 .NET 平台基础；工程方向通过实战教程带领读者从零构建 VS Code 扩展与 AI 驱动的自动化流程；人文艺术方向则以《冰海战纪》为引探索真实维京世界，辅以插画线条基础训练。各课程彼此独立、按需选读，共享同一方法论——从表层 API 下沉到底层机制，从孤立知识点串成系统认知。
+本仓库汇集了八门独立课程，覆盖现代 .NET 语言演进、AI Agent 构建、VS Code 扩展开发、GitHub Actions 自动化工作流、维京历史文化、河西走廊历史地理与二次元绘画入门。编程方向以 C# 从 8 到 15 每一次语法升级为主线，深入语言机制与 .NET 平台基础；工程方向通过实战教程带领读者从零构建 VS Code 扩展与 AI 驱动的自动化流程；人文方向以《冰海战纪》为引探索真实维京世界，以《河西走廊》纪录片为引梳理汉代西域地理、族群与外交史；艺术方向则从插画线条基础训练起步。各课程彼此独立、按需选读，共享同一方法论——从表层 API 下沉到底层机制，从孤立知识点串成系统认知。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
+
+## 河西走廊 第一集 使者
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [第1课：河西走廊 · 地理、族群与时间](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0001-hexi-corridor-panorama.html) | 概览河西走廊的地理格局、族群分布与历史时间轴，为理解张骞出使西域提供时空背景 |
+| 2 | [第2课：匈奴帝国——不只是一个"敌人"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0002-xiongnu-empire.html) | 深入匈奴帝国的政治结构、军事体系与草原文明，重新认识这个被简化为"敌人"的强大政权 |
+| 3 | [第3课：月氏——被追杀者的史诗](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0003-yuezhi-migration.html) | 追踪月氏人被匈奴驱逐后的西迁史诗，从河西走廊到中亚的族群迁徙与文明碰撞 |
+
+**参考资料：**
+- [参考：河西走廊族群档案](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/ethnic-groups.html) — 河西走廊及西域主要族群的历史档案与关系梳理
+- [参考：术语表](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/glossary.html) — 河西走廊、汉匈关系与西域地理核心术语速查
 
 ## Build an Agent
 
