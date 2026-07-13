@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参考：旧项目迁移到 SDK 风格 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+<!-- styles: assets/styles.css -->
+</head>
+<body>
+
+<h1>🔄 参考：旧项目迁移到 SDK 风格</h1>
+<div class="lesson-meta">
+  模块：SDK 项目系统 &nbsp;|&nbsp; 速查参考
+</div>
+
+<h2>两种迁移路径</h2>
+
+<div class="cmp" style="margin-bottom:1.5rem">
+  <div class="cmp-col">
+    <div class="cmp-col__head cmp-col__head--new">路径 A：自动化（推荐）</div>
+    <div class="cmp-col__body">
+      <p style="margin-top:0">
+        <code>dotnet tool install -g upgrade-assistant</code><br>
+        <code>upgrade-assistant upgrade MyProject.csproj</code>
+      </p>
+      <p style="font-size:0.85rem">交互式，自动转格式 + 迁移依赖</p>
+    </div>
+  </div>
+  <div class="cmp-col">
+    <div class="cmp-col__head" style="background:#e3f2fd;color:#1565c0">路径 B：手动（理解本质）</div>
+    <div class="cmp-col__body">
+      <p style="margin-top:0">四步手迁，适合项目少、想彻底理解变化</p>
+    </div>
+  </div>
+</div>
+
+<h2>手动迁移四步</h2>
+
+<div class="steps">
+
+<div class="step"><h3>创建 SDK 风格骨架</h3>
+<pre><code>dotnet new classlib -n TempLib -f net9.0</code></pre>
+<p>打开生成的 <code>TempLib.csproj</code>，复制内容作为起点。控制台应用记得改 <code>&lt;OutputType&gt;Exe&lt;/OutputType&gt;</code>。</p>
+</div>
+
+<div class="step"><h3>替换 csproj 内容</h3>
+<pre><code>&lt;Project Sdk="Microsoft.NET.Sdk"&gt;
+  &lt;PropertyGroup&gt;
+    &lt;TargetFramework&gt;net9.0&lt;/TargetFramework&gt;
+    &lt;Nullable&gt;enable&lt;/Nullable&gt;
+    &lt;ImplicitUsings&gt;enable&lt;/ImplicitUsings&gt;
+  &lt;/PropertyGroup&gt;
+&lt;/Project&gt;</code></pre>
+<p>WPF 项目加 <code>&lt;UseWPF&gt;true&lt;/UseWPF&gt;</code>，WinForms 加 <code>&lt;UseWindowsForms&gt;true&lt;/UseWindowsForms&gt;</code>。</p>
+</div>
+
+<div class="step"><h3>迁移依赖（最容易出错）</h3>
+<div class="do-dont">
+  <div class="do">只迁移你真正 <code>using</code> 的顶层包。传递依赖由 NuGet 自动解析，<strong>不要手动搬</strong>。</div>
+  <div class="dont">把 packages.config 里每个包都转成 PackageReference。旧格式会把传递依赖也列进去——那些是"幽灵依赖"。</div>
+</div>
+
+<p><code>packages.config</code> 到 csproj 的对应关系：</p>
+<table class="tbl">
+  <tr><th>packages.config</th><th>.csproj</th></tr>
+  <tr>
+    <td><code>&lt;package id="Newtonsoft.Json" version="13.0.1" targetFramework="net48" /&gt;</code></td>
+    <td><code>&lt;PackageReference Include="Newtonsoft.Json" Version="13.0.1" /&gt;</code></td>
+  </tr>
+</table>
+</div>
+
+<div class="step"><h3>清理旧文件</h3>
+<ul class="check-list">
+  <li>删除 <code>packages.config</code></li>
+  <li>删除 <code>Properties/AssemblyInfo.cs</code>（SDK 自动生成程序集属性）</li>
+  <li>删除所有 <code>&lt;Compile Include="..." /&gt;</code></li>
+  <li>删除所有 <code>&lt;Reference Include="System.*" /&gt;</code></li>
+  <li>删除 <code>&lt;ProjectGuid&gt;</code> 块</li>
+</ul>
+</div>
+
+</div><!-- .steps -->
+
+<h2>AssemblyInfo → csproj 属性</h2>
+
+<table class="tbl">
+  <tr><th>旧 AssemblyInfo.cs</th><th>新 csproj 属性</th></tr>
+  <tr><td><code>[assembly: AssemblyVersion("1.2.3")]</code></td><td><code>&lt;Version&gt;1.2.3&lt;/Version&gt;</code></td></tr>
+  <tr><td><code>[assembly: AssemblyCompany("Acme")]</code></td><td><code>&lt;Company&gt;Acme&lt;/Company&gt;</code></td></tr>
+  <tr><td><code>[assembly: AssemblyDescription("...")]</code></td><td><code>&lt;Description&gt;...&lt;/Description&gt;</code></td></tr>
+  <tr><td><code>[assembly: InternalsVisibleTo("X.Tests")]</code></td><td><code>&lt;InternalsVisibleTo Include="X.Tests" /&gt;</code></td></tr>
+</table>
+
+<h2>Framework 专属 API 替代</h2>
+
+<table class="tbl">
+  <tr><th>旧 API（不可迁移）</th><th>替代方案</th></tr>
+  <tr><td><code>System.Web.dll</code></td><td><code>Microsoft.AspNetCore.*</code></td></tr>
+  <tr><td><code>HttpContext.Current</code></td><td><code>IHttpContextAccessor</code>（DI 注入）</td></tr>
+  <tr><td><code>ConfigurationManager</code></td><td><code>IConfiguration</code>（Microsoft.Extensions.Configuration）</td></tr>
+  <tr><td><code>System.Drawing</code>（服务端）</td><td><code>SkiaSharp</code> / <code>SixLabors.ImageSharp</code></td></tr>
+  <tr><td><code>AppDomain</code></td><td><code>AssemblyLoadContext</code></td></tr>
+  <tr><td>Remoting / WCF（服务端）</td><td>gRPC / CoreWCF</td></tr>
+</table>
+
+<h2>多目标支持</h2>
+
+<pre><code>&lt;PropertyGroup&gt;
+  &lt;!-- 注意是复数 TargetFrameworks，用分号分隔 --&gt;
+  &lt;TargetFrameworks&gt;net48;net9.0&lt;/TargetFrameworks&gt;
+&lt;/PropertyGroup&gt;</code></pre>
+
+<p>条件编译：<code>#if NET48</code> / <code>#if NET9_0</code>（SDK 自动定义这些符号）。</p>
+
+<h2>验证清单</h2>
+
+<ul class="check-list">
+  <li><code>dotnet restore</code> 成功</li>
+  <li><code>dotnet build</code> 0 error 0 warning</li>
+  <li><code>dotnet list package --include-transitive</code> 显示的依赖数量合理</li>
+  <li><code>dotnet test</code> 全部通过</li>
+</ul>
+
+<h2>常见坑</h2>
+
+<table class="tbl">
+  <tr><th>问题</th><th>原因</th><th>修复</th></tr>
+  <tr>
+    <td>NU1504 / restore 报错</td>
+    <td><code>packages.config</code> 和 <code>PackageReference</code> 共存</td>
+    <td>删除 <code>packages.config</code></td>
+  </tr>
+  <tr>
+    <td>编译时找不到类型</td>
+    <td>迁移时漏掉了某个<strong>直接</strong>依赖</td>
+    <td>回到旧 <code>packages.config</code> 确认哪些是顶层包</td>
+  </tr>
+  <tr>
+    <td>NU1605 大量出现</td>
+    <td>pass 了"幽灵依赖"进来，版本冲突</td>
+    <td>删掉非直接依赖的 PackageReference</td>
+  </tr>
+</table>
+
+<hr class="section">
+
+<p>
+  ← 返回 <a href="../lessons/0001-sdk-project-system.html">第 1 课：SDK 风格项目系统</a>
+  &nbsp;|&nbsp;
+  📖 来源：<a href="https://learn.microsoft.com/en-us/dotnet/core/porting/">Port from .NET Framework to .NET</a>
+</p>
+
+</body>
+</html>

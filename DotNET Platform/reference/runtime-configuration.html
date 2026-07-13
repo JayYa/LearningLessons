@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参考：运行时配置速查 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+<!-- styles: assets/styles.css -->
+</head>
+<body>
+
+<h1>⚙️ 参考：运行时配置速查</h1>
+<div class="lesson-meta">
+  模块：运行时架构 &nbsp;|&nbsp; 速查参考
+</div>
+
+<h2>GC 模式配置</h2>
+
+<table class="tbl">
+  <tr><th>配置项</th><th>csproj 属性</th><th>runtimeconfig.json</th><th>环境变量</th><th>默认值</th></tr>
+  <tr>
+    <td>Server GC</td>
+    <td><code>ServerGarbageCollection</code></td>
+    <td><code>System.GC.Server</code></td>
+    <td><code>DOTNET_gcServer</code></td>
+    <td>false（控制台）<br>true（ASP.NET）</td>
+  </tr>
+  <tr>
+    <td>Background GC</td>
+    <td><code>ConcurrentGarbageCollection</code></td>
+    <td><code>System.GC.Concurrent</code></td>
+    <td><code>DOTNET_gcConcurrent</code></td>
+    <td>true</td>
+  </tr>
+  <tr>
+    <td>Server GC 堆数</td>
+    <td>—（用 RuntimeHostConfigurationOption）</td>
+    <td><code>System.GC.HeapCount</code></td>
+    <td><code>DOTNET_GCHeapCount</code></td>
+    <td>CPU 核数</td>
+  </tr>
+  <tr>
+    <td>内存节约模式</td>
+    <td>—</td>
+    <td><code>System.GC.ConserveMemory</code></td>
+    <td><code>DOTNET_GCConserveMemory</code></td>
+    <td>0（不启用）</td>
+  </tr>
+  <tr>
+    <td>堆内存硬上限</td>
+    <td>—</td>
+    <td><code>System.GC.HeapHardLimit</code></td>
+    <td><code>DOTNET_GCHeapHardLimit</code></td>
+    <td>容器：20MB 或 75%</td>
+  </tr>
+  <tr>
+    <td>内存负载触发阈值</td>
+    <td>—</td>
+    <td><code>System.GC.HighMemoryPercent</code></td>
+    <td><code>DOTNET_GCHighMemPercent</code></td>
+    <td>90%</td>
+  </tr>
+</table>
+
+<pre><code>&lt;!-- csproj 示例：控制台服务切 Server GC + 限制堆数 --&gt;
+&lt;PropertyGroup&gt;
+  &lt;ServerGarbageCollection&gt;true&lt;/ServerGarbageCollection&gt;
+&lt;/PropertyGroup&gt;
+&lt;ItemGroup&gt;
+  &lt;RuntimeHostConfigurationOption Include="System.GC.HeapCount" Value="4" /&gt;
+&lt;/ItemGroup&gt;</code></pre>
+
+<h2>JIT / 编译配置</h2>
+
+<table class="tbl">
+  <tr><th>配置项</th><th>csproj 属性</th><th>runtimeconfig.json</th><th>默认值</th></tr>
+  <tr>
+    <td>分层编译</td>
+    <td><code>TieredCompilation</code></td>
+    <td><code>System.Runtime.TieredCompilation</code></td>
+    <td>true（.NET Core 3.0+）</td>
+  </tr>
+  <tr>
+    <td>Quick JIT</td>
+    <td><code>TieredCompilationQuickJit</code></td>
+    <td><code>System.Runtime.TieredCompilation.QuickJit</code></td>
+    <td>true</td>
+  </tr>
+  <tr>
+    <td>Quick JIT for 循环</td>
+    <td><code>TieredCompilationQuickJitForLoops</code></td>
+    <td><code>System.Runtime.TieredCompilation.QuickJitForLoops</code></td>
+    <td>false（循环直接优化）</td>
+  </tr>
+  <tr>
+    <td>Dynamic PGO</td>
+    <td><code>TieredPGO</code></td>
+    <td>—</td>
+    <td>false（.NET 8+ 默认 true）</td>
+  </tr>
+</table>
+
+<h2>三种编译部署模式</h2>
+
+<div class="spectrum">
+  <div class="spec-item">
+    <span class="tag tag-jit">JIT</span>
+    <h4>即时编译</h4>
+    <p>运行时编译 IL → 机器码<br>启动：慢<br>峰值性能：最高<br>体积：最小<br>运行时依赖：需要</p>
+  </div>
+  <div class="spec-item">
+    <span class="tag tag-r2r">R2R</span>
+    <h4>ReadyToRun</h4>
+    <p>发布时预编译<br>启动：较快<br>峰值性能：高<br>体积：中等<br>运行时依赖：需要</p>
+  </div>
+  <div class="spec-item">
+    <span class="tag tag-aot">NativeAOT</span>
+    <h4>原生 AOT</h4>
+    <p>发布时全编译<br>启动：极快<br>峰值性能：高<br>体积：大<br>运行时依赖：不需要</p>
+  </div>
+</div>
+
+<table class="tbl">
+  <tr><th>模式</th><th>csproj 属性</th><th>发布命令</th><th>关键限制</th></tr>
+  <tr>
+    <td>JIT（默认）</td>
+    <td>—</td>
+    <td><code>dotnet publish</code></td>
+    <td>无</td>
+  </tr>
+  <tr>
+    <td>R2R</td>
+    <td><code>PublishReadyToRun</code></td>
+    <td><code>dotnet publish -p:PublishReadyToRun=true</code></td>
+    <td>需指定 RID；跨平台需分别发布</td>
+  </tr>
+  <tr>
+    <td>NativeAOT</td>
+    <td><code>PublishAot</code></td>
+    <td><code>dotnet publish -r win-x64</code></td>
+    <td>无 Assembly.LoadFile、无 Emit、需 C++ 工具链</td>
+  </tr>
+</table>
+
+<h2>典型场景配置模板</h2>
+
+<table class="tbl">
+  <tr><th>场景</th><th>配置</th></tr>
+  <tr>
+    <td>控制台 Worker Service</td>
+    <td><code>ServerGarbageCollection=true</code></td>
+  </tr>
+  <tr>
+    <td>低延迟桌面应用</td>
+    <td>默认 Workstation GC + 保持 Background GC</td>
+  </tr>
+  <tr>
+    <td>容器化微服务（高密度）</td>
+    <td><code>ServerGarbageCollection=true</code><br><code>DOTNET_GCHeapHardLimit</code> 设内存上限<br>或开启 NativeAOT</td>
+  </tr>
+  <tr>
+    <td>CLI 工具</td>
+    <td><code>PublishAot=true</code>（如果依赖兼容）</td>
+  </tr>
+</table>
+
+<hr class="section">
+
+<p>
+  ← 返回 <a href="../lessons/0002-coreclr-runtime-architecture.html">第 2 课：运行时架构</a>
+</p>
+
+</body>
+</html>

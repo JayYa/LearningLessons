@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参考：NuGet 传递依赖解析规则 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+<!-- styles: assets/styles.css -->
+</head>
+<body>
+
+<h1>📋 参考：NuGet 传递依赖解析</h1>
+<div class="lesson-meta">
+  模块：SDK 项目系统 &nbsp;|&nbsp; 速查参考
+</div>
+
+<p>
+  当你引用两个包，它们各自依赖同一个包但版本不同时，NuGet 按以下四规则决定最终版本。
+  <strong>一个项目只允许一个包的一个版本。</strong>
+</p>
+
+<h2>四项解析规则</h2>
+
+<div class="rule">
+  <div class="rule__num">规则 1</div>
+  <h3>最低适用版本（Lowest Applicable Version）</h3>
+  <p>满足所有约束的<strong>最低</strong>版本被选中。这是默认的保守策略。</p>
+  <div class="diag">
+    约束 ≥ 2.1，feed 上有 [2.0, 2.2, 2.3] → 选 <span class="win">2.2</span>（满足且最低）
+  </div>
+</div>
+
+<div class="rule">
+  <div class="rule__num">规则 2</div>
+  <h3>浮动版本（Floating Versions）</h3>
+  <p><code>6.0.*</code> 取最高匹配稳定版。仅项目级别可用，<strong>与规则 1 方向相反</strong>。</p>
+  <div class="diag">
+    6.0.*，feed 上有 [6.0.0, 6.0.1, 6.0.2] → 选 <span class="win">6.0.2</span>
+  </div>
+</div>
+
+<div class="rule">
+  <div class="rule__num">规则 3 ⭐ 最常用</div>
+  <h3>直接依赖优先（Direct Dependency Wins / Nearest-Wins）</h3>
+  <p>同一子图中，<strong>离项目更近的层决定版本</strong>。深层传递版本被忽略。</p>
+  <div class="diag">
+<pre>项目
+├── <span class="win">PackageRef → B v2.0</span>              ← 直接引用，胜出
+└── PackageRef → A v1.0
+    └── 依赖 → B ≥ 3.0                    <span class="lose">← 被忽略</span></pre>
+  </div>
+  <p><strong>结果：</strong>用 B v2.0。如果 2.0 &lt; 3.0，发出 <strong>NU1605 警告</strong>（降级）。项目能编译，但运行时可能炸 <code>MissingMethodException</code>。</p>
+  <p><strong>用途：</strong>这是你<strong>主动解决冲突</strong>的手段——加一条直接引用即可覆盖任何传递版本。</p>
+</div>
+
+<div class="rule">
+  <div class="rule__num">规则 4</div>
+  <h3>表亲依赖（Cousin Dependencies）</h3>
+  <p>不同子图需不同版本且无直接引用覆盖时，取<strong>满足所有约束的最低版本</strong>。</p>
+  <div class="diag">
+<pre>项目
+├── PackageRef → A v1.0 → 依赖 B ≥ 1.0
+└── PackageRef → C v1.0 → 依赖 B ≥ 2.0
+                         → 选 <span class="win">B 2.0</span>（同时满足 ≥1.0 和 ≥2.0）</pre>
+  </div>
+  <p><strong>若无交集：</strong>报 <strong>NU1107 错误</strong>，restore 失败。</p>
+  <div class="diag">
+<pre>A → B [1.0, 2.0)      即 ≥ 1.0 且 &lt; 2.0
+C → B [2.0, 3.0)      即 ≥ 2.0 且 &lt; 3.0
+                      <span class="lose">交集为空 → NU1107</span></pre>
+  </div>
+</div>
+
+<h2>诊断码速查</h2>
+
+<table class="tbl">
+  <tr><th>代码</th><th>含义</th><th>严重性</th><th>修复</th></tr>
+  <tr>
+    <td><code>NU1605</code></td>
+    <td>检测到包降级——传递依赖要求高版本，但被更近的依赖覆盖为低版本</td>
+    <td>⚠ 警告</td>
+    <td>加直接引用指向高版本；或确认降级安全</td>
+  </tr>
+  <tr>
+    <td><code>NU1107</code></td>
+    <td>版本冲突——两个包对同一依赖的要求无交集</td>
+    <td>❌ 错误</td>
+    <td>加直接引用覆盖冲突，触发规则 3</td>
+  </tr>
+  <tr>
+    <td><code>NU1103</code></td>
+    <td>请求的版本在 feed 上不存在</td>
+    <td>❌ 错误</td>
+    <td>检查版本号拼写；检查 NuGet 源配置</td>
+  </tr>
+</table>
+
+<h2>调试命令</h2>
+
+<pre><code># 查看完整依赖树（含传递依赖）
+dotnet list package --include-transitive
+
+# 只看有过时版本的包
+dotnet list package --outdated --include-transitive
+
+# JSON 格式输出（给脚本用）
+dotnet list package --include-transitive --format json</code></pre>
+
+<p><strong>最终裁决文件：</strong><code>obj/project.assets.json</code>——restore 的完整结果，记录了"每个包选了哪个版本、为什么"。调试时直接搜包名。</p>
+
+<h2>集中包管理（CPM）</h2>
+
+<p>多项目仓库用 <code>Directory.Packages.props</code> 统一版本，从源头消除冲突：</p>
+
+<table class="tbl">
+  <tr><th>文件</th><th>内容</th></tr>
+  <tr>
+    <td><code>/Directory.Packages.props</code></td>
+    <td>
+      <code>&lt;ManagePackageVersionsCentrally&gt;true&lt;/...&gt;</code><br>
+      <code>&lt;PackageVersion Include="Newtonsoft.Json" Version="13.0.3" /&gt;</code>
+    </td>
+  </tr>
+  <tr>
+    <td>各 <code>.csproj</code></td>
+    <td><code>&lt;PackageReference Include="Newtonsoft.Json" /&gt;</code>（<strong>不写 Version</strong>）</td>
+  </tr>
+</table>
+
+<h2>Framework 4.8 对比</h2>
+
+<table class="tbl">
+  <tr><th></th><th>Framework 4.8</th><th>现代 .NET</th></tr>
+  <tr><td>解析时机</td><td>安装时，逐包</td><td>restore 时，全图一次</td></tr>
+  <tr><td>冲突信号</td><td>安装报错，项目状态不确定</td><td>NU1605 警告 / NU1107 错误</td></tr>
+  <tr><td>多版本共存</td><td>binding redirects 映射</td><td>全图只留一个版本</td></tr>
+  <tr><td>版本覆盖</td><td>手动装目标版本到 packages.config</td><td>加一条 PackageReference 触发规则 3</td></tr>
+  <tr><td>运行时错误</td><td>FileLoadException（redirect 写错）</td><td>不存在 redirect，由 restore 保证自洽</td></tr>
+</table>
+
+<hr class="section">
+
+<p>
+  ← 返回 <a href="../lessons/0001-sdk-project-system.html">第 1 课：SDK 风格项目系统</a>
+  &nbsp;|&nbsp;
+  📖 来源：<a href="https://learn.microsoft.com/en-us/nuget/concepts/dependency-resolution">NuGet Dependency Resolution</a>
+</p>
+
+</body>
+</html>

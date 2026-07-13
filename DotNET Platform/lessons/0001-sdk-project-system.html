@@ -147,7 +147,7 @@
 
 <p>优势：</p>
 <ul>
-  <li>包里嵌套的依赖<strong>自动传递解析</strong>（你引用 A，A 依赖 B 和 C——你不用管）</li>
+  <li>包里嵌套的依赖<strong>自动传递解析</strong>（你引用 A，A 依赖 B 和 C——你不用管）——<a href="../reference/nuget-dependency-resolution.html">📋 冲突了怎么办？</a></li>
   <li>多个项目共享依赖时，用 <code>Directory.Packages.props</code> 统一管理版本</li>
   <li><code>dotnet restore</code> 替代 NuGet.exe 手动还原</li>
 </ul>
@@ -200,7 +200,9 @@ dotnet run</code></pre>
 
 <h2>检查理解</h2>
 
-<div class="quiz" id="quiz">
+<div class="quiz" id="quiz"
+     data-feedback-correct="✅ 正确！ProjectGuid（GUID）是 Framework 时代的产物，SDK 风格项目不需要它。"
+     data-feedback-wrong="❌ 不对。ProjectGuid 是 Framework 项目特有的 GUID 标识符，SDK 风格项目不再需要它。">
   <div class="quiz__q">❓ Framework 4.8 的 csproj 中，哪个东西在现代 .NET 中不再需要？</div>
   <div class="quiz__opt" data-answer="wrong">PackageReference</div>
   <div class="quiz__opt" data-answer="correct">ProjectGuid</div>
@@ -209,28 +211,7 @@ dotnet run</code></pre>
   <div class="quiz__feedback" id="quiz-feedback"></div>
 </div>
 
-<script>
-(function() {
-  const opts = document.querySelectorAll('#quiz .quiz__opt');
-  const feedback = document.getElementById('quiz-feedback');
-  let answered = false;
-  opts.forEach(opt => {
-    opt.addEventListener('click', () => {
-      if (answered) return;
-      answered = true;
-      const isCorrect = opt.dataset.answer === 'correct';
-      opt.classList.add(isCorrect ? 'quiz__opt--correct' : 'quiz__opt--wrong');
-      opts.forEach(o => {
-        if (o.dataset.answer === 'correct' && o !== opt) o.classList.add('quiz__opt--correct');
-      });
-      feedback.textContent = isCorrect
-        ? '✅ 正确！ProjectGuid（GUID）是 Framework 时代的产物，SDK 风格项目不需要它。'
-        : '❌ 不对。ProjectGuid 是 Framework 项目特有的 GUID 标识符，SDK 风格项目不再需要它。';
-      feedback.classList.add('quiz__feedback--show');
-    });
-  });
-})();
-</script>
+<script src="../assets/quiz.js"></script>
 
 <h2>关键术语</h2>
 
@@ -246,6 +227,10 @@ dotnet run</code></pre>
 <h2>推荐阅读</h2>
 
 <p>📖 <strong>首选参考：</strong><a href="https://learn.microsoft.com/en-us/dotnet/core/project-sdk/overview">Microsoft Learn — .NET project SDK overview</a></p>
+
+<p>📖 <strong>本课延伸：</strong> <a href="../reference/nuget-dependency-resolution.html">NuGet 传递依赖冲突解析规则</a>（包版本不一致时 NuGet 怎么选？NU1605 vs NU1107 怎么修？）</p>
+
+<p>📖 <strong>本课延伸：</strong> <a href="../reference/migrate-to-sdk-style.html">旧项目迁移到 SDK 风格</a>（packages.config → PackageReference、AssemblyInfo 属性迁移、常见坑）</p>
 
 <p>📖 如果你还维护着 Framework 项目：<a href="https://learn.microsoft.com/en-us/dotnet/core/porting/">Port from .NET Framework to .NET</a></p>
 

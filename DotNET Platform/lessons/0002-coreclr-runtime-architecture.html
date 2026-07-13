@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 2 课：运行时架构 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>第 2 课：运行时架构</h1>
+<div class="lesson-meta">
+  模块：运行时架构（1/2）&nbsp;|&nbsp; 预计阅读/练习时间：15 分钟
+</div>
+
+<p>
+  .NET Framework 4.8 的 CLR 是一个<strong>只跑在 Windows 上、20 年没大改</strong>的庞然大物。
+  现代 .NET 把它拆了重写——CoreCLR 不仅是跨平台的，GC、JIT、部署方式<strong>都是可选的、可配置的</strong>。
+  这一课帮你建立心智模型：当你用 <code>dotnet run</code> 启动一个程序时，底层到底发生了什么。
+</p>
+
+<div class="summary">
+  <ul>
+    <li>理解 <strong>CoreCLR</strong> 为什么要重写，而不是在旧 CLR 上修修补补</li>
+    <li>知道两种 GC 模式（Workstation / Server）的区别和<strong>什么时候切</strong></li>
+    <li>理解<strong>分层编译</strong>默认在做什么——为什么冷启动快、热路径也快</li>
+    <li>建立 JIT → R2R → NativeAOT 的<strong>编译光谱</strong>概念</li>
+  </ul>
+</div>
+
+<h2>起点：Framework 4.8 CLR 为什么必须重写？</h2>
+
+<p>旧 CLR 身上背着三个不可调和的包袱：</p>
+
+<table class="tbl">
+  <tr><th>包袱</th><th>为什么改不了</th><th>CoreCLR 怎么解决</th></tr>
+  <tr>
+    <td>Windows 耦合</td>
+    <td>CLR 内部大量调用 Win32 API（内存管理、线程调度、文件 IO 都走 OS）</td>
+    <td>所有 OS 交互抽象为 PAL（Platform Abstraction Layer），一套接口，多套实现</td>
+  </tr>
+  <tr>
+    <td>单 GC 模式</td>
+    <td>Workstation GC 一个线程跑回收，Server 机器也这样——浪费多核</td>
+    <td>Workstation / Server 两种 GC 可切换，Server GC 每核一个堆，并行回收</td>
+  </tr>
+  <tr>
+    <td>JIT 一刀切</td>
+    <td>要么全 JIT（启动慢），要么全 NGen（镜像大、不灵活）</td>
+    <td>分层编译：先快编保证启动，后台再重编优化热路径</td>
+  </tr>
+</table>
+
+<div class="callout callout--info">
+  💡 <strong>一句话概括：</strong>Framework 4.8 CLR 是一座 20 年没拆过的老房子——地基是 Windows，管线是单线程，装修是 JIT 一刀切。
+  CoreCLR 拆了重盖：地基换成 PAL（跨平台），管线可切（Workstation/Server GC），装修分层（tiered JIT + R2R + NativeAOT）。
+</div>
+
+<h2>GC 模式：这次你真的要关心</h2>
+
+<p>在 Framework 4.8 中大多数开发者从来不碰 GC 配置——默认就够了。现代 .NET 中<strong>选错 GC 模式可能是 10× 级别的吞吐差异</strong>。</p>
+
+<h3>两种模式</h3>
+
+<div class="cmp">
+  <div class="cmp-col">
+    <div class="cmp-col__head" style="background:#fff3e0;color:#e65100">Workstation GC</div>
+    <div class="cmp-col__body">
+      <ul style="font-size:0.85rem">
+        <li>一个堆，一个 GC 线程</li>
+        <li>回收时<strong>暂停所有用户线程</strong></li>
+        <li>延迟低（暂停短），吞吐低</li>
+        <li><strong>默认模式</strong></li>
+        <li>适合：桌面应用、单实例服务</li>
+      </ul>
+    </div>
+  </div>
+  <div class="cmp-col">
+    <div class="cmp-col__head cmp-col__head--new">Server GC</div>
+    <div class="cmp-col__body">
+      <ul style="font-size:0.85rem">
+        <li><strong>每核一个堆</strong>，每核一个 GC 线程</li>
+        <li>所有 GC 线程<strong>并行回收</strong></li>
+        <li>吞吐高，但每次暂停稍长</li>
+        <li>需显式开启</li>
+        <li>适合：Web 服务、后台任务、高吞吐场景</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<h3>怎么切？</h3>
+
+<p>在 csproj 里加一行：</p>
+
+<pre><code>&lt;PropertyGroup&gt;
+  &lt;ServerGarbageCollection&gt;true&lt;/ServerGarbageCollection&gt;
+&lt;/PropertyGroup&gt;</code></pre>
+
+<p>或者用 <code>runtimeconfig.json</code>：</p>
+
+<pre><code>{
+  "runtimeOptions": {
+    "configProperties": {
+      "System.GC.Server": true
+    }
+  }
+}</code></pre>
+
+<div class="callout callout--warn">
+  ⚠️ <strong>注意：</strong>ASP.NET Core 项目模板<strong>默认已经开了 Server GC</strong>（通过 <code>Microsoft.NET.Sdk.Web</code> SDK）。
+  控制台应用和类库<strong>默认是 Workstation GC</strong>——你如果用 Generic Host 跑后台服务，记得自己开关。
+</div>
+
+<h3>Background GC</h3>
+
+<p>两种模式都支持<strong>后台 GC</strong>（默认开启）。意思是 Gen2 回收（最慢的那种）可以在后台线程上做，<strong>不暂停用户线程</strong>。只有 Gen0/Gen1 回收（快）才会短暂暂停。</p>
+
+<p>如果你发现 Gen2 回收的暂停时间不可接受，可以关掉后台 GC（让 Gen2 也暂停，但总时长可能更短）：</p>
+
+<pre><code>&lt;ConcurrentGarbageCollection&gt;false&lt;/ConcurrentGarbageCollection&gt;</code></pre>
+
+<p>这对应 Framework 4.8 的 <code>&lt;gcConcurrent enabled="false"/&gt;</code>——概念一样，配置路径不同。</p>
+
+<h2>JIT 编译：你写的 IL 怎么变成机器码？</h2>
+
+<p>Framework 4.8 中的 JIT：调用一个方法 → 即时编译 → 执行。简单粗暴。问题是<strong>首次调用慢</strong>——大型应用启动时要编译大量方法。</p>
+
+<p>现代 .NET 的 JIT 完全不同——<strong>分层编译（Tiered Compilation）</strong>是默认：</p>
+
+<div class="diagram">
+<pre>
+方法首次调用
+  │
+  ▼
+<strong>Tier 0：Quick JIT</strong>（极快编译，不优化）
+  │  目标：让启动尽可能快
+  │
+  ▼
+运行时统计：这个方法被调了多少次？
+  │
+  ├── 冷方法（没被反复调）→ 保持 Tier 0，不浪费编译时间
+  │
+  └── 热方法（调用次数 &gt; 阈值）→ <strong>Tier 1：Optimizing JIT</strong>
+       目标：全面优化（内联、循环展开、边界检查消除）
+</pre>
+</div>
+
+<p>结果是：<strong>启动快（Tier 0），热路径也快（Tier 1），冷代码不浪费优化时间。</strong></p>
+
+<p>你不需要做任何事——<strong>.NET Core 3.0 起默认开启</strong>。如果想关闭（某些低延迟场景不想有后台编译线程）：</p>
+
+<pre><code>&lt;TieredCompilation&gt;false&lt;/TieredCompilation&gt;</code></pre>
+
+<div class="callout callout--info">
+  💡 .NET 6 起引入了 <strong>Dynamic PGO</strong>（动态 Profile-Guided Optimization）——Tier 0 时插入探针，Tier 1 编译时根据<strong>真实运行时数据</strong>做优化。
+  比如发现某个虚方法调用 99% 是同一个具体类型，就直接去虚拟化（devirtualization）。CSProj 加 <code>&lt;TieredPGO&gt;true&lt;/TieredPGO&gt;</code> 开启。
+</div>
+
+<h2>编译光谱：JIT → R2R → NativeAOT</h2>
+
+<p>这是 Framework 4.8 用户最陌生的概念。在现代 .NET 中，代码怎么从 IL 变机器码，有三种选择：</p>
+
+<table class="tbl">
+  <tr><th></th><th>JIT</th><th>R2R</th><th>NativeAOT</th></tr>
+  <tr><td>编译时机</td><td>运行时</td><td>发布时预编译 IL 布局 + 运行时轻量 JIT</td><td>发布时全编译</td></tr>
+  <tr><td>启动速度</td><td>慢</td><td>较快</td><td><strong>极快</strong></td></tr>
+  <tr><td>峰值性能</td><td><strong>最高</strong>（tiered + PGO）</td><td>高（再加 tiered JIT 可达峰值）</td><td>高（但无 PGO 优化）</td></tr>
+  <tr><td>文件体积</td><td>最小</td><td>中（多预编译代码）</td><td>大（含整个运行时）</td></tr>
+  <tr><td>需要运行时安装</td><td>是</td><td>是</td><td><strong>否</strong>（自包含）</td></tr>
+  <tr><td>反射/Emit</td><td>全支持</td><td>全支持</td><td><strong>受限</strong></td></tr>
+  <tr><td>适用场景</td><td>开发、桌面、通用</td><td>SDK 库、桌面应用、服务</td><td>CLI 工具、微服务、容器</td></tr>
+</table>
+
+<h3>R2R：Framework 的 NGen 重生版</h3>
+
+<p>R2R 是 Framework 时代 NGen 的精神续作，但做得更好：把 IL 编译成<strong>中间态的预编译代码</strong>，运行时只需做少量修正（地址重定位、跨程序集引用解析），而非从头编译。</p>
+
+<pre><code># 发布时开启 R2R
+dotnet publish -c Release -p:PublishReadyToRun=true</code></pre>
+
+<p>R2R 代码 <strong>仍然可以叠加分层编译</strong>——先跑 R2R 的 Tier 0 代码保证启动，热方法再由 JIT 重编译到 Tier 1。这是现代 .NET 的默认行为。</p>
+
+<h3>NativeAOT：.NET 编译成独立 exe</h3>
+
+<p>如果你想要一个<strong>没有依赖、直接启动、体积可控</strong>的单一可执行文件：</p>
+
+<pre><code>&lt;PropertyGroup&gt;
+  &lt;PublishAot&gt;true&lt;/PublishAot&gt;
+&lt;/PropertyGroup&gt;</code></pre>
+
+<pre><code>dotnet publish -r win-x64 -c Release</code></pre>
+
+<p>代价是：<strong>反射受限、不能动态加载程序集、不能用 Expression.Emit</strong>。而且不是所有 NuGet 包都标记了 AOT 兼容。但有<strong>AOT 分析器</strong>（<code>IsAotCompatible</code>）在编译时帮你检查哪些代码不兼容。</p>
+
+<div class="callout callout--info">
+  💡 <strong>和 Framework 的 ngen.exe 有什么不同？</strong>NGen 生成的代码<strong>仍然依赖完整的 CLR 运行时</strong>，只是把 IL 提前转成了机器码。
+  NativeAOT 是把<strong>整个运行时也裁剪、链接、编译进去</strong>——发布出来的是一个不依赖任何 .NET 运行时的独立二进制。
+</div>
+
+<h2>选型决策流程</h2>
+
+<div class="diagram">
+<pre>
+你的应用是什么？
+│
+├── 桌面应用 / 通用后端服务
+│   └── 默认 JIT + 分层编译 ✅
+│       （开发体验最好，峰值性能最高）
+│
+├── 对启动速度有要求（SDK 工具、CLI）
+│   └── R2R（发布时预编译）
+│       或 NativeAOT（如果依赖兼容）
+│
+├── 容器化微服务 / 短生命周期
+│   └── NativeAOT（镜像小、启动快）
+│       ⚠️ 先检查所有依赖是否 AOT 兼容
+│
+└── 控制台后台服务 / Worker
+    └── Server GC ← <strong>别忘了这个！</strong>
+        （控制台模板默认 Workstation GC）
+</pre>
+</div>
+
+<h2>检查理解</h2>
+
+<div class="quiz" id="quiz1"
+     data-feedback-correct="✅ 正确！控制台应用默认是 Workstation GC，高并发下应切换到 Server GC。"
+     data-feedback-wrong="❌ 不对。控制台应用默认使用 Workstation GC（单堆单线程），高并发后台任务需要显式开启 Server GC。">
+  <div class="quiz__q">❓ 你的控制台应用用 Generic Host 跑后台任务，高并发下吞吐很差。最可能的原因？</div>
+  <div class="quiz__opt" data-answer="wrong">分层编译默认关闭了</div>
+  <div class="quiz__opt" data-answer="correct">默认是 Workstation GC，应该切到 Server GC</div>
+  <div class="quiz__opt" data-answer="wrong">没有开启 NativeAOT</div>
+  <div class="quiz__opt" data-answer="wrong">Background GC 没关</div>
+  <div class="quiz__feedback" id="quiz1-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz2" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！Server GC 不是 .NET 的默认 GC 模式（Workstation GC 才是）。"
+     data-feedback-wrong="❌ 不对。Server GC 不是默认模式——Workstation GC 是默认，Server GC 需要显式开启（ASP.NET Core 模板除外）。">
+  <div class="quiz__q">❌ 以下哪个是<strong>错误的</strong>？</div>
+  <div class="quiz__opt" data-answer="wrong">Tier 0 编译快但不优化，Tier 1 后台优化热方法</div>
+  <div class="quiz__opt" data-answer="wrong">R2R 可以在运行时叠加分层编译</div>
+  <div class="quiz__opt" data-answer="wrong">NativeAOT 不支持 Assembly.LoadFile</div>
+  <div class="quiz__opt" data-answer="correct">Server GC 是 .NET 的默认 GC 模式</div>
+  <div class="quiz__feedback" id="quiz2-feedback"></div>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+<h2>关键术语</h2>
+
+<dl>
+  <dt><strong>CoreCLR</strong></dt>
+  <dd>现代 .NET 的运行时引擎。从 .NET Framework CLR 分叉后重写，跨平台、模块化。源码在 <a href="https://github.com/dotnet/runtime">dotnet/runtime</a>。</dd>
+  <dt><strong>PAL（Platform Abstraction Layer）</strong></dt>
+  <dd>CoreCLR 与操作系统的抽象层——所有 OS 调用（线程、内存、IO）走 PAL 接口，Windows/Linux/macOS 各有实现。</dd>
+  <dt><strong>Workstation GC / Server GC</strong></dt>
+  <dd>两种 GC 模式。Workstation：一个堆一个线程，低延迟。Server：每核一个堆一个线程，高吞吐。ASP.NET Core 默认 Server，控制台默认 Workstation。</dd>
+  <dt><strong>分层编译（Tiered Compilation）</strong></dt>
+  <dd>JIT 的方法编译策略：Tier 0 快速编译优先启动速度，热方法升到 Tier 1 做全面优化。.NET Core 3.0+ 默认开启。</dd>
+  <dt><strong>R2R（ReadyToRun）</strong></dt>
+  <dd>发布时预编译 IL 为中间态机器码，运行时只需轻量修正。类似 Framework 的 NGen，但可叠加分层编译。</dd>
+  <dt><strong>NativeAOT</strong></dt>
+  <dd>发布时把 IL 和裁剪后的运行时<strong>全部编译为原生机器码</strong>，生成独立 exe。不需要安装 .NET 运行时。代价是反射和动态代码生成受限。</dd>
+  <dt><strong>Dynamic PGO</strong></dt>
+  <dd>动态 Profile-Guided Optimization——Tier 0 时插探针，Tier 1 根据真实运行时数据做优化（如去虚拟化、内联决策）。</dd>
+</dl>
+
+<h2>推荐阅读</h2>
+
+<p>📖 <strong>首选参考：</strong><a href="https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/workstation-server-gc">Workstation and Server GC</a> — 官方文档</p>
+
+<p>📖 <a href="https://github.com/dotnet/runtime/blob/main/docs/design/features/tiered-compilation.md">Tiered Compilation 设计文档</a> — dotnet/runtime 仓库中的详细设计</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/">Native AOT deployment</a> — 官方部署指南</p>
+
+<p>📖 <a href="https://github.com/dotnet/runtime/blob/main/docs/design/features/tiered-compilation-guide.md">Tiered Compilation Guide</a> — 性能调优实战</p>
+
+<p>📖 <strong>本课速查：</strong> <a href="../reference/runtime-configuration.html">运行时配置速查</a>（GC / JIT / 编译模式的所有配置项汇总）</p>
+
+<h2>接下来</h2>
+
+<p>
+  运行时架构第二部分将深入：GC 的<strong>代（generations）机制</strong>和 LOH/SOH/POH 堆结构、
+  <strong>Span&lt;T&gt; 和 Memory&lt;T&gt;</strong> 如何绕开 GC 堆直接操作内存、
+  以及 <strong>AssemblyLoadContext</strong> 如何替代 Framework 的 AppDomain。
+</p>
+
+<div class="callout callout--info">
+  💬 <strong>有问题？</strong> 直接问我！比如"我有个跑在 8 核服务器上的 Worker Service，GC 参数具体怎么调？"或者"NativeAOT 真的不能做反射吗？"
+</div>
+
+<div class="lesson-nav">
+  <a href="0001-sdk-project-system.html">← 上一课：SDK 风格项目系统</a>
+  <span></span>
+</div>
+
+</body>
+</html>

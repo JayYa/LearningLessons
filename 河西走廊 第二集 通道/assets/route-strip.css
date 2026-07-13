@@ -1,0 +1,34 @@
+/* Route strip component — horizontal visualization of a journey or timeline */
+/* Use for: travel routes, campaign paths, sequential locations */
+
+.route-strip {
+  display: flex;
+  gap: 0;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  font-size: 0.88rem;
+}
+
+.route-stop {
+  flex: 1;
+  min-width: 80px;
+  text-align: center;
+  padding: 0.6rem 0.4rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-right: none;
+}
+
+.route-stop:last-child {
+  border-right: 1px solid var(--border);
+}
+
+.route-stop .name {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.route-stop .label {
+  font-size: 0.78rem;
+  color: var(--muted);
+}

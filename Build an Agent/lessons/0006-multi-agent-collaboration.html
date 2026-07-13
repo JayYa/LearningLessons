@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 06 · Multi-Agent Collaboration</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<div class="lesson-meta">
+  <span class="lesson-number">Lesson 06</span>
+  <span>Agent Academy</span>
+  <span>·</span>
+  <span>~30 min</span>
+</div>
+
+<h1>多 Agent 协作：从单兵作战到团队配合</h1>
+<p style="font-size:1.1rem;color:var(--text-muted);margin-top:0;">
+  前五课你在用一个 Agent 解决所有问题。这一课回答一个自然延伸的问题——什么时候该用两个 Agent？怎么让它们配合？
+</p>
+
+<div style="margin:1.5rem 0;">
+  <span class="tag">Multi-Agent</span>
+  <span class="tag">AgentWorkflowBuilder</span>
+  <span class="tag">GroupChatManager</span>
+  <span class="tag">SelectionStrategy</span>
+  <span class="tag">RoundRobin</span>
+  <span class="tag">Handoff</span>
+  <span class="tag">MAF v1.0</span>
+  <span class="tag">C#</span>
+</div>
+
+<hr style="border:none;border-top:1px solid var(--border);margin:2rem 0;">
+
+<!-- ============ MOTIVATION ============ -->
+<h2>单 Agent 的天花板</h2>
+
+<p>
+  前五课你的 Agent 什么都能做——调用工具、管理记忆、执行多步规划。但你会逐渐发现一个问题：<strong>Instructions 越来越长</strong>。一个 Agent 既要分析文件、又要写报告、还要自我审查——Instructions 变成了几百行的"保姆级说明书"，LLM 在其中迷失。
+</p>
+
+<div class="diagram">
+一个 Agent 的 Instructions：
+"你是代码分析助手。
+ 第1步：列出文件
+ 第2步：读取每个文件
+ 第3步：统计代码行数
+ 第4步：分析代码质量
+ 第5步：生成报告
+ 第6步：自己审查报告是否有误
+ ..."
+         ↓
+ 问题：角色冲突——"写报告的人"和"审查报告的人"是同一套指令。
+ 写代码时你会让一个人既写代码又做 Code Review 吗？
+</div>
+
+<p>
+  <strong>多 Agent 协作的本质不是「更多的 Agent = 更好」</strong>——而是<strong>职责分离</strong>。当一个 Agent 的 Instructions 内部出现角色冲突时，就该拆成两个。这和软件工程中「一个类不要承担两种职责」是同一个原则。
+</p>
+
+<div class="card card--highlight">
+  <strong>MAF 的独特优势：</strong> 多 Agent 协作是 MAF 的 L5 层（Workflow & Orchestration）——这正是 AutoGen 团队合并时贡献的核心能力。在 SK 时代，多 Agent 需要手动管理 ChatHistory 的分发和 Agent 间切换；在 MAF 中，<strong>AgentWorkflowBuilder + GroupChatManager</strong> 把这些变成了声明式配置。<br><br>
+  <strong>本课产出：</strong> 构建一个 Writer + Reviewer 双 Agent 群聊——Writer 生成内容，Reviewer 审查反馈，两个 Agent 自动轮流发言直到 Reviewer 批准。
+</div>
+
+<!-- ============ MENTAL MODEL ============ -->
+<h2>心智模型：两种协作拓扑</h2>
+
+<p>MAF 提供五种编排模式，但核心就两种拓扑——理解了这两种，其余的（Sequential、Concurrent、Magentic）都是变体：</p>
+
+<table style="width:100%;margin:1rem 0;font-size:0.92rem;">
+  <tr><th style="text-align:left;padding:0.5rem;width:15%;"></th><th style="text-align:left;padding:0.5rem;width:42.5%;">Group Chat（群聊）</th><th style="text-align:left;padding:0.5rem;width:42.5%;">Handoff（交接）</th></tr>
+  <tr>
+    <td style="padding:0.5rem;"><strong>类比</strong></td>
+    <td style="padding:0.5rem;">圆桌会议 🪑——一个主持人决定谁发言</td>
+    <td style="padding:0.5rem;">接力赛跑 🏃‍♂️→🏃‍♀️——当前选手决定下一棒给谁</td>
+  </tr>
+  <tr>
+    <td style="padding:0.5rem;"><strong>协调方式</strong></td>
+    <td style="padding:0.5rem;"><strong>中央协调</strong>——GroupChatManager 选择下一个发言的 Agent</td>
+    <td style="padding:0.5rem;"><strong>去中心化</strong>——当前 Agent 自己决定把对话交给谁</td>
+  </tr>
+  <tr>
+    <td style="padding:0.5rem;"><strong>上下文</strong></td>
+    <td style="padding:0.5rem;">所有 Agent 看到完整的对话历史</td>
+    <td style="padding:0.5rem;">只有当前活跃的 Agent 在处理</td>
+  </tr>
+  <tr>
+    <td style="padding:0.5rem;"><strong>适用场景</strong></td>
+    <td style="padding:0.5rem;">迭代创作、头脑风暴、质量审查</td>
+    <td style="padding:0.5rem;">客服分诊、专家路由、升级处理</td>
+  </tr>
+  <tr>
+    <td style="padding:0.5rem;"><strong>核心 API</strong></td>
+    <td style="padding:0.5rem;"><code>CreateGroupChatBuilderWith(managerFactory)</code></td>
+    <td style="padding:0.5rem;"><code>CreateHandoffsBuilderWith(startAgent)</code></td>
+  </tr>
+</table>
+
+<div class="diagram">
+Group Chat 拓扑（星型）：           Handoff 拓扑（链式）：
+
+        Reviewer                        Triage → Billing
+         ╱                                  ↓
+   Manager                                Support
+         ╲
+        Writer                        每个 Agent 决定下一棒给谁
+</div>
+
+<p>
+  本课聚焦 <strong>Group Chat</strong>——它是最直观的多 Agent 模式，也最能体现 MAF 的 SelectionStrategy 设计。Handoff 在「挑战练习」里让你自己探索。
+</p>
+
+<h2>SelectionStrategy：谁该说话了？</h2>
+
+<p>
+  Group Chat 的核心不是一个"聊天室"——而是一个<strong>发言权决策引擎</strong>。GroupChatManager 在每一轮回答三个问题：
+</p>
+
+<ol style="color:var(--text-muted);margin:0.5rem 0 0.5rem 1.5rem;">
+  <li><strong>下一个该谁发言？</strong>（SelectNextAgent）</li>
+  <li><strong>传给它的上下文是什么？</strong>（UpdateHistory / Broadcast）</li>
+  <li><strong>该结束了吗？</strong>（ShouldTerminateAsync）</li>
+</ol>
+
+<p>
+  MAF 内置了 <code>RoundRobinGroupChatManager</code>——按顺序轮流发言，达到 <code>MaximumIterationCount</code> 后终止。对于 80% 的场景它够用，而剩下的 20% 你可以继承它，覆写 <code>ShouldTerminateAsync</code> 来自定义终止条件——本课会演示。
+</p>
+
+<!-- ============ SKILL ============ -->
+<h2>动手构建：Writer + Reviewer 双 Agent 群聊</h2>
+
+<p>
+  用你已熟悉的 DeepSeek 模型，创建两个 Agent：一个负责创作，一个负责审查。它们自动轮流发言，直到 Reviewer 说"通过"。
+</p>
+
+<h3>Step 1: 创建项目和安装包</h3>
+
+<pre><code>dotnet new console -n WriterReviewer
+cd WriterReviewer
+dotnet add package Microsoft.Agents.AI --version 1.0.0
+dotnet add package Microsoft.Agents.AI.Workflows --version 1.0.0
+dotnet add package OpenAI --version 2.*
+</code></pre>
+
+<div class="card">
+  <strong>📦 新包说明：</strong><br>
+  · <code>Microsoft.Agents.AI</code> — 核心包（AIAgent、ChatClientAgent）<br>
+  · <code>Microsoft.Agents.AI.Workflows</code> — <strong>新增</strong>：编排引擎（AgentWorkflowBuilder、GroupChatManager、HandoffBuilder 等）<br>
+  · <code>OpenAI</code> — AWS/DeepSeek 的模型接入（和之前一样）
+</div>
+
+<h3>Step 2: 定义两个 Agent</h3>
+
+<p>每个 Agent 有自己的 Instructions——<strong>角色专一、边界清晰</strong>：</p>
+
+<pre><code>using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using OpenAI;
+
+// ——— 接入 DeepSeek ———
+var apiKey = Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")
+    ?? throw new InvalidOperationException("请设置 DEEPSEEK_API_KEY");
+var openai = new OpenAIClient(
+    new System.ClientModel.ApiKeyCredential(apiKey),
+    new OpenAIClientOptions { Endpoint = new Uri("https://api.deepseek.com/v1") });
+var chatClient = openai.GetChatClient("deepseek-v4-flash").AsIChatClient();
+
+// ——— Agent A: Writer（只负责创作）———
+var writer = new ChatClientAgent(chatClient,
+    instructions: """
+        你是一位创意文案撰稿人。
+        职责：根据用户需求生成口号和营销文案。
+        要求：简洁有力、有记忆点。每次输出一个版本。
+        如果 Reviewer 给了反馈，根据反馈修改后重新输出。
+        """,
+    name: "CopyWriter",
+    description: "负责创意文案生成");
+
+// ——— Agent B: Reviewer（只负责审查）———
+var reviewer = new ChatClientAgent(chatClient,
+    instructions: """
+        你是一位营销审查专家。
+        职责：评估 CopyWriter 的文案。
+        审查标准：清晰度、影响力、品牌契合度。
+        - 如果文案符合标准，回复"approve"并附最终文案。
+        - 如果需要修改，给出具体、可操作的反馈（不要生成新文案，交给 CopyWriter 改）。
+        """,
+    name: "Reviewer",
+    description: "负责文案质量审查");</code></pre>
+
+<div class="card">
+  <strong>🔍 关键设计：</strong><br>
+  · <strong>角色互斥</strong>——Writer 不审查自己，Reviewer 不写新文案。这是多 Agent 的第一条纪律。<br>
+  · <strong>明确的交接协议</strong>——Reviewer 的 Instructions 定义了"approve"作为终止信号。这比轮数限制更智能。<br>
+  · <strong>名称即身份</strong>——<code>name</code> 参数在对话历史中作为 <code>AuthorName</code> 出现，LLM 据此理解"谁说了什么"。起一个描述性的名字。
+</div>
+
+<h3>Step 3: 构建 Group Chat + 自定义终止条件</h3>
+
+<p>这是整个多 Agent 协作的<strong>核心——三行代码定义一个编排规则</strong>：</p>
+
+<pre><code>using Microsoft.Agents.AI.Workflows;
+
+// ——— 自定义 GroupChatManager：Reviewer 批准即终止 ———
+public class ApprovalBasedManager : RoundRobinGroupChatManager
+{
+    private readonly string _approverName;
+
+    public ApprovalBasedManager(IReadOnlyList&lt;AIAgent&gt; agents, string approverName)
+        : base(agents)
+    {
+        _approverName = approverName;
+    }
+
+    protected override ValueTask&lt;bool&gt; ShouldTerminateAsync(
+        IReadOnlyList&lt;ChatMessage&gt; history,
+        CancellationToken cancellationToken = default)
+    {
+        var last = history.LastOrDefault();
+        // 终止条件：最后一句话来自 Reviewer，且包含 "approve"
+        bool shouldTerminate = last?.AuthorName == _approverName &amp;&amp;
+            last.Text?.Contains("approve", StringComparison.OrdinalIgnoreCase) == true;
+        return ValueTask.FromResult(shouldTerminate);
+    }
+}
+
+// ——— 构建 Workflow ———
+var workflow = AgentWorkflowBuilder
+    .CreateGroupChatBuilderWith(agents =>
+        new ApprovalBasedManager(agents, "Reviewer")
+        {
+            MaximumIterationCount = 8  // 安全上限：防止无限循环
+        })
+    .AddParticipants(writer, reviewer)
+    .Build();</code></pre>
+
+<div class="card card--highlight">
+  <strong>💡 这是多 Agent 协作的全部 API 表面积：</strong><br><br>
+  <strong>① AgentWorkflowBuilder</strong> —— 编排的入口。你告诉它参与者是谁、用哪个 Manager。<br>
+  <strong>② GroupChatManager</strong> —— 发言权决策引擎。内置 RoundRobin；自定义只需覆写 <code>ShouldTerminateAsync</code>。<br>
+  <strong>③ MaximumIterationCount</strong> —— 安全网。即使你的自定义终止逻辑有 bug，也不会无限循环烧 token。<br><br>
+  对比一下：在 SK 时代实现同样的事，你需要手动管理每个 Agent 的 ChatHistory 分发、手动写 <code>KernelFunctionSelectionStrategy</code> 选择函数、手动写 <code>KernelFunctionTerminationStrategy</code> 终止函数——代码量至少 3 倍。<br><br>
+  <strong>核心理念：Instruction 仍然是 Agent 行为的唯一可编程接口</strong>（见 <a href="../learning-records/0008-instruction-is-the-operating-system.md">学习记录 0008</a>），Manager 控制的是<strong>谁在什么时候看到什么上下文</strong>——Instructions 控制「怎么想」，Manager 控制「谁来说」。
+</div>
+
+<h3>Step 4: 运行并观察 Agent 间对话</h3>
+
+<p>执行 Workflow，你会看到两个 Agent <strong>自动轮流发言</strong>——你不需要写任何切换逻辑：</p>
+
+<pre><code>using Microsoft.Extensions.AI;
+
+// ——— 启动群聊 ———
+var messages = new List&lt;ChatMessage&gt;
+{
+    new(ChatRole.User, "为一款环保电动 SUV 创作一个口号。")
+};
+
+Console.WriteLine("=== Writer + Reviewer 群聊开始 ===\n");
+
+await using StreamingRun run = await InProcessExecution.RunStreamingAsync(workflow, messages);
+await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
+
+await foreach (WorkflowEvent evt in run.WatchStreamAsync())
+{
+    if (evt is AgentResponseUpdateEvent update)
+    {
+        AgentResponse response = update.AsResponse();
+        foreach (ChatMessage message in response.Messages)
+        {
+            Console.WriteLine($"[{update.ExecutorId}]: {message.Text}\n");
+        }
+    }
+    else if (evt is WorkflowOutputEvent output)
+    {
+        Console.WriteLine("=== 群聊结束 ===");
+        break;
+    }
+}</code></pre>
+
+<p>对话过程（示意）：</p>
+
+<div class="diagram">
+[CopyWriter]: 「零碳驱动力」——体验电动出行的纯净力量。
+
+[Reviewer]: "零碳驱动力"有记忆点，但缺少产品关联。建议加入 SUV 的空间感，
+          比如把"驱动力"换成一种空间或旅程的意象。请修改后重新提交。
+
+[CopyWriter]: 「零碳征途」——SUV 的广阔，电动的纯净，一路向前。
+
+[Reviewer]: 这次很好！"征途"兼顾了 SUV 的探险感和环保的使命感。
+          简洁、有冲击力、品牌契合度高。approve ✓
+
+=== 群聊结束 ===
+</div>
+
+<div class="card card--success">
+  <strong>观察：你没有做的事情——</strong><br>
+  · 没有手动管理 ChatHistory——Workflow 自动同步所有 Agent 的上下文<br>
+  · 没有写"下一个该谁发言"的判断逻辑——Manager 处理了<br>
+  · 没有写"什么时候结束"的循环退出条件——<code>ShouldTerminateAsync</code> 处理了<br>
+  · 没有手动把 Reviewer 的反馈传回 Writer——Workflow 的 Broadcast 机制自动做了<br><br>
+  <strong>你只做了三件事：</strong>定义两个 Agent 的 Instructions → 选择 Manager → 启动 Workflow。
+</div>
+
+<h3>Step 5: 完整 Program.cs</h3>
+
+<pre><code>using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Workflows;
+using Microsoft.Extensions.AI;
+using OpenAI;
+
+// ——— 模型接入（DeepSeek）———
+var apiKey = Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")!;
+var openai = new OpenAIClient(
+    new System.ClientModel.ApiKeyCredential(apiKey),
+    new OpenAIClientOptions { Endpoint = new Uri("https://api.deepseek.com/v1") });
+var chatClient = openai.GetChatClient("deepseek-v4-flash").AsIChatClient();
+
+// ——— 定义 Agent ———
+var writer = new ChatClientAgent(chatClient,
+    instructions: """
+        你是一位创意文案撰稿人。
+        职责：根据用户需求生成口号和营销文案。
+        要求：简洁有力、有记忆点。每次输出一个版本。
+        如果 Reviewer 给了反馈，根据反馈修改后重新输出。
+        """,
+    name: "CopyWriter",
+    description: "负责创意文案生成");
+
+var reviewer = new ChatClientAgent(chatClient,
+    instructions: """
+        你是一位营销审查专家。
+        职责：评估 CopyWriter 的文案。
+        审查标准：清晰度、影响力、品牌契合度。
+        - 如果文案符合标准，回复"approve"并附最终文案。
+        - 如果需要修改，给出具体、可操作的反馈。
+        """,
+    name: "Reviewer",
+    description: "负责文案质量审查");
+
+// ——— 构建群聊 ———
+var workflow = AgentWorkflowBuilder
+    .CreateGroupChatBuilderWith(agents =>
+        new ApprovalBasedManager(agents, "Reviewer")
+        {
+            MaximumIterationCount = 8
+        })
+    .AddParticipants(writer, reviewer)
+    .Build();
+
+// ——— 交互循环 ———
+Console.WriteLine("=== Writer + Reviewer 群聊 ===\n");
+Console.Write("需求: ");
+var input = Console.ReadLine();
+if (string.IsNullOrWhiteSpace(input)) return;
+
+var messages = new List&lt;ChatMessage&gt; { new(ChatRole.User, input) };
+
+await using var run = await InProcessExecution.RunStreamingAsync(workflow, messages);
+await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
+
+await foreach (WorkflowEvent evt in run.WatchStreamAsync())
+{
+    if (evt is AgentResponseUpdateEvent update)
+    {
+        foreach (var msg in update.AsResponse().Messages)
+            Console.WriteLine($"[{update.ExecutorId}]: {msg.Text}\n");
+    }
+    else if (evt is WorkflowOutputEvent)
+        break;
+}
+
+Console.WriteLine("=== 结束 ===\n");
+
+// ——— 自定义 Manager ———
+public class ApprovalBasedManager : RoundRobinGroupChatManager
+{
+    private readonly string _approverName;
+    public ApprovalBasedManager(IReadOnlyList&lt;AIAgent&gt; agents, string approverName)
+        : base(agents) => _approverName = approverName;
+
+    protected override ValueTask&lt;bool&gt; ShouldTerminateAsync(
+        IReadOnlyList&lt;ChatMessage&gt; history, CancellationToken ct = default)
+    {
+        var last = history.LastOrDefault();
+        return ValueTask.FromResult(
+            last?.AuthorName == _approverName &amp;&amp;
+            last.Text?.Contains("approve", StringComparison.OrdinalIgnoreCase) == true);
+    }
+}</code></pre>
+
+<!-- ============ DEEP DIVE ============ -->
+<h2>深入理解：多 Agent 的上下文同步</h2>
+
+<p>
+  你可能有一个直觉性的担忧：Writer 和 Reviewer 各有各的 AgentSession——它们怎么看到同一段对话？
+</p>
+
+<div class="card">
+  <strong>MAF 的 Broadcast 机制：</strong><br><br>
+  在 Group Chat 中，每个 Agent <strong>拥有独立的 AgentSession</strong>（因为不同 Agent 类型可能有不同的 Session 实现）。但每次一个 Agent 发言后，GroupChatManager 会<strong>把它的回复广播到所有其他 Agent 的 Session</strong>——确保每个 Agent 在发言前都能看到完整对话历史。<br><br>
+  <strong>这不只是"复制消息"——</strong> 广播时 Manager 会决定哪些消息可见。你可以覆写 <code>UpdateHistory</code> 来过滤敏感信息——比如不让 Writer 看到 Reviewer 的某些内部评估标准。这给多 Agent 协作提供了<strong>信息隔离</strong>的能力：不是所有 Agent 都需要知道所有事。
+</div>
+
+<h2>什么时候不用多 Agent？</h2>
+
+<div class="card card--warning">
+  <strong>多 Agent 不是银弹——它有真实的代价：</strong><br><br>
+  <strong>① Token 消耗倍数增长。</strong> 每个 Agent 的每次发言都是独立的 LLM 调用。一个两 Agent 群聊跑 4 轮 = 8 次 LLM 调用。同一件事用一个 Agent 可能 2 次调用就完成了。<br><br>
+  <strong>② 延迟累积。</strong> Group Chat 是串行的——Agent A 发言 → Agent B 发言 → Agent A 再发言……每次都是完整的 LLM 推理。4 轮群聊的延迟可能是单 Agent 的 4 倍。<br><br>
+  <strong>③ 指令漂移。</strong> 多轮群聊中，Agent 可能逐渐偏离原始任务。Writer 可能从"写口号"变成"解释为什么这个口号好"——它开始做 Reviewer 的活了。这是角色边界模糊化的信号。<br><br>
+  <strong>判断标准——先问自己：</strong>「这件事用一个 Agent，在 Instructions 里分步骤描述，能做好吗？」如果能，就用单 Agent。只有当 Instructions 内部出现<strong>不可调和的角色冲突</strong>（生成 vs 审查、提问 vs 回答、教练 vs 裁判）时，才拆成多 Agent。
+</div>
+
+<!-- ============ QUIZ ============ -->
+<h2>检索练习</h2>
+<p style="color:var(--text-muted);">回忆刚学的内容——多 Agent 协作的核心不是"人多力量大"，而是"各司其职"。</p>
+
+<div class="quiz" id="q1">
+  <div class="quiz-question">1. Group Chat 和 Handoff 的核心区别是什么？</div>
+  <button class="quiz-option" data-answer="wrong">Group Chat 有 LLM 参与，Handoff 是纯代码逻辑</button>
+  <button class="quiz-option" data-answer="wrong">Group Chat 是异步的，Handoff 是同步的</button>
+  <button class="quiz-option" data-answer="wrong">Group Chat 只能用于内容创作，Handoff 只能用于客服</button>
+  <button class="quiz-option" data-answer="correct">Group Chat 由中央 Manager 协调谁发言；Handoff 由当前 Agent 自己决定交给谁</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <div class="quiz-question">2. 自定义 GroupChatManager 时，最需要覆写的方法是？</div>
+  <button class="quiz-option" data-answer="wrong">SelectNextAgent——控制下一个发言的 Agent 是谁</button>
+  <button class="quiz-option" data-answer="wrong">GetResponseAsync——控制 Agent 如何生成回复</button>
+  <button class="quiz-option" data-answer="correct">ShouldTerminateAsync——定义"群聊该结束了"的条件（如 Reviewer 说了 approve）</button>
+  <button class="quiz-option" data-answer="wrong">CreateSessionAsync——控制每个 Agent 的对话历史如何初始化</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <div class="quiz-question">3. 以下哪个是使用多 Agent 的正确信号？</div>
+  <button class="quiz-option" data-answer="wrong">想让 Agent 回答得更准确——用多个 Agent 互相校验</button>
+  <button class="quiz-option" data-answer="wrong">想让系统看起来更复杂、更有技术含量</button>
+  <button class="quiz-option" data-answer="wrong">任务步骤太多，一个 Agent 记不住全部步骤</button>
+  <button class="quiz-option" data-answer="correct">Instructions 内部出现不可调和的角色冲突（如生成 vs 审查、教练 vs 裁判）</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<script>
+document.querySelectorAll('.quiz').forEach(quiz => {
+  quiz.querySelectorAll('.quiz-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (quiz.dataset.answered) return;
+      quiz.dataset.answered = 'true';
+
+      const fb = quiz.querySelector('.quiz-feedback');
+      quiz.querySelectorAll('.quiz-option').forEach(b => b.style.pointerEvents = 'none');
+      btn.classList.add('selected');
+
+      if (btn.dataset.answer === 'correct') {
+        btn.classList.add('correct');
+        fb.textContent = '✓ 正确！';
+        fb.className = 'quiz-feedback correct';
+      } else {
+        btn.classList.add('incorrect');
+        fb.textContent = '✗ 不太对。回顾一下 GroupChatManager 的职责和用多 Agent 的判断标准。';
+        fb.className = 'quiz-feedback incorrect';
+        quiz.querySelectorAll('.quiz-option').forEach(b => {
+          if (b.dataset.answer === 'correct') b.classList.add('correct');
+        });
+      }
+    });
+  });
+});
+</script>
+
+<!-- ============ CHALLENGE ============ -->
+<h2>挑战练习</h2>
+
+<div class="card">
+  <p style="margin:0 0 0.75rem;"><strong>🛠️ 三个方向，按难度递进：</strong></p>
+  <ol style="margin:0 0 0 1.5rem;color:var(--text-muted);">
+    <li>
+      <strong>（基础）添加第三个 Agent：</strong> 在 Writer + Reviewer 之间加一个 <strong>Researcher</strong>——负责在创作前收集与产品相关的市场数据或竞品信息。修改 Instructions，让群聊流程变成：Researcher → Writer → Reviewer → 通过/再改。
+    </li>
+    <li>
+      <strong>（进阶）用 Handoff 实现客服分诊系统：</strong> 创建 TriageAgent（分诊）、BillingAgent（账单）、SupportAgent（技术支持）三个 Agent。用 <code>AgentWorkflowBuilder.CreateHandoffsBuilderWith(triage)</code> 构建 Handoff 流程——Triage 根据用户问题内容决定交给谁，专家 Agent 处理后交回 Triage 做满意度确认。<br>
+      参考：<a href="https://learn.microsoft.com/en-in/training/modules/orchestrate-semantic-kernel-multi-agent-solution/7-use-handoff-orchestration" target="_blank">Handoff Orchestration 官方教程</a>
+    </li>
+    <li>
+      <strong>（高阶）对比单 Agent vs 多 Agent 的 token 效率：</strong> 同一个任务——「为环保电动 SUV 写一句口号并确保质量」——先让一个 Agent 做（自写自审），再让 Writer + Reviewer 群聊做。对比两个版本的：(a) 总 LLM 调用次数；(b) 总输出 token 数；(c) 最终口号的质量差异。写一段 200 字的分析，回答：「这个任务用多 Agent 值得吗？」
+    </li>
+  </ol>
+</div>
+
+<!-- ============ NEXT STEPS ============ -->
+<h2>下一步</h2>
+
+<div class="card" style="margin-top:0.75rem;">
+  <p style="margin:0;">
+    <strong>官方文档：</strong>
+    <a href="https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/group-chat?pivots=programming-language-csharp" target="_blank">Group Chat Orchestration</a>
+    —— 本课代码的官方出处，包含更多 Manager 自定义示例和 Python/Go 版本。
+  </p>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <p style="margin:0;">
+    <strong>动手实践：</strong>
+    <a href="https://github.com/Azure-Samples/multi-agent-orchestration-workshop" target="_blank">Multi-Agent Orchestration Workshop</a>
+    —— 微软官方 Workshop，用 MAF + Aspire 构建完整的五模式多 Agent 系统（含 Blazor 前端）。动手实践多 Agent 的最佳资源。
+  </p>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <p style="margin:0;">
+    <strong>深度参考：</strong>
+    <a href="https://visualstudiomagazine.com/articles/2026/06/11/developing-agentic-systems-in-net-from-concept-to-code.aspx" target="_blank">Developing Agentic Systems in .NET (VS Magazine, 2026.6)</a>
+    —— 从单 Agent 到多 Agent 的完整 .NET 实战综述，覆盖五种编排模式的对比和选型指南。
+  </p>
+</div>
+
+<p style="margin-top:1.5rem;">
+  📖 <strong>相关参考：</strong> <a href="../reference/agent-glossary.html">Agent 术语表</a>——新增 Multi-Agent 核心术语：「GroupChatManager」「SelectionStrategy」「Handoff」「Broadcast」。
+</p>
+
+<p style="margin-top:0.5rem;">
+  📂 <strong>下节课预告：</strong> <a href="0007-agent-observability.html">Lesson 07: Agent 可观测性</a>——当你的 Agent 系统从"玩具"变成"服务"，你需要看到它内部在做什么。OpenTelemetry 集成、日志、追踪、Metrics——让 Agent 不再是黑盒。
+</p>
+
+<div class="ask-followup">
+  <strong>💡 有问题？</strong> 直接在当前对话中向你的 AI 老师提问。比如：<br>
+  · 「三个 Agent 的群聊会不会比两个更不稳定？怎么防止对话跑偏？」<br>
+  · 「Handoff 和 Group Chat 能混合使用吗？什么场景需要？」<br>
+  · 「能把 Lesson 04 的 PlannerAgent 拆成 Planner + Executor 两个 Agent 做试验吗？」<br>
+  你的老师就是当前正在和你对话的 Claude Agent——充分利用它。
+</div>
+
+<div class="lesson-footer">
+  <nav>
+    <a href="0005-maf-migration-bridge.html">← 上一课：MAF Migration Bridge</a>
+    <a href="0007-agent-observability.html">下一课：Agent Observability →</a>
+  </nav>
+</div>
+
+</body>
+</html>

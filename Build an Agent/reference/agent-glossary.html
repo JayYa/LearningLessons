@@ -118,19 +118,19 @@
 <dt id="ichatclient">IChatClient</dt>
 <dd>
   <code>Microsoft.Extensions.AI</code> 定义的<strong>厂商中立聊天模型抽象接口</strong>。任何兼容 OpenAI 协议（或通过适配器桥接）的模型都通过 <code>IChatClient</code> 接入 MAF。创建方式：<code>new OpenAIClient(key).GetChatClient(model).AsIChatClient()</code>。<br>
-  <span class="aka">SK 等价物：<code>Kernel.CreateBuilder().AddOpenAIChatCompletion(...).Build()</code>。IChatClient 让模型选择从"Kernel 的配置步骤"变成了"一个可替换的接口实现"。</span>
+  <span class="aka">定位：微软主导的 .NET 生态事实标准。不同模型的接入方式不同——OpenAI 需要微软适配器（<code>.AsIChatClient()</code> 扩展），Anthropic SDK (v10+) 原生实现 IChatClient（<code>new AnthropicClient().AsIChatClient(model)</code>），Ollama 社区包直接实现。IChatClient 是接口而非框架——你可以自己手写实现来对接任何不被官方支持的模型。</span>
 </dd>
 
 <dt id="aifunctionfactory">AIFunctionFactory</dt>
 <dd>
   MAF 中<strong>将 C# 方法转换为 LLM 可调用工具</strong>的工厂类。使用方式：<code>AIFunctionFactory.Create(method)</code>——传入一个带有 <code>[Description]</code> 特性的方法，返回一个 <code>AIFunction</code> 对象，可直接注入 Agent 的 tools 数组。替代了 SK 的 <code>[KernelFunction]</code> + <code>KernelPlugin</code> 注册流程。<br>
-  <span class="aka">对比：SK 需要 Plugin 类（标记 [KernelFunction]）→ Plugins.AddFromType → Kernel；MAF 只需 [Description] + AIFunctionFactory.Create → tools 数组。扁平一级，无 Plugin 层级。</span>
+  <span class="aka">生产级 DI 集成：两种模式——(1) 构造注入：注册 Plugin 到 DI → 解析 → AIFunctionFactory.Create(instance.Method)；(2) IServiceProvider 参数注入：在工具方法签名加 IServiceProvider 参数，MAF 调用时自动注入，LLM 看不到该参数。</span>
 </dd>
 
 <dt id="agentsession">AgentSession</dt>
 <dd>
   MAF 中<strong>自动管理多轮对话历史</strong>的会话对象。通过 <code>await agent.CreateSessionAsync()</code> 创建，传给 <code>RunAsync(prompt, session)</code> 或 <code>RunStreamingAsync(prompt, session)</code>。框架在内部自动记录每轮用户/助手消息（包括 tool_call 和 tool_result），你不再需要手动 <code>history.AddUserMessage()</code> / <code>history.AddAssistantMessage()</code>。<br>
-  <span class="aka">支持序列化：<code>agent.SerializeSession(session)</code> → 存盘 → <code>agent.DeserializeSessionAsync(saved)</code> 恢复。SK 等价物：手动管理的 <code>ChatHistory</code> 对象。</span>
+  <span class="aka">序列化：<code>SerializeSession(session)</code> 返回普通 JSON 字符串（非 JSONL），内含 ConversationId + StateBag。框架只负责数据转换，I/O 由开发者决定——返回 string 而非直接写文件，意味着同一个序列化结果可以存入文件、数据库、Redis、Blob 等任意介质。SK 等价物：手动管理的 <code>ChatHistory</code> 对象。</span>
 </dd>
 
 <dt>Kernel</dt>
@@ -177,14 +177,44 @@
 
 <dt>Multi-Agent（多 Agent 系统）</dt>
 <dd>
-  多个 Agent <strong>分工协作</strong>完成复杂任务的架构。每个 Agent 有独立的 Instructions 和工具集，Agent 间通过共享消息或以层级调用协作。常见模式：Group Chat、Delegation、Debate。<br>
-  <span class="aka">Semantic Kernel 支持：AgentGroupChat、SelectionStrategy、TerminationStrategy。</span>
+  多个 Agent <strong>分工协作</strong>完成复杂任务的架构。每个 Agent 有独立的 Instructions 和工具集，Agent 间通过共享消息或以层级调用协作。MAF 提供五种编排模式：Group Chat（群聊，中央协调）、Handoff（交接，去中心化）、Sequential（顺序执行）、Concurrent（并发执行）、Magentic-One（Manager 领导团队）。<br>
+  <span class="aka">核心判断标准：不是「Agent 越多越好」，而是「单 Agent 的 Instructions 是否出现了不可调和的角色冲突（生成 vs 审查、教练 vs 裁判）」。多 Agent 有真实代价——Token 消耗倍数增长、延迟累积、指令漂移风险。</span>
+</dd>
+
+<dt id="agentworkflowbuilder">AgentWorkflowBuilder</dt>
+<dd>
+  MAF Workflows 编排的<strong>统一入口</strong>（<code>Microsoft.Agents.AI.Workflows</code> 包）。通过静态工厂方法创建不同模式的 Builder：<code>CreateGroupChatBuilderWith(managerFactory)</code>、<code>CreateHandoffsBuilderWith(startAgent)</code>、<code>CreateSequentialBuilder()</code>、<code>CreateConcurrentBuilder()</code>。链式调用 <code>.AddParticipants(agents).Build()</code> 返回一个 <code>Workflow</code> 对象。<br>
+  <span class="aka">NuGet：<code>Microsoft.Agents.AI.Workflows</code>。这是 MAF L5 层（Workflow & Orchestration）的核心 API。</span>
+</dd>
+
+<dt id="groupchatmanager">GroupChatManager</dt>
+<dd>
+  Group Chat 模式中的<strong>中央发言权决策引擎</strong>。每一轮回答三个问题：(1) 下一个该谁发言（SelectNextAgent）；(2) 传给它的上下文是什么（UpdateHistory / Broadcast）；(3) 该结束了吗（ShouldTerminateAsync）。MAF 内置 <code>RoundRobinGroupChatManager</code>（轮转发言 + MaximumIterationCount 终止），开发者可继承它覆写 <code>ShouldTerminateAsync</code> 实现自定义终止逻辑。<br>
+  <span class="aka">类比：圆桌会议的主持人。Manager 不强依赖 LLM——轮转模式是纯代码逻辑。复杂的 SelectionStrategy 可调用 LLM 做判断，但那是可选的。</span>
+</dd>
+
+<dt id="handoff">Handoff（交接）</dt>
+<dd>
+  去中心化的多 Agent 协作模式：<strong>当前 Agent 自己决定把对话交给谁</strong>——不需要中央 Manager。MAF 通过 <code>AgentWorkflowBuilder.CreateHandoffsBuilderWith(startAgent)</code> 构建，框架自动为每个 Agent 生成 <code>handoff_to_{target}</code> 工具，Agent 调用该工具即触发交接。适合客服分诊、专家路由、升级处理。<br>
+  <span class="aka">类比：接力赛跑——当前选手决定下一棒给谁。对比 Group Chat（圆桌会议，有主持人）。</span>
+</dd>
+
+<dt id="broadcast">Broadcast（广播机制）</dt>
+<dd>
+  Group Chat 中 Manager 在每次 Agent 发言后<strong>将回复同步到所有其他 Agent 的 Session</strong>——确保每个 Agent 在发言前都看到完整对话历史。每个 Agent 拥有独立的 AgentSession（因为不同 Agent 类型可能有不同的 Session 实现），Manager 负责跨 Session 的消息同步。可覆写 <code>UpdateHistory</code> 实现<strong>信息隔离</strong>——不是所有 Agent 都需要知道所有事。<br>
+  <span class="aka">这是 Group Chat 和 Handoff 的核心机制差异：Group Chat = 广播式上下文共享；Handoff = 接力式上下文传递。</span>
+</dd>
+
+<dt id="autogen">AutoGen</dt>
+<dd>
+  微软研究院（Microsoft Research）2023 年推出的<strong>多智能体对话框架</strong>（Python 为主）。核心贡献是 Multi-Agent 协作机制——<strong>AgentGroupChat</strong>（多 Agent 群聊）、<strong>Handoff</strong>（Agent 间交接）、<strong>SelectionStrategy</strong>（下一轮发言权决策）。<br>
+  <span class="aka">2024-2025 年与 Semantic Kernel 团队合并，AutoGen 的 Multi-Agent 研究能力 + SK 的企业工程基础 = <a href="#maf">Microsoft Agent Framework</a>（2026.4 GA）。MAF 的 L5（Workflow & Orchestration）层就是 AutoGen 的继承。</span>
 </dd>
 
 <dt>MCP（Model Context Protocol）</dt>
 <dd>
-  Anthropic 提出的<strong>Agent-to-Tool 标准协议</strong>。定义统一的工具发现、调用、认证接口，让任何 Agent 能使用任何 MCP Server 提供的工具。<br>
-  <span class="aka">2025 年成为行业标准，Microsoft 已将 MCP 集成到 Semantic Kernel。</span>
+  <strong>微软与 Anthropic 共同推动</strong>的 Agent-to-Tool 标准协议。定义统一的工具发现、调用、认证接口，让任何 Agent 能使用任何 MCP Server 提供的工具。三大协议原语：Resources（只读上下文）、Tools（可执行操作）、Prompts（模板）。<br>
+  <span class="aka">2025-2026 年成为行业标准，Anthropic .NET SDK 深度原生集成 MCP，Visual Studio 2026 已将 MCP 作为 AI 治理核心。与 IChatClient 不同——MCP 是真正的跨行业合作标准，IChatClient 是微软主导的 .NET 生态标准。</span>
 </dd>
 
 <dt>Token（令牌）</dt>

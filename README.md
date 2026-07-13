@@ -1,8 +1,17 @@
 # 📘 Learning Lessons
 
-本仓库汇集了八门独立课程，覆盖现代 .NET 语言演进、AI Agent 构建、VS Code 扩展开发、GitHub Actions 自动化工作流、维京历史文化、河西走廊历史地理与二次元绘画入门。编程方向以 C# 从 8 到 15 每一次语法升级为主线，深入语言机制与 .NET 平台基础；工程方向通过实战教程带领读者从零构建 VS Code 扩展与 AI 驱动的自动化流程；人文方向以《冰海战纪》为引探索真实维京世界，以《河西走廊》纪录片为引梳理汉代西域地理、族群与外交史；艺术方向则从插画线条基础训练起步。各课程彼此独立、按需选读，共享同一方法论——从表层 API 下沉到底层机制，从孤立知识点串成系统认知。
+本仓库汇集了九门独立课程，覆盖现代 .NET 语言演进与平台基础、AI Agent 构建、VS Code 扩展开发、GitHub Actions 自动化工作流、维京历史文化、河西走廊历史地理与二次元绘画入门。编程方向以 C# 从 8 到 15 每一次语法升级为主线，深入语言机制与 .NET 运行时架构；工程方向通过实战教程带领读者从零构建 VS Code 扩展与 AI 驱动的自动化流程；人文方向以《冰海战纪》为引探索真实维京世界，以《河西走廊》纪录片为引逐集梳理汉代西域地理、族群与外交史；艺术方向则从插画线条基础训练起步。各课程彼此独立、按需选读，共享同一方法论——从表层 API 下沉到底层机制，从孤立知识点串成系统认知。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
+
+## 河西走廊 第二集 通道
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [第1课：河西走廊地理格局 —— 从乌鞘岭到玉门关](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0001-hexi-corridor-geography.html) | 概览河西走廊的地理格局，从乌鞘岭到玉门关逐段解析这条战略通道的地形与关隘体系 |
+
+**参考资料：**
+- [河西走廊历史 · 核心术语表](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/reference/glossary.html) — 河西走廊历史地理核心术语速查
 
 ## 河西走廊 第一集 使者
 
@@ -11,6 +20,9 @@
 | 1 | [第1课：河西走廊 · 地理、族群与时间](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0001-hexi-corridor-panorama.html) | 概览河西走廊的地理格局、族群分布与历史时间轴，为理解张骞出使西域提供时空背景 |
 | 2 | [第2课：匈奴帝国——不只是一个"敌人"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0002-xiongnu-empire.html) | 深入匈奴帝国的政治结构、军事体系与草原文明，重新认识这个被简化为"敌人"的强大政权 |
 | 3 | [第3课：月氏——被追杀者的史诗](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0003-yuezhi-migration.html) | 追踪月氏人被匈奴驱逐后的西迁史诗，从河西走廊到中亚的族群迁徙与文明碰撞 |
+| 4 | [第4课：乌孙——在巨人之间](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0004-wusun.html) | 揭秘乌孙王国如何在匈奴与汉朝两大帝国之间周旋求存，成为西域关键博弈者 |
+| 5 | [第5课：羌——被误解三千年的邻居](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0005-qiang.html) | 重新认识被中原叙事边缘化的羌人族群，梳理三千年演变脉络与华夏文明的互动关系 |
+| 6 | [第6课：大宛——亚历山大最远的回声](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0006-dayuan.html) | 追溯大宛（费尔干纳）的希腊化渊源，探索亚历山大东征在东方遗留的最远文明回响 |
 
 **参考资料：**
 - [参考：河西走廊族群档案](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/ethnic-groups.html) — 河西走廊及西域主要族群的历史档案与关系梳理
@@ -25,6 +37,7 @@
 | 3 | [Lesson 03 · Memory & Context](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0003-memory-and-context.html) | 探索 Agent 的记忆与上下文管理机制，理解如何让 Agent 跨多轮对话保持状态与连贯性 |
 | 4 | [Lesson 04 · Planning & Orchestration](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0004-planning-and-orchestration.html) | 深入 Agent 的任务规划与编排能力，理解如何将复杂目标拆解为可执行的子任务链 |
 | 5 | [Lesson 05 · MAF Migration Bridge](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0005-maf-migration-bridge.html) | 讲解 MAF（Multi-Agent Framework）迁移桥接层设计，理解如何在不同 Agent 框架之间实现互操作与平滑过渡 |
+| 6 | [Lesson 06 · Multi-Agent Collaboration](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0006-multi-agent-collaboration.html) | 探索多智能体协作模式，理解多个 Agent 如何分工、通信与协同完成复杂任务 |
 
 **参考资料：**
 - [Agent Glossary · Reference](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/reference/agent-glossary.html) — AI Agent 领域核心术语速查
@@ -34,6 +47,12 @@
 | # | 课程 | 描述 |
 |---|------|------|
 | 1 | [第 1 课：SDK 风格项目系统 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0001-sdk-project-system.html) | 从传统 .csproj 格式到 SDK 风格项目系统的演进，理解 .NET 平台的项目组织与构建基础 |
+| 2 | [第 2 课：运行时架构 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0002-coreclr-runtime-architecture.html) | 深入 CoreCLR 运行时架构，理解 .NET 平台的执行引擎、垃圾回收与 JIT 编译机制 |
+
+**参考资料：**
+- [参考：旧项目迁移到 SDK 风格 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/migrate-to-sdk-style.html) — 传统 .csproj 项目迁移到 SDK 风格的操作指南
+- [参考：NuGet 传递依赖解析规则 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/nuget-dependency-resolution.html) — NuGet 依赖版本选择与冲突解析机制速查
+- [参考：运行时配置速查 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/runtime-configuration.html) — runtimeconfig.json 与 MSBuild 运行时配置选项速查
 
 ## Morden .NET
 

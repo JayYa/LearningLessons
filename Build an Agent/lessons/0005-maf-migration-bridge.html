@@ -48,6 +48,19 @@ Semantic Kernel (2023–2026)     AutoGen (2023–2026)
          统一 Agent 抽象、多模型中立、原生 Multi-Agent
 </div>
 
+<h3>回顾：AutoGen 是什么？</h3>
+
+<p>
+  如果你来自 Python 生态，可能对 Semantic Kernel 不熟，但听说过 AutoGen。它是微软研究院（Microsoft Research）2023 年推出的<strong>多智能体对话框架</strong>，核心概念是让多个 Agent 像团队一样互相聊天、分工、交接任务。
+</p>
+
+<div class="card">
+  <strong>SK vs AutoGen 的原始分工：</strong><br>
+  · <strong>Semantic Kernel</strong>（Azure AI 团队）：单 Agent + 插件编排——「如何让一个 Agent 调用工具完成任务？」<br>
+  · <strong>AutoGen</strong>（Microsoft Research）：多 Agent 协作——「如何让多个 Agent 互相聊天、分工、交接任务？」<br><br>
+  AutoGen 贡献给 MAF 的关键能力：<strong>AgentGroupChat</strong>（多 Agent 群聊）、<strong>Handoff</strong>（Agent 间交接）、<strong>SelectionStrategy</strong>（框架自动判断下一轮该让谁发言）。这些就是 <a href="0006-multi-agent-collaboration.html">Lesson 06</a> 要讲的内容。
+</div>
+
 <p>
   对学习者意味着什么？前四节课你用 SK 看到了 Agent 的「骨头」——手动管理 Kernel、Plugin、ChatHistory。这些概念 <strong>100% 通用</strong>。MAF 只是换了 API 语法和结构，<strong>概念体系不变</strong>。
 </p>
@@ -151,6 +164,7 @@ dotnet add package OpenAI --version 2.*
   <strong>📦 包说明：</strong><br>
   · <code>Microsoft.Agents.AI</code> — 核心包，包含 <code>AIAgent</code>、<code>ChatClientAgent</code> 等<br>
   · <code>OpenAI</code> — OpenAI 官方 SDK（DeepSeek 兼容 OpenAI 协议，所以也用这个）<br>
+  · <strong>替代方案：对接 Claude？</strong> 把 <code>OpenAI</code> 换成 <code>Anthropic</code> (v10+) 包即可——Anthropic 官方 SDK 原生实现了 <code>IChatClient</code>，不需要适配器。详见下方 <a href="#multi-model">Step 3 后「对接不同模型」</a>。<br>
   · 不需要 <code>Microsoft.SemanticKernel</code> ——MAF 内部依赖它，但你不直接引用
 </div>
 
@@ -302,6 +316,154 @@ var agent = chatClient.AsAIAgent(
   <strong>无显式 Function Calling 配置：</strong> 在 SK 中你需要 <code>new OpenAIPromptExecutionSettings { FunctionChoiceBehavior = ... }</code>。在 MAF 中，只要传了 <code>tools</code> 数组，Agent 自动启用 Function Calling——不需要额外配置。
 </div>
 
+<h3 id="multi-model">对接不同模型：三行差异</h3>
+
+<p>
+  上面的代码用 DeepSeek（OpenAI 兼容协议）接入。但 MAF 的 <code>IChatClient</code> 抽象意味着——<strong>换模型只需要改创建 <code>IChatClient</code> 的那三行，Agent 创建、工具注册、Session 管理的代码完全不变</strong>。
+</p>
+
+<table style="width:100%;margin:1rem 0;font-size:0.82rem;">
+  <tr><th style="text-align:left;padding:0.4rem;">模型</th><th style="text-align:left;padding:0.4rem;">NuGet 包</th><th style="text-align:left;padding:0.4rem;">创建 IChatClient（仅这三行不同）</th><th style="text-align:left;padding:0.4rem;">IChatClient 来源</th></tr>
+
+  <tr>
+    <td style="padding:0.4rem;"><strong>DeepSeek / OpenAI</strong></td>
+    <td style="padding:0.4rem;"><code>OpenAI</code> (v2+)</td>
+    <td style="padding:0.4rem;font-size:0.78rem;"><code>new OpenAIClient(key).GetChatClient(model).AsIChatClient()</code></td>
+    <td style="padding:0.4rem;">OpenAI SDK + 微软适配器扩展</td>
+  </tr>
+
+  <tr>
+    <td style="padding:0.4rem;"><strong>Claude / Anthropic</strong></td>
+    <td style="padding:0.4rem;"><code>Anthropic</code> (v10+)</td>
+    <td style="padding:0.4rem;font-size:0.78rem;"><code>new AnthropicClient().AsIChatClient(model)</code></td>
+    <td style="padding:0.4rem;"><strong>Anthropic 官方 SDK 原生实现</strong>——不需要适配器</td>
+  </tr>
+
+  <tr>
+    <td style="padding:0.4rem;"><strong>Ollama（本地）</strong></td>
+    <td style="padding:0.4rem;"><code>Ollama</code> (社区)</td>
+    <td style="padding:0.4rem;font-size:0.78rem;"><code>new OllamaChatClient(endpoint, model)</code></td>
+    <td style="padding:0.4rem;">社区包直接实现 IChatClient</td>
+  </tr>
+</table>
+
+<p>以下是 Claude 的完整接入代码：</p>
+
+<pre><code>// ——— 对接 Claude（替换 Step 3 的「A：接入 DeepSeek」部分即可）———
+dotnet add package Anthropic --version 10.*
+
+using Anthropic;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+
+// 创建 Claude 客户端（自动从环境变量读取 ANTHROPIC_API_KEY）
+var anthropic = new AnthropicClient();
+var chatClient = anthropic.AsIChatClient("claude-sonnet-4-6");
+
+// ——— 后面的代码和 DeepSeek 完全一样 ———
+var agent = chatClient.AsAIAgent(
+    name: "MemoryAssistant",
+    instructions: "你是一个带记忆功能的助手。...",
+    tools: [
+        AIFunctionFactory.Create(memory.Remember),
+        AIFunctionFactory.Create(memory.Recall),
+        AIFunctionFactory.Create(memory.ListMemories),
+    ]);
+
+var session = await agent.CreateSessionAsync();
+// ...</code></pre>
+
+<div class="card">
+  <strong>⚠️ 对接 Claude 的一个坑：</strong> Anthropic SDK 要求每次请求必须带 <code>ModelId</code> 和 <code>MaxOutputTokens</code>，但 MAF 不会自动填充这些字段。如果遇到报错，加一个薄中间件即可：<br><br>
+  <code>chatClient.AsBuilder().Use(new AnthropicOptionsInjector("claude-sonnet-4-6")).Build();</code><br><br>
+  （<code>AnthropicOptionsInjector</code> 是一个 10 行的 <code>DelegatingChatClient</code> 子类——见 <a href="https://www.endpointdev.com/blog/2026/05/building-multi-agent-travel-planner-dotnet/" target="_blank">这篇实践文章</a>。将来 <code>Microsoft.Agents.AI.Anthropic</code> 包 GA 后会自动处理。）
+</div>
+
+<p style="margin-top:0.75rem;color:var(--text-muted);">
+  📖 <strong>延伸阅读：</strong>
+  <a href="https://startdebugging.net/2026/06/anthropic-sdk-vs-microsoft-extensions-ai-for-calling-claude-from-dotnet/" target="_blank">Anthropic SDK vs MEAI 完整对比</a> ·
+  <a href="https://github.com/anthropics/dotnet-sdk" target="_blank">Anthropic .NET SDK 官方仓库</a>
+</p>
+
+<h3>进阶：生产级工具注册 —— 用依赖注入替代 <code>new</code></h3>
+
+<p>
+  课上代码用 <code>new MemoryPlugin()</code> 直接创建是为了教学简洁。但在真实项目中，你的工具类迟早需要依赖——数据库连接、ILogger、IMemoryStore 接口等。届时 <code>new</code> 就行不通了。MAF 提供了<strong>两种 DI 模式</strong>来应对。
+</p>
+
+<h4>模式一：构造注入（适合有状态、可长期复用的工具）</h4>
+
+<p>把 Plugin 注册到 DI 容器，在构造函数里声明它需要的依赖：</p>
+
+<pre><code>// ——— DI 注册（Program.cs / Startup）———
+builder.Services.AddSingleton&lt;IMemoryStore, SqliteMemoryStore&gt;();
+builder.Services.AddSingleton&lt;MemoryPlugin&gt;();  // 它的构造函数可以要 DI 里的任何东西
+builder.Services.AddSingleton&lt;AIAgent&gt;(sp => {
+    var chatClient = sp.GetRequiredService&lt;IChatClient&gt;();
+    var plugin = sp.GetRequiredService&lt;MemoryPlugin&gt;();
+    return chatClient.AsAIAgent(
+        instructions: "...",
+        tools: [
+            AIFunctionFactory.Create(plugin.Remember),
+            AIFunctionFactory.Create(plugin.Recall),
+            AIFunctionFactory.Create(plugin.ListMemories),
+        ]);
+});
+
+// ——— Plugin 类 ———
+public class MemoryPlugin(IMemoryStore store, ILogger&lt;MemoryPlugin&gt; logger)
+{
+    [Description("存储信息到长期记忆。")]
+    public string Remember(string key, string info)
+    {
+        logger.LogInformation("Storing {Key}", key);
+        store.Set(key, info);       // ← 真正的持久化，不是 Dictionary
+        return $"已记住 [{key}]";
+    }
+}</code></pre>
+
+<p style="color:var(--text-muted);">
+  注意——<code>AIFunctionFactory.Create(plugin.Remember)</code> 那三行<strong>完全不变</strong>。DI 帮你换了 Plugin 的依赖实现，但 Agent 的创建代码不需要感知。
+</p>
+
+<h4>模式二：IServiceProvider 参数注入（适合需要按次解析的服务）</h4>
+
+<p>在工具方法签名里加 <code>IServiceProvider</code> 参数——MAF 调用时自动注入，<strong>LLM 看不到这个参数</strong>：</p>
+
+<pre><code>public class MemoryPlugin
+{
+    // IServiceProvider 不出现在 LLM 看到的 function schema 里
+    // LLM 只知道 key: string, info: string
+    [Description("存储信息到长期记忆。")]
+    public string Remember(string key, string info, IServiceProvider services)
+    {
+        var store = services.GetRequiredService&lt;IMemoryStore&gt;();
+        store.Set(key, info);
+        return $"已记住 [{key}]";
+    }
+}
+
+// 把 IServiceProvider 传给 Agent
+var agent = chatClient.AsAIAgent(
+    instructions: "...",
+    tools: [...],
+    services: app.Services);  // ← 整个 DI 容器传入</code></pre>
+
+<div class="card card--highlight">
+  <strong>核心区分：</strong><br>
+  · <code>string key, string info</code> → LLM 提供的（<strong>不可信输入</strong>）<br>
+  · <code>IServiceProvider services</code> → 框架注入的（<strong>可信应用依赖</strong>）<br>
+  · <code>CancellationToken cancellationToken</code> → 框架注入的（超时控制）<br><br>
+  MAF 的 schema 生成会自动跳过 <code>IServiceProvider</code> 和 <code>CancellationToken</code> 类型的参数，确保 LLM 看到的函数签名只包含它应该关心的参数。
+</div>
+
+<p style="margin-top:1rem;color:var(--text-muted);">
+  📖 <strong>延伸阅读：</strong>
+  <a href="https://dev.to/lukaswalter/tools-and-dependency-injection-in-microsoft-agent-framework-5cm0" target="_blank">Tools and Dependency Injection in Microsoft Agent Framework</a> —— DI 两种模式的最佳实践 ·
+  <a href="https://learn.microsoft.com/en-us/dotNET/ai/how-to/access-data-in-functions" target="_blank">Access data in AI functions (.NET)</a> —— IServiceProvider 参数注入官方文档 ·
+  <a href="https://www.azureguru.net/function-calls-through-dependency-injection-in-microsoft-agent-framework" target="_blank">Function Calls through DI in MAF (Azure Guru)</a> —— 完整 DI 注册示例
+</p>
+
 <h3>Step 4: 多轮对话——AgentSession 替代 ChatHistory</h3>
 
 <p>这是你作为开发者<strong>最直接的体感变化</strong>：</p>
@@ -367,6 +529,32 @@ File.WriteAllText("session.json", serialized);
 var saved = File.ReadAllText("session.json");
 var resumed = await agent.DeserializeSessionAsync(saved);
 var response = await agent.RunAsync("上次我们聊到哪了？", resumed);</code></pre>
+
+<h4>序列化格式：JSON，不是 JSONL</h4>
+
+<p>
+  <code>SerializeSession(session)</code> 返回一个<strong>普通 JSON 字符串</strong>（用 <code>System.Text.Json</code> 生成），不是 JSONL。里面包含两个东西：
+</p>
+
+<ul style="color:var(--text-muted);margin:0.5rem 0 0.5rem 1.5rem;">
+  <li><strong>ConversationId</strong> —— 会话的唯一标识</li>
+  <li><strong>StateBag</strong> —— 一个字典，装着所有状态：ChatHistoryProvider 写入的对话历史、工具调用记录、workflow 检查点等</li>
+</ul>
+
+<p>
+  你可以把它直接存成 <code>.json</code> 文件，用任何 JSON 工具打开查看。想读里面的具体消息？交给 <code>DeserializeSessionAsync</code> 就行——你不需要手动解析 <code>StateBag</code> 的内部结构。
+</p>
+
+<div class="card">
+  <strong>💡 为什么不是直接读写文件，还要开发者手动 <code>File.WriteAllText</code>？</strong><br><br>
+  这是 .NET 的设计惯例：<strong>库负责数据转换，应用负责 I/O</strong>。<code>SerializeSession</code> 像 <code>ToString()</code>——它把对象变成可传输的字符串。存在哪、怎么存、要不要压缩——这些是你的应用架构决策，框架不该替你做。<br><br>
+  如果 API 直接写成 <code>SaveToFile(path)</code>，那想存到数据库、Redis、消息队列、Blob 存储的场景就会被阻塞。返回 <code>string</code> 意味着：<br><br>
+  <code>File.WriteAllText("session.json", serialized)</code> —— 本地文件<br>
+  <code>await db.InsertAsync(new Row { Data = serialized })</code> —— SQL 数据库<br>
+  <code>await redis.SetAsync("session:42", serialized)</code> —— Redis 缓存<br>
+  <code>await blob.UploadAsync(serialized)</code> —— Azure Blob<br><br>
+  框架不知道你的应用跑在服务器还是客户端、有没有文件系统权限——所以它只做序列化，I/O 留给你。这也让单元测试更简单：断言字符串内容不需要创建临时文件。
+</div>
 
 <h3>Step 5: 完整 Program.cs</h3>
 
@@ -483,6 +671,87 @@ dotnet run
   · <strong>基本场景</strong>（90%）：你只需要 <code>AIAgent</code> + <code>tools</code> + <code>AgentSession</code>——足够了<br>
   · <strong>高级场景</strong>（10%）：如果将来 Kernel 的高级特性（如 Filter 管道、Prompt Template 引擎）对你有用，MAF 允许你通过 <code>ChatClientAgentOptions</code> 暴露底层的 SK Kernel，按需深度定制<br><br>
   这正是"渐进式抽象"——默认路径极简，深度路径不走弯路。
+</div>
+
+<h2>深入理解：L1/L2 是行业合作标准，还是微软单方面兼容？</h2>
+
+<p>
+  这个问题直接关系到你在生产中选择 MAF 的技术风险评估。答案是<strong>分层的——而且有一个反直觉的细节</strong>。
+</p>
+
+<table style="width:100%;margin:1rem 0;font-size:0.92rem;">
+  <tr><th style="text-align:left;padding:0.5rem;">层级</th><th style="text-align:left;padding:0.5rem;">是什么</th><th style="text-align:left;padding:0.5rem;">谁主导</th><th style="text-align:left;padding:0.5rem;">合作程度</th></tr>
+  <tr>
+    <td style="padding:0.5rem;"><strong>L2</strong> IChatClient</td>
+    <td style="padding:0.5rem;">.NET 生态的 AI 统一抽象接口（MEAI）</td>
+    <td style="padding:0.5rem;"><strong>微软主导</strong>，开源</td>
+    <td style="padding:0.5rem;">非跨行业标准，但已是 .NET 生态的<strong>事实标准</strong></td>
+  </tr>
+  <tr>
+    <td style="padding:0.5rem;"><strong>L1</strong> Service Connectors</td>
+    <td style="padding:0.5rem;">各厂商的 .NET SDK + MEAI 适配器</td>
+    <td style="padding:0.5rem;"><strong>各供应商独立维护</strong></td>
+    <td style="padding:0.5rem;">取决于供应商态度——差异很大</td>
+  </tr>
+  <tr>
+    <td style="padding:0.5rem;"><strong>MCP</strong>（不在 MAF 层，但相关）</td>
+    <td style="padding:0.5rem;">模型上下文协议——标准化工具/资源交互</td>
+    <td style="padding:0.5rem;"><strong>微软 + Anthropic 共同推动</strong></td>
+    <td style="padding:0.5rem;">真正的跨行业合作标准</td>
+  </tr>
+</table>
+
+<h3>一个反直觉的事实</h3>
+
+<p>
+  <strong>OpenAI 的官方 .NET SDK 并不原生实现 <code>IChatClient</code></strong>——你需要通过微软提供的 <code>Microsoft.Extensions.AI.OpenAI</code> 适配器包，调用 <code>.AsIChatClient()</code> 扩展方法来桥接。<strong>而 Anthropic 的官方 .NET SDK 原生实现了 <code>IChatClient</code></strong>——不需要适配器。
+</p>
+
+<p>
+  讽刺之处：作为微软"亲儿子"的 OpenAI SDK 反而不原生实现微软自己的抽象标准，Anthropic 却率先原生支持。这意味着 <code>IChatClient</code> 并非微软自嗨——外部厂商愿意直接实现它，降低了它变成「仅微软生态内可用」的风险。
+</p>
+
+<h3>兼容性与更新延迟风险</h3>
+
+<p>风险来自两级依赖链：</p>
+
+<div class="diagram">
+模型厂商发布新 API 功能
+    → 厂商 .NET SDK 更新（第一级延迟）
+        → MEAI 适配器更新（第二级延迟）
+            → MAF 框架更新（第三级延迟）
+</div>
+
+<table style="width:100%;margin:1rem 0;font-size:0.92rem;">
+  <tr><th style="text-align:left;padding:0.5rem;">风险</th><th style="text-align:left;padding:0.5rem;">严重程度</th><th style="text-align:left;padding:0.5rem;">说明</th></tr>
+  <tr>
+    <td style="padding:0.5rem;">新模型参数不支持</td>
+    <td style="padding:0.5rem;">中</td>
+    <td style="padding:0.5rem;">如果 OpenAI 推出新参数（如新的 response_format），需要等 SDK → 适配器 → MAF 三级更新</td>
+  </tr>
+  <tr>
+    <td style="padding:0.5rem;">API 废弃 / breaking change</td>
+    <td style="padding:0.5rem;">低</td>
+    <td style="padding:0.5rem;">Azure OpenAI 也是 MAF 的核心场景，微软有动力快速适配</td>
+  </tr>
+  <tr>
+    <td style="padding:0.5rem;">非主流模型支持慢</td>
+    <td style="padding:0.5rem;">高</td>
+    <td style="padding:0.5rem;">OpenAI/Azure 优先级最高，Anthropic 次之，Ollama 等靠社区</td>
+  </tr>
+  <tr>
+    <td style="padding:0.5rem;">流式/工具调用行为差异</td>
+    <td style="padding:0.5rem;">中</td>
+    <td style="padding:0.5rem;">不同模型的 Function Calling 语义不同，适配器可能掩盖不了所有差异</td>
+  </tr>
+</table>
+
+<h3>三重缓冲机制</h3>
+
+<div class="card card--highlight">
+  <strong>① IChatClient 是接口，不是框架。</strong> 你随时可以绕过微软适配器，自己实现 <code>IChatClient</code> 对接任何模型——接口就几个方法，手写也不难。<br><br>
+  <strong>② MAF 不限制 IChatClient 来源。</strong> 如果适配器滞后，你不需要等 MAF 更新——你只需要一个实现了 <code>IChatClient</code> 的客户端，直接传给 <code>AsAIAgent()</code>。<br><br>
+  <strong>③ Anthropic 的原生支持是积极信号。</strong> 外部厂商愿意直接实现 IChatClient 而不是依赖微软适配器，说明这个接口有生态生命力。
 </div>
 
 <h2>Planning 在 MAF 中怎么实现？</h2>

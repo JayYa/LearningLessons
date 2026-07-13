@@ -149,6 +149,163 @@ kbd {
 .check-list { list-style: none; margin: 0.5rem 0; }
 .check-list li::before { content: "✓ "; color: #4caf50; font-weight: 700; }
 
+/* Tables */
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+}
+.tbl th, .tbl td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.tbl th {
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  border-bottom-width: 2px;
+}
+.tbl tr:last-child td { border-bottom: none; }
+
+/* Definition lists (glossary / key terms) */
+dl {
+  margin: 1rem 0;
+}
+dt {
+  font-weight: 600;
+  margin-top: 0.75rem;
+}
+dd {
+  margin-left: 1.2rem;
+  font-size: 0.92rem;
+  color: var(--fg-muted);
+}
+
+/* ASCII / text-flow diagrams */
+.diagram {
+  background: #fafafa;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  margin: 1rem 0;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+.diagram pre {
+  margin: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* Compact diagram block (inline examples, narrower than .diagram) */
+.diag {
+  background: #fafafa;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.8rem 1rem;
+  margin: 0.6rem 0;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+.diag pre { margin: 0; border: none; background: transparent; padding: 0; font-size: inherit; }
+.diag .arrow { color: var(--fg-muted); }
+.diag .win   { color: #2e7d32; font-weight: 600; }
+.diag .lose  { color: #c62828; }
+
+/* Numbered rule blocks */
+.rule {
+  border-left: 3px solid var(--accent);
+  padding-left: 1rem;
+  margin: 1rem 0;
+}
+.rule__num {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.rule h3, .rule h4 { margin-top: 0.2rem; border: none; padding: 0; }
+
+/* Auto-numbered step blocks */
+.steps { counter-reset: step; }
+.step {
+  counter-increment: step;
+  margin: 1rem 0;
+}
+.step::before {
+  content: "Step " counter(step);
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.1rem;
+}
+.step h3, .step h4 { margin-top: 0; border: none; padding: 0; }
+
+/* Do / Don't comparison */
+.do-dont {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+  margin: 0.8rem 0;
+}
+.do-dont > div { padding: 0.7rem 0.9rem; border-radius: 6px; font-size: 0.88rem; }
+.do   { background: #e8f5e9; border: 1px solid #a5d6a7; }
+.dont { background: #fce4ec; border: 1px solid #ef9a9a; }
+.do::before   { content: "✅ 做："; font-weight: 600; }
+.dont::before { content: "❌ 别："; font-weight: 600; }
+@media (max-width: 500px) {
+  .do-dont { grid-template-columns: 1fr; }
+}
+
+/* Spectrum / comparison cards (3-col) */
+.spectrum {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.8rem;
+  margin: 1rem 0;
+}
+.spec-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.8rem;
+  text-align: center;
+}
+.spec-item h4, .spec-item h5 { margin: 0 0 0.3rem; font-size: 0.95rem; border: none; padding: 0; }
+.spec-item p { margin: 0; font-size: 0.8rem; color: var(--fg-muted); }
+
+/* Tags (for spectrum cards) */
+.tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.12em 0.5em;
+  border-radius: 3px;
+  margin-bottom: 0.3rem;
+}
+.tag-jit { background: #e8f5e9; color: #2e7d32; }
+.tag-r2r { background: #fff3e0; color: #e65100; }
+.tag-aot { background: #e3f2fd; color: #1565c0; }
+@media (max-width: 600px) {
+  .spectrum { grid-template-columns: 1fr; }
+}
+
+/* Section divider */
+hr.section { margin: 2rem 0; border: none; border-top: 1px solid var(--border); }
+
 /* Print */
 @media print {
   body { font-size: 11pt; max-width: none; padding: 0; }
