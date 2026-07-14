@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 3 课：GC 内部机制与内存控制 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>第 3 课：GC 内部机制与内存控制</h1>
+<div class="lesson-meta">
+  模块：运行时架构（2/2）&nbsp;|&nbsp; 预计阅读/练习时间：20 分钟
+</div>
+
+<p>
+  上一课你知道了 GC 有<strong>两种模式</strong>可以切。但选完模式还不够——GC 在回收时到底在干什么？
+  Framework 4.8 开发者可以一辈子不关心 GC 内部细节，现代 .NET 给了你<strong>绕开 GC 的工具</strong>，
+  但前提是你要理解它怎么运作。这一课从 GC 的"代"机制出发，到 Span&lt;T&gt; 如何直接在栈上操作内存，
+  再到 AssemblyLoadContext 如何替代你熟悉的 AppDomain。
+</p>
+
+<div class="summary">
+  <ul>
+    <li>理解 GC <strong>三代机制</strong>（Gen0/Gen1/Gen2）和三种堆（SOH/LOH/POH）的<strong>物理分界</strong></li>
+    <li>掌握 <strong>Span&lt;T&gt; 和 Memory&lt;T&gt;</strong> 如何绕开 GC 堆，以及两者在<strong>什么场景用哪个</strong></li>
+    <li>理解 <strong>AssemblyLoadContext</strong> 为何取代 AppDomain——加载、隔离、卸载程序集的新模型</li>
+  </ul>
+</div>
+
+<h2>代机制：GC 不是"扫全堆"</h2>
+
+<p>
+  Framework 4.8 时代你可能听过"GC 回收会暂停所有线程"——但 GC 并不是每次都扫整个堆。
+  现代 .NET 的 GC 是<strong>分代（generational）的</strong>，基于一个简单假设：<strong>新对象死得快，老对象活得久</strong>。
+</p>
+
+<h3>三代模型</h3>
+
+<div class="diagram">
+<pre>
+<strong>托管堆的物理布局</strong>
+
+┌─────────────────────────────────────────────────────┐
+│  Gen0          │  Gen1          │  Gen2             │
+│  (ephemeral)   │  (buffer)      │  (long-lived)     │
+│                 │                │                   │
+│  新创建的       │  熬过 1 次     │  熬过多次回收     │
+│  小对象         │  Gen0 回收     │  静态变量、       │
+│  临时字符串     │  上升至此      │  长期缓存、       │
+│  LINQ 临时结果  │                │  Singleton        │
+│                 │                │                   │
+│  回收频率：极高  │  回收频率：中   │  回收频率：低     │
+│  暂停时间：&lt;1ms │  暂停时间：短   │  暂停时间：较长    │
+└─────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<p>回收的逻辑：</p>
+
+<ol>
+  <li><strong>Gen0 满了</strong> → 只回收 Gen0。存活对象<strong>提升（promote）</strong>到 Gen1，死亡对象的内存直接回收。</li>
+  <li><strong>Gen1 满了</strong> → 回收 Gen0 <strong>和</strong> Gen1。Gen1 的存活对象提升到 Gen2。</li>
+  <li><strong>Gen2 满了</strong> → 回收 <strong>全部三代</strong>（full GC）。这是最贵的回收，但发生频率最低。</li>
+</ol>
+
+<div class="callout callout--info">
+💡 <strong>Framework 4.8 的 GC 也是分代的</strong>——这点新旧是相同的。区别在于现代 .NET 让你对 GC 有更细的控制：
+可以<strong>压缩 LOH</strong>（以前不行）、可以<strong>限制堆硬上限</strong>（容器友好）、可以用 <code>GC.Collect(2, GCCollectionMode.Aggressive)</code> 精确控制回收行为。
+</div>
+
+<h3>SOH / LOH / POH：对象的三个"家"</h3>
+
+<p>GC 堆不是一个整体——对象根据自己的大小和特性，被分配在<strong>三个不同的堆区域</strong>：</p>
+
+<table class="tbl">
+  <tr><th>堆</th><th>全称</th><th>存放什么</th><th>回收时压不压缩</th><th>代支持</th></tr>
+  <tr>
+    <td><strong>SOH</strong></td>
+    <td>Small Object Heap</td>
+    <td>&lt; 85,000 字节的对象<br>（绝大多数对象在这）</td>
+    <td>✅ 压缩（移动存活对象，消除碎片）</td>
+    <td>Gen0/Gen1/Gen2</td>
+  </tr>
+  <tr>
+    <td><strong>LOH</strong></td>
+    <td>Large Object Heap</td>
+    <td>≥ 85,000 字节的对象<br>（大数组、大字符串、大 byte[]）</td>
+    <td>❌ 默认不压缩<br>（移动大对象太贵）</td>
+    <td>只有 Gen2<br>（大对象直接进 Gen2）</td>
+  </tr>
+  <tr>
+    <td><strong>POH</strong></td>
+    <td>Pinned Object Heap</td>
+    <td>被 <code>fixed</code> 固定的对象<br>（传给 native 代码的 buffer）</td>
+    <td>❌ 不压缩<br>（固定了就不能移动）</td>
+    <td>只有 Gen2<br>（.NET 5 新增）</td>
+  </tr>
+</table>
+
+<div class="callout callout--warn">
+⚠️ <strong>LOH 碎片的坑：</strong>Framework 4.8 中最头疼的问题之一——大对象分配后释放，LOH 产生空洞，
+后续分配找不到足够大的连续空间 → <code>OutOfMemoryException</code>（明明空闲内存还很多）。
+现代 .NET 可以通过 <code>GCSettings.LargeObjectHeapCompactionMode</code> 手动触发 LOH 压缩，
+或配置 <code>DOTNET_GCLOHThreshold</code> 调整大对象阈值。
+</div>
+
+<p>POH 是 .NET 5 才加入的——以前被 <code>fixed</code> 固定的对象留在 SOH 里，像钉子一样阻碍 Gen0 压缩。现在它们被单独隔离到 POH，SOH 的回收效率大幅提升。</p>
+
+<h2>Span&lt;T&gt;：绕开 GC 堆操作内存</h2>
+
+<p>
+  Framework 4.8 时代你想操作一段内存，几乎只有三条路：<strong>数组（在 GC 堆上）</strong>、<strong>不安全代码（unsafe + 指针）</strong>、<strong>Marshal.AllocHGlobal（非托管内存，手动释放）</strong>。
+  数组产生 GC 分配，不安全代码太难维护，AllocHGlobal 忘了释放就是内存泄漏。
+</p>
+
+<p>现代 .NET 给了你第四种选择：<strong>Span&lt;T&gt;</strong>——一个可以指向<strong>任意内存</strong>的类型安全切片视图。</p>
+
+<h3>Span&lt;T&gt; 是什么？</h3>
+
+<div class="diagram">
+<pre>
+<strong>Span&lt;T&gt; 可以指向三种内存来源</strong>
+
+  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+  │  托管堆上的数组   │    │  栈上的内存      │    │  非托管内存      │
+  │  (GC 管理的)     │    │  (stackalloc)   │    │  (native heap)  │
+  └────────┬────────┘    └────────┬────────┘    └────────┬────────┘
+           │                      │                      │
+           ▼                      ▼                      ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │                    Span&lt;T&gt;（ref struct）                    │
+  │  · 只存在栈上（不能被装箱、不能作为类字段）                   │
+  │  · 零分配——不对 GC 产生任何压力                              │
+  │  · 切片（Slice）只是移动指针，不复制数据                      │
+  │  · 编译器保证生命周期安全（比 unsafe 指针安全得多）            │
+  └─────────────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<h3>典型用法</h3>
+
+<pre><code>// 1. 从数组创建 Span——不分配新内存
+byte[] buffer = new byte[1024];
+Span&lt;byte&gt; span = buffer.AsSpan();
+Span&lt;byte&gt; firstHalf = span.Slice(0, 512);  // 不复制，只是新视图
+
+// 2. 栈上分配——完全绕开 GC
+Span&lt;int&gt; nums = stackalloc int[128];  // 在栈上，0 GC 压力
+
+// 3. 字符串切片——以前要 Substring（分配新字符串），现在不用了
+ReadOnlySpan&lt;char&gt; slice = "Hello, World!".AsSpan(0, 5);  // "Hello"，零分配
+
+// 4. 解析数据不产生临时 string
+ReadOnlySpan&lt;char&gt; text = input.AsSpan();
+int commaIndex = text.IndexOf(',');
+var key = text.Slice(0, commaIndex);    // 零分配
+var value = text.Slice(commaIndex + 1); // 零分配
+</code></pre>
+
+<div class="callout callout--info">
+💡 <strong>和 Framework 4.8 的 <code>ArraySegment&lt;T&gt;</code> 有什么不同？</strong>
+<code>ArraySegment&lt;T&gt;</code> 只能指向数组，而且是个普通 struct（可以放堆上，没有 ref 安全保证）。
+<code>Span&lt;T&gt;</code> 可以指向任何内存，并且是 <strong>ref struct</strong>——编译器强制它只能在栈上，确保它引用的内存在使用期间有效。这是 C# 7.2 引入的语言级安全特性。
+</div>
+
+<h3>Span&lt;T&gt; vs Memory&lt;T&gt;：什么时候用哪个？</h3>
+
+<p>Span&lt;T&gt; 有一个致命限制——它是 <strong>ref struct</strong>，<strong>不能作为类字段、不能装箱、不能在 async 方法中使用</strong>。对于异步场景，你需要它的堂兄弟 Memory&lt;T&gt;：</p>
+
+<table class="tbl">
+  <tr><th></th><th>Span&lt;T&gt;</th><th>Memory&lt;T&gt;</th></tr>
+  <tr><td>类型</td><td>ref struct</td><td>struct（普通值类型）</td></tr>
+  <tr><td>存储位置</td><td><strong>只能在栈上</strong></td><td>栈上、堆上（类字段）、lambda 捕获</td></tr>
+  <tr><td>async 方法</td><td>❌ 不能</td><td>✅ 可以</td></tr>
+  <tr><td>作为类字段</td><td>❌ 不能</td><td>✅ 可以</td></tr>
+  <tr><td>零 GC 分配</td><td>✅ 是</td><td>✅ 是（但 Memory 本身可在堆上）</td></tr>
+  <tr><td>性能</td><td>更快（无间接层）</td><td>略慢（内部有 Span 属性）</td></tr>
+  <tr><td>典型场景</td><td>同步方法、本地变量、循环内切片</td><td>async 管道、类字段、跨方法传递</td></tr>
+</table>
+
+<pre><code>// Memory&lt;T&gt;：异步场景中零分配的缓冲区操作
+async Task ProcessAsync(Memory&lt;byte&gt; buffer, PipeWriter writer)
+{
+    // Memory 可以跨 await 使用
+    await writer.WriteAsync(buffer.Slice(0, 128));
+    await DoMoreAsync(buffer);
+}
+
+// 从 Memory 取出 Span 做实际读写（取 Span 的瞬间是同步的）
+void ParseHeader(Memory&lt;byte&gt; buffer)
+{
+    Span&lt;byte&gt; span = buffer.Span;  // 同步方法里拿到 Span
+    int version = span[0];
+}
+</code></pre>
+
+<div class="callout callout--warn">
+⚠️ <strong>常见错误：</strong>在 async 方法里试图用 Span&lt;T&gt; 跨 await——编译器会报错 CS4012。
+这是 C# 的保护机制：ref struct 跨 await 意味着它的栈帧在恢复时可能已经失效。
+<strong>规则很简单：同步用 Span，异步用 Memory，在同步回调里通过 <code>.Span</code> 拿到 Span 做实际读写。</strong>
+</div>
+
+<h2>AssemblyLoadContext：AppDomain 的现代替代</h2>
+
+<p>
+  Framework 4.8 中你熟悉的 AppDomain 在现代 .NET 中<strong>几乎全砍了</strong>。原因很简单：AppDomain
+  太重了——创建和卸载 AppDomain 需要序列化跨越边界的对象，性能极差，而且<strong>不能单独卸载一个程序集</strong>
+  （一个程序集加载到 AppDomain 后，必须卸载整个 AppDomain 才能释放）。
+</p>
+
+<p>现代 .NET 的答案是 <strong>AssemblyLoadContext</strong>（ALC）——轻量、可单独卸载、支持隔离。</p>
+
+<h3>对比</h3>
+
+<table class="tbl">
+  <tr><th></th><th>AppDomain（Framework 4.8）</th><th>AssemblyLoadContext（现代 .NET）</th></tr>
+  <tr><td>创建成本</td><td>高（独立运行时隔离）</td><td>低（轻量逻辑边界）</td></tr>
+  <tr><td>卸载</td><td>卸载整个 AppDomain<br>（含其中所有程序集）</td><td><strong>卸载单个 ALC</strong><br>（含其中所有程序集）</td></tr>
+  <tr><td>跨边界通信</td><td>需 MarshalByRefObject / 序列化</td><td><strong>不需要</strong>（同一进程，纯类型边界）</td></tr>
+  <tr><td>隔离粒度</td><td>整个应用程序域</td><td>程序集加载范围可控</td></tr>
+  <tr><td>典型场景</td><td>进程内多应用隔离（极少使用）</td><td>插件系统、热重载、程序集版本隔离</td></tr>
+</table>
+
+<h3>核心概念：加载链</h3>
+
+<p>每个 ALC 都有一个名称，构成一个<strong>加载链</strong>。当你在一个 ALC 中尝试加载程序集时：</p>
+
+<div class="diagram">
+<pre>
+MyPluginContext（自定义 ALC）
+  │ 尝试加载 PluginUtils.dll
+  │
+  ├── 自己先处理（Load 重载 → 从 plugins/ 目录加载）
+  │   └── 如果返回 null（表示"我不处理这个"）
+  │
+  └── 回退到 <strong>Default ALC</strong>
+      └── 从应用程序目录加载
+</pre>
+</div>
+
+<h3>插件系统最小示例</h3>
+
+<pre><code>// 自定义 ALC：从指定目录加载程序集
+class PluginLoadContext : AssemblyLoadContext
+{
+    private readonly string _pluginPath;
+
+    public PluginLoadContext(string pluginPath)
+        : base(isCollectible: true)  // ← 关键：允许卸载！
+    {
+        _pluginPath = pluginPath;
+    }
+
+    protected override Assembly? Load(AssemblyName name)
+    {
+        string dllPath = Path.Combine(_pluginPath, name.Name + ".dll");
+        if (File.Exists(dllPath))
+            return LoadFromAssemblyPath(dllPath);  // 从文件加载
+
+        return null;  // 回退到 Default ALC
+    }
+}
+
+// 使用：加载插件 → 执行 → 卸载
+var context = new PluginLoadContext("./plugins/greeter");
+Assembly pluginAssembly = context.LoadFromAssemblyName(
+    new AssemblyName("GreeterPlugin"));
+// ... 执行插件代码 ...
+context.Unload();  // 卸载整个 ALC 及其中所有程序集
+// 注意：Unload 是异步的，实际释放要等 GC 回收
+</code></pre>
+
+<div class="callout callout--info">
+💡 <strong><code>isCollectible: true</code> 是关键——</strong>不设这个标志，ALC 中的程序集<strong>永远不能被 GC 回收</strong>。
+这是 Framework 4.8 开发者最容易踩的坑。另外即使调了 <code>Unload()</code>，程序集也不会立即释放——需要等 GC 检测到 ALC 和所有相关对象不再被引用后才回收。
+</div>
+
+<h3>典型应用场景</h3>
+
+<table class="tbl">
+  <tr><th>场景</th><th>怎么做</th><th>FW 4.8 时代怎么搞</th></tr>
+  <tr>
+    <td>插件系统</td>
+    <td>每个插件一个 ALC，动态加载/卸载</td>
+    <td>AppDomain 隔离 or 不隔离（无法卸载）</td>
+  </tr>
+  <tr>
+    <td>ASP.NET Core 热重载</td>
+    <td>每次修改代码 → 卸载旧 ALC → 新 ALC 加载新版本</td>
+    <td>不存在，只能重启进程</td>
+  </tr>
+  <tr>
+    <td>Roslyn 脚本引擎</td>
+    <td>每次 C# 脚本编译生成一个程序集 → 放进独立 ALC → 执行完卸载</td>
+    <td>加载后无法卸载，内存泄漏</td>
+  </tr>
+  <tr>
+    <td>程序集版本隔离</td>
+    <td>不同 ALC 加载同一程序集不同版本，互不冲突（如 Newtonsoft.Json 11 和 13 共存）</td>
+    <td>依赖 bindingRedirect，经常失败</td>
+  </tr>
+</table>
+
+<h2>框架选择：这三个技术怎么关联？</h2>
+
+<p>把它们串起来看，现代 .NET 对内存的管理形成了一个从"放任"到"精细控制"的光谱：</p>
+
+<div class="diagram">
+<pre>
+你的应用在做什么？
+│
+├── 普通对象分配
+│   └── SOH (Gen0→Gen1→Gen2)，GC 自动管理
+│       大对象 → LOH（默认不压缩，可手动触发）
+│       fixed 对象 → POH（.NET 5+ 隔离，不干扰 SOH）
+│
+├── 要避免临时对象带来的 GC 压力？
+│   └── <strong>Span&lt;T&gt;</strong>（同步）或 <strong>Memory&lt;T&gt;</strong>（异步）
+│       零分配切片、栈分配、直接操作原生内存
+│
+├── 要加载外部的 .dll 并能在不用时卸载？
+│   └── <strong>AssemblyLoadContext</strong>（设 isCollectible: true）
+│       每个 ALC 是独立的加载域，卸载 = GC 回收全部相关程序集
+│
+└── 要一个不依赖 .NET 运行时的单文件？
+    └── NativeAOT（上一课的编译光谱最右端）
+        整个运行时裁剪、编译进 exe，但 Span/Memory 依旧可用
+</pre>
+</div>
+
+<h2>检查理解</h2>
+
+<div class="quiz" id="quiz1"
+     data-feedback-correct="✅ 正确！≥ 85,000 字节的对象直接分配在 LOH，且默认不参与 Gen0 回收（直接标记为 Gen2）。"
+     data-feedback-wrong="❌ 不对。大对象（≥ 85,000 字节）不进入 Gen0，直接分配到 LOH。">
+  <div class="quiz__q">❓ 一个 100KB 的 byte[] 刚创建时，它分配在哪个堆、属于哪一代？</div>
+  <div class="quiz__opt" data-answer="wrong">SOH / Gen0</div>
+  <div class="quiz__opt" data-answer="correct">LOH / Gen2</div>
+  <div class="quiz__opt" data-answer="wrong">POH / Gen2</div>
+  <div class="quiz__opt" data-answer="wrong">SOH / Gen2</div>
+  <div class="quiz__feedback" id="quiz1-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz2" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！数据不会被复制——Span.Slice 只是新建一个 Span，它的指针指向原数据内部的一段。"
+     data-feedback-wrong="❌ 不对。Slice 不复制数据，它只是移动内部指针并缩小长度。这也是 Span 零分配的关键原因。">
+  <div class="quiz__q">❓ 对一个 1024 字节的 <code>Span&lt;byte&gt;</code> 调用 <code>.Slice(0, 512)</code> 后，数据发生了什么？</div>
+  <div class="quiz__opt" data-answer="wrong">前 512 字节被复制到一个新的数组</div>
+  <div class="quiz__opt" data-answer="correct">不复制数据，只是创建了一个指向原数据前 512 字节的新视图</div>
+  <div class="quiz__opt" data-answer="wrong">前 512 字节被复制到栈上</div>
+  <div class="quiz__opt" data-answer="wrong">原 Span 被截短到 512 字节，没有新 Span</div>
+  <div class="quiz__feedback" id="quiz2-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz3" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！看表不仔细吧——POH 是 .NET 5 新增的，用于隔离被 fixed 固定的对象，跟大对象分配无关。"
+     data-feedback-wrong="❌ 不对。POH（Pinned Object Heap）是为了隔离固定对象，不是大对象分配的第二选择。">
+  <div class="quiz__q">❌ 以下哪个是<strong>错误的</strong>？</div>
+  <div class="quiz__opt" data-answer="wrong">LOH 默认不压缩，因为移动大对象开销太大</div>
+  <div class="quiz__opt" data-answer="wrong">Span&lt;T&gt; 不能作为类的字段</div>
+  <div class="quiz__opt" data-answer="correct">POH 用于存放 ≥ 85,000 字节的大对象</div>
+  <div class="quiz__opt" data-answer="wrong">AssemblyLoadContext 设 isCollectible: true 后可以卸载</div>
+  <div class="quiz__feedback" id="quiz3-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz4" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！Memory&lt;T&gt; 是普通 struct，可以作为类字段、在 async 方法中使用。Span&lt;T&gt; 是 ref struct，有这些限制。"
+     data-feedback-wrong="❌ 不对。async 方法中要用 Memory&lt;T&gt; 代替 Span&lt;T&gt;，因为 Span 是 ref struct 不能跨 await。">
+  <div class="quiz__q">❓ 你在一个 async 方法中需要操作一个 byte 缓冲区。应该用什么类型？</div>
+  <div class="quiz__opt" data-answer="wrong">Span&lt;byte&gt;</div>
+  <div class="quiz__opt" data-answer="correct">Memory&lt;byte&gt;</div>
+  <div class="quiz__opt" data-answer="wrong">ArraySegment&lt;byte&gt;</div>
+  <div class="quiz__opt" data-answer="wrong">byte*</div>
+  <div class="quiz__feedback" id="quiz4-feedback"></div>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+<h2>关键术语</h2>
+
+<dl>
+  <dt><strong>Gen0 / Gen1 / Gen2</strong></dt>
+  <dd>GC 的三代回收机制。Gen0：新创建的小对象，回收最频繁（暂停 &lt;1ms）。Gen1：熬过一次 Gen0 回收的对象，作为 Gen0 和 Gen2 之间的缓冲。Gen2：长期存活的对象（静态变量、缓存），回收触发 full GC。</dd>
+  <dt><strong>提升（Promotion）</strong></dt>
+  <dd>回收时，存活对象从当前代"升"到更老一代的过程。Gen0 存活 → Gen1；Gen1 存活 → Gen2。提升意味着对象会活得更久，所以别让临时对象不小心升到 Gen2。</dd>
+  <dt><strong>SOH（Small Object Heap）</strong></dt>
+  <dd>存放 &lt; 85,000 字节对象的堆区域，支持三代回收和压缩（移动存活对象消除碎片）。</dd>
+  <dt><strong>LOH（Large Object Heap）</strong></dt>
+  <dd>存放 ≥ 85,000 字节（即 ≳83KB）对象的堆区域。对象直接标记为 Gen2，默认不压缩。碎片可能导致 OOM。现代 .NET 支持手动压缩。</dd>
+  <dt><strong>POH（Pinned Object Heap）</strong></dt>
+  <dd>.NET 5 新增——存放被 <code>fixed</code> 固定（不能移动）的对象。将"钉子"从 SOH 中分离出来，SOH 回收效率更高。</dd>
+  <dt><strong>Span&lt;T&gt;</strong></dt>
+  <dd>ref struct，只能存在于栈上。可以提供对托管堆、栈、非托管内存的类型安全零分配视图。Slice 不复制数据。不能作为类字段、不能在 async 中使用。</dd>
+  <dt><strong>Memory&lt;T&gt;</strong></dt>
+  <dd>Span&lt;T&gt; 的堆安全版本。普通 struct，可以存储在类字段中、在 async 方法中跨 await 使用。通过 <code>.Span</code> 属性在同步回调中取出 Span 做实际读写。</dd>
+  <dt><strong>AssemblyLoadContext（ALC）</strong></dt>
+  <dd>现代 .NET 中替代 AppDomain 的程序集加载边界。轻量、可单独卸载（isCollectible: true）、不需要跨边界序列化。用于插件系统、热重载、程序集版本隔离。</dd>
+  <dt><strong>Default ALC</strong></dt>
+  <dd>应用程序启动时的默认 AssemblyLoadContext，从应用程序目录加载程序集。所有自定义 ALC 的回退目标。</dd>
+</dl>
+
+<h2>推荐阅读</h2>
+
+<p>📖 <strong>首选参考：</strong><a href="https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/fundamentals">Fundamentals of Garbage Collection</a> — GC 代机制、LOH/SOH 官方详解</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/standard/memory-and-spans/">Memory and Span usage guidelines</a> — Span/Memory 选择决策树与最佳实践</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/core/dependency-loading/understanding-assemblyloadcontext">Understanding AssemblyLoadContext</a> — ALC 加载顺序与隔离的完整行为指南</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/large-object-heap">The large object heap on Windows systems</a> — LOH 碎片与压缩的实战信息</p>
+
+<p>📖 <a href="https://github.com/dotnet/runtime/blob/main/docs/design/features/pinned-object-heap.md">POH 设计文档</a> — dotnet/runtime 仓库中 POH 的详细设计</p>
+
+<p>📖 <strong>本课速查：</strong> <a href="../reference/runtime-configuration.html">运行时配置速查</a>（GC / JIT / 编译模式）<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<a href="../reference/span-memory-patterns.html">Span&lt;T&gt; / Memory&lt;T&gt; 速查</a>（常用模式、性能陷阱、API 映射）</p>
+
+<h2>接下来</h2>
+
+<p>
+  运行时架构模块到此结束。下一个模块是<strong>依赖注入（DI）</strong>——这是 Framework 4.8 开发者要面对的最大范式转变。
+  从 Autofac/Ninject 这种"第三方容器的第三方用法"切换到<strong>内置的、处处渗透的</strong>
+  <code>Microsoft.Extensions.DependencyInjection</code>，你需要重新理解服务生命周期、工厂模式和 keyed service。
+</p>
+
+<div class="callout callout--info">
+💬 <strong>有问题？</strong> 直接问我！比如"LOH 碎片到底什么时候该手动压缩？"
+或"我以前的 Autofac 模块能直接搬到 IServiceCollection 吗？"
+或"为什么 Span 跨 await 就会出问题？编译器到底在防什么？"
+</div>
+
+<div class="lesson-nav">
+  <a href="0002-coreclr-runtime-architecture.html">← 上一课：运行时架构（一）</a>
+  <a href="0004-dependency-injection-fundamentals.html">下一课：依赖注入基础 →</a>
+</div>
+
+</body>
+</html>

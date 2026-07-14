@@ -126,6 +126,13 @@
 
 <p>Framework 4.8 中的 JIT：调用一个方法 → 即时编译 → 执行。简单粗暴。问题是<strong>首次调用慢</strong>——大型应用启动时要编译大量方法。</p>
 
+<div class="callout callout--info">
+💡 <strong>"首次调用慢"是运行时的事，不是编译时。</strong><code>dotnet build</code> 只是把你的 C# 转成 IL（中间语言），这一步很快，跟 JIT 无关。
+JIT 的"即时编译"发生在<strong>程序运行时、方法第一次被调用的时候</strong>——跟 Debug 还是 Release 没关系（Release 下优化更多反而编译更慢，只是生成的代码跑得更快）。
+打个比方：JIT 不是你打开 IDE 加载项目慢，而是<strong>用户双击你的 exe 后第一次弹窗慢</strong>。
+分层编译解决的就是这个运行时的冷启动问题：Tier 0 快编先让程序跑起来，热方法后台升 Tier 1。
+</div>
+
 <p>现代 .NET 的 JIT 完全不同——<strong>分层编译（Tiered Compilation）</strong>是默认：</p>
 
 <div class="diagram">
@@ -175,6 +182,15 @@
 <h3>R2R：Framework 的 NGen 重生版</h3>
 
 <p>R2R 是 Framework 时代 NGen 的精神续作，但做得更好：把 IL 编译成<strong>中间态的预编译代码</strong>，运行时只需做少量修正（地址重定位、跨程序集引用解析），而非从头编译。</p>
+
+<p>用翻译作类比，三种模式的区别一目了然：</p>
+
+<table class="tbl">
+  <tr><th>模式</th><th>类比</th><th>编译实际发生</th></tr>
+  <tr><td>纯 JIT</td><td>现场翻译——外国人（IL）来了才找翻译（JIT），边说边翻</td><td>运行时每个方法首次调用时编译</td></tr>
+  <tr><td>R2R</td><td>提前翻译好了讲稿，现场只填几个名字和日期</td><td>发布时预编译大部分，运行时只做轻量修正</td></tr>
+  <tr><td>NativeAOT</td><td>直接给对方一个母语者，不需要翻译</td><td>发布时全部编译好，运行时就是纯原生代码</td></tr>
+</table>
 
 <pre><code># 发布时开启 R2R
 dotnet publish -c Release -p:PublishReadyToRun=true</code></pre>
@@ -293,7 +309,7 @@ dotnet publish -c Release -p:PublishReadyToRun=true</code></pre>
 
 <div class="lesson-nav">
   <a href="0001-sdk-project-system.html">← 上一课：SDK 风格项目系统</a>
-  <span></span>
+  <a href="0003-gc-internals-memory-control.html">下一课：GC 内部机制与内存控制 →</a>
 </div>
 
 </body>

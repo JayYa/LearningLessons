@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参考：Span&lt;T&gt; / Memory&lt;T&gt; 速查 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>📐 参考：Span&lt;T&gt; / Memory&lt;T&gt; 速查</h1>
+<div class="lesson-meta">
+  模块：运行时架构 &nbsp;|&nbsp; 速查参考
+</div>
+
+<h2>一句话区分</h2>
+
+<table class="tbl">
+  <tr><th></th><th>Span&lt;T&gt;</th><th>Memory&lt;T&gt;</th></tr>
+  <tr><td>类型</td><td>ref struct</td><td>struct</td></tr>
+  <tr><td>存活范围</td><td>只能在栈上</td><td>栈上 / 堆上（可作为类字段）</td></tr>
+  <tr><td>async 方法</td><td>❌ 不能跨 await</td><td>✅ 可以</td></tr>
+  <tr><td>作为字段</td><td>❌ 只能作为 ref struct 的字段</td><td>✅ 任意类型的字段</td></tr>
+  <tr><td>装箱</td><td>❌ 不允许</td><td>✅ 但会分配在堆上</td></tr>
+  <tr><td>lambda 捕获</td><td>❌ 不允许</td><td>✅ 允许</td></tr>
+  <tr><td>迭代器 (yield)</td><td>❌ 不允许</td><td>✅ 允许</td></tr>
+  <tr><td>性能</td><td>更快（无间接层）</td><td>.Span 属性有一层间接</td></tr>
+</table>
+
+<h2>创建方式</h2>
+
+<pre><code>// ========== Span&lt;T&gt; ==========
+
+// 从数组
+Span&lt;byte&gt; s1 = new byte[1024].AsSpan();
+Span&lt;byte&gt; s2 = new byte[1024];              // 隐式转换
+
+// 从数组切片
+Span&lt;byte&gt; s3 = array.AsSpan(10, 100);       // [10..110)
+
+// 从字符串 (ReadOnlySpan)
+ReadOnlySpan&lt;char&gt; s4 = "hello".AsSpan();
+ReadOnlySpan&lt;char&gt; s5 = "hello".AsSpan(1, 3);// "ell"
+
+// 栈上分配
+Span&lt;int&gt; s6 = stackalloc int[32];
+Span&lt;byte&gt; s7 = stackalloc byte[64];         // 类型推断
+
+// 从非托管指针
+Span&lt;byte&gt; s8 = new Span&lt;byte&gt;(ptr, length); // unsafe
+
+// 从 Memory
+Span&lt;byte&gt; s9 = memory.Span;
+
+// ========== Memory&lt;T&gt; ==========
+
+// 从数组
+Memory&lt;byte&gt; m1 = new byte[1024].AsMemory();
+Memory&lt;byte&gt; m2 = new byte[1024];            // 隐式转换
+
+// 从数组切片
+Memory&lt;byte&gt; m3 = array.AsMemory(10, 100);
+
+// 从字符串
+ReadOnlyMemory&lt;char&gt; m4 = "hello".AsMemory();
+
+// 从 MemoryManager (池化/非托管)
+Memory&lt;byte&gt; m5 = new NativeMemoryManager(1024).Memory;
+</code></pre>
+
+<h2>常用操作</h2>
+
+<pre><code>Span&lt;int&gt; s = stackalloc int[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+
+// 切片 (不复制)
+var first4 = s.Slice(0, 4);        // [1,2,3,4]
+var last4 = s.Slice(4);            // [5,6,7,8]
+var middle = s[2..6];              // [3,4,5,6] (C# range syntax)
+
+// 查找
+int idx = s.IndexOf(5);            // 4
+bool hasNegative = s.ContainsAny(searchValues);
+
+// 修改
+s.Fill(42);                        // 全部填 42
+s.Clear();                         // 全部填 default
+
+// 拷贝
+var dest = new Span&lt;int&gt;(new int[8]);
+s.CopyTo(dest);                    // 整段复制
+
+// 比较
+bool eq = s.SequenceEqual(other);  // 逐元素比较
+
+// 转回数组 (这会分配!)
+int[] arr = s.ToArray();           // ⚠️ 产生 GC 分配
+</code></pre>
+
+<h2>性能陷阱</h2>
+
+<table class="tbl">
+  <tr><th>陷阱</th><th>错误代码</th><th>正确代码</th><th>原因</th></tr>
+  <tr>
+    <td>Span 转 string</td>
+    <td><code>span.ToString()</code></td>
+    <td><code>new string(span)</code> 或直接用 <code>ReadOnlySpan&lt;char&gt;</code></td>
+    <td><code>ToString()</code> 返回类型名，不是内容</td>
+  </tr>
+  <tr>
+    <td>不必要的 ToArray</td>
+    <td><code>span.ToArray()[0]</code></td>
+    <td><code>span[0]</code></td>
+    <td><code>ToArray()</code> 产生堆分配</td>
+  </tr>
+  <tr>
+    <td>Span 装箱</td>
+    <td><code>object o = span;</code></td>
+    <td>不允许（编译器错误）</td>
+    <td>ref struct 禁止装箱</td>
+  </tr>
+  <tr>
+    <td>捕获 Span 到闭包</td>
+    <td><code>Task.Run(() => span[0]);</code></td>
+    <td>先 <code>CopyTo</code> 到堆数组，或改用 <code>Memory&lt;T&gt;</code></td>
+    <td>Span 不能在 lambda 中存活</td>
+  </tr>
+  <tr>
+    <td>async 中用 Span 跨 await</td>
+    <td><code>await Task.Yield(); span[0] = 1;</code></td>
+    <td>改用 <code>Memory&lt;T&gt;</code>，同步段取 <code>.Span</code></td>
+    <td>编译器 CS4012</td>
+  </tr>
+</table>
+
+<h2>Framework 4.8 API → 现代 .NET Span API</h2>
+
+<table class="tbl">
+  <tr><th>Framework 4.8 写法（分配）</th><th>现代 .NET 写法（零分配）</th></tr>
+  <tr>
+    <td><code>str.Substring(0, 10)</code></td>
+    <td><code>str.AsSpan(0, 10)</code></td>
+  </tr>
+  <tr>
+    <td><code>str.Split(',')[0]</code></td>
+    <td><code>str.AsSpan().IndexOf(','); str.AsSpan(0, idx)</code></td>
+  </tr>
+  <tr>
+    <td><code>new string(chars.Where(...).ToArray())</code></td>
+    <td>用 <code>Span&lt;char&gt;</code> 就地修改，或 <code>string.Create()</code></td>
+  </tr>
+  <tr>
+    <td><code>Encoding.UTF8.GetString(bytes)</code></td>
+    <td><code>Encoding.UTF8.GetString(span)</code>（Span 重载）</td>
+  </tr>
+  <tr>
+    <td><code>File.ReadAllBytes(path)</code></td>
+    <td>用 <code>Stream.ReadAsync(Memory&lt;byte&gt;)</code> + <code>ArrayPool</code></td>
+  </tr>
+  <tr>
+    <td><code>int.Parse(str.Substring(2,5))</code></td>
+    <td><code>int.Parse(str.AsSpan(2, 5))</code></td>
+  </tr>
+  <tr>
+    <td><code>new ArraySegment&lt;byte&gt;(buf, 0, 100)</code></td>
+    <td><code>buf.AsSpan(0, 100)</code></td>
+  </tr>
+</table>
+
+<h2>选择决策树</h2>
+
+<div class="diagram">
+<pre>
+你需要操作内存/切片
+│
+├── 在同步方法里，作为局部变量？
+│   └── <strong>Span&lt;T&gt;</strong> ✅
+│
+├── 作为方法的<strong>参数</strong>？
+│   ├── 同步方法 → <strong>Span&lt;T&gt;</strong> 或 ReadOnlySpan&lt;T&gt;
+│   └── 异步方法 → <strong>Memory&lt;T&gt;</strong> 或 ReadOnlyMemory&lt;T&gt;
+│       （在方法里第一个 await 之前取 .Span 处理）
+│
+├── 作为类的<strong>字段</strong>？
+│   └── <strong>Memory&lt;T&gt;</strong> ✅
+│       （Span&lt;T&gt; 不能做类字段）
+│
+├── 需要在 lambda / closure 中使用？
+│   └── <strong>Memory&lt;T&gt;</strong> ✅
+│
+└── 性能关键路径，确定不跨方法调用？
+    └── <strong>Span&lt;T&gt;</strong> ✅（无间接层）
+</pre>
+</div>
+
+<h2>ArrayPool：和 Span 配合减少 GC 压力</h2>
+
+<pre><code>// 经典模式：租用 → 使用 → 归还
+byte[]? rented = null;
+try
+{
+    rented = ArrayPool&lt;byte&gt;.Shared.Rent(4096);  // 至少 4096 字节
+    Span&lt;byte&gt; buffer = rented.AsSpan(0, 4096);   // 只用前 4096
+    // ... 处理 buffer ...
+}
+finally
+{
+    if (rented is not null)
+        ArrayPool&lt;byte&gt;.Shared.Return(rented);   // 归还（不清除内容）
+}
+</code></pre>
+
+<div class="callout callout--warn">
+⚠️ ArrayPool.Return 不会清除数组内容。下一个租用者可能读到脏数据。
+如果你存放了敏感信息，归还前用 <code>span.Clear()</code> 覆盖。
+</div>
+
+<hr class="section">
+
+<p>
+  ← 返回 <a href="../lessons/0003-gc-internals-memory-control.html">第 3 课：GC 内部机制与内存控制</a>
+</p>
+
+</body>
+</html>

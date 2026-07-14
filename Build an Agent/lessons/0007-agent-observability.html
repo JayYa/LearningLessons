@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 07 · Agent Observability</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<div class="lesson-meta">
+  <span class="lesson-number">Lesson 07</span>
+  <span>Agent Academy</span>
+  <span>·</span>
+  <span>~35 min</span>
+</div>
+
+<h1>Agent 可观测性：让黑盒变成玻璃盒</h1>
+<p style="font-size:1.1rem;color:var(--text-muted);margin-top:0;">
+  前六课你在构建 Agent。这一课回答一个运维问题——Agent 在里面做了什么？花了多少 token？哪一步慢了？
+</p>
+
+<div style="margin:1.5rem 0;">
+  <span class="tag">OpenTelemetry</span>
+  <span class="tag">Tracing</span>
+  <span class="tag">Metrics</span>
+  <span class="tag">Logging</span>
+  <span class="tag">Aspire Dashboard</span>
+  <span class="tag">GenAI Semantic Conventions</span>
+  <span class="tag">MAF v1.0</span>
+  <span class="tag">C#</span>
+</div>
+
+<hr style="border:none;border-top:1px solid var(--border);margin:2rem 0;">
+
+<!-- ============ MOTIVATION ============ -->
+<h2>Agent 是个黑盒——直到你打开它</h2>
+
+<p>
+  传统 API 是可预测的：输入 X → 输出 Y，延迟稳定，错误可重现。Agent 完全不一样——同一个 Prompt 可能触发 3 次工具调用也可能触发 0 次，LLM 推理时间波动在 0.5 到 30 秒之间，每次对话的 token 消耗取决于 LLM 的"心情"。
+</p>
+
+<p>当你把 Agent 从"玩具"推向"服务"，三个问题会反复出现：</p>
+
+<div class="diagram">
+问题 1: "为什么这次回复这么慢？"     → 需要 <strong>Tracing</strong>（哪个 span 耗时最长？）
+问题 2: "昨天花了多少 token？"        → 需要 <strong>Metrics</strong>（token 消耗趋势）
+问题 3: "Agent 在第 3 步为什么选了 B？"→ 需要 <strong>Logging</strong>（结构化日志 + 敏感数据）
+</div>
+
+<p>
+  MAF 对可观测性的回答是<strong>原生 OpenTelemetry 集成</strong>——遵循 <a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/" target="_blank">GenAI Semantic Conventions</a> 标准，自动产出 Traces、Metrics、Logs。你不需要手写埋点代码——<strong>两行 API 调用，整个 Agent 的内部行为就透明了</strong>。
+</p>
+
+<div class="card card--highlight">
+  <strong>本课产出：</strong> 给 Lesson 06 的 Writer + Reviewer 群聊加上 OpenTelemetry 追踪——在控制台看到每次 Agent 调用、每次 LLM 推理、每次工具执行的耗时和 token 消耗。<br><br>
+  <strong>核心理念：</strong> 可观测性不是"出了问题才看"——它是你<strong>开发阶段的实时反馈系统</strong>。看到 Agent 在第 3 轮群聊中做了 4 次 LLM 调用消耗了 8000 token——这就是你优化 Instructions 的直接信号。
+</div>
+
+<!-- ============ MENTAL MODEL ============ -->
+<h2>心智模型：三个信号，一个标准</h2>
+
+<p>MAF 的可观测性建立在三个支柱上，遵循同一个行业标准（OpenTelemetry + GenAI Semantic Conventions）：</p>
+
+<table style="width:100%;margin:1rem 0;font-size:0.92rem;">
+  <tr><th style="text-align:left;padding:0.5rem;width:15%;">信号</th><th style="text-align:left;padding:0.5rem;width:30%;">回答的问题</th><th style="text-align:left;padding:0.5rem;width:25%;">MAF 中的载体</th><th style="text-align:left;padding:0.5rem;width:30%;">示例</th></tr>
+  <tr>
+    <td style="padding:0.5rem;"><strong>Traces / Spans</strong></td>
+    <td style="padding:0.5rem;">"一个请求经历了哪些步骤？每步花了多久？"</td>
+    <td style="padding:0.5rem;"><code>invoke_agent</code> / <code>chat</code> / <code>execute_tool</code></td>
+    <td style="padding:0.5rem;">invoke_agent CopyWriter (2.1s) → chat deepseek (1.8s) → execute_tool search (0.3s)</td>
+  </tr>
+  <tr>
+    <td style="padding:0.5rem;"><strong>Metrics</strong></td>
+    <td style="padding:0.5rem;">"token 消耗趋势？平均延迟？错误率？"</td>
+    <td style="padding:0.5rem;">Histogram（<code>gen_ai.client.operation.duration</code>、<code>gen_ai.client.token.usage</code>）</td>
+    <td style="padding:0.5rem;">P50 延迟 1.2s，P99 延迟 8.7s，每小时消耗 12 万 token</td>
+  </tr>
+  <tr>
+    <td style="padding:0.5rem;"><strong>Logs</strong></td>
+    <td style="padding:0.5rem;">"具体发生了什么？Prompt 是什么？工具返回了什么？"</td>
+    <td style="padding:0.5rem;"><code>Microsoft.Extensions.Logging</code> + OpenTelemetry 导出</td>
+    <td style="padding:0.5rem;">"Agent CopyWriter invoked with 3 tools available, 1200 input tokens"</td>
+  </tr>
+</table>
+
+<h2>Span 层级：一棵调用树</h2>
+
+<p>
+  MAF 自动创建三层 Span，形成一棵自然的调用树：
+</p>
+
+<div class="diagram">
+invoke_agent CopyWriter                 ← 顶层：一次 Agent 调用
+├── chat deepseek-v4-flash              ← 第 1 次 LLM 推理
+│   └── (prompt + response)             ← 敏感数据（dev only）
+├── execute_tool search_competitors     ← 工具调用
+│   └── (arguments + result)            ← 敏感数据（dev only）
+└── chat deepseek-v4-flash              ← 第 2 次 LLM 推理（基于工具结果）
+    └── (prompt + response)
+</div>
+
+<p>
+  <strong>关键洞察：</strong> 一棵 Trace 树 = 一次 Agent 调用的完整病历。你能精确回答"Agent 为这个请求做了几次 LLM 推理？每次分别花了多少 token？"。这就是 <a href="../learning-records/0008-instruction-is-the-operating-system.md">Instructions = 操作系统</a> 的可观测面——你能看到"操作系统"的每一次上下文切换。
+</p>
+
+<!-- ============ SKILL ============ -->
+<h2>动手构建：给 Writer + Reviewer 加上可观测性</h2>
+
+<p>
+  以 Lesson 06 的 Writer + Reviewer 群聊为基础——给两个 Agent 加上 OpenTelemetry 追踪，在控制台实时看到每次调用的 trace 输出。
+</p>
+
+<h3>Step 1: 创建项目和安装包</h3>
+
+<pre><code>dotnet new console -n AgentObservability
+cd AgentObservability
+dotnet add package Microsoft.Agents.AI --version 1.0.0
+dotnet add package OpenAI --version 2.*
+dotnet add package OpenTelemetry --version 1.*
+dotnet add package OpenTelemetry.Exporter.Console --version 1.*
+</code></pre>
+
+<div class="card">
+  <strong>📦 新包说明：</strong><br>
+  · <code>OpenTelemetry</code> — OTel SDK 核心（TracerProvider、MeterProvider）<br>
+  · <code>OpenTelemetry.Exporter.Console</code> — <strong>新增</strong>：将 traces/metrics/logs 输出到控制台——本地开发的最佳起点<br>
+  · 后续可以替换为 <code>OpenTelemetry.Exporter.OpenTelemetryProtocol</code>（Aspire Dashboard）或 <code>Azure.Monitor.OpenTelemetry.Exporter</code>（生产环境）
+</div>
+
+<h3>Step 2: 配置 OpenTelemetry 管线</h3>
+
+<p>在任何 Agent 代码之前，先搭建好 OTel 的"管线"——决定 telemetry 数据去哪：</p>
+
+<pre><code>using OpenTelemetry;
+using OpenTelemetry.Trace;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+
+const string SourceName = "WriterReviewerApp";
+
+// ——— ① 创建 Resource（标识你的服务）———
+var resourceBuilder = ResourceBuilder.CreateDefault()
+    .AddService("WriterReviewerApp", serviceVersion: "1.0.0");
+
+// ——— ② 配置 Traces 导出到控制台 ———
+using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+    .SetResourceBuilder(resourceBuilder)
+    .AddSource(SourceName)          // ← 必须和 UseOpenTelemetry 的 sourceName 一致
+    .AddConsoleExporter()           // ← 输出到控制台（开发用）
+    .Build();
+
+// ——— ③ 配置 Metrics 导出到控制台 ———
+using var meterProvider = Sdk.CreateMeterProviderBuilder()
+    .SetResourceBuilder(resourceBuilder)
+    .AddMeter(SourceName)
+    .AddConsoleExporter()           // ← 每 30 秒输出一次指标聚合
+    .Build();
+
+Console.WriteLine("OpenTelemetry 管线已就绪。\n");</code></pre>
+
+<div class="card">
+  <strong>🔑 sourceName 是关键：</strong><br>
+  · <code>.AddSource(SourceName)</code> 告诉 Provider "监听来自这个名字的 telemetry"<br>
+  · 如果你不指定 sourceName，MAF 默认用 <code>"Experimental.Microsoft.Agents.AI"</code>——那你就要 <code>.AddSource("Experimental.Microsoft.Agents.AI")</code><br>
+  · 显式指定一个名字更清晰——本课用 <code>"WriterReviewerApp"</code>
+</div>
+
+<h3>Step 3: 接入模型 + 定义 Agent（和 Lesson 06 一样，加一行）</h3>
+
+<pre><code>using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using OpenAI;
+
+// ——— 接入 DeepSeek（同 Lesson 06）———
+var apiKey = Environment.GetEnvironmentVariable("DEEPSEEK_API_KEY")
+    ?? throw new InvalidOperationException("请设置 DEEPSEEK_API_KEY");
+var openai = new OpenAIClient(
+    new System.ClientModel.ApiKeyCredential(apiKey),
+    new OpenAIClientOptions { Endpoint = new Uri("https://api.deepseek.com/v1") });
+var chatClient = openai.GetChatClient("deepseek-v4-flash").AsIChatClient();
+
+// ——— ★ 唯一新增：给 ChatClient 加上 OpenTelemetry ———
+var instrumentedChatClient = chatClient
+    .AsBuilder()
+    .UseOpenTelemetry(sourceName: SourceName,
+        configure: cfg => cfg.EnableSensitiveData = true)  // dev 环境可见 Prompt
+    .Build();
+
+// ——— Agent 定义（同 Lesson 06，仅将 chatClient 换为 instrumentedChatClient）———
+var writer = new ChatClientAgent(instrumentedChatClient,
+    instructions: """
+        你是一位创意文案撰稿人。
+        职责：根据用户需求生成口号和营销文案。
+        要求：简洁有力、有记忆点。每次输出一个版本。
+        如果 Reviewer 给了反馈，根据反馈修改后重新输出。
+        """,
+    name: "CopyWriter",
+    description: "负责创意文案生成");
+
+var reviewer = new ChatClientAgent(instrumentedChatClient,
+    instructions: """
+        你是一位营销审查专家。
+        职责：评估 CopyWriter 的文案。
+        审查标准：清晰度、影响力、品牌契合度。
+        - 如果文案符合标准，回复"approve"并附最终文案。
+        - 如果需要修改，给出具体、可操作的反馈。
+        """,
+    name: "Reviewer",
+    description: "负责文案质量审查");</code></pre>
+
+<div class="card card--highlight">
+  <strong>💡 两种 instrumentation 级别，选一个就够了：</strong><br><br>
+  <strong>级别 A：只 instrument ChatClient</strong>（本课采用）<br>
+  · <code>chatClient.AsBuilder().UseOpenTelemetry(...)</code><br>
+  · 捕获每次 LLM 调用——所有 Agent 共享的模型访问点<br>
+  · 优势：一处配置，所有 Agent 自动受益；不会重复<br><br>
+  <strong>级别 B：只 instrument Agent</strong><br>
+  · <code>agent.WithOpenTelemetry(sourceName, ...)</code><br>
+  · 捕获 Agent 级别的元数据（Agent ID、name、instructions）但不捕获底层 LLM 调用细节<br>
+  · 优势：Agent 语义更丰富，适合多 Agent 场景按 Agent 维度分析<br><br>
+  <strong>⚠️ 不要两个都开：</strong>会导致 Chat 级别的 span 重复（ChatClient 和 Agent 各创建一个）。选一个就够了。<br><br>
+  <strong>2026.5 后的变化：</strong>PR #5750 开始，<code>OpenTelemetryAgent</code> 自动包裹内部 ChatClient——选 Agent 级别时不再丢失 LLM 调用细节。但目前最稳妥的做法仍是<strong>只 instrument ChatClient</strong>。
+</div>
+
+<h3>Step 4: 构建 Group Chat + 运行</h3>
+
+<p>Workflow 代码和 Lesson 06 完全一样——可观测性是<strong>横切关注点</strong>，不侵入业务代码：</p>
+
+<pre><code>using Microsoft.Agents.AI.Workflows;
+using Microsoft.Extensions.AI;
+
+// ——— Workflow（和 Lesson 06 完全相同）———
+var workflow = AgentWorkflowBuilder
+    .CreateGroupChatBuilderWith(agents =>
+        new ApprovalBasedManager(agents, "Reviewer")
+        {
+            MaximumIterationCount = 8
+        })
+    .AddParticipants(writer, reviewer)
+    .Build();
+
+// ——— 运行 ———
+var messages = new List&lt;ChatMessage&gt;
+{
+    new(ChatRole.User, "为一款环保电动 SUV 创作一个口号。")
+};
+
+Console.WriteLine("=== Writer + Reviewer 群聊（可观测） ===\n");
+
+await using var run = await InProcessExecution.RunStreamingAsync(workflow, messages);
+await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
+
+await foreach (WorkflowEvent evt in run.WatchStreamAsync())
+{
+    if (evt is AgentResponseUpdateEvent update)
+    {
+        foreach (var msg in update.AsResponse().Messages)
+            Console.WriteLine($"[{update.ExecutorId}]: {msg.Text}\n");
+    }
+    else if (evt is WorkflowOutputEvent)
+        break;
+}
+
+Console.WriteLine("=== 结束 ===\n");
+
+// ——— 自定义 Manager（同 Lesson 06）———
+public class ApprovalBasedManager : RoundRobinGroupChatManager
+{
+    private readonly string _approverName;
+    public ApprovalBasedManager(IReadOnlyList&lt;AIAgent&gt; agents, string approverName)
+        : base(agents) => _approverName = approverName;
+
+    protected override ValueTask&lt;bool&gt; ShouldTerminateAsync(
+        IReadOnlyList&lt;ChatMessage&gt; history, CancellationToken ct = default)
+    {
+        var last = history.LastOrDefault();
+        return ValueTask.FromResult(
+            last?.AuthorName == _approverName &amp;&amp;
+            last.Text?.Contains("approve", StringComparison.OrdinalIgnoreCase) == true);
+    }
+}</code></pre>
+
+<h3>Step 5: 运行，观察控制台 Trace 输出</h3>
+
+<p>
+  运行程序，你会在控制台看到<strong>两层输出</strong>——正常的 Agent 对话，以及 OpenTelemetry 自动产出的 Span 详情：
+</p>
+
+<div class="diagram">
+=== Writer + Reviewer 群聊（可观测） ===
+
+[CopyWriter]: 「零碳征途」——SUV 的广阔，电动的纯净，一路向前。
+
+[Reviewer]: "零碳征途"兼顾了 SUV 的探险感和环保的使命感。approve ✓
+
+=== 结束 ===
+
+Activity.TraceId:            f2258b51421fe9cf4c0bd428c87b1ae4
+Activity.SpanId:             2cad6fc139dcf01d
+Activity.TraceFlags:         Recorded
+Activity.ParentSpanId:       0000000000000000
+Activity.ActivitySourceName: WriterReviewerApp
+Activity.DisplayName:        chat deepseek-v4-flash
+Activity.Kind:               Client
+Activity.StartTime:          2026-07-14T10:30:15.421Z
+Activity.Duration:           00:00:01.8230000
+Activity.Tags:
+    gen_ai.system: deepseek
+    gen_ai.operation.name: chat
+    gen_ai.request.model: deepseek-v4-flash
+    gen_ai.usage.input_tokens: 1247
+    gen_ai.usage.output_tokens: 89
+    gen_ai.request.prompt: "你是一位创意文案撰稿人..."
+    gen_ai.response.content: "「零碳征途」——SUV 的广阔..."
+
+Activity.TraceId:            f2258b51421fe9cf4c0bd428c87b1ae4
+Activity.SpanId:             a1b2c3d4e5f6a7b8
+Activity.DisplayName:        chat deepseek-v4-flash
+Activity.Duration:           00:00:01.5120000
+Activity.Tags:
+    gen_ai.usage.input_tokens: 1456
+    gen_ai.usage.output_tokens: 42
+</div>
+
+<div class="card card--success">
+  <strong>观察：你现在能看到——</strong><br>
+  · 两个 <code>chat</code> span = 两次 LLM 调用（CopyWriter 一次，Reviewer 一次）<br>
+  · 每次 LLM 调用的耗时（1.823s / 1.512s）<br>
+  · 每次调用的 token 消耗（input 1247+89, 1456+42）<br>
+  · <strong>同一个 TraceId</strong> = 它们属于同一次群聊请求——可以串联起来分析<br>
+  · 因为启用了 <code>EnableSensitiveData</code>，Prompt 和 Response 内容也在 Attributes 里<br><br>
+  <strong>这就叫"玻璃盒"：</strong>你不需要猜 Agent 做了什么——每一个 LLM 调用、每一次工具执行都有精确的数字记录。
+</div>
+
+<h3>Step 6: 升级到 Aspire Dashboard（可视化）</h3>
+
+<p>
+  控制台输出够用但不够直观。微软的 <a href="https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/dashboard/overview" target="_blank">Aspire Dashboard</a> 是一个<strong>本地运行的 Web UI</strong>，专门为 OpenTelemetry 数据设计——免费、零配置、Docker 一行命令启动：
+</p>
+
+<pre><code># 终端 1：启动 Aspire Dashboard
+docker run --rm -it -d \
+    -p 18888:18888 \
+    -p 4317:18889 \
+    --name aspire-dashboard \
+    mcr.microsoft.com/dotnet/aspire-dashboard:latest
+
+# 浏览器打开 http://localhost:18888</code></pre>
+
+<p>然后把控制台 exporter 换成 OTLP exporter：</p>
+
+<pre><code>// ——— 替换 Step 2 中的 exporter 配置 ———
+using OpenTelemetry.Exporter;
+
+using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+    .SetResourceBuilder(resourceBuilder)
+    .AddSource(SourceName)
+    .AddOtlpExporter(options => options.Endpoint = new Uri("http://localhost:4317"))
+    .Build();
+
+using var meterProvider = Sdk.CreateMeterProviderBuilder()
+    .SetResourceBuilder(resourceBuilder)
+    .AddMeter(SourceName)
+    .AddOtlpExporter(options => options.Endpoint = new Uri("http://localhost:4317"))
+    .Build();</code></pre>
+
+<p>运行后打开 Dashboard → Traces 页面，你会看到一棵<strong>可视化的调用树</strong>——每个 span 的父子关系、甘特图式的时间线、按 span 类型筛选。</p>
+
+<div class="card">
+  <strong>📊 Metrics 也自动来了：</strong><br>
+  Aspire Dashboard 的 Metrics 页面会显示：<br>
+  · <code>gen_ai.client.operation.duration</code> — LLM 调用延迟分布（P50/P95/P99）<br>
+  · <code>gen_ai.client.token.usage</code> — token 消耗趋势<br>
+  不需要额外代码——Metrics 和 Traces 同一条管线。
+</div>
+
+<!-- ============ DEEP DIVE ============ -->
+<h2>深入理解：多 Agent 的可观测性</h2>
+
+<div class="card">
+  <strong>每个 Agent 的调用天然隔离——</strong> 在 ChatClient 级别做 instrumentation 时，Writer 的 LLM 调用和 Reviewer 的 LLM 调用共享同一个 TraceId（因为它们在同一个 Workflow 执行上下文中），但你可以通过 <code>gen_ai.agent.name</code> 属性来区分。<br><br>
+  <strong>如果换成 Agent 级别的 instrumentation</strong>（<code>.WithOpenTelemetry()</code>），框架会自动为每个 Agent 创建 <code>invoke_agent CopyWriter</code> 和 <code>invoke_agent Reviewer</code> 两个顶层 span——你可以按 Agent 维度做性能分析和成本归因。<br><br>
+  <strong>生产环境的最佳实践：</strong><br>
+  · <strong>开发阶段</strong>——Console exporter + <code>EnableSensitiveData = true</code>，快速定位问题<br>
+  · <strong>预发布阶段</strong>——Aspire Dashboard / Jaeger，可视化分析调用链<br>
+  · <strong>生产环境</strong>——Azure Monitor / Application Insights，设置 <code>EnableSensitiveData = false</code><br>
+  · <strong>成本控制</strong>——用 <code>gen_ai.client.token.usage</code> 指标设置告警（"Writer Agent 单次调用超过 8000 token 时警告"）
+</div>
+
+<h2>什么时候不需要 OpenTelemetry？</h2>
+
+<div class="card card--warning">
+  <strong>OTel 也有成本——虽然很小，但有：</strong><br><br>
+  <strong>① Span 创建的内存开销。</strong> 每次 LLM 调用和工具执行都会创建 Span 对象。在高并发场景下（每秒数百次 Agent 调用），这些 Span 对象会占用可观的堆内存。<br><br>
+  <strong>② 导出开销。</strong> Console exporter 几乎是零成本的，但 OTLP exporter 需要序列化 + 网络传输。如果用 Azure Monitor，还涉及采样策略（默认自适应采样可能丢失低频但重要的 trace）。<br><br>
+  <strong>③ 敏感数据风险。</strong> <code>EnableSensitiveData = true</code> 意味着用户输入、LLM 回复、工具参数和返回值全部记录在 trace 中——这在生产环境是不可接受的。<br><br>
+  <strong>判断标准：</strong><br>
+  · 原型/个人项目 → 不开 OTel，靠 Console.WriteLine 观察<br>
+  · 团队协作/预发布 → OTel + Console exporter，理解 Agent 行为<br>
+  · 生产服务 → OTel + Azure Monitor，但 <code>EnableSensitiveData = false</code>，搭配结构化日志补充关键决策点
+</div>
+
+<!-- ============ QUIZ ============ -->
+<h2>检索练习</h2>
+<p style="color:var(--text-muted);">回忆刚学的内容——可观测性的三个信号、span 层级、instrumentation 级别。</p>
+
+<div class="quiz" id="q1">
+  <div class="quiz-question">1. MAF 自动创建的三种 Span 类型是？</div>
+  <button class="quiz-option" data-answer="wrong">request_agent、call_model、run_function</button>
+  <button class="quiz-option" data-answer="correct">invoke_agent、chat、execute_tool</button>
+  <button class="quiz-option" data-answer="wrong">agent_start、llm_think、tool_call</button>
+  <button class="quiz-option" data-answer="wrong">begin_agent、prompt_model、invoke_tool</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <div class="quiz-question">2. 同时 instrument ChatClient 和 Agent 会有什么后果？</div>
+  <button class="quiz-option" data-answer="wrong">程序崩溃，因为两个 instrumentation 冲突</button>
+  <button class="quiz-option" data-answer="wrong">没有任何问题——两者互不干扰，信息互补</button>
+  <button class="quiz-option" data-answer="wrong">Metrics 数据翻倍，Token 消耗统计不准确</button>
+  <button class="quiz-option" data-answer="correct">Chat 级别的 Span 会重复——ChatClient 和 Agent 各创建一个，产生冗余数据</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <div class="quiz-question">3. <code>EnableSensitiveData = true</code> 在生产环境为什么不应该开启？</div>
+  <button class="quiz-option" data-answer="correct">会把用户的 Prompt、LLM 回复、工具参数写入 Trace——这些可能包含用户隐私或商业机密</button>
+  <button class="quiz-option" data-answer="wrong">会显著增加 LLM 调用延迟（每次调用额外 500ms+）</button>
+  <button class="quiz-option" data-answer="wrong">会导致 OpenTelemetry 管线崩溃，因为它无法处理大量文本数据</button>
+  <button class="quiz-option" data-answer="wrong">会和 Azure Monitor 的采样策略冲突，导致 Trace 数据丢失</button>
+  <div class="quiz-feedback"></div>
+</div>
+
+<script>
+document.querySelectorAll('.quiz').forEach(quiz => {
+  quiz.querySelectorAll('.quiz-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (quiz.dataset.answered) return;
+      quiz.dataset.answered = 'true';
+
+      const fb = quiz.querySelector('.quiz-feedback');
+      quiz.querySelectorAll('.quiz-option').forEach(b => b.style.pointerEvents = 'none');
+      btn.classList.add('selected');
+
+      if (btn.dataset.answer === 'correct') {
+        btn.classList.add('correct');
+        fb.textContent = '✓ 正确！';
+        fb.className = 'quiz-feedback correct';
+      } else {
+        btn.classList.add('incorrect');
+        fb.textContent = '✗ 不太对。回顾一下三种 Span 名称、instrumentation 级别的重复问题、以及敏感数据的风险。';
+        fb.className = 'quiz-feedback incorrect';
+        quiz.querySelectorAll('.quiz-option').forEach(b => {
+          if (b.dataset.answer === 'correct') b.classList.add('correct');
+        });
+      }
+    });
+  });
+});
+</script>
+
+<!-- ============ CHALLENGE ============ -->
+<h2>挑战练习</h2>
+
+<div class="card">
+  <p style="margin:0 0 0.75rem;"><strong>🛠️ 三个方向，按难度递进：</strong></p>
+  <ol style="margin:0 0 0 1.5rem;color:var(--text-muted);">
+    <li>
+      <strong>（基础）给现有 Agent 加上 Console Tracing：</strong> 选前几课任意一个 Agent 项目（Lesson 04 的 PlannerAgent、或者 Lesson 05 的 MAF 迁移版本），加上 OpenTelemetry Console exporter。运行 3 个不同的问题，对比每次的 token 消耗和 LLM 调用次数。<br>
+      记录：哪个问题消耗了最多的 token？为什么？（看 <code>gen_ai.usage.input_tokens</code> 的变化）
+    </li>
+    <li>
+      <strong>（进阶）用 Aspire Dashboard 可视化群聊：</strong> 把本课的 Writer + Reviewer 项目换成 OTLP exporter，启动 Aspire Dashboard。观察 Traces 页面的<strong>甘特图视图</strong>——你能否看到 CopyWriter 和 Reviewer 的 LLM 调用在时间轴上是串行的？（Group Chat 的回合制天然串行——这正是 Lesson 06 提到的"延迟累积"在 Trace 视图上的直观体现。）<br>
+      截图保存 Dashboard 的 Trace 视图作为你的"Agent 性能档案"。
+    </li>
+    <li>
+      <strong>（高阶）Agent 成本仪表板：</strong> 在 Aspire Dashboard 的 Metrics 页面，为 <code>gen_ai.client.token.usage</code> 创建一张图表。然后给你的群聊加入第三个 Agent（Researcher，见 Lesson 06 挑战练习），运行 5 轮不同的文案任务，观察 token 消耗趋势。<br>
+      写一段 200 字的分析：三 Agent 群聊的 token 消耗模式是什么？哪个 Agent 是 token 消耗的瓶颈？有没有优化空间？
+    </li>
+  </ol>
+</div>
+
+<!-- ============ NEXT STEPS ============ -->
+<h2>下一步</h2>
+
+<div class="card" style="margin-top:0.75rem;">
+  <p style="margin:0;">
+    <strong>官方文档：</strong>
+    <a href="https://learn.microsoft.com/en-us/agent-framework/agents/observability?pivots=programming-language-csharp" target="_blank">Agent Framework Observability</a>
+    —— 本课代码的官方出处，包含 Azure Monitor 集成和 Python/Go 版本的完整示例。
+  </p>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <p style="margin:0;">
+    <strong>GitHub 示例：</strong>
+    <a href="https://github.com/microsoft/agent-framework/tree/main/dotnet/samples/02-agents/AgentOpenTelemetry" target="_blank">AgentOpenTelemetry Sample</a>
+    —— MAF 官方 repo 中的完整可运行示例，包含 ChatClient + Agent 两种 instrumentation 模式的对比。
+  </p>
+</div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <p style="margin:0;">
+    <strong>标准参考：</strong>
+    <a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/" target="_blank">OpenTelemetry GenAI Semantic Conventions</a>
+    —— 理解 <code>gen_ai.operation.name</code>、<code>gen_ai.usage.*</code> 等标准化属性名的含义，跨框架通用。
+  </p>
+</div>
+
+<p style="margin-top:1.5rem;">
+  📖 <strong>相关参考：</strong> <a href="../reference/agent-glossary.html">Agent 术语表</a>——新增「OpenTelemetry」「Span」「Metrics」「Aspire Dashboard」「GenAI Semantic Conventions」。
+</p>
+
+<p style="margin-top:0.5rem;">
+  📂 <strong>下节课预告：</strong> Lesson 08: Agent 评估与测试——你的 Agent "好"还是"不好"？怎么量化？用 Eval 框架让你的 Agent 质量从"感觉还行"变成"数据说了算"。
+</p>
+
+<div class="ask-followup">
+  <strong>💡 有问题？</strong> 直接在当前对话中向你的 AI 老师提问。比如：<br>
+  · 「Console exporter 和 OTLP exporter 能同时开吗？我想既在控制台看又发到 Aspire Dashboard。」<br>
+  · 「三个 Agent 的群聊，怎么在 Trace 里区分哪个 span 属于哪个 Agent？」<br>
+  · 「不用 OpenTelemetry，纯代码层面能不能监听 Agent 的执行过程？」<br>
+  你的老师就是当前正在和你对话的 Claude Agent——充分利用它。
+</div>
+
+<div class="lesson-footer">
+  <nav>
+    <a href="0006-multi-agent-collaboration.html">← 上一课：Multi-Agent Collaboration</a>
+    <a href="0008-agent-evaluation.html">下一课：Agent Evaluation →</a>
+  </nav>
+</div>
+
+</body>
+</html>

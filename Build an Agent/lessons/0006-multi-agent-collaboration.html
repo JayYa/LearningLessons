@@ -194,7 +194,38 @@ var reviewer = new ChatClientAgent(chatClient,
   <strong>🔍 关键设计：</strong><br>
   · <strong>角色互斥</strong>——Writer 不审查自己，Reviewer 不写新文案。这是多 Agent 的第一条纪律。<br>
   · <strong>明确的交接协议</strong>——Reviewer 的 Instructions 定义了"approve"作为终止信号。这比轮数限制更智能。<br>
-  · <strong>名称即身份</strong>——<code>name</code> 参数在对话历史中作为 <code>AuthorName</code> 出现，LLM 据此理解"谁说了什么"。起一个描述性的名字。
+  · <strong>名称即身份</strong>——<code>name</code> 参数在对话历史中作为 <code>AuthorName</code> 出现，LLM 据此理解"谁说了什么"。起一个描述性的名字。<strong>在 Group Chat 中，所有参与者的 name 必须唯一</strong>——GroupChatManager 用它做发言权路由和终止判断（见下方详解）。
+</div>
+
+<div class="card">
+  <strong>🪪 深入：Agent 的身份系统——Name vs Id</strong><br><br>
+  MAF 中每个 Agent 有两层身份标识：<br><br>
+  <table style="width:100%;font-size:0.9rem;margin:0.5rem 0;">
+    <tr>
+      <th style="text-align:left;padding:0.4rem;width:15%;">属性</th>
+      <th style="text-align:left;padding:0.4rem;width:25%;">来源</th>
+      <th style="text-align:left;padding:0.4rem;width:20%;">唯一性</th>
+      <th style="text-align:left;padding:0.4rem;width:40%;">用途</th>
+    </tr>
+    <tr>
+      <td style="padding:0.4rem;"><code>Id</code></td>
+      <td style="padding:0.4rem;">框架自动生成（GUID）</td>
+      <td style="padding:0.4rem;"><strong>全局唯一</strong></td>
+      <td style="padding:0.4rem;">内部追踪、序列化、Session 关联——你不直接操作它</td>
+    </tr>
+    <tr>
+      <td style="padding:0.4rem;"><code>Name</code></td>
+      <td style="padding:0.4rem;">你创建 Agent 时指定</td>
+      <td style="padding:0.4rem;"><strong>同一 Workflow 内必须唯一</strong></td>
+      <td style="padding:0.4rem;">对话身份标签（→ <code>AuthorName</code>）、Manager 路由 key、LLM 辨识"谁说了什么"</td>
+    </tr>
+  </table>
+  <br>
+  <strong>关键机制：</strong><br>
+  · <strong>Name → AuthorName：</strong>每次 Agent 发言，框架自动把 <code>Name</code> 写入消息的 <code>AuthorName</code> 字段。这就是 <code>ShouldTerminateAsync</code> 里 <code>last?.AuthorName == "Reviewer"</code> 能工作的原因。<br>
+  · <strong>官方约束：</strong><a href="https://learn.microsoft.com/en-us/python/api/agent-framework-core/agent_framework.groupchatbuilder" target="_blank">GroupChatBuilder 文档</a> 明确要求 <em>"Participant names must be unique"</em>——用 list 形式注册参与者时，<code>agent.name</code> 直接作为 participant key，重名即冲突。<br>
+  · <strong>不指定 name 的后果：</strong>框架会兜底为 <code>"UnnamedAgent"</code>。两个 Agent 都不起名 → 都叫 <code>"UnnamedAgent"</code> → Manager 和 LLM 无法区分谁说了什么 → 群聊逻辑失效。<br>
+  · <strong>最佳实践：</strong>起一个<strong>描述性、角色明确的名称</strong>（如 <code>"CopyWriter"</code>、<code>"Reviewer"</code>），不只是给人类看——LLM 通过 <code>AuthorName</code> 理解对话结构和角色关系，Manager 用它做路由决策。
 </div>
 
 <h3>Step 3: 构建 Group Chat + 自定义终止条件</h3>
@@ -243,6 +274,84 @@ var workflow = AgentWorkflowBuilder
   <strong>③ MaximumIterationCount</strong> —— 安全网。即使你的自定义终止逻辑有 bug，也不会无限循环烧 token。<br><br>
   对比一下：在 SK 时代实现同样的事，你需要手动管理每个 Agent 的 ChatHistory 分发、手动写 <code>KernelFunctionSelectionStrategy</code> 选择函数、手动写 <code>KernelFunctionTerminationStrategy</code> 终止函数——代码量至少 3 倍。<br><br>
   <strong>核心理念：Instruction 仍然是 Agent 行为的唯一可编程接口</strong>（见 <a href="../learning-records/0008-instruction-is-the-operating-system.md">学习记录 0008</a>），Manager 控制的是<strong>谁在什么时候看到什么上下文</strong>——Instructions 控制「怎么想」，Manager 控制「谁来说」。
+</div>
+
+<h3>RoundRobin 的发言顺序</h3>
+
+<p>
+  <code>RoundRobinGroupChatManager</code> 的"轮转"不是随机的——<strong>严格按 <code>AddParticipants</code> 的传入顺序轮流发言</strong>。
+  核心逻辑就是一个索引计数器，每次发言后 <code>(index + 1) % 参与者总数</code>：
+</p>
+
+<div class="diagram">
+AddParticipants(writer, reviewer)     →  writer → reviewer → writer → ...
+AddParticipants(reviewer, writer)     →  reviewer → writer → reviewer → ...
+AddParticipants(researcher, writer, reviewer)  →  researcher → writer → reviewer → ...
+</div>
+
+<p>
+  这纯粹是<strong>代码逻辑，不涉及 LLM 判断</strong>——Manager 维护一个 <code>_nextSpeakerIndex</code>，取模递增。所以如果你想让 Writer 先发言、Reviewer 后审查，<code>AddParticipants(writer, reviewer)</code> 这个顺序就是你要的（和本课代码一致）。
+</p>
+
+<h3>进阶：让 Manager 动态选择下一个发言人</h3>
+
+<p>
+  轮转适合固定流程，但如果发言顺序应该<strong>由对话内容决定</strong>呢？比如用户问了账单问题就路由到 BillingAgent，问了技术问题就路由到 SupportAgent——这就是 <code>Handoff</code> 模式的强项。但在 Group Chat 中，你也可以覆写 Manager 的 <code>SelectNextAgentAsync</code>，让 LLM 根据上下文动态选人：
+</p>
+
+<pre><code>public class DynamicManager : GroupChatManager
+{
+    private readonly IChatClient _llm;  // 专门做选人决策的 LLM（可用轻量模型）
+
+    public DynamicManager(IReadOnlyList&lt;AIAgent&gt; agents, IChatClient llm)
+        : base(agents) => _llm = llm;
+
+    protected override async ValueTask&lt;string&gt; SelectNextAgentAsync(
+        IReadOnlyList&lt;ChatMessage&gt; history,
+        CancellationToken ct = default)
+    {
+        // 把所有 Agent 的描述喂给 LLM，让它根据对话历史选人
+        var agentList = string.Join("
+",
+            Agents.Select(a =&gt; $"- {a.Name}: {a.Description}"));
+
+        var prompt = $"""
+            对话历史：
+            {string.Join("
+", history.Select(m =&gt; $"[{m.AuthorName}]: {m.Text}"))}
+
+            可选 Agent 及其职责：
+            {agentList}
+
+            根据对话进展，下一个最应该发言的 Agent 是？（只输出 Agent 名字，不要解释）
+            """;
+
+        var result = await _llm.CompleteAsync(prompt, cancellationToken: ct);
+        return result.Message.Text.Trim();  // 如 "Reviewer"
+    }
+}
+
+// 使用——传入一个轻量 LLM 做路由决策
+var workflow = AgentWorkflowBuilder
+    .CreateGroupChatBuilderWith(agents =>
+        new DynamicManager(agents, routerLLM)
+        {
+            MaximumIterationCount = 8
+        })
+    .AddParticipants(writer, reviewer, researcher)
+    .Build();</code></pre>
+
+<div class="card">
+  <strong>⚡ 选人策略的代价与选择：</strong><br><br>
+  <table style="width:100%;font-size:0.9rem;margin:0.5rem 0;">
+    <tr><th style="text-align:left;padding:0.4rem;width:20%;">策略</th><th style="text-align:left;padding:0.4rem;width:25%;">实现方式</th><th style="text-align:left;padding:0.4rem;width:20%;">额外延迟</th><th style="text-align:left;padding:0.4rem;width:35%;">适用场景</th></tr>
+    <tr><td style="padding:0.4rem;"><strong>固定轮转</strong></td><td style="padding:0.4rem;">RoundRobin（默认）</td><td style="padding:0.4rem;">无</td><td style="padding:0.4rem;">固定流程：写→审→改→审</td></tr>
+    <tr><td style="padding:0.4rem;"><strong>规则函数</strong></td><td style="padding:0.4rem;">覆写 <code>SelectNextAgentAsync</code>，纯代码逻辑</td><td style="padding:0.4rem;">无</td><td style="padding:0.4rem;">条件明确：Writer 刚说完 → 一定是 Reviewer；Researcher 说完 → Writer</td></tr>
+    <tr><td style="padding:0.4rem;"><strong>LLM 动态选人</strong></td><td style="padding:0.4rem;">覆写 <code>SelectNextAgentAsync</code>，调用 LLM 做决策</td><td style="padding:0.4rem;">每次发言 +1 次 LLM 调用</td><td style="padding:0.4rem;">角色不确定：需根据对话内容判断该谁来</td></tr>
+  </table>
+  <br>
+  <strong>判断标准：</strong>如果发言顺序是<strong>确定性的</strong>（"A 说完一定是 B"），用规则函数——零额外成本。只有当顺序<strong>依赖对话内容</strong>（"用户问账单还是技术？"）时，才引入 LLM 做选人。<br><br>
+  <strong>提示：</strong>如果"依赖对话内容决定谁来"是你的核心需求，<strong>Handoff 模式可能比 Group Chat 更合适</strong>——Handoff 的去中心化设计天然支持当前 Agent 自己判断该把对话交给谁（见下方挑战练习的进阶任务）。
 </div>
 
 <h3>Step 4: 运行并观察 Agent 间对话</h3>
@@ -295,7 +404,57 @@ await foreach (WorkflowEvent evt in run.WatchStreamAsync())
 === 群聊结束 ===
 </div>
 
+<div class="card">
+  <strong>🔬 这段代码在做什么？Workflow 执行 API 逐行拆解</strong><br><br>
+  和之前 <code>await agent.RunAsync(...)</code> 的简单模式不同——Workflow 是一个<strong>事件驱动的流式状态机</strong>。<br><br>
+
+  <strong>① InProcessExecution.RunStreamingAsync(workflow, messages)</strong><br>
+  · 创建进程内执行宿主（MAF 还支持分布式执行，本课用进程内模式）<br>
+  · 传入 Workflow 定义 + 初始消息，返回 <code>StreamingRun</code> 对象<br>
+  · <strong>此时 Workflow 还没开始跑</strong>——只是"装载"好了，等待你发令<br>
+  · <code>await using</code> — <code>StreamingRun</code> 是 <code>IAsyncDisposable</code>，跑完自动释放资源<br><br>
+
+  <strong>② TurnToken（回合令牌）</strong><br>
+  · Workflow <strong>不会自己跑</strong>——你通过 <code>TurnToken</code> 驱动它<br>
+  · <code>new TurnToken(emitEvents: true)</code> = "请执行下一个回合，并把详细事件发给我"<br>
+  · 为什么这样设计？<strong>解耦</strong>——同一个 Workflow 定义可以由进程内代码驱动、也可以通过消息队列远程驱动、甚至由 UI 按钮手动触发。TurnToken 是统一的"请继续"信号<br>
+  · <code>TrySendMessageAsync</code> 返回 <code>bool</code>——令牌被接受返回 <code>true</code>，Workflow 已终止则返回 <code>false</code><br><br>
+
+  <strong>③ WatchStreamAsync() → IAsyncEnumerable&lt;WorkflowEvent&gt;</strong><br>
+  · 返回一个<strong>异步事件流</strong>——事件到达时立即处理，不需要等全部执行完<br>
+  · <code>await foreach</code> 每收到一个事件就迭代一次<br><br>
+
+  <strong>④ 两种关键事件</strong><br>
+  <table style="width:100%;font-size:0.9rem;margin:0.5rem 0;">
+    <tr><th style="text-align:left;padding:0.4rem;width:30%;">事件类型</th><th style="text-align:left;padding:0.4rem;width:30%;">含义</th><th style="text-align:left;padding:0.4rem;width:40%;">关键属性</th></tr>
+    <tr><td style="padding:0.4rem;"><code>AgentResponseUpdateEvent</code></td><td style="padding:0.4rem;">某个 Agent 完成了一次发言</td><td style="padding:0.4rem;"><code>ExecutorId</code>（谁说的）、<code>AsResponse()</code>（说了什么）</td></tr>
+    <tr><td style="padding:0.4rem;"><code>WorkflowOutputEvent</code></td><td style="padding:0.4rem;">群聊终止——<code>ShouldTerminateAsync</code> 返回 true 或达到 <code>MaximumIterationCount</code></td><td style="padding:0.4rem;">无额外数据，纯粹是终止信号</td></tr>
+  </table>
+  <br>
+
+  <strong>⑤ 完整数据流</strong>
+  <pre style="background:var(--bg-secondary);padding:0.75rem;font-size:0.85rem;line-height:1.6;margin:0.5rem 0;">
+InProcessExecution.RunStreamingAsync(workflow, messages)
+        │
+        ▼
+   StreamingRun（已装载，等待驱动）
+        │
+        │  TrySendMessageAsync(TurnToken)  ← 你发令
+        ▼
+   GroupChatManager 选择 Agent → Agent 推理 → 生成回复
+        │
+        ▼
+   AgentResponseUpdateEvent ──→ WatchStreamAsync 的 await foreach
+        │                              │
+        │                              ▼
+        │                       你打印到控制台
+        ▼
+   ShouldTerminateAsync 判断 → false → 下一轮
+                             → true  → WorkflowOutputEvent → break</pre>
+</div>
+
 <div class="card card--success">
+
   <strong>观察：你没有做的事情——</strong><br>
   · 没有手动管理 ChatHistory——Workflow 自动同步所有 Agent 的上下文<br>
   · 没有写"下一个该谁发言"的判断逻辑——Manager 处理了<br>
@@ -304,7 +463,43 @@ await foreach (WorkflowEvent evt in run.WatchStreamAsync())
   <strong>你只做了三件事：</strong>定义两个 Agent 的 Instructions → 选择 Manager → 启动 Workflow。
 </div>
 
+<h3>为什么又用回了 ChatMessage？</h3>
+
+<p>
+  前几课用 <code>AgentSession</code> 时，对话历史对你透明——<code>await agent.RunAsync("做个任务", session)</code> 即可。
+  到了 Workflow 层，<code>ChatMessage</code> 重新浮出水面。这不是设计倒退——是<strong>多 Agent 状态下没有"一个 Session"能代表一切</strong>：
+</p>
+
+<div class="card">
+  <table style="width:100%;font-size:0.9rem;margin:0;">
+    <tr><th style="text-align:left;padding:0.4rem;width:25%;"></th><th style="text-align:left;padding:0.4rem;width:37.5%;">单 Agent（AgentSession）</th><th style="text-align:left;padding:0.4rem;width:37.5%;">多 Agent（Workflow）</th></tr>
+    <tr><td style="padding:0.4rem;"><strong>会话管理</strong></td><td style="padding:0.4rem;">一个 Session 管一个 Agent</td><td style="padding:0.4rem;">Writer 有自己的 Session，Reviewer 有另一个，Manager 还持有广播记录——三条线交织</td></tr>
+    <tr><td style="padding:0.4rem;"><strong>ChatHistory</strong></td><td style="padding:0.4rem;">框架自动管理，对你透明</td><td style="padding:0.4rem;"><code>ChatMessage</code> 是 Agent 间的"通用货币"——Writer 的输出是 ChatMessage，Broadcast 给 Reviewer 的也是 ChatMessage，Manager 读 <code>AuthorName</code> 做路由判断读的还是 ChatMessage</td></tr>
+    <tr><td style="padding:0.4rem;"><strong>多轮对话</strong></td><td style="padding:0.4rem;">session 自动记住历史</td><td style="padding:0.4rem;">没有"WorkflowSession"——你需要自己维护 <code>List&lt;ChatMessage&gt;</code>（见下方多轮变体）</td></tr>
+  </table>
+</div>
+
+<h3>简化版：非流式 API（三行搞定）</h3>
+
+<p>
+  课程选了流式 API（<code>RunStreamingAsync</code> + <code>WatchStreamAsync</code>）因为它最灵活——适合做实时 UI、适合观察 Agent 间对话过程。但如果你只想要<strong>「启动群聊，拿到最终结果」</strong>，非流式版本简单得多：
+</p>
+
+<pre><code>// 非流式——三行搞定
+await using var run = await InProcessExecution.RunAsync(workflow, messages);
+await run.TrySendMessageAsync(TurnToken.CompletedTurn);
+WorkflowResult result = run.GetResult();
+// result.FinalOutput 就是最终结果</code></pre>
+
+<div class="card">
+  <strong>💡 两个 API 的选择：</strong><br>
+  · <strong>流式（RunStreamingAsync）</strong>——你需要观察 Agent 间对话的<em>过程</em>（Writer 写了什么 → Reviewer 怎么反馈 → Writer 怎么改）。本课用它，因为多 Agent 场景下<strong>过程比结果更重要</strong>。<br>
+  · <strong>非流式（RunAsync）</strong>——你只需要最终结果。中间状态被吞掉，但代码量少。<br>
+  · <code>TurnToken.CompletedTurn</code> 是一个预定义的"请一路执行到终止"令牌——不需要手动发令、不需要 <code>await foreach</code>。
+</div>
+
 <h3>Step 5: 完整 Program.cs</h3>
+
 
 <pre><code>using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Workflows;
@@ -390,6 +585,56 @@ public class ApprovalBasedManager : RoundRobinGroupChatManager
             last.Text?.Contains("approve", StringComparison.OrdinalIgnoreCase) == true);
     }
 }</code></pre>
+
+<h3>变体：多轮对话（交互式）</h3>
+
+<p>
+  上面的版本是"单轮"——用户输入一次，群聊跑完就结束。实际应用中，用户往往需要<strong>多轮追问</strong>（"第一版不错，但能不能加个英文副标题？"）。
+  多 Agent 场景下没有 <code>WorkflowSession</code> 帮你自动记住历史——你需要自己维护 <code>List&lt;ChatMessage&gt;</code>，每轮手动传入和追加：
+</p>
+
+<pre><code>// ——— 替换 Program.cs 中的"交互循环"部分 ———
+
+var history = new List&lt;ChatMessage&gt;();
+
+while (true)
+{
+    Console.Write("你: ");
+    var input = Console.ReadLine();
+    if (string.IsNullOrWhiteSpace(input)) break;
+
+    // ① 追加用户消息到历史
+    history.Add(new ChatMessage(ChatRole.User, input));
+
+    // ② 启动群聊——传入完整历史
+    await using var run = await InProcessExecution.RunStreamingAsync(workflow, history);
+    await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
+
+    // ③ 监听事件：打印并收集 Agent 发言
+    await foreach (WorkflowEvent evt in run.WatchStreamAsync())
+    {
+        if (evt is AgentResponseUpdateEvent update)
+        {
+            foreach (var msg in update.AsResponse().Messages)
+            {
+                history.Add(msg);  // ← 塞回历史，下一轮 Agent 能看到
+                Console.WriteLine($"[{update.ExecutorId}]: {msg.Text}\n");
+            }
+        }
+        else if (evt is WorkflowOutputEvent)
+        {
+            Console.WriteLine("=== 本轮结束 ===\n");
+            break;
+        }
+    }
+}</code></pre>
+
+<div class="card">
+  <strong>🔑 关键就两步：</strong><br>
+  · <strong>传入时带上 history</strong>——让新一轮 Workflow 知道之前聊了什么<br>
+  · <strong>结束时把 Agent 回复塞回 history</strong>——为下一轮做准备<br><br>
+  虽然比单 Agent 的 <code>session</code> 模式多了一些样板代码，但逻辑透明——你知道历史的每一行是什么，没有魔法。
+</div>
 
 <!-- ============ DEEP DIVE ============ -->
 <h2>深入理解：多 Agent 的上下文同步</h2>

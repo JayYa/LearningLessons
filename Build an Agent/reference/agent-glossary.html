@@ -241,6 +241,42 @@
   <span class="aka">这是 Agent 交互体验「自然」的关键——用户不需要精确指定每个参数。但也可能猜错，关键操作需确认。</span>
 </dd>
 
+<dt id="opentelemetry">OpenTelemetry (OTel)</dt>
+<dd>
+  CNCF 旗下的<strong>可观测性标准框架</strong>——定义统一的 API、SDK 和协议来收集 Traces、Metrics、Logs。MAF 原生集成 OTel，遵循 <a href="#genai-conventions">GenAI Semantic Conventions</a> 自动产出 telemetry 数据。<br>
+  <span class="aka">三大信号：Traces（调用链）、Metrics（指标）、Logs（日志）。MAF 中通过 <code>chatClient.AsBuilder().UseOpenTelemetry()</code> 或 <code>agent.WithOpenTelemetry()</code> 开启。</span>
+</dd>
+
+<dt id="span">Span</dt>
+<dd>
+  分布式追踪中的<strong>最小工作单元</strong>——代表一次操作（如一次 LLM 调用、一次工具执行）的起止时间、属性和父子关系。多个 Span 组成一棵 Trace 树。<br>
+  <span class="aka">MAF 自动创建三种 Span：<code>invoke_agent</code>（Agent 调用）、<code>chat</code>（LLM 推理）、<code>execute_tool</code>（工具执行）。</span>
+</dd>
+
+<dt id="trace">Trace</dt>
+<dd>
+  一个请求<strong>端到端的完整调用链</strong>——由多个有父子关系的 Span 组成，共享同一个 <code>TraceId</code>。在 MAF 中，一次 <code>agent.RunAsync()</code> 通常对应一条 Trace。<br>
+  <span class="aka">TraceId 是跨 Span 串联的关键——同一 Workflow 中所有 Agent 的 LLM 调用共享同一个 TraceId。</span>
+</dd>
+
+<dt id="metrics">Metrics</dt>
+<dd>
+  可观测性的<strong>数值信号</strong>——记录一段时间内的聚合数据（计数器、直方图）。不同于 Traces 的"单次请求快照"，Metrics 回答"趋势"问题。<br>
+  <span class="aka">MAF 自动产出三种 Metric：<code>gen_ai.client.operation.duration</code>（延迟直方图）、<code>gen_ai.client.token.usage</code>（token 直方图）、<code>agent_framework.function.invocation.duration</code>（工具执行直方图）。</span>
+</dd>
+
+<dt id="aspire-dashboard">Aspire Dashboard</dt>
+<dd>
+  微软 .NET Aspire 团队的<strong>本地 OpenTelemetry 可视化工具</strong>——Docker 一键启动，通过 OTLP 协议接收 telemetry 数据，提供 Traces 甘特图、Metrics 图表和结构化日志查看。MAF 开发阶段的最佳观测伴侣。<br>
+  <span class="aka">启动：<code>docker run -p 18888:18888 -p 4317:18889 mcr.microsoft.com/dotnet/aspire-dashboard:latest</code>。Web UI: http://localhost:18888。</span>
+</dd>
+
+<dt id="genai-conventions">GenAI Semantic Conventions</dt>
+<dd>
+  OpenTelemetry 社区定义的<strong>AI/LLM 场景专用属性标准</strong>——统一了 <code>gen_ai.system</code>、<code>gen_ai.operation.name</code>、<code>gen_ai.usage.input_tokens</code> 等属性名。MAF 遵循此标准，意味着你的 Agent telemetry 数据可以被任何兼容的 OTel 后端理解。<br>
+  <span class="aka">跨框架通用——LangChain、LlamaIndex、Semantic Kernel 都在向这个标准靠拢。</span>
+</dd>
+
 </dl>
 
 <div class="lesson-footer" style="margin-top:3rem;">
