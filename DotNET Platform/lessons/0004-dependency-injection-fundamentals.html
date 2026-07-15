@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 4 课：依赖注入基础 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>第 4 课：依赖注入基础</h1>
+<div class="lesson-meta">
+  模块：依赖注入（1/3）&nbsp;|&nbsp; 预计阅读/练习时间：25 分钟
+</div>
+
+<p>
+  前三个模块我们都在讲运行时——项目怎么编译、GC 怎么回收、内存怎么控制。
+  但 Framework 4.8 开发者进入现代 .NET 面临的<strong>最大范式转变</strong>不是运行时，而是这里：
+  依赖注入从"第三方容器的第三方用法"变成了<strong>内置的、处处渗透的</strong>基础设施。
+</p>
+
+<div class="summary">
+  <ul>
+    <li>理解 MSDI 是什么，以及为什么它<strong>不是又一个 Autofac</strong></li>
+    <li>掌握 <strong>Transient / Scoped / Singleton</strong> 三种生命周期的行为和适用场景</li>
+    <li>理解 <strong>IServiceCollection + IServiceProvider</strong> 的注册与解析模型</li>
+    <li>识别 <strong>Captive Dependency</strong>——DI 第一杀手</li>
+  </ul>
+</div>
+
+<h2>Framework 4.8 时代：DI 是"别人的事"</h2>
+
+<p>回忆一下你当年怎么用 DI：</p>
+
+<div class="cmp">
+  <div class="cmp-col">
+    <div class="cmp-col__head cmp-col__head--old">Framework 4.8 + Autofac</div>
+    <div class="cmp-col__body">
+<pre><code>// Global.asax.cs — Application_Start
+var builder = new ContainerBuilder();
+builder.RegisterType&lt;UserService&gt;()
+       .As&lt;IUserService&gt;()
+       .InstancePerLifetimeScope();
+builder.RegisterType&lt;LogService&gt;()
+       .As&lt;ILogService&gt;()
+       .SingleInstance();
+var container = builder.Build();
+
+// 获取服务——Service Locator
+var service = container.Resolve&lt;IUserService&gt;();
+</code></pre>
+    </div>
+  </div>
+  <div class="cmp-col">
+    <div class="cmp-col__head cmp-col__head--new">现代 .NET</div>
+    <div class="cmp-col__body">
+<pre><code>// Program.cs — 一行一行链下去
+var builder = Host.CreateApplicationBuilder();
+builder.Services.AddScoped&lt;IUserService, UserService&gt;();
+builder.Services.AddSingleton&lt;ILogService, LogService&gt;();
+var host = builder.Build();
+
+// 不手动 Resolve——构造函数注入
+class MyController(IUserService userService)
+</code></pre>
+    </div>
+  </div>
+</div>
+
+<p>区别不在语法，在<strong>系统地位</strong>：</p>
+
+<table class="tbl">
+  <tr><th></th><th>Framework 4.8</th><th>现代 .NET</th></tr>
+  <tr><td>DI 容器</td><td>第三方（Autofac/Ninject/Unity）— NuGet 自己装</td><td><strong>内置</strong>——<code>Microsoft.Extensions.DependencyInjection</code></td></tr>
+  <tr><td>使用方式</td><td>Service Locator（<code>container.Resolve&lt;T&gt;()</code>）</td><td><strong>构造函数注入</strong>——框架自动解析</td></tr>
+  <tr><td>配置方式</td><td>XML / Module 类 / 分散在各地</td><td><strong>扩展方法</strong>——<code>services.AddXxx()</code> 链式调用</td></tr>
+  <tr><td>渗透程度</td><td>Web 项目才用，控制台几乎不用</td><td><strong>所有项目类型都用同一套</strong>（控制台/WPF/Worker/Web）</td></tr>
+  <tr><td>框架集成</td><td>需要胶水代码</td><td>ASP.NET Core / EF Core / HttpClientFactory / Logging <strong>全部原生基于这套 DI</strong></td></tr>
+</table>
+
+<div class="callout callout--info">
+💡 <strong>关键心智转变：</strong>Framework 4.8 时代你可能写过 <code>new UserService()</code> 来创建服务实例。
+在现代 .NET 中，你应该<strong>几乎永远不写 <code>new</code></strong>——所有依赖都通过构造函数注入。
+这不仅仅是"最佳实践"，而是整个平台的设计契约——ASP.NET Core、EF Core、HttpClientFactory
+的整个生命周期都依赖 DI 容器管理。
+</div>
+
+<h2>核心模型：IServiceCollection → IServiceProvider</h2>
+
+<p>MSDI 的架构极其简单——只有三个核心接口：</p>
+
+<div class="diagram">
+<pre>
+<strong>MSDI 架构</strong>
+
+IServiceCollection               IServiceProvider           你的类
+┌────────────────────┐          ┌────────────────┐        ┌──────────┐
+│ 注册表（一堆描述符）  │  Build()  │  服务容器       │ Resolve│          │
+│                    │ ───────→ │                │ ─────→ │ 构造函数  │
+│ AddTransient&lt;A,B&gt;()│          │ 单例缓存        │        │ 拿到实例  │
+│ AddScoped&lt;C,D&gt;()   │          │ Scope 工厂      │        │          │
+│ AddSingleton&lt;E,F&gt;()│          │ 生命周期管理     │        └──────────┘
+└────────────────────┘          └────────────────┘
+</pre>
+</div>
+
+<pre><code>// 最小完整示例
+using Microsoft.Extensions.DependencyInjection;
+
+// 1. 创建 ServiceCollection（注册表）
+var services = new ServiceCollection();
+
+// 2. 注册服务
+services.AddTransient&lt;IMessageWriter, ConsoleMessageWriter&gt;();
+services.AddSingleton&lt;App&gt;();
+
+// 3. Build → 得到 IServiceProvider（容器）
+ServiceProvider provider = services.BuildServiceProvider();
+
+// 4. 解析入口对象
+App app = provider.GetRequiredService&lt;App&gt;();
+app.Run();
+
+// 5. 释放容器（释放所有 Singleton + 清理）
+provider.Dispose();
+</code></pre>
+
+<p>三个接口的分工：</p>
+
+<table class="tbl">
+  <tr><th>接口</th><th>角色</th><th>你用它的方式</th></tr>
+  <tr><td><code>IServiceCollection</code></td><td><strong>注册表</strong>——记录"什么接口映射到什么实现"</td><td>在启动代码中 <code>services.AddXxx()</code></td></tr>
+  <tr><td><code>IServiceProvider</code></td><td><strong>容器</strong>——根据注册表创建/缓存/返回实例</td><td>框架用；你只在极少数情况下手动 <code>GetRequiredService&lt;T&gt;()</code></td></tr>
+  <tr><td><code>IServiceScopeFactory</code></td><td><strong>Scope 工厂</strong>——创建子容器</td><td>Singleton 中需要 Scoped 服务时，或在 <code>IHostedService</code> 中</td></tr>
+</table>
+
+<h2>三种生命周期：DI 的灵魂</h2>
+
+<p>这是整个 MSDI 中最需要理解透彻的东西。选错生命周期是最常见的 bug 来源。</p>
+
+<div class="diagram">
+<pre>
+<strong>生命周期对比——同一个请求 / Scope 内多次解析</strong>
+
+        第 1 次 GetService&lt;T&gt;()           第 2 次 GetService&lt;T&gt;()
+        ┌───────────────────┐          ┌───────────────────┐
+Transient │ new → 返回实例 A   │          │ new → 返回实例 B   │  ← 每次不同
+Scoped    │ new → 缓存 → 返回 A│          │ 命中缓存 → 返回 A  │  ← Scope 内相同
+Singleton │ new → 缓存 → 返回 A│          │ 命中缓存 → 返回 A  │  ← 永远相同
+        └───────────────────┘          └───────────────────┘
+</pre>
+</div>
+
+<h3>Transient：用完即弃</h3>
+
+<pre><code>services.AddTransient&lt;IEmailSender, SmtpEmailSender&gt;();
+
+// 每次 GetService → 新对象
+// 同一个请求里解析两次 → 两个不同实例
+// "无状态的小工具类"最适合 Transient
+</code></pre>
+
+<p><strong>用 Transient 的场景：</strong>无状态的工具类（序列化器、映射器）、每次执行逻辑都不同的轻量服务。</p>
+
+<div class="callout callout--warn">
+⚠️ <strong>陷阱：</strong>如果你注册了 Transient 但把它注入到 Singleton 中，它会被 Singleton 持有引用——
+虽然它"名义上"是 Transient，但<strong>只被创建了一次</strong>，变成事实上的 Singleton。
+这不是 MSDI 的 bug，是类型系统无法阻止的引用持有问题。
+</div>
+
+<h3>Scoped：一个 Scope 内共享</h3>
+
+<pre><code>services.AddScoped&lt;IUnitOfWork, EfUnitOfWork&gt;();
+
+// HTTP 请求 → 框架自动创建一个 Scope
+//   同一个请求里解析 100 次 → 返回同一个实例
+//   不同请求 → 不同实例
+
+// 自己创建 Scope
+using (var scope = provider.CreateScope())
+{
+    var uow1 = scope.ServiceProvider.GetRequiredService&lt;IUnitOfWork&gt;();
+    var uow2 = scope.ServiceProvider.GetRequiredService&lt;IUnitOfWork&gt;();
+    // uow1 == uow2  ✅ 同一个 Scope 内相同
+}
+// Scope 结束 → 其中所有 Transient 和 Scoped 服务自动 Dispose
+</code></pre>
+
+<p><strong>用 Scoped 的场景：</strong>Unit of Work、DbContext（EF Core 默认 Scoped）、请求级别的上下文信息、需要在一个业务操作内共享状态的服务。</p>
+
+<h3>Singleton：全应用唯一</h3>
+
+<pre><code>services.AddSingleton&lt;ICache, RedisCache&gt;();
+
+// 整个应用生命周期内只创建一次
+// 所有线程、所有请求共享同一个实例
+// 容器 Dispose 时才释放
+</code></pre>
+
+<p><strong>用 Singleton 的场景：</strong>无状态且创建成本高的服务、全应用共享的缓存、配置快照。必须是<strong>线程安全</strong>的。</p>
+
+<div class="callout callout--warn">
+⚠️ <strong>Singleton 的真正代价（不仅仅是线程安全）：</strong>
+<ul style="margin-top:0.3rem">
+  <li>可能把大对象图一直锁在内存里，直到进程退出</li>
+  <li>如果 Singleton 或其依赖树中任何一环挂了，无法恢复</li>
+  <li>不支持"热重载"配置——创建时读了配置，后续配置变了它不知道</li>
+  <li>可能意外"捕获"Scoped 服务（Captive Dependency——见下文）</li>
+</ul>
+<strong>大多数业务服务应该用 Scoped，不是 Singleton。</strong>
+</div>
+
+<h3>快速决策表</h3>
+
+<table class="tbl">
+  <tr><th>你的服务…</th><th>用</th></tr>
+  <tr><td>无状态，每次调用都是独立逻辑</td><td>Transient</td></tr>
+  <tr><td>在一个请求/操作内需要共享状态</td><td>Scoped</td></tr>
+  <tr><td>全应用共享，线程安全，创建成本高</td><td>Singleton</td></tr>
+  <tr><td>EF Core 的 <code>DbContext</code></td><td>Scoped（默认，别改）</td></tr>
+  <tr><td>HTTP Client / HttpClientFactory 创建的 Client</td><td>Scoped 或 Transient</td></tr>
+</table>
+
+<h2>注册模式：不止 AddXxx&lt;T,U&gt;()</h2>
+
+<h3>接口→实现（最常用）</h3>
+
+<pre><code>services.AddScoped&lt;IUserRepository, EfUserRepository&gt;();
+// 请求 IUserRepository → 返回 EfUserRepository 实例
+</code></pre>
+
+<h3>只注册具体类型</h3>
+
+<pre><code>services.AddScoped&lt;MyService&gt;();
+// 只能通过 MyService 类型解析，没有接口抽象
+// 适用于简单类型或值对象
+</code></pre>
+
+<h3>已有实例（Singleton 专用）</h3>
+
+<pre><code>var cache = new RedisCache("connection-string");
+services.AddSingleton&lt;ICache&gt;(cache);
+// 你手动控制创建和生命周期——容器不帮你 Dispose！
+</code></pre>
+
+<h3>工厂注册（需要构造逻辑时）</h3>
+
+<pre><code>services.AddScoped&lt;IUserService&gt;(sp =>
+{
+    var repo = sp.GetRequiredService&lt;IUserRepository&gt;();
+    var logger = sp.GetRequiredService&lt;ILogger&lt;UserService&gt;&gt;();
+    return new UserService(repo, logger, Environment.MachineName);
+});
+// sp 是当前 Scope 的 IServiceProvider——可以解析其他已注册的服务
+</code></pre>
+
+<h3>TryAdd——"我有默认值，但允许覆盖"</h3>
+
+<pre><code>// 在库/framework 代码中：提供默认实现
+services.TryAddSingleton&lt;ICache, MemoryCache&gt;();
+
+// 在应用代码中：覆盖默认
+services.AddSingleton&lt;ICache, RedisCache&gt;();  // 这个生效！
+// TryAdd 不会覆盖已有的注册
+</code></pre>
+
+<div class="callout callout--info">
+💡 <strong>开放泛型注册：</strong>MSDI 支持 <code>services.AddSingleton(typeof(IRepository&lt;&gt;), typeof(EfRepository&lt;&gt;))</code>——
+当你请求 <code>IRepository&lt;Order&gt;</code> 时自动返回 <code>EfRepository&lt;Order&gt;</code>。
+这是你天天在用的 <code>ILogger&lt;T&gt;</code> 的底层机制。
+</div>
+
+<h2>构造函数注入：服务怎么拿到依赖？</h2>
+
+<p>现代 .NET 中你看到的构造函数注入：</p>
+
+<pre><code>public class OrderService
+{
+    private readonly IUserRepository _users;
+    private readonly IOrderRepository _orders;
+    private readonly ILogger&lt;OrderService&gt; _logger;
+
+    // 构造函数——DI 容器自动解析每个参数
+    public OrderService(
+        IUserRepository users,
+        IOrderRepository orders,
+        ILogger&lt;OrderService&gt; logger)
+    {
+        _users = users;
+        _orders = orders;
+        _logger = logger;
+    }
+
+    public async Task&lt;Order&gt; PlaceOrderAsync(int userId, OrderItem[] items)
+    {
+        _logger.LogInformation("创建订单 {UserId}", userId);
+        var user = await _users.GetByIdAsync(userId);
+        var order = Order.Create(user, items);
+        await _orders.SaveAsync(order);
+        return order;
+    }
+}
+
+// Primary Constructor（C# 12+）——更简洁
+public class OrderService(
+    IUserRepository users,
+    IOrderRepository orders,
+    ILogger&lt;OrderService&gt; logger)
+{
+    public async Task&lt;Order&gt; PlaceOrderAsync(int userId, OrderItem[] items)
+    {
+        logger.LogInformation("创建订单 {UserId}", userId);
+        // ...
+    }
+}
+</code></pre>
+
+<p>如果构造函数有多个重载，DI 容器会选<strong>参数最多的那个</strong>（能全部解析的前提下）。有歧义就抛异常。</p>
+
+<div class="callout callout--warn">
+⚠️ <strong>别用 Service Locator 模式：</strong>在 Framework 4.8 时代你可能习惯 <code>container.Resolve&lt;T&gt;()</code>
+到处取服务。在现代 .NET 中这是反模式——它隐藏依赖关系、让单元测试变困难。
+<strong>唯一的例外：</strong>在 <code>IHostedService</code> 或 Singleton 中需要 Scoped 服务时，
+通过 <code>IServiceScopeFactory</code> 创建 Scope 再获取——但这是有意识的选择，不是偷懒。
+</div>
+
+<h2>Captive Dependency：DI 第一杀手</h2>
+
+<p>这是现代 .NET DI 中最常见的 bug——也是 Framework 4.8 开发者最容易踩的坑。</p>
+
+<h3>什么是 Captive Dependency？</h3>
+
+<pre><code>// ❌ 错误：Singleton 注入了 Scoped 服务
+services.AddSingleton&lt;CacheWarmer&gt;();     // 全应用唯一
+services.AddScoped&lt;IDbContext, AppDbContext&gt;();  // 每个请求一个
+
+public class CacheWarmer
+{
+    public CacheWarmer(IDbContext db)  // ← db 是 Scoped！
+    {
+        // db 被"囚禁"在 CacheWarmer 中
+        // CacheWarmer 活到应用关闭 → db 也活到应用关闭
+        // 但 db 本该在每个请求结束后释放！
+    }
+}
+</code></pre>
+
+<h3>为什么会出问题？</h3>
+
+<div class="diagram">
+<pre>
+<strong>正常情况：Scoped 服务的生命周期</strong>
+
+HTTP 请求 1 开始 → Scope 1 创建 → 创建 AppDbContext 实例 A
+HTTP 请求 1 结束 → Scope 1 释放 → AppDbContext A 释放 ✅
+
+<strong>Captive Dependency：Scoped 被俘虏</strong>
+
+应用启动 → 创建 Singleton CacheWarmer
+           └── 构造函数要 IDbContext → 容器创建 AppDbContext 实例 B
+                                       └── B 被 CacheWarmer 持有引用
+HTTP 请求 1 结束 → Scope 1 释放 → 但 AppDbContext B 还在！
+HTTP 请求 2 结束 → Scope 2 释放 → 但 AppDbContext B 还在！
+...
+应用关闭 → CacheWarmer 释放 → AppDbContext B 终于释放 💀
+             （可能已经持有几万个过期实体的引用）
+</pre>
+</div>
+
+<h3>怎么发现？</h3>
+
+<pre><code>// 开发环境启用 Scope Validation
+ServiceProvider provider = services.BuildServiceProvider(
+    new ServiceProviderOptions
+    {
+        ValidateScopes = true  // ← 开发环境开这个
+    });
+
+// 如果有 Singleton → Scoped 的依赖，直接抛异常：
+// InvalidOperationException: Cannot consume scoped service
+// 'IDbContext' from singleton 'CacheWarmer'.
+</code></pre>
+
+<h3>怎么修？</h3>
+
+<table class="tbl">
+  <tr><th>方案</th><th>何时用</th></tr>
+  <tr><td><strong>把 Scoped 升级为 Singleton</strong></td><td>只有确认服务本身支持全应用共享（如无状态连接池）</td></tr>
+  <tr><td><strong>把 Singleton 降级为 Scoped</strong></td><td>该服务本身就不该是全局的——大多数情况应该用这个方案</td></tr>
+  <tr><td><strong>IServiceScopeFactory</strong></td><td>Singleton 确实需要 Scoped，但它只在方法内临时用——手动创建 Scope</td></tr>
+</table>
+
+<pre><code>// ✅ 方案 3：Singleton 通过 IServiceScopeFactory 临时获取 Scoped 服务
+public class CacheWarmer
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public CacheWarmer(IServiceScopeFactory scopeFactory)  // 不是 IDbContext
+    {
+        _scopeFactory = scopeFactory;
+    }
+
+    public async Task WarmCacheAsync()
+    {
+        using var scope = _scopeFactory.CreateScope();  // 手动创建 Scope
+        var db = scope.ServiceProvider.GetRequiredService&lt;IDbContext&gt;();
+        // 用 db 做缓存预热...
+    }  // Scope 结束 → db 释放 ✅
+}
+</code></pre>
+
+<h2>检查理解</h2>
+
+<div class="quiz" id="quiz1"
+     data-feedback-correct="✅ 正确！AddScoped 保证同一 Scope 内返回同一实例，不同 Scope 返回不同实例。EF Core 的 DbContext 默认就是 Scoped。"
+     data-feedback-wrong="❌ 不对。Scoped 意味着每个 Scope 内共享同一个实例——HTTP 请求是最典型的 Scope。">
+  <div class="quiz__q">❓ 你在 ASP.NET Core 中注册了一个 AddScoped 服务。同一个 HTTP 请求中，控制器 A 和控制器 B 各解析了一次——它们拿到的是同一个实例吗？</div>
+  <div class="quiz__opt" data-answer="correct">是同一个实例</div>
+  <div class="quiz__opt" data-answer="wrong">不是，各拿到不同的实例</div>
+  <div class="quiz__opt" data-answer="wrong">取决于注册的顺序</div>
+  <div class="quiz__opt" data-answer="wrong">取决于解析的顺序</div>
+  <div class="quiz__feedback" id="quiz1-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz2" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！Singleton 注入 Scoped 就是 Captive Dependency——Scoped 服务被 Singleton 永久持有，无法按 Scope 释放。"
+     data-feedback-wrong="❌ 不对。这只在运行时抛异常，编译能过。但即使不抛异常，这也是 Bug——Scoped 被"囚禁"了。">
+  <div class="quiz__q">❓ 以下哪种注册组合会导致 Captive Dependency？</div>
+  <div class="quiz__opt" data-answer="wrong">Transient 注入 Singleton</div>
+  <div class="quiz__opt" data-answer="correct">Singleton 注入 Scoped</div>
+  <div class="quiz__opt" data-answer="wrong">Scoped 注入 Transient</div>
+  <div class="quiz__opt" data-answer="wrong">Singleton 注入 Transient</div>
+  <div class="quiz__feedback" id="quiz2-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz3" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！MSDI 不支持程序集扫描——这是故意的设计选择（极简）。需要时用 Scrutor 或替换容器。"
+     data-feedback-wrong="❌ 不对。MSDI 故意不支持程序集扫描——需要第三方库如 Scrutor。">
+  <div class="quiz__q">❌ 以下哪个是<strong>错误的</strong>？</div>
+  <div class="quiz__opt" data-answer="wrong">MSDI 的 Singleton 服务必须是线程安全的</div>
+  <div class="quiz__opt" data-answer="correct">MSDI 支持通过 AddScoped(Assembly) 扫描程序集自动注册</div>
+  <div class="quiz__opt" data-answer="wrong">ValidateScopes 可以检测 Singleton 注入 Scoped 的问题</div>
+  <div class="quiz__opt" data-answer="wrong">TryAdd 不会覆盖已有的服务注册</div>
+  <div class="quiz__feedback" id="quiz3-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz4" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！IServiceScopeFactory 是 Singleton，用它创建 Scope 是唯一的正确解。"
+     data-feedback-wrong="❌ 不对。IHostedService 是 Singleton——直接注入 Scoped 服务就是 Captive Dependency。必须用 IServiceScopeFactory 创建 Scope。">
+  <div class="quiz__q">❓ 一个 IHostedService（本质是 Singleton）需要访问 DbContext（Scoped）。应该怎么做？</div>
+  <div class="quiz__opt" data-answer="wrong">直接在构造函数中注入 IDbContext</div>
+  <div class="quiz__opt" data-answer="correct">注入 IServiceScopeFactory，在方法内创建 Scope 获取</div>
+  <div class="quiz__opt" data-answer="wrong">把 IDbContext 注册改成 Singleton</div>
+  <div class="quiz__opt" data-answer="wrong">在构造函数中调用 GetRequiredService&lt;IDbContext&gt;()</div>
+  <div class="quiz__feedback" id="quiz4-feedback"></div>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+<h2>关键术语</h2>
+
+<dl>
+  <dt><strong>MSDI（Microsoft.Extensions.DependencyInjection）</strong></dt>
+  <dd>现代 .NET 内置的 DI 容器。极简设计——不支持属性注入、不支持程序集扫描、不支持装饰器模式。但这些可以用第三方库（Scrutor）或替换容器（Autofac/Lamar）补上。</dd>
+  <dt><strong>IServiceCollection</strong></dt>
+  <dd>服务注册表——启动时通过 <code>AddTransient/AddScoped/AddSingleton</code> 填写，Build 后变成 IServiceProvider。一个 ServiceDescriptor 的列表。</dd>
+  <dt><strong>IServiceProvider</strong></dt>
+  <dd>服务容器——根据注册表创建、缓存、返回服务实例。线程安全。通过构造函数注入自动使用，你几乎不需要手动调用。</dd>
+  <dt><strong>Transient</strong></dt>
+  <dd>每次解析都创建新实例。适用无状态的轻量工具类。注意：如果被 Singleton 持有引用，会产生"事实上的 Singleton"。</dd>
+  <dt><strong>Scoped</strong></dt>
+  <dd>在一个 Scope 内共享同一实例。HTTP 请求是最典型的 Scope——同一个请求里所有解析返回同一实例。EF Core 的 DbContext 默认 Scoped。</dd>
+  <dt><strong>Singleton</strong></dt>
+  <dd>全应用生命周期内唯一实例。必须线程安全。创建成本高、全应用共享的服务用这个。大多数业务服务不该用 Singleton。</dd>
+  <dt><strong>Scope（IServiceScope）</strong></dt>
+  <dd>由 IServiceScopeFactory 创建的子容器。ASP.NET Core 中每个 HTTP 请求自动创建一个 Scope。手动创建：<code>using var scope = provider.CreateScope()</code>。</dd>
+  <dt><strong>Captive Dependency（囚禁依赖）</strong></dt>
+  <dd>DI 反模式——长生命周期服务持有短生命周期服务的引用。最常见：Singleton 注入 Scoped。启用 <code>ValidateScopes = true</code> 可在 Build 时检测。</dd>
+  <dt><strong>Service Locator（服务定位器）</strong></dt>
+  <dd>反模式——在代码中手动调用 <code>GetService&lt;T&gt;()</code> 而不是通过构造函数注入。隐藏依赖关系、难以测试。Framework 4.8 时代的 <code>container.Resolve&lt;T&gt;()</code> 就是典型的 Service Locator。</dd>
+  <dt><strong>TryAdd</strong></dt>
+  <dd>只在服务尚未注册时才注册——允许框架/库提供默认实现，用户代码可覆盖。不覆盖已有注册。</dd>
+</dl>
+
+<h2>推荐阅读</h2>
+
+<p>📖 <strong>首选参考：</strong><a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection/overview">Dependency injection in .NET</a> — MSDI 官方总览，本课的核心来源</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection/service-lifetimes">Service lifetimes in DI</a> — 生命周期官方详解，含 Dispose 行为</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection-guidelines">DI guidelines</a> — 最佳实践与反模式（Captive Dependency、async 工厂死锁等）</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection#keyed-services">Keyed service registration</a> — .NET 8+ 的 Keyed DI（同一接口多个实现按 key 区分）</p>
+
+<p>📖 <strong>DI 圣经：</strong>《Dependency Injection Principles, Practices, and Patterns》— Mark Seemann & Steven van Deursen。不仅讲 MSDI，覆盖所有 DI 容器的设计原则。</p>
+
+<p>📖 <strong>本课速查：</strong> <a href="../reference/di-lifetime-reference.html">DI 生命周期与注册速查</a>（注册语法、生命周期陷阱、Autofac→MSDI 迁移对照）</p>
+
+<h2>接下来</h2>
+
+<p>
+  这一课覆盖了 DI 的基础——容器、生命周期、注册、构造函数注入、Captive Dependency。
+  下一课深入<strong>DI 进阶：工厂模式与 Keyed Service</strong>——同一接口多个实现怎么办？
+  <code>Func&lt;T&gt;</code> 工厂何时用？.NET 8 的 <code>[FromKeyedServices]</code> 怎么替代以前的"命名注册"？
+</p>
+
+<div class="callout callout--info">
+💬 <strong>有问题？</strong> 直接问我！比如"我以前的 Autofac 模块（Module）怎么迁移到 MSDI？"
+或"Scoped 和 Transient 到底该选哪个——我不确定我的服务有没有状态？"
+或"Scope Validation 开了之后一堆报错，该怎么一步步修？"
+</div>
+
+<div class="lesson-nav">
+  <a href="0003-gc-internals-memory-control.html">← 上一课：GC 内部机制与内存控制</a>
+  <a href="0005-di-advanced-factories-keyed.html">下一课：DI 进阶：工厂模式与 Keyed Service →</a>
+</div>
+
+</body>
+</html>

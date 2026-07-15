@@ -10,7 +10,7 @@
 
 <h1>第 3 课：GC 内部机制与内存控制</h1>
 <div class="lesson-meta">
-  模块：运行时架构（2/2）&nbsp;|&nbsp; 预计阅读/练习时间：20 分钟
+  模块：运行时架构（2/2）&nbsp;|&nbsp; 预计阅读/练习时间：25 分钟
 </div>
 
 <p>
@@ -45,10 +45,10 @@
 │  Gen0          │  Gen1          │  Gen2             │
 │  (ephemeral)   │  (buffer)      │  (long-lived)     │
 │                 │                │                   │
-│  新创建的       │  熬过 1 次     │  熬过多次回收     │
-│  小对象         │  Gen0 回收     │  静态变量、       │
-│  临时字符串     │  上升至此      │  长期缓存、       │
-│  LINQ 临时结果  │                │  Singleton        │
+│  新创建的       │  熬过 1 次     │  熬过 Gen0 +     │
+│  小对象         │  Gen0 回收     │  Gen1 各 1 次    │
+│  临时字符串     │  上升至此      │  回收后提升至此   │
+│  LINQ 临时结果  │                │  静态变量等       │
 │                 │                │                   │
 │  回收频率：极高  │  回收频率：中   │  回收频率：低     │
 │  暂停时间：&lt;1ms │  暂停时间：短   │  暂停时间：较长    │
@@ -106,6 +106,54 @@
 </div>
 
 <p>POH 是 .NET 5 才加入的——以前被 <code>fixed</code> 固定的对象留在 SOH 里，像钉子一样阻碍 Gen0 压缩。现在它们被单独隔离到 POH，SOH 的回收效率大幅提升。</p>
+
+<h3>压缩（Compaction）到底是什么？</h3>
+
+<p>每次 GC 回收结束时，如果开启了压缩，运行时会做一件事：<strong>把存活对象挤到一起，把空洞消灭掉</strong>。不压缩的话，死亡对象留下的空隙散布在堆里，堆像被虫蛀过的木头——空洞到处都是，分配新对象时可能找不到足够大的连续空间。</p>
+
+<div class="diagram">
+<pre>
+<strong>压缩前（碎片化）</strong>
+┌────┬════┬────┬════┬────────┬════┐
+│ 活 │ 死  │ 活 │ 死  │  活    │ 死  │
+└────┴════┴────┴════┴────────┴════┘
+
+<strong>压缩后（存活对象移到一起，空闲空间连成一片）</strong>
+┌────┬────┬────────┬──────────────────┐
+│ 活 │ 活 │  活    │   一整块空闲空间    │
+└────┴────┴────────┴──────────────────┘
+              ↑
+         分配指针只需往右移（bump pointer）
+</pre>
+</div>
+
+<table class="tbl">
+  <tr><th>压缩的好处</th><th>为什么重要</th></tr>
+  <tr><td><strong>消灭碎片</strong></td><td>后续分配总能找到连续空间，不会"明明有空闲内存却 OOM"</td></tr>
+  <tr><td><strong>分配极快</strong></td><td>空闲空间是一整块，分配只需移动一个指针</td></tr>
+  <tr><td><strong>缓存友好</strong></td><td>相关对象物理上更近，CPU 缓存命中率更高</td></tr>
+</table>
+
+<p><strong>一句话：压缩是用回收时的移动成本，换取回收后的分配速度和空间利用率。</strong></p>
+
+<h3>LOH 强制压缩有多贵？</h3>
+
+<p>SOH 压缩移动的是小对象（&lt; 85KB），一次 <code>memcpy</code> 几百字节到几十 KB，几微秒的事。</p>
+
+<p>LOH 里的对象动辄几百 MB。移动一个 500MB 的 <code>byte[]</code> 意味着：<strong>实际复制 500MB 数据</strong>（不是指针游戏）、<strong>更新所有引用</strong>（指向这个对象的所有指针都要改）、<strong>整个过程线程挂起</strong>。</p>
+
+<table class="tbl">
+  <tr><th></th><th>SOH Gen2 回收</th><th>LOH 压缩</th></tr>
+  <tr><td>典型暂停</td><td>几十 ms</td><td><strong>几百 ms 到秒级</strong></td></tr>
+  <tr><td>主要开销</td><td>标记 + 清理</td><td>内存拷贝（memcpy）</td></tr>
+  <tr><td>自带压缩</td><td>✅ 总是</td><td>❌ 需手动触发 <code>CompactOnce</code></td></tr>
+</table>
+
+<p>生产环境里一个 2GB LOH 上做压缩，暂停 1-3 秒是正常的。</p>
+
+<div class="callout callout--warn">
+⚠️ <strong>正确的策略：</strong>不是在每次 full GC 后压，而是在<strong>感觉到 LOH 碎片问题时</strong>才压。典型姿势：应用启动 → 分配大量临时大对象 → 程序空闲时做一次 full GC + LOH 压缩。也可以从根本上避免——用 <code>ArrayPool&lt;byte&gt;.Shared</code> 租用大 buffer、用完归还，而不是频繁 new 大数组又扔掉。<strong>LOH 压缩是重症手术，不是日常养生。</strong>
+</div>
 
 <h2>Span&lt;T&gt;：绕开 GC 堆操作内存</h2>
 
@@ -302,6 +350,49 @@ context.Unload();  // 卸载整个 ALC 及其中所有程序集
   </tr>
 </table>
 
+<h3>实际开发中什么情况下用到 ALC？</h3>
+
+<p>大部分开发者不会直接写 ALC 代码，但你<strong>已经在用它</strong>了。而且有几个场景不自己写就绕不过去。</p>
+
+<h4>你已经在用的（框架替你做）</h4>
+
+<table class="tbl">
+  <tr><th>框架</th><th>ALC 在背后做什么</th></tr>
+  <tr>
+    <td><strong>ASP.NET Core 热重载</strong></td>
+    <td>每次 Ctrl+S 保存 .cs 文件：卸载旧 ALC（含旧版本程序集）→ 等待 GC 回收 → 新建 ALC 加载新编译的程序集。旧请求在旧 ALC 上跑完自然结束，新请求走新 ALC。</td>
+  </tr>
+  <tr>
+    <td><strong>Roslyn 脚本引擎</strong></td>
+    <td>LINQPad、C# Interactive、dotnet-script 中每次执行脚本：编译成临时程序集 → 塞进独立 ALC → 执行 → Unload。不这么做的话每执行一次就多一个永远删不掉的程序集，用一天进程就 OOM 了。</td>
+  </tr>
+</table>
+
+<h4>你需要自己写的场景</h4>
+
+<table class="tbl">
+  <tr><th>场景</th><th>为什么必须用 ALC</th><th>真实案例</th></tr>
+  <tr>
+    <td><strong>插件系统</strong></td>
+    <td>加载 .dll 后能在不用时彻底卸载，不重启进程</td>
+    <td>NCrunch / Rider 测试运行器每次改代码重新编译旧程序集，ALC 隔离旧版本，跑完 Unload 释放文件锁；企业工作流引擎的租户自定义步骤插件</td>
+  </tr>
+  <tr>
+    <td><strong>程序集版本隔离</strong></td>
+    <td>同一进程加载同一库的两个不同版本，真正物理隔离</td>
+    <td>网关同时引用 Alipay.SDK（依赖 Newtonsoft.Json 12）和 WeChat.SDK（依赖 Newtonsoft.Json 13）——各放进独立 ALC，各加载各的，不存在版本冲突。FW 4.8 时代用 &lt;bindingRedirect&gt; 经常莫名其妙 <code>MethodNotFoundException</code></td>
+  </tr>
+  <tr>
+    <td><strong>编译-执行-卸载 管线</strong></td>
+    <td>自己写 DSL 或规则引擎，每次编译成程序集 → 加载 → 反射调用 → 执行完 Unload，不污染主程序</td>
+    <td>自研规则引擎：用户写规则文本 → Roslyn 编译 → ALC 加载 → 反射调用 → Unload</td>
+  </tr>
+</table>
+
+<div class="callout callout--info">
+💡 <strong>什么时候不需要 ALC？</strong>普通服务注入（DI 容器管理生命周期就够了）、只想热加载配置（JSON 文件监听就够了）、微服务架构（进程隔离天然优于 ALC 隔离）。<strong>规则：当你需要"加载一个 .dll，用完后能彻底卸载它"时，ALC 是唯一正确解。其他场景一般不需要碰。</strong>
+</div>
+
 <h2>框架选择：这三个技术怎么关联？</h2>
 
 <p>把它们串起来看，现代 .NET 对内存的管理形成了一个从"放任"到"精细控制"的光谱：</p>
@@ -381,7 +472,7 @@ context.Unload();  // 卸载整个 ALC 及其中所有程序集
 
 <dl>
   <dt><strong>Gen0 / Gen1 / Gen2</strong></dt>
-  <dd>GC 的三代回收机制。Gen0：新创建的小对象，回收最频繁（暂停 &lt;1ms）。Gen1：熬过一次 Gen0 回收的对象，作为 Gen0 和 Gen2 之间的缓冲。Gen2：长期存活的对象（静态变量、缓存），回收触发 full GC。</dd>
+  <dd>GC 的三代回收机制。Gen0：新创建的小对象，回收最频繁（暂停 &lt;1ms）。Gen1：熬过一次 Gen0 回收的对象，作为 Gen0 和 Gen2 之间的缓冲。Gen2：熬过 Gen0 和 Gen1 各一次回收后提升至此。存放静态变量、长期缓存等，回收触发 full GC。</dd>
   <dt><strong>提升（Promotion）</strong></dt>
   <dd>回收时，存活对象从当前代"升"到更老一代的过程。Gen0 存活 → Gen1；Gen1 存活 → Gen2。提升意味着对象会活得更久，所以别让临时对象不小心升到 Gen2。</dd>
   <dt><strong>SOH（Small Object Heap）</strong></dt>
@@ -390,6 +481,8 @@ context.Unload();  // 卸载整个 ALC 及其中所有程序集
   <dd>存放 ≥ 85,000 字节（即 ≳83KB）对象的堆区域。对象直接标记为 Gen2，默认不压缩。碎片可能导致 OOM。现代 .NET 支持手动压缩。</dd>
   <dt><strong>POH（Pinned Object Heap）</strong></dt>
   <dd>.NET 5 新增——存放被 <code>fixed</code> 固定（不能移动）的对象。将"钉子"从 SOH 中分离出来，SOH 回收效率更高。</dd>
+  <dt><strong>压缩（Compaction）</strong></dt>
+  <dd>GC 回收后将存活对象移到一起、消除碎片空洞的过程。压缩后空闲空间连续，分配只需移动指针（极快），对象物理位置更近（缓存友好）。代价是压缩时需暂停线程并 memcpy 存活对象。SOH 总是压缩，LOH 默认不压缩（移动大对象太贵），POH 不压缩（固定了不能移动）。</dd>
   <dt><strong>Span&lt;T&gt;</strong></dt>
   <dd>ref struct，只能存在于栈上。可以提供对托管堆、栈、非托管内存的类型安全零分配视图。Slice 不复制数据。不能作为类字段、不能在 async 中使用。</dd>
   <dt><strong>Memory&lt;T&gt;</strong></dt>

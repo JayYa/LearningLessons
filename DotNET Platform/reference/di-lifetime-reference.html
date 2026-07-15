@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参考：DI 生命周期与注册速查 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>📐 参考：DI 生命周期与注册速查</h1>
+<div class="lesson-meta">
+  模块：依赖注入 &nbsp;|&nbsp; 速查参考
+</div>
+
+<h2>一句话区分三个生命周期</h2>
+
+<table class="tbl">
+  <tr><th>生命周期</th><th>创建时机</th><th>释放时机</th><th>Autofac 对应</th></tr>
+  <tr>
+    <td><strong>Transient</strong></td>
+    <td>每次从容器获取时都创建新实例</td>
+    <td>Scope 结束时（由容器 Dispose）</td>
+    <td><code>.InstancePerDependency()</code>（默认）</td>
+  </tr>
+  <tr>
+    <td><strong>Scoped</strong></td>
+    <td>每个 Scope 内只创建一次</td>
+    <td>Scope 结束时</td>
+    <td><code>.InstancePerLifetimeScope()</code></td>
+  </tr>
+  <tr>
+    <td><strong>Singleton</strong></td>
+    <td>首次获取时创建，全应用唯一</td>
+    <td>容器 Dispose 时（应用关闭）</td>
+    <td><code>.SingleInstance()</code></td>
+  </tr>
+</table>
+
+<h2>注册速查</h2>
+
+<h3>基本注册</h3>
+
+<pre><code>var services = new ServiceCollection();
+
+// 接口 → 实现
+services.AddTransient&lt;IService, MyService&gt;();
+services.AddScoped&lt;IService, MyService&gt;();
+services.AddSingleton&lt;IService, MyService&gt;();
+
+// 只注册具体类型（不映射到接口）
+services.AddTransient&lt;MyService&gt;();
+services.AddScoped&lt;MyService&gt;();
+services.AddSingleton&lt;MyService&gt;();
+
+// 已有实例（Singleton 专用——你手动控制生命周期）
+services.AddSingleton&lt;IService&gt;(new MyService());
+</code></pre>
+
+<h3>工厂注册</h3>
+
+<pre><code>// Transient 工厂——每次获取都调用工厂
+services.AddTransient&lt;IService&gt;(sp => new MyService(
+    sp.GetRequiredService&lt;IDependency&gt;()
+));
+
+// Scoped 工厂
+services.AddScoped&lt;IService&gt;(sp =>
+{
+    var dep = sp.GetRequiredService&lt;IDependency&gt;();
+    return new MyService(dep, DateTime.Now);
+});
+
+// Singleton 工厂——只调用一次（线程安全保证）
+services.AddSingleton&lt;IService&gt;(sp =>
+{
+    var dep = sp.GetRequiredService&lt;IDependency&gt;();
+    return new MyService(dep);
+});
+
+// ⚠️ 工厂中不要用 async/await！会导致死锁
+// ❌ services.AddSingleton(sp => GetAsync(sp).Result);  // 死锁！
+</code></pre>
+
+<h3>TryAdd——不覆盖已有注册</h3>
+
+<pre><code>// 只在 IService 尚未注册时才注册
+services.TryAddTransient&lt;IService, MyDefaultService&gt;();
+services.TryAddScoped&lt;IService, MyDefaultService&gt;();
+services.TryAddSingleton&lt;IService, MyDefaultService&gt;();
+
+// 典型场景：框架提供默认实现，用户可覆盖
+services.TryAddSingleton&lt;ICache, MemoryCache&gt;();       // 默认
+// 用户代码中可以替换：
+// services.AddSingleton&lt;ICache, RedisCache&gt;();         // 覆盖
+</code></pre>
+
+<h3>开放泛型注册</h3>
+
+<pre><code>// 注册 ILogger&lt;T&gt; 这样的开放泛型
+services.AddSingleton(typeof(IRepository&lt;&gt;), typeof(EfRepository&lt;&gt;));
+
+// 使用时：
+// var repo = provider.GetRequiredService&lt;IRepository&lt;Order&gt;&gt;();
+// 自动解析为 EfRepository&lt;Order&gt;
+</code></pre>
+
+<h2>获取/解析服务</h2>
+
+<pre><code>IServiceProvider provider = services.BuildServiceProvider();
+
+// 获取服务（找不到返回 null）
+var svc = provider.GetService&lt;IMyService&gt;();
+
+// 获取服务（找不到抛 InvalidOperationException）——推荐
+var svc = provider.GetRequiredService&lt;IMyService&gt;();
+
+// 创建 Scope
+using (var scope = provider.CreateScope())
+{
+    var scopedSvc = scope.ServiceProvider.GetRequiredService&lt;IMyService&gt;();
+    // Scope 内的 Scoped 服务共享同一实例
+}
+// using 结束 → scope 释放 → 其中所有 Transient/Scoped 服务 Dispose
+</code></pre>
+
+<h2>生命周期陷阱表</h2>
+
+<table class="tbl">
+  <tr><th>陷阱</th><th>表现</th><th>正确做法</th></tr>
+  <tr>
+    <td><strong>Captive Dependency</strong></td>
+    <td>Singleton 注入 Scoped 服务 → Scoped 被"囚禁"，活到应用关闭</td>
+    <td>Singleton 只依赖 Singleton/Transient；Scoped 服务通过 <code>IServiceScopeFactory</code> 在方法内创建 scope 获取</td>
+  </tr>
+  <tr>
+    <td><strong>Transient 注入 Singleton</strong></td>
+    <td>Transient 变成事实上的 Singleton（只创建一次）</td>
+    <td>用工厂注册代替，或重新审视设计——是不是该用 Scoped？</td>
+  </tr>
+  <tr>
+    <td><strong>Transient IDisposable 内存泄漏</strong></td>
+    <td>容器持有所有 Transient IDisposable 的引用直到 Scope 结束</td>
+    <td>用工厂模式创建、手动 Dispose；或改用 Scoped 生命周期</td>
+  </tr>
+  <tr>
+    <td><strong>根容器解析 Scoped 服务</strong></td>
+    <td>Scoped 变成 Singleton（没有 Scope 释放它）</td>
+    <td>始终在 Scope 内解析 Scoped 服务</td>
+  </tr>
+  <tr>
+    <td><strong>DI 工厂中调用 .Result</strong></td>
+    <td>死锁</td>
+    <td>保持工厂同步；需要异步初始化时用 <code>IHostedService</code></td>
+  </tr>
+</table>
+
+<h2>解析流程图</h2>
+
+<div class="diagram">
+<pre>
+请求 IOrderService 实例
+│
+├── 已注册？
+│   ├── 否 → GetService 返回 null / GetRequiredService 抛异常
+│   └── 是 ↓
+│
+├── 生命周期？
+│   ├── Singleton → 检查缓存 → 有则返回，无则创建 → 缓存 → 返回
+│   ├── Scoped    → 检查当前 Scope 缓存 → 有则返回，无则创建 → 缓存到 Scope → 返回
+│   └── Transient → 每次都创建新实例 → 返回
+│
+└── 构造函数注入
+    └── 检查构造函数参数 → 递归解析每个参数类型 → 注入 → 完成
+</pre>
+</div>
+
+<h2>Autofac → MSDI 迁移速查</h2>
+
+<table class="tbl">
+  <tr><th>Autofac 写法</th><th>MSDI 写法</th></tr>
+  <tr><td><code>builder.RegisterType&lt;Foo&gt;().As&lt;IFoo&gt;()</code></td><td><code>services.AddTransient&lt;IFoo, Foo&gt;()</code></td></tr>
+  <tr><td><code>.InstancePerDependency()</code></td><td><code>AddTransient&lt;T&gt;()</code>（也是默认）</td></tr>
+  <tr><td><code>.InstancePerLifetimeScope()</code></td><td><code>AddScoped&lt;T&gt;()</code></td></tr>
+  <tr><td><code>.SingleInstance()</code></td><td><code>AddSingleton&lt;T&gt;()</code></td></tr>
+  <tr><td><code>builder.RegisterModule(new MyModule())</code></td><td><code>services.AddXxx()</code> 封装成扩展方法</td></tr>
+  <tr><td>Assembly Scanning</td><td>MSDI 不支持，用 Scrutor 或 Autofac 替换容器</td></tr>
+  <tr><td>Property Injection</td><td>MSDI 不支持，只支持构造函数注入</td></tr>
+  <tr><td>Decorator Pattern</td><td>用 Scrutor 的 <code>.Decorate&lt;T&gt;()</code>，或手动工厂</td></tr>
+</table>
+
+<div class="callout callout--info">
+💡 <strong>MSDI 没有的，用 Scrutor 补：</strong>MSDI 故意做得极简——没有程序集扫描、没有装饰器、
+没有基于约定的注册。第三方库 <a href="https://github.com/khellang/Scrutor">Scrutor</a>
+是 MSDI 的"官方半支持"扩展，提供 <code>.Scan()</code>、<code>.Decorate()</code> 等。
+如果你需要 Autofac 的高级功能，也可以<strong>直接替换容器</strong>——Autofac、Lamar、Simple Injector
+都能接在 <code>IServiceCollection</code> 上面。
+</div>
+
+<hr class="section">
+
+<p>
+  ← 返回 <a href="../lessons/0004-dependency-injection-fundamentals.html">第 4 课：依赖注入基础</a>
+</p>
+
+</body>
+</html>

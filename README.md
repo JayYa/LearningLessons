@@ -1,8 +1,23 @@
 # 📘 Learning Lessons
 
-本仓库汇集了九门独立课程，覆盖现代 .NET 语言演进与平台基础、AI Agent 构建、VS Code 扩展开发、GitHub Actions 自动化工作流、维京历史文化、河西走廊历史地理与二次元绘画入门。编程方向以 C# 从 8 到 15 每一次语法升级为主线，深入语言机制与 .NET 运行时架构；工程方向通过实战教程带领读者从零构建 VS Code 扩展与 AI 驱动的自动化流程；人文方向以《冰海战纪》为引探索真实维京世界，以《河西走廊》纪录片为引逐集梳理汉代西域地理、族群与外交史；艺术方向则从插画线条基础训练起步。各课程彼此独立、按需选读，共享同一方法论——从表层 API 下沉到底层机制，从孤立知识点串成系统认知。
+本仓库汇集了十门独立课程，覆盖现代 .NET 语言演进与平台基础、AI Agent 构建、VS Code 扩展开发、GitHub Actions 自动化工作流、维京历史文化、河西走廊历史地理与二次元绘画入门。编程方向以 C# 从 8 到 15 每一次语法升级为主线，深入语言机制与 .NET 运行时架构；工程方向通过实战教程带领读者从零构建 VS Code 扩展与 AI 驱动的自动化流程；人文方向以《冰海战纪》为引探索真实维京世界，以《河西走廊》纪录片为引逐集梳理汉代西域地理、族群与外交史，第三集驿站篇聚焦悬泉置邮驿体系与常惠苏武的西域外交传奇；艺术方向则从插画线条基础训练起步。各课程彼此独立、按需选读，共享同一方法论——从表层 API 下沉到底层机制，从孤立知识点串成系统认知。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
+
+## 河西走廊 第三集 驿站
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [第1课：汉代邮驿制度 — 悬泉置与帝国的信息网络](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0001-han-postal-system.html) | 以悬泉置遗址为切入点，解析汉代邮驿体系的运行机制与帝国治理的信息网络基础 |
+| 2 | [第2课：常惠与苏武 — 19年匈奴囚禁与西域外交](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0002-changhui-and-suwu.html) | 讲述常惠六使西域与苏武十九年匈奴囚禁的故事，展现汉代外交官的坚韧品格与西域经略智慧 |
+
+**参考资料：**
+- [冯嫽 — 中国第一位女外交家](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/feng-liao.html) — 中国第一位女外交家冯嫽的生平与西域外交贡献
+- [河西走廊·驿站 — 术语表](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/glossary.html) — 河西走廊邮驿体系与汉代外交核心术语速查
+- [泥靡与刺杀事件 — 解忧公主的第三段婚姻](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/nimi-and-assassination.html) — 泥靡刺杀事件始末，解忧公主第三段婚姻的政治背景
+- [细君公主与《黄鹄歌》](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/princess-xijun.html) — 细君公主和亲乌孙的故事与千古名篇《黄鹄歌》的历史背景
+- [河西走廊大事年表（公元前2世纪–前1世纪）](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/timeline.html) — 公元前2世纪至前1世纪河西走廊与西域重大事件时间线
+- [乌孙大小昆弥分立 — 公元前53年](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/wusun-dual-kunmi.html) — 公元前53年乌孙大小昆弥分立的背景、经过与历史影响
 
 ## 河西走廊 第二集 通道
 
@@ -57,8 +72,10 @@
 | 1 | [第 1 课：SDK 风格项目系统 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0001-sdk-project-system.html) | 从传统 .csproj 格式到 SDK 风格项目系统的演进，理解 .NET 平台的项目组织与构建基础 |
 | 2 | [第 2 课：运行时架构 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0002-coreclr-runtime-architecture.html) | 深入 CoreCLR 运行时架构，理解 .NET 平台的执行引擎、垃圾回收与 JIT 编译机制 |
 | 3 | [第 3 课：GC 内部机制与内存控制 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0003-gc-internals-memory-control.html) | 深入 .NET GC 内部机制与内存控制策略，掌握代际回收、LOH 管理与性能调优的关键技术 |
+| 4 | [第 4 课：依赖注入基础 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0004-dependency-injection-fundamentals.html) | 系统讲解 .NET 依赖注入容器的注册、解析与生命周期管理，理解 DI 在现代 .NET 应用中的核心角色 |
 
 **参考资料：**
+- [参考：DI 生命周期与注册速查 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/di-lifetime-reference.html) — 依赖注入三种生命周期（Transient、Scoped、Singleton）的行为差异与选择指南
 - [参考：旧项目迁移到 SDK 风格 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/migrate-to-sdk-style.html) — 传统 .csproj 项目迁移到 SDK 风格的操作指南
 - [参考：NuGet 传递依赖解析规则 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/nuget-dependency-resolution.html) — NuGet 依赖版本选择与冲突解析机制速查
 - [参考：运行时配置速查 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/runtime-configuration.html) — runtimeconfig.json 与 MSBuild 运行时配置选项速查
