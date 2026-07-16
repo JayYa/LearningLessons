@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 6 课：超越 MSDI——Scrutor、容器替换与反模式总结 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>第 6 课：超越 MSDI——Scrutor、容器替换与反模式总结</h1>
+<div class="lesson-meta">
+  模块：依赖注入（3/3）&nbsp;|&nbsp; 预计阅读/练习时间：25 分钟
+</div>
+
+<p>
+  前两课我们掌握了 MSDI 的全部内置能力——三种生命周期、Captive Dependency、<code>Func&lt;T&gt;</code>、
+  <code>IEnumerable&lt;T&gt;</code>、Keyed Service。这些占了日常 DI 使用的 80%。
+  但 Framework 4.8 开发者从 Autofac 迁移过来时，有两个高频痛点 MSDI 故意不解决：
+  程序集扫描和装饰器模式。这一课来补上它们，并做一个完整的反模式总结。
+</p>
+
+<div class="summary">
+  <ul>
+    <li>理解 MSDI 为什么<strong>不做</strong>程序集扫描——以及用 <strong>Scrutor</strong> 怎么补</li>
+    <li>掌握 <strong>装饰器模式</strong>在 MSDI 中的实现（Scrutor.Decorate）</li>
+    <li>判断标准：什么时候该<strong>换容器</strong>，什么时候不该</li>
+    <li>DI 反模式全面总结——从 Service Locator 到 async 工厂死锁</li>
+  </ul>
+</div>
+
+<h2>MSDI 的极简哲学：为什么不内置这些功能？</h2>
+
+<p>
+  很多从 Autofac 过来的开发者第一反应是"MSDI 太弱了"——没有程序集扫描、没有装饰器、没有属性注入、
+  没有基于约定的注册（"所有以 Service 结尾的类都注册"）。
+</p>
+
+<p><strong>这恰恰是 MSDI 的设计意图。</strong> 回顾一下 MSDI 的定位：</p>
+
+<table class="tbl">
+  <tr><th>设计原则</th><th>说明</th></tr>
+  <tr><td><strong>极简内核</strong></td><td>只做 DI 容器最基本的事情——注册 + 解析 + 生命周期管理。每个功能都经过大量用户验证，零依赖。</td></tr>
+  <tr><td><strong>不做 Convention over Configuration</strong></td><td>Autofac 的 <code>AsImplementedInterfaces()</code>、模块扫描看起来很酷，但隐式行为让新人难以调试。MSDI 要求你显式声明每一个注册。</td></tr>
+  <tr><td><strong>不做"框架级"功能</strong></td><td>属性注入、拦截器（AOP）、装饰器——这些是应用层关注点，不是容器内核职责。</td></tr>
+  <tr><td><strong>可以扩展，也可以替换</strong></td><td>整个容器设计为可替换——ASP.NET Core 不关心底下是 MSDI 还是 Autofac。第三方库（Scrutor）在 <code>IServiceCollection</code> 上扩展，不修改内核。</td></tr>
+</table>
+
+<div class="callout callout--info">
+💡 <strong>心智模型：</strong>MSDI 不是"穷人的 Autofac"——它是"DI 容器的 HTTP 协议"。简单、稳定、
+无歧义。你需要高级功能时，要么用扩展库（Scrutor），要么换完整的容器（Autofac/Lamar）。设计者故意不给"半个功能"。
+</div>
+
+<h2>Scrutor：MSDI 的"半官方"扩展</h2>
+
+<p>
+  <a href="https://github.com/khellang/Scrutor">Scrutor</a> 是 MSDI 社区最广泛使用的扩展库，
+  提供两个核心能力：<strong>程序集扫描</strong>和<strong>装饰器</strong>。它不是替换容器——它只是帮你<strong>自动写
+  <code>services.AddXxx()</code></strong>。
+</p>
+
+<pre><code>// 安装：dotnet add package Scrutor
+</code></pre>
+
+<h3>程序集扫描（Assembly Scanning）</h3>
+
+<p>如果你有 50 个 Service 类，手写 50 行 <code>AddScoped</code> 既枯燥又容易漏。Scrutor 帮你做：</p>
+
+<pre><code>using Scrutor;
+
+// ✅ 扫描整个程序集，按约定自动注册
+services.Scan(scan => scan
+    .FromAssemblyOf&lt;IMarker&gt;()          // 扫描包含 IMarker 的程序集
+    .AddClasses(classes => classes
+        .Where(t => t.Name.EndsWith("Service")))  // 只注册以 "Service" 结尾的类
+    .AsImplementedInterfaces()          // 映射到它们实现的所有接口
+    .WithScopedLifetime());             // 统一注册为 Scoped
+
+// 上面一行 = 手写 50 行 services.AddScoped&lt;IXxxService, XxxService&gt;()
+</code></pre>
+
+<p>常见的扫描模式：</p>
+
+<pre><code>// 模式 1：按接口注册（最常用）
+services.Scan(scan => scan
+    .FromAssemblyOf&lt;Program&gt;()
+    .AddClasses(classes => classes.AssignableTo&lt;IService&gt;())
+    .AsImplementedInterfaces()
+    .WithScopedLifetime());
+
+// 模式 2：按命名约定注册
+services.Scan(scan => scan
+    .FromExecutingAssembly()
+    .AddClasses(classes => classes.InNamespaces("MyApp.Services"))
+    .AsMatchingInterface()              // UserService → IUserService
+    .WithTransientLifetime());
+
+// 模式 3：组合筛选
+services.Scan(scan => scan
+    .FromAssemblies(assembly1, assembly2)
+    .AddClasses(classes => classes
+        .Where(t => t.IsClass && !t.IsAbstract)
+        .AssignableTo&lt;IHandler&gt;())
+    .AsSelfWithInterfaces()             // 既注册具体类型，也注册接口
+    .WithSingletonLifetime());
+</code></pre>
+
+<div class="callout callout--warn">
+⚠️ <strong>扫描的代价：</strong>隐式行为难以调试。新人看到一个 Service 被正确注入，但找不到
+<code>services.AddScoped&lt;...&gt;()</code> 在哪儿——原来是 Scrutor 扫描自动注册的。如果你的项目不到
+20 个服务，<strong>手写注册比扫描更可维护</strong>。扫描的价值在大型项目中才显现。
+</div>
+
+<h3>装饰器模式（Decoration）</h3>
+
+<p>
+  装饰器是 DI 容器中最强大的扩展机制之一——不修改原类，在外面包一层来做日志、缓存、验证。
+  这是 Autofac 的 <code>.Decorate&lt;T&gt;()</code> 在 MSDI 中的等效方案。
+</p>
+
+<pre><code>// 原始服务（你不想改它）
+public interface IUserRepository
+{
+    Task&lt;User&gt; GetByIdAsync(int id);
+}
+
+public class EfUserRepository : IUserRepository
+{
+    public async Task&lt;User&gt; GetByIdAsync(int id)
+    {
+        // EF Core 数据库查询
+        return await _db.Users.FindAsync(id);
+    }
+}
+
+// ✅ 装饰器：加上缓存层——不修改 EfUserRepository
+public class CachedUserRepository : IUserRepository
+{
+    private readonly IUserRepository _inner;  // 被装饰的对象
+    private readonly IMemoryCache _cache;
+
+    public CachedUserRepository(IUserRepository inner, IMemoryCache cache)
+    {
+        _inner = inner;
+        _cache = cache;
+    }
+
+    public async Task&lt;User&gt; GetByIdAsync(int id)
+    {
+        var key = $"user:{id}";
+        return await _cache.GetOrCreateAsync(key, async entry =>
+        {
+            entry.AbsoluteExpiration = TimeSpan.FromMinutes(5);
+            return await _inner.GetByIdAsync(id);  // 缓存未命中 → 调用原始实现
+        });
+    }
+}
+
+// 注册：先注册原始实现，再装饰
+services.AddScoped&lt;IUserRepository, EfUserRepository&gt;();
+services.Decorate&lt;IUserRepository, CachedUserRepository&gt;();  // Scrutor
+
+// 解析 IUserRepository → CachedUserRepository(EfUserRepository(_db))
+// 即：CachedUserRepository 包装了 EfUserRepository
+</code></pre>
+
+<p>多层装饰——按注册顺序层层包裹：</p>
+
+<pre><code>// 装饰器可以叠加
+services.AddScoped&lt;IUserRepository, EfUserRepository&gt;();         // 内层：数据库
+services.Decorate&lt;IUserRepository, CachedUserRepository&gt;();      // 中层：缓存
+services.Decorate&lt;IUserRepository, LoggingUserRepository&gt;();     // 外层：日志
+
+// 解析结构：
+// LoggingUserRepository(
+//   CachedUserRepository(
+//     EfUserRepository(_db)))
+//
+// 调用链：Logging → Caching → EF Core
+//            ↓         ↓         ↓
+//         记录日志   检查缓存   查数据库
+</code></pre>
+
+<div class="callout callout--info">
+💡 <strong>Scrutor 不是"换容器"，是"帮助注册"：</strong><code>Scan()</code> 和 <code>Decorate()</code>
+最终都转化为 <code>services.AddXxx()</code> 调用。解析时仍然是 MSDI 在工作。Scrutor 只是帮你写注册代码。
+</div>
+
+<h2>什么时候该换容器？</h2>
+
+<p>Scrutor 解决了扫描和装饰。但有四个能力它做不到——这时候你需要换完整的 DI 容器：</p>
+
+<table class="tbl">
+  <tr><th>需求</th><th>MSDI + Scrutor</th><th>替换容器方案</th></tr>
+  <tr>
+    <td>程序集扫描</td>
+    <td>✅ Scrutor <code>.Scan()</code></td>
+    <td>不必要换</td>
+  </tr>
+  <tr>
+    <td>装饰器</td>
+    <td>✅ Scrutor <code>.Decorate()</code></td>
+    <td>不必要换</td>
+  </tr>
+  <tr>
+    <td><strong>属性注入</strong></td>
+    <td>❌ 不支持</td>
+    <td>换容器或重新设计（大多数场景构造函数注入更优）</td>
+  </tr>
+  <tr>
+    <td><strong>AOP / 拦截器</strong></td>
+    <td>❌ 不支持</td>
+    <td>Autofac + Castle DynamicProxy；或用 Source Generator（.NET 7+）</td>
+  </tr>
+  <tr>
+    <td><strong>子容器 / 多租户 Scope</strong></td>
+    <td>❌ 只有一个扁平的 Scope 模型</td>
+    <td>Autofac 的多层 Lifetime Scope；Lamar 的 Nested Container</td>
+  </tr>
+  <tr>
+    <td><strong>Autofac Module 兼容</strong></td>
+    <td>❌ 不支持</td>
+    <td>直接接 Autofac（见下文）</td>
+  </tr>
+</table>
+
+<h3>如何替换容器：Autofac 示例</h3>
+
+<pre><code>// ASP.NET Core 中换 Autofac
+// 1. NuGet: Autofac.Extensions.DependencyInjection
+
+var builder = WebApplication.CreateBuilder(args);
+
+// 2. MSDI 部分——照常用 services.AddXxx()
+builder.Services.AddScoped&lt;IUserService, UserService&gt;();
+
+// 3. Autofac 部分——高级功能
+builder.Host.UseServiceProviderFactory(new AutofacServiceProviderFactory());
+builder.Host.ConfigureContainer&lt;ContainerBuilder&gt;(containerBuilder =>
+{
+    // Autofac 的增强能力
+    containerBuilder.RegisterType&lt;LoggerInterceptor&gt;()
+                    .As&lt;IInterceptor&gt;()
+                    .SingleInstance();
+
+    containerBuilder.RegisterType&lt;UserService&gt;()
+                    .As&lt;IUserService&gt;()
+                    .EnableInterfaceInterceptors()  // AOP
+                    .InstancePerLifetimeScope();
+});
+
+// 解析时：框架自动用 Autofac 容器，而不是 MSDI
+// 但你的代码完全不用改——你注的还是 IServiceProvider
+</code></pre>
+
+<div class="callout callout--warn">
+⚠️ <strong>换容器的代价：</strong>
+<ul style="margin-top:0.3rem">
+  <li>你绑定了特定容器的 API（Autofac Module、Interceptor 配置）——未来换容器成本高</li>
+  <li>团队成员需要对两个 DI 系统都有基本了解</li>
+  <li>行为差异——例如 MSDI 的"最后注册胜出" vs Autofac 的默认行为不同</li>
+  <li>大多数项目其实不需要换——MSDI + Scrutor 足够</li>
+</ul>
+<strong>建议：</strong>先写完 80% 的代码用 MSDI。如果确实遇到了 Scrutor 解决不了的需求（AOP、子容器、多租户 Scope），再引入 Autofac/Lamar。不要"预防性换容器"。
+</div>
+
+<h2>DI 反模式全面总结</h2>
+
+<p>这三课覆盖了 MSDI 的核心用法。这里是所有常见反模式的集中总结——作为长期参考：</p>
+
+<table class="tbl">
+  <tr><th>反模式</th><th>表现</th><th>正确做法</th><th>危害级别</th></tr>
+  <tr>
+    <td><strong>Service Locator</strong></td>
+    <td>在方法内调用 <code>provider.GetService&lt;T&gt;()</code> 获取依赖</td>
+    <td>通过构造函数注入；运行时动态选择时用 Func&lt;T&gt; 或 Keyed Service</td>
+    <td>🔴 严重</td>
+  </tr>
+  <tr>
+    <td><strong>Captive Dependency</strong></td>
+    <td>Singleton 注入 Scoped → Scoped 被囚禁，永不释放</td>
+    <td>降级为 Scoped；或用 IServiceScopeFactory 创建临时 Scope</td>
+    <td>🔴 严重</td>
+  </tr>
+  <tr>
+    <td><strong>语义 Captive</strong></td>
+    <td>Singleton 注入 Transient → Transient 变成事实 Singleton</td>
+    <td>改注册为 Singleton（明确意图）；或用 Func&lt;T&gt; 在方法内解析</td>
+    <td>🟡 中等</td>
+  </tr>
+  <tr>
+    <td><strong>Transient IDisposable 泄漏</strong></td>
+    <td>容器持有所有 Transient IDisposable 引用直到 Scope 结束</td>
+    <td>用工厂模式创建、手动 Dispose；或注册为 Scoped</td>
+    <td>🟡 中等</td>
+  </tr>
+  <tr>
+    <td><strong>根容器解析 Scoped</strong></td>
+    <td>从根 IServiceProvider（非 Scope）解析 Scoped → 事实 Singleton</td>
+    <td>始终在 Scope 内解析 Scoped 服务</td>
+    <td>🟡 中等</td>
+  </tr>
+  <tr>
+    <td><strong>async 工厂死锁</strong></td>
+    <td>DI 工厂中使用 <code>.Result</code> / <code>.Wait()</code></td>
+    <td>保持工厂同步；异步初始化用 IHostedService</td>
+    <td>🔴 严重</td>
+  </tr>
+  <tr>
+    <td><strong>过度 Singleton</strong></td>
+    <td>所有服务都注册为 Singleton"省事"</td>
+    <td>默认用 Scoped，只有全应用共享且线程安全的服务才用 Singleton</td>
+    <td>🟡 中等</td>
+  </tr>
+  <tr>
+    <td><strong>多构造函数歧义</strong></td>
+    <td>一个类有多个构造函数，DI 容器选错了</td>
+    <td>只保留一个构造函数；或用 [ActivatorUtilitiesConstructor] 指定</td>
+    <td>🟢 轻微</td>
+  </tr>
+</table>
+
+<h3>启用开发时检测</h3>
+
+<pre><code>// 开发环境——打开所有验证
+ServiceProvider provider = services.BuildServiceProvider(
+    new ServiceProviderOptions
+    {
+        ValidateScopes = true,           // 检测 Captive Dependency
+        ValidateOnBuild = true           // 检测注册图中的问题（Build 时立即报错，而不是运行时报错）
+    });
+
+// Host Builder 中这样开：
+builder.UseDefaultServiceProvider(options =>
+{
+    options.ValidateScopes = true;
+    options.ValidateOnBuild = true;
+});
+</code></pre>
+
+<div class="callout callout--info">
+💡 <strong>内存技巧：</strong>记住"短可依赖长，长不可依赖短"。每次注册服务时，心想："这个服务活多久？
+它依赖的服务又活多久？如果它活得比依赖久，就出问题了。"
+</div>
+
+<h2>DI 模块到此结束——与下一个模块的关系</h2>
+
+<p>
+  DI 是整个现代 .NET 平台的<strong>胶水层</strong>。你已经掌握了容器本身，但 DI 的真正威力体现在它
+  <strong>被框架使用</strong>的场景中。接下来你会看到：
+</p>
+
+<div class="diagram">
+<pre>
+<strong>DI 在现代 .NET 栈中的位置</strong>
+
+┌──────────────────────────────────────────────────────┐
+│  你的应用代码（构造函数注入 Func&lt;T&gt; Keyed 等）        │
+├──────────────────────────────────────────────────────┤
+│  ASP.NET Core  │  EF Core  │  HttpClientFactory     │
+│  (每个请求自动  │  (DbContext│  (管理 HttpClient      │
+│   创建 Scope)   │   默认 Scoped)│  生命周期避免端口耗尽)  │
+├──────────────────────────────────────────────────────┤
+│  Configuration    │  Logging      │  Host 模型       │
+│  (Options 模式    │  (ILogger&lt;T&gt;   │  (IHostedService │
+│   通过 DI 注入)    │   通过 DI 注入) │   通过 DI 托管)   │
+├──────────────────────────────────────────────────────┤
+│            IServiceProvider（MSDI 容器）               │
+└──────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<p>下一个模块——<strong>配置系统</strong>——你会看到 <code>IConfiguration</code> 和 Options 模式如何通过 DI
+注入到服务中。然后 <strong>Host 模型</strong> 会展示 DI 容器如何被托管、启动、停止。整个平台是围绕 DI 搭建的。</p>
+
+<h2>检查理解</h2>
+
+<div class="quiz" id="quiz1"
+     data-feedback-correct="✅ 正确！Scrutor 的 Scan() 和 Decorate() 最终都转化为 services.AddXxx()，解析时仍然是 MSDI 工作。"
+     data-feedback-wrong="❌ 不对。Scrutor 是注册时的辅助，不替换容器——它帮你自动生成 services.AddXxx() 调用。">
+  <div class="quiz__q">❓ Scrutor 是替换 MSDI 容器的替代品吗？</div>
+  <div class="quiz__opt" data-answer="wrong">是，Scrutor 替换了整个 IServiceProvider 实现</div>
+  <div class="quiz__opt" data-answer="wrong">是，但只在 ASP.NET Core 中</div>
+  <div class="quiz__opt" data-answer="correct">不是，Scrutor 只是帮助生成注册代码的扩展</div>
+  <div class="quiz__opt" data-answer="wrong">不是，但需要同时安装 Autofac</div>
+  <div class="quiz__feedback" id="quiz1-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz2" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！装饰器本身也实现了同一接口，容器在解析时层层包裹——外层注入内层。注册顺序决定包裹顺序。"
+     data-feedback-wrong="❌ 不对。装饰器实现了同一接口并在构造函数中接受该接口——容器创建外层实例时注入内层实例。">
+  <div class="quiz__q">❓ Scrutor 的 Decorate&lt;TService, TDecorator&gt;() 是怎么工作的？</div>
+  <div class="quiz__opt" data-answer="wrong">直接修改原类的 IL 代码</div>
+  <div class="quiz__opt" data-answer="wrong">通过反射在运行时动态生成子类</div>
+  <div class="quiz__opt" data-answer="correct">TDecorator 构造器接受 TService，容器解析时把原实现传入构造器</div>
+  <div class="quiz__opt" data-answer="wrong">用 Castle DynamicProxy 生成代理</div>
+  <div class="quiz__feedback" id="quiz2-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz3" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！ValidateOnBuild 在 Build 时立即检查整个注册图，而非等到运行时第一次解析才报错。"
+     data-feedback-wrong="❌ 不对。ValidateScopes 只检测 Captive Dependency，ValidateOnBuild 检测注册图中所有可立即发现的问题。">
+  <div class="quiz__q">❓ ValidateOnBuild = true 和 ValidateScopes = true 有什么区别？</div>
+  <div class="quiz__opt" data-answer="wrong">两者完全相同，只是不同的命名</div>
+  <div class="quiz__opt" data-answer="wrong">ValidateOnBuild 只在 CI 环境有效</div>
+  <div class="quiz__opt" data-answer="correct">ValidateOnBuild 在 Build 时立即验证，ValidateScopes 只在解析时检查 Scope 违规</div>
+  <div class="quiz__opt" data-answer="wrong">ValidateOnBuild 替代 ValidateScopes，后者已过时</div>
+  <div class="quiz__feedback" id="quiz3-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz4" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！AOP 拦截器（Castle DynamicProxy）、子容器/多租户 Scope 是 MSDI + Scrutor 做不到的——需要完整的第三方容器。"
+     data-feedback-wrong="❌ 不对。程序集扫描和装饰器用 Scrutor 就能解决，换容器的理由是 AOP、属性注入、子容器这类更底层的能力。">
+  <div class="quiz__q">❓ 以下哪个是真正需要换容器（Autofac/Lamar）的理由？</div>
+  <div class="quiz__opt" data-answer="wrong">需要程序集扫描自动注册服务</div>
+  <div class="quiz__opt" data-answer="wrong">需要装饰器模式给服务加缓存层</div>
+  <div class="quiz__opt" data-answer="correct">需要 AOP 拦截器（方法拦截、动态代理）</div>
+  <div class="quiz__opt" data-answer="wrong">需要用 Func&lt;T&gt; 工厂延迟解析</div>
+  <div class="quiz__feedback" id="quiz4-feedback"></div>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+<h2>关键术语</h2>
+
+<dl>
+  <dt><strong>Scrutor</strong></dt>
+  <dd>MSDI 的"半官方"扩展库。提供程序集扫描（<code>.Scan()</code>）和装饰器（<code>.Decorate()</code>）能力。不替换容器，只在注册阶段帮你自动生成 <code>services.AddXxx()</code> 调用。GitHub: khellang/Scrutor。</dd>
+  <dt><strong>程序集扫描（Assembly Scanning）</strong></dt>
+  <dd>按约定（命名模式、接口继承、命名空间）批量注册服务，替代手写 N 行 <code>AddXxx</code>。Autofac 内置此功能，MSDI 需要 Scrutor 补充。适合大型项目（50+ 服务），小项目手写更清晰。</dd>
+  <dt><strong>装饰器模式（Decorator Pattern）</strong></dt>
+  <dd>不修改原类、在外面包裹一层实现额外行为（缓存、日志、重试）。DI 容器通过"注册顺序决定包裹顺序"来支持多层嵌套。Scrutor 的 <code>Decorate&lt;T&gt;()</code> 是 MSDI 中的标准实现方式。</dd>
+  <dt><strong>容器替换（Container Replacement）</strong></dt>
+  <dd>用 Autofac/Lamar/Simple Injector 替换 MSDI 的 <code>IServiceProvider</code> 实现。使用 <code>UseServiceProviderFactory</code> 集成。表面上你的代码仍通过 <code>IServiceProvider</code> 使用，实际解析由第三方容器执行。适合需要 AOP、属性注入、子容器的项目。</dd>
+  <dt><strong>ValidateOnBuild</strong></dt>
+  <dd>在 <code>BuildServiceProvider()</code> 时立即验证整个服务注册图（依赖是否都能解析、是否有循环依赖），而非等到运行时第一次解析才报错。与 <code>ValidateScopes</code> 互补——前者验证图结构，后者验证生命周期规则。</dd>
+  <dt><strong>Transient IDisposable 泄漏</strong></dt>
+  <dd>容器会追踪所有它创建的 <code>IDisposable</code> 实例。Transient 服务如果实现了 <code>IDisposable</code>，其引用被容器持有直到所属 Scope 释放——即使业务代码早已不再使用它。这就是为什么"Transient 用完即弃"的说法不完全准确——容器在幕后记着它。</dd>
+</dl>
+
+<h2>推荐阅读</h2>
+
+<p>📖 <strong>Scrutor 官方仓库：</strong><a href="https://github.com/khellang/Scrutor">khellang/Scrutor</a> — API 文档和示例</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection-guidelines">DI guidelines</a> — 官方最佳实践与反模式文档</p>
+
+<p>📖 <a href="https://autofac.org/">Autofac 官方文档</a> — 如果你决定换容器，这是最主流的选择</p>
+
+<p>📖 <a href="https://andrewlock.net/using-scrutor-to-automatically-register-your-services-with-the-asp-net-core-di-container/">Using Scrutor to automatically register services</a> — Andrew Lock 的 Scrutor 实战文章（共三篇，覆盖 Scan、Decorate、生命周期）</p>
+
+<p>📖 <strong>DI 圣经：</strong>《Dependency Injection Principles, Practices, and Patterns》第 9-10 章——装饰器和拦截器的深入讨论</p>
+
+<p>📖 <strong>本课速查：</strong> <a href="../reference/di-lifetime-reference.html">DI 生命周期与注册速查</a></p>
+
+<h2>接下来</h2>
+
+<p>
+  DI 模块（第 4–6 课）到此结束。你掌握了从基础到实战的全部 MSDI 知识——生命周期、Captive Dependency、
+  工厂与 Keyed Service、Scrutor 扩展、容器替换判断、反模式总结。
+</p>
+
+<p>
+  下一个模块：<strong>配置系统</strong>——<code>IConfiguration</code>、配置源（JSON/环境变量/命令行/Key Vault）、
+  Options 模式（<code>IOptions&lt;T&gt;</code>/<code>IOptionsSnapshot&lt;T&gt;</code>/<code>IOptionsMonitor&lt;T&gt;</code>）、热重载。
+  这是 Framework 4.8 中 <code>web.config</code> + <code>ConfigurationManager</code> 的现代替代方案。
+</p>
+
+<div class="callout callout--info">
+💬 <strong>有问题？</strong> 直接问我！比如"我的项目有 200+ 个服务，Scrutor 扫描会不会很慢？"
+或"装饰器和 AOP 有什么区别——我什么时候该换 Autofac 而不是用 Scrutor.Decorate？"
+或"从 Autofac Module 迁移到 MSDI，怎么写扩展方法？"
+</div>
+
+<div class="lesson-nav">
+  <a href="0005-di-advanced-factories-keyed.html">← 上一课：DI 进阶：工厂与 Keyed Service</a>
+  <a href="0007-configuration-options.html">下一课：配置系统（待生成）→</a>
+</div>
+
+</body>
+</html>

@@ -10,6 +10,11 @@
 |---|------|------|
 | 1 | [第1课：汉代邮驿制度 — 悬泉置与帝国的信息网络](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0001-han-postal-system.html) | 以悬泉置遗址为切入点，解析汉代邮驿体系的运行机制与帝国治理的信息网络基础 |
 | 2 | [第2课：常惠与苏武 — 19年匈奴囚禁与西域外交](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0002-changhui-and-suwu.html) | 讲述常惠六使西域与苏武十九年匈奴囚禁的故事，展现汉代外交官的坚韧品格与西域经略智慧 |
+| 3 | [第3课：解忧公主 — 和亲乌孙的50年](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0003-princess-jieyou.html) | 讲述解忧公主远嫁乌孙五十年，以和亲维系汉朝与西域联盟的政治智慧与人生传奇 |
+| 4 | [第4课：汉匈西域博弈 — 从军事征服到外交经营](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0004-han-xiongnu-rivalry.html) | 解析汉朝与匈奴在西域的百年博弈，从战场厮杀到外交角力的战略转型与地缘棋局 |
+| 5 | [第5课：屯田戍边 — 赵充国与"兵农合一"的边疆战略](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0005-zhaochongguo-tuntian.html) | 讲述赵充国首创屯田戍边战略，以兵农合一模式巩固汉朝西部边疆的深远影响 |
+| 6 | [第6课：西域都护府 — "汉之号令，班西域矣"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0006-xihu-duhufu.html) | 解析西域都护府的设立与运作，标志着汉朝正式将西域纳入中央管辖的历史转折 |
+| 7 | [第7课：丝绸之路上的驿站 — 帝国的神经网络](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0007-silk-road-stations.html) | 串联丝绸之路沿线驿站体系，揭示信息与物资传递网络如何支撑帝国的远程治理 |
 
 **参考资料：**
 - [冯嫽 — 中国第一位女外交家](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/feng-liao.html) — 中国第一位女外交家冯嫽的生平与西域外交贡献
@@ -73,6 +78,8 @@
 | 2 | [第 2 课：运行时架构 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0002-coreclr-runtime-architecture.html) | 深入 CoreCLR 运行时架构，理解 .NET 平台的执行引擎、垃圾回收与 JIT 编译机制 |
 | 3 | [第 3 课：GC 内部机制与内存控制 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0003-gc-internals-memory-control.html) | 深入 .NET GC 内部机制与内存控制策略，掌握代际回收、LOH 管理与性能调优的关键技术 |
 | 4 | [第 4 课：依赖注入基础 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0004-dependency-injection-fundamentals.html) | 系统讲解 .NET 依赖注入容器的注册、解析与生命周期管理，理解 DI 在现代 .NET 应用中的核心角色 |
+| 5 | [第 5 课：DI 进阶：工厂模式与 Keyed Service — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0005-di-advanced-factories-keyed.html) | 深入依赖注入进阶技巧，掌握工厂模式与 Keyed Service 在复杂场景下的灵活应用 |
+| 6 | [第 6 课：超越 MSDI——Scrutor、容器替换与反模式总结 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0006-di-scrutor-container-replacement.html) | 探索 Scrutor 装饰器与程序集扫描、第三方容器替换及 DI 常见反模式，完成依赖注入知识体系闭环 |
 
 **参考资料：**
 - [参考：DI 生命周期与注册速查 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/di-lifetime-reference.html) — 依赖注入三种生命周期（Transient、Scoped、Singleton）的行为差异与选择指南

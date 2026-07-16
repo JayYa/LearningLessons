@@ -309,6 +309,27 @@ tr:nth-child(even) td { background: var(--card-bg); }
   @page { margin: 2cm; }
 }
 
+/* === Table: two-network layout === */
+.table-network {
+  text-align: center;
+  font-weight: 700;
+  vertical-align: middle;
+  width: 12%;
+}
+.table-network--local {
+  background: #f5f0e6;
+  color: #6b5e4a;
+}
+.table-network--arterial {
+  background: #f0e8d8;
+  color: var(--accent);
+}
+.table-network + td,
+.table-network + td + td,
+.table-network + td + td + td {
+  vertical-align: middle;
+}
+
 /* === Utility === */
 .text-center { text-align: center; text-indent: 0; }
 .text-muted { color: var(--text-muted); }

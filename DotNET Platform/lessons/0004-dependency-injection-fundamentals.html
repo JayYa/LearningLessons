@@ -409,7 +409,106 @@ public class CacheWarmer
 }
 </code></pre>
 
-<h2>检查理解</h2>
+	<h3>深入：Singleton 注入 Transient 算不算 Captive Dependency？</h3>
+
+	<p>这是一个在面试和实际项目中经常被问到的问题。技术上需要分两层来看：</p>
+
+	<h4>Singleton → Transient：语义上的 Captive Dependency</h4>
+
+	<pre><code>// ⚠️ 灰色地带：Singleton 注入了 Transient
+	services.AddSingleton&lt;BackgroundWorker&gt;();
+	services.AddTransient&lt;IEmailSender, SmtpEmailSender&gt;();
+
+	public class BackgroundWorker
+	{
+	    private readonly IEmailSender _email;  // Transient！
+
+	    public BackgroundWorker(IEmailSender email)
+	    {
+	        _email = email;  // ← 这个 Transient 实例被 Singleton 永久持有
+	    }
+	}
+	</code></pre>
+
+	<div class="diagram">
+	<pre>
+	<strong>Singleton → Transient：引用囚禁</strong>
+
+	应用启动 → 创建 Singleton BackgroundWorker
+	           └── 构造函数要 IEmailSender（Transient）
+	               → 容器 new SmtpEmailSender 实例 A
+	               → A 被 BackgroundWorker._email 持有
+
+	此后无论解析多少次 BackgroundWorker，它内部的 _email 永远是 A
+	→ "名义上 Transient，事实上 Singleton"
+
+	更隐蔽的问题：
+	- SmtpEmailSender 可能持有 HttpClient（应短命）
+	- 如果有多个 Singleton 各注入同一个 Transient，每个 Singleton 得到<strong>不同</strong>的实例
+	  → 行为不一致，极难调试
+	</pre>
+	</div>
+
+	<p><strong>为什么 <code>ValidateScopes</code> 不报？</strong> 因为 Transient 没有 Scope 归属——从 MSDI 的角度看，把 Transient 给 Singleton 在技术上是"合法"的（不会像 Scoped 那样在 Scope 释放后留下 dangling 引用）。但这<strong>不代表它是对的</strong>——它违背了你注册 Transient 时的语义意图：每次解析都创建新实例。</p>
+
+	<h4>要不要修？取决于你的意图</h4>
+
+	<table class="tbl">
+	  <tr><th>你的真实意图</th><th>正确做法</th></tr>
+	  <tr><td>"我只需要一个实例跟着 Singleton 走"</td><td>把它注册为 <strong>Singleton</strong>，让意图明确</td></tr>
+	  <tr><td>"我需要每次调用时都新建实例"</td><td>注入 <code>Func&lt;T&gt;</code> 或 <code>IServiceScopeFactory</code>，在方法内解析</td></tr>
+	  <tr><td>"这个服务本身创建成本极低、无状态、用完就扔"</td><td>检查父服务真的需要是 Singleton 吗？也许降级为 Scoped 更合适</td></tr>
+	</table>
+
+	<pre><code>// ✅ 方案：用 Func&lt;T&gt; 在每次调用时获取新实例
+	public class BackgroundWorker
+	{
+	    private readonly Func&lt;IEmailSender&gt; _createSender;  // 工厂
+
+	    public BackgroundWorker(Func&lt;IEmailSender&gt; createSender)
+	    {
+	        _createSender = createSender;
+	    }
+
+	    public async Task SendAsync(string message)
+	    {
+	        var email = _createSender();  // 每次调用 → 新实例 ✅
+	        await email.SendAsync(message);
+	    }  // 使用完即丢弃
+	}
+	</code></pre>
+
+	<h4>Scoped → Transient：通常安全</h4>
+
+	<pre><code>// ✅ 这通常没问题
+	services.AddScoped&lt;OrderService&gt;();
+	services.AddTransient&lt;IPriceCalculator, DefaultPriceCalculator&gt;();
+
+	public class OrderService
+	{
+	    private readonly IPriceCalculator _calc;  // Transient
+
+	    public OrderService(IPriceCalculator calc)
+	    {
+	        _calc = calc;  // 被 Scoped 持有 → 跟着 Scoped 一起释放
+	    }
+	}
+	</code></pre>
+
+	<p>关键区别：Scoped 服务的生命周期是<strong>有限的</strong>（一个请求结束就释放），被它持有的 Transient 也会一起释放。下一个请求创建新的 Scoped → 新的 Transient。虽然同一个 Scope 内多次解析 Scoped 时不会重新创建它内部的 Transient（因为 Scoped 只构造一次），但在实践中几乎没有影响——Scope 本来就短命。</p>
+
+	<h4>安全矩阵：谁注入谁</h4>
+
+	<table class="tbl">
+	  <tr><th>父（长）→ 子（短）</th><th>Transient 子</th><th>Scoped 子</th><th>Singleton 子</th></tr>
+	  <tr><td><strong>Transient 父</strong></td><td>✅ 安全</td><td>✅ 安全</td><td>✅ 安全</td></tr>
+	  <tr><td><strong>Scoped 父</strong></td><td>✅ 通常安全</td><td>✅ 安全</td><td>✅ 安全</td></tr>
+	  <tr><td><strong>Singleton 父</strong></td><td>⚠️ 语义 Captive</td><td>❌ 真正 Captive</td><td>✅ 安全</td></tr>
+	</table>
+
+	<p>规则很简单：<strong>短生命周期可以依赖长生命周期；长生命周期依赖短生命周期就是 Captive Dependency。</strong>Singleton → Transient 处于灰色地带——MSDI 不报错，但违背了 Transient 的语义。理解这一点，你就比大多数 .NET 开发者对这个概念理解得更深。</p>
+
+	<h2>检查理解</h2>
 
 <div class="quiz" id="quiz1"
      data-feedback-correct="✅ 正确！AddScoped 保证同一 Scope 内返回同一实例，不同 Scope 返回不同实例。EF Core 的 DbContext 默认就是 Scoped。"
@@ -475,7 +574,7 @@ public class CacheWarmer
   <dt><strong>Scope（IServiceScope）</strong></dt>
   <dd>由 IServiceScopeFactory 创建的子容器。ASP.NET Core 中每个 HTTP 请求自动创建一个 Scope。手动创建：<code>using var scope = provider.CreateScope()</code>。</dd>
   <dt><strong>Captive Dependency（囚禁依赖）</strong></dt>
-  <dd>DI 反模式——长生命周期服务持有短生命周期服务的引用。最常见：Singleton 注入 Scoped。启用 <code>ValidateScopes = true</code> 可在 Build 时检测。</dd>
+  <dd>DI 反模式——长生命周期服务持有短生命周期服务的引用。分为两个级别：<strong>真正 Captive</strong>（Singleton 注入 Scoped——<code>ValidateScopes</code> 可检测）和<strong>语义 Captive</strong>（Singleton 注入 Transient——容器不报错，但 Transient 变成事实上的 Singleton）。规则：短可依赖长，长不可依赖短。</dd>
   <dt><strong>Service Locator（服务定位器）</strong></dt>
   <dd>反模式——在代码中手动调用 <code>GetService&lt;T&gt;()</code> 而不是通过构造函数注入。隐藏依赖关系、难以测试。Framework 4.8 时代的 <code>container.Resolve&lt;T&gt;()</code> 就是典型的 Service Locator。</dd>
   <dt><strong>TryAdd</strong></dt>

@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 5 课：DI 进阶：工厂模式与 Keyed Service — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>第 5 课：DI 进阶：工厂模式与 Keyed Service</h1>
+<div class="lesson-meta">
+  模块：依赖注入（2/3）&nbsp;|&nbsp; 预计阅读/练习时间：25 分钟
+</div>
+
+<p>
+  上一课我们掌握了三种生命周期和 Captive Dependency。这一课解决一个你迟早会遇到的问题：
+  <strong>同一个接口有多个实现，怎么办？</strong>Framework 4.8 中 Autofac 有 <code>.Named&lt;T&gt;()</code>
+  和 <code>.Keyed&lt;T&gt;()</code>——但 MSDI 直到 .NET 8 才有类似功能。在此之前，社区发展出了三套方案，
+  而 .NET 8 的 Keyed Service 统一了其中最核心的需求。
+</p>
+
+<div class="summary">
+  <ul>
+    <li>掌握 <strong><code>Func&lt;T&gt;</code> 工厂委托</strong>——无需注册，MSDI 自动提供</li>
+    <li>理解 <strong><code>IEnumerable&lt;T&gt;</code> 注入</strong>——一次性获取接口的所有实现</li>
+    <li>掌握 <strong>Keyed Service（.NET 8+）</strong>——同一接口按 key 区分实现</li>
+    <li>建立直觉：<strong>什么时候用哪种方案？</strong></li>
+  </ul>
+</div>
+
+<h2>问题场景：同一接口，多个实现</h2>
+
+<p>这是一个真实的业务场景：</p>
+
+<pre><code>public interface IPaymentProcessor
+{
+    Task&lt;PaymentResult&gt; ProcessAsync(Payment payment);
+}
+
+// 三个实现——针对不同支付渠道
+public class AlipayProcessor : IPaymentProcessor { /* ... */ }
+public class WeChatPayProcessor : IPaymentProcessor { /* ... */ }
+public class CreditCardProcessor : IPaymentProcessor { /* ... */ }
+</code></pre>
+
+<p>
+  现在 <code>OrderService</code> 需要根据用户选择的支付方式，调用不同的 <code>IPaymentProcessor</code>。
+  如果只注册一个：
+</p>
+
+<pre><code>// ❌ 只注册一个——后面两个覆盖前面的
+services.AddTransient&lt;IPaymentProcessor, AlipayProcessor&gt;();
+services.AddTransient&lt;IPaymentProcessor, WeChatPayProcessor&gt;(); // 覆盖！
+// 解析 IPaymentProcessor → 永远是 WeChatPayProcessor
+</code></pre>
+
+<p>MSDI 提供了三种解决方案，从简单到复杂依次展开。</p>
+
+<h2>方案一：Func&lt;T&gt; 工厂——MSDI 的内置"免费午餐"</h2>
+
+<p>
+  这是 MSDI 中最被低估的特性。<strong><code>Func&lt;T&gt;</code> 不需要你自己注册</strong>——容器自动理解它。
+  当你注入 <code>Func&lt;ITalker&gt;</code> 时，容器给你一个每次调用都返回新实例的工厂委托。
+</p>
+
+<h3>基础用法：延迟解析 + 每次新建</h3>
+
+<pre><code>// 不需要在 ServiceCollection 中注册 Func&lt;T&gt;！
+// MSDI 自动理解 Func&lt;T&gt; 是"按需解析 T 的工厂"
+
+public class ReportService
+{
+    private readonly Func&lt;IEmailSender&gt; _createSender;
+
+    // ✅ 直接注入 Func&lt;T&gt;——容器自动提供
+    public ReportService(Func&lt;IEmailSender&gt; createSender)
+    {
+        _createSender = createSender;
+    }
+
+    public async Task SendReportAsync()
+    {
+        // 每次调用 _createSender() 都返回新实例（Transient 行为）
+        var sender = _createSender();
+        await sender.SendAsync("report");
+    }
+}
+</code></pre>
+
+<div class="callout callout--info">
+💡 <strong>Func&lt;T&gt; 的关键规则：</strong>
+<ul style="margin-top:0.3rem">
+  <li>如果 T 注册为 <strong>Transient</strong>：每次调用返回新实例</li>
+  <li>如果 T 注册为 <strong>Scoped</strong>：同一 Scope 内每次调用返回同一实例</li>
+  <li>如果 T 注册为 <strong>Singleton</strong>：每次调用返回同一实例</li>
+</ul>
+<code>Func&lt;T&gt;</code> 只是创建了一个"延迟解析点"——它不会改变 T 原本的生命周期。
+</div>
+
+<h3>进阶：Func&lt;T&gt; 解决 Captive Dependency</h3>
+
+<p>回忆上一课的 Singleton → Transient 语义囚禁问题——<code>Func&lt;T&gt;</code> 正是解药：</p>
+
+<pre><code>// Singleton 需要 Transient 的"每次新建"行为
+services.AddSingleton&lt;CacheWarmer&gt;();
+services.AddTransient&lt;IDbContext, AppDbContext&gt;();
+
+public class CacheWarmer
+{
+    private readonly Func&lt;IDbContext&gt; _createDb;
+
+    // ✅ 注入工厂，而不是 IDbContext 本身
+    public CacheWarmer(Func&lt;IDbContext&gt; createDb)
+    {
+        _createDb = createDb;
+    }
+
+    public async Task WarmAsync()
+    {
+        var db = _createDb();  // 每次调用 → 新 DbContext ✅
+        // ...
+    }
+}
+</code></pre>
+
+<h3>带参数的工厂：Func&lt;string, T&gt;</h3>
+
+<p>有时候你需要根据运行时参数决定用哪个实现。比如支付场景——根据支付方式名称选不同的 Processor：</p>
+
+<pre><code>public interface IPaymentProcessor
+{
+    Task&lt;PaymentResult&gt; ProcessAsync(Payment payment);
+}
+
+public class OrderService
+{
+    private readonly IServiceProvider _provider;
+
+    public OrderService(IServiceProvider provider)
+    {
+        _provider = provider;
+    }
+
+    public async Task CheckoutAsync(Payment payment)
+    {
+        // 根据运行时数据选实现
+        IPaymentProcessor processor = payment.Method switch
+        {
+            "Alipay" => _provider.GetRequiredKeyedService&lt;IPaymentProcessor&gt;("alipay"),
+            "WeChat" => _provider.GetRequiredKeyedService&lt;IPaymentProcessor&gt;("wechat"),
+            _        => _provider.GetRequiredService&lt;CreditCardProcessor&gt;()
+        };
+
+        await processor.ProcessAsync(payment);
+    }
+}
+</code></pre>
+
+<div class="callout callout--warn">
+⚠️ <strong>注意：</strong>上面的代码直接用 <code>IServiceProvider</code> 手动解析——这是 Service Locator 模式！
+在这个场景中它<strong>可以接受</strong>，因为支付方式确实是运行时决定的。但更好的方案是 .NET 8 的 Keyed Service（下文方案三）。
+</div>
+
+<h2>方案二：IEnumerable&lt;T&gt;——一次性拿到所有实现</h2>
+
+<p>
+  当你需要<strong>对所有实现执行同一操作</strong>时——比如"用所有支付渠道验证一笔交易"或"用所有通知渠道发送消息"——
+  <code>IEnumerable&lt;T&gt;</code> 是最自然的方案。
+</p>
+
+<h3>基础用法</h3>
+
+<pre><code>// 注册所有实现——同一个接口，多次注册（不会互相覆盖！）
+services.AddTransient&lt;IPaymentValidator, AlipayValidator&gt;();
+services.AddTransient&lt;IPaymentValidator, WeChatValidator&gt;();
+services.AddTransient&lt;IPaymentValidator, CreditCardValidator&gt;();
+
+// ✅ 注入 IEnumerable&lt;T&gt;——拿到所有实现
+public class PaymentValidationPipeline
+{
+    private readonly IEnumerable&lt;IPaymentValidator&gt; _validators;
+
+    public PaymentValidationPipeline(IEnumerable&lt;IPaymentValidator&gt; validators)
+    {
+        _validators = validators;  // 包含全部 3 个实现
+    }
+
+    public async Task&lt;bool&gt; ValidateAllAsync(Payment payment)
+    {
+        foreach (var validator in _validators)
+        {
+            if (!await validator.ValidateAsync(payment))
+                return false;
+        }
+        return true;  // 全部通过
+    }
+}
+</code></pre>
+
+<p>
+  <strong>关键区别：</strong><code>IEnumerable&lt;T&gt;</code> 不会覆盖——每次 <code>AddXxx&lt;T, U&gt;()</code> 都追加到列表中。
+  解析单个 <code>T</code> 时返回<strong>最后一个注册的</strong>；解析 <code>IEnumerable&lt;T&gt;</code> 时返回<strong>全部</strong>。
+</p>
+
+<h3>经典用例：责任链 / 管道模式</h3>
+
+<pre><code>public interface IMiddleware
+{
+    Task InvokeAsync(Message msg, Func&lt;Task&gt; next);
+}
+
+// 多个中间件组成管道
+public class MessagePipeline
+{
+    private readonly IEnumerable&lt;IMiddleware&gt; _middlewares;
+
+    public MessagePipeline(IEnumerable&lt;IMiddleware&gt; middlewares)
+    {
+        _middlewares = middlewares;
+    }
+
+    public async Task ProcessAsync(Message msg)
+    {
+        // 把所有中间件链起来
+        Func&lt;Task&gt; handler = () =&gt; Task.CompletedTask;
+        foreach (var m in _middlewares.Reverse())
+        {
+            var next = handler;
+            handler = () =&gt; m.InvokeAsync(msg, next);
+        }
+        await handler();
+    }
+}
+</code></pre>
+
+<p>
+  <strong>ASP.NET Core 的中间件管道就是这么实现的。</strong> 你每次写的 <code>app.UseXxx()</code> 本质就是在
+  <code>IEnumerable&lt;IMiddleware&gt;</code> 上追加一个元素。
+</p>
+
+<h3>IEnumerable&lt;T&gt; 的生命周期细节</h3>
+
+<p>如果注册了三个 <code>IPaymentValidator</code>，解析 <code>IEnumerable&lt;IPaymentValidator&gt;</code> 时：</p>
+
+<ul style="margin-left:1.5rem; margin-bottom:0.8rem">
+  <li>每个实现都遵循<strong>各自的注册生命周期</strong></li>
+  <li>如果 A 是 Singleton、B 是 Scoped、C 是 Transient——容器照样正确管理</li>
+  <li>但 <code>IEnumerable&lt;T&gt;</code> 本身的生命周期取决于<strong>谁注入了它</strong>（集合被注入的时机）</li>
+</ul>
+
+<div class="callout callout--warn">
+⚠️ <strong>陷阱：</strong>如果 <code>PaymentValidationPipeline</code> 是 Singleton，而某个 Validator 是 Scoped，
+这依然是 Captive Dependency！<code>IEnumerable&lt;T&gt;</code> 不会魔法般地解决生命周期冲突。
+</div>
+
+<h2>方案三：Keyed Service（.NET 8+）</h2>
+
+<p>
+  .NET 8 终于把"按 key 区分实现"这个需求内置了。不用再自己写工厂 Switch，不用再依赖命名约定。
+</p>
+
+<h3>注册 Keyed Service</h3>
+
+<pre><code>// .NET 8+ —— 同一个接口，按 key 区分
+services.AddKeyedTransient&lt;IPaymentProcessor, AlipayProcessor&gt;("alipay");
+services.AddKeyedTransient&lt;IPaymentProcessor, WeChatPayProcessor&gt;("wechat");
+services.AddKeyedScoped&lt;IPaymentProcessor, CreditCardProcessor&gt;("credit");
+
+// key 可以是任意 object——string 最常用，但 enum、int 都行
+services.AddKeyedSingleton&lt;ICache, RedisCache&gt;("remote");
+services.AddKeyedSingleton&lt;ICache, MemoryCache&gt;("local");
+</code></pre>
+
+<h3>注入 Keyed Service</h3>
+
+<pre><code>// 方式一：通过 [FromKeyedServices] 特性（构造函数注入）
+public class OrderService(
+    [FromKeyedServices("alipay")] IPaymentProcessor alipay,
+    [FromKeyedServices("wechat")] IPaymentProcessor wechat)
+{
+    public async Task PayAsync(string method, Payment payment)
+    {
+        var processor = method switch
+        {
+            "Alipay" => alipay,
+            "WeChat" => wechat,
+            _ => throw new NotSupportedException()
+        };
+        await processor.ProcessAsync(payment);
+    }
+}
+
+// 方式二：通过 IServiceProvider（方法内动态选择）
+public class PaymentDispatcher
+{
+    private readonly IServiceProvider _provider;
+
+    public PaymentDispatcher(IServiceProvider provider)
+    {
+        _provider = provider;
+    }
+
+    public async Task DispatchAsync(string method, Payment payment)
+    {
+        var processor = _provider.GetRequiredKeyedService&lt;IPaymentProcessor&gt;(method);
+        await processor.ProcessAsync(payment);
+    }
+}
+</code></pre>
+
+<div class="callout callout--info">
+💡 <strong>[FromKeyedServices] 的限制：</strong>它只能在构造函数参数上用。如果你需要在方法内根据运行时数据
+动态选择，还是要通过 <code>IServiceProvider.GetRequiredKeyedService&lt;T&gt;(key)</code>。但这时候不是反模式——因为
+<strong>key 本身就是运行时数据</strong>，无法在构造时确定。
+</div>
+
+<h3>Keyed Service 与 IEnumerable&lt;T&gt; 共存</h3>
+
+<pre><code>// Keyed 和 non-keyed 可以同时存在
+services.AddKeyedTransient&lt;INotifier, SmsNotifier&gt;("sms");
+services.AddKeyedTransient&lt;INotifier, EmailNotifier&gt;("email");
+services.AddTransient&lt;INotifier, DefaultNotifier&gt;();  // 默认实现（无 key）
+
+// 解析不带 key 的 INotifier → DefaultNotifier
+// 解析 IEnumerable&lt;INotifier&gt; → 只包含 DefaultNotifier（keyed 的不在 IEnumerable 中）
+// 解析 [FromKeyedServices("sms")] INotifier → SmsNotifier
+</code></pre>
+
+<p>
+  <strong>Keyed Service 被明确排除在 <code>IEnumerable&lt;T&gt;</code> 之外</strong>——这是故意的设计选择。
+  如果你两种都需要，注册两个非 keyed 的实现到 IEnumerable，再用 keyed 做精确选择。
+</p>
+
+<h2>三方案对比：什么时候用哪个？</h2>
+
+<table class="tbl">
+  <tr><th>场景</th><th>推荐方案</th><th>为什么</th></tr>
+  <tr>
+    <td>"我需要延迟解析，或者每次调用时新建实例"</td>
+    <td><code>Func&lt;T&gt;</code></td>
+    <td>零配置，MSDI 自动支持。Singleton 需要 Transient 行为时必用。</td>
+  </tr>
+  <tr>
+    <td>"对所有实现执行同一个操作"（验证器链、中间件管道、复合处理器）</td>
+    <td><code>IEnumerable&lt;T&gt;</code></td>
+    <td>天然表达"一组东西"的语义。注册即追加，无需额外配置。</td>
+  </tr>
+  <tr>
+    <td>"根据运行时 key 选一个特定实现"（支付渠道、数据库分片、租户隔离）</td>
+    <td>Keyed Service</td>
+    <td>.NET 8 原生支持。类型安全，key 可以是任意 object。取代以前的工厂 switch。</td>
+  </tr>
+  <tr>
+    <td>"同一个接口，但不同消费者需要不同实现"（Controller A 用实现 A，B 用 B）</td>
+    <td>Keyed Service + <code>[FromKeyedServices]</code></td>
+    <td>在构造函数中精确指定——调用方不需要知道选择逻辑。</td>
+  </tr>
+  <tr>
+    <td>需要 Autofac 的 <code>.Named&lt;T&gt;()</code> 等效功能</td>
+    <td>Keyed Service</td>
+    <td>.NET 8 的 Keyed Service 就是 MSDI 对命名注册的官方回答。</td>
+  </tr>
+</table>
+
+<h2>Autofac → MSDI：命名/Keyed 注册迁移</h2>
+
+<table class="tbl">
+  <tr><th>Autofac</th><th>MSDI（.NET 6-7）</th><th>MSDI（.NET 8+）</th></tr>
+  <tr>
+    <td><code>.Named&lt;T&gt;("name")</code></td>
+    <td>工厂 + 手动 switch；或 Scrutor + 约定</td>
+    <td><code>AddKeyedXxx&lt;T&gt;("name")</code></td>
+  </tr>
+  <tr>
+    <td><code>.Keyed&lt;T&gt;(enum)</code></td>
+    <td>工厂 switch + IServiceProvider</td>
+    <td><code>AddKeyedXxx&lt;T&gt;(enum)</code></td>
+  </tr>
+  <tr>
+    <td><code>IIndex&lt;K, T&gt;</code>（按 key 获取）</td>
+    <td>不支持，手动 <code>IDictionary&lt;K, Func&lt;T&gt;&gt;</code></td>
+    <td><code>IServiceProvider.GetRequiredKeyedService&lt;T&gt;(key)</code></td>
+  </tr>
+  <tr>
+    <td>Assembly Scanning</td>
+    <td>Scrutor <code>.Scan()</code></td>
+    <td>同样用 Scrutor（下节课详讲）</td>
+  </tr>
+</table>
+
+<h2>检查理解</h2>
+
+<div class="quiz" id="quiz1"
+     data-feedback-correct="✅ 正确！MSDI 自动理解 Func&lt;T&gt;——不需要任何注册，直接注入即可。"
+     data-feedback-wrong="❌ 不对。Func&lt;T&gt; 是 MSDI 自动提供的，不需要注册。">
+  <div class="quiz__q">❓ 使用 Func&lt;T&gt; 工厂模式前，需要先在 ServiceCollection 中注册 Func&lt;T&gt; 吗？</div>
+  <div class="quiz__opt" data-answer="correct">不需要，MSDI 自动理解</div>
+  <div class="quiz__opt" data-answer="wrong">需要 services.AddFactory&lt;T&gt;()</div>
+  <div class="quiz__opt" data-answer="wrong">需要 services.AddTransient&lt;Func&lt;T&gt;&gt;()</div>
+  <div class="quiz__opt" data-answer="wrong">只有 Transient 注册的 T 才支持 Func&lt;T&gt;</div>
+  <div class="quiz__feedback" id="quiz1-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz2" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！同一个接口多次注册不会覆盖。解析单个 T 取最后一个，解析 IEnumerable&lt;T&gt; 拿全部。"
+     data-feedback-wrong="❌ 不对。IEnumerable&lt;T&gt; 的注册不会互相覆盖——每次 Add 都追加到列表中。">
+  <div class="quiz__q">❓ 多次调用 services.AddTransient&lt;INotifier, Xxx&gt;() 注册不同实现，解析 IEnumerable&lt;INotifier&gt; 会发生什么？</div>
+  <div class="quiz__opt" data-answer="wrong">最后一次注册覆盖前面的，只得到一个实现</div>
+  <div class="quiz__opt" data-answer="correct">拿到所有注册的实现</div>
+  <div class="quiz__opt" data-answer="wrong">编译时抛异常——不允许重复注册同一接口</div>
+  <div class="quiz__opt" data-answer="wrong">随机返回其中一个实现</div>
+  <div class="quiz__feedback" id="quiz2-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz3" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！Keyed Service 明确被排除在 IEnumerable&lt;T&gt; 之外——这是有意的设计选择。"
+     data-feedback-wrong="❌ 不对。Keyed Service 不在 IEnumerable&lt;T&gt; 中——需要通过 GetRequiredKeyedService 单独获取。">
+  <div class="quiz__q">❓ Keyed Service 注册的实现会出现在 IEnumerable&lt;T&gt; 的解析结果中吗？</div>
+  <div class="quiz__opt" data-answer="wrong">会，和普通注册的实现一起返回</div>
+  <div class="quiz__opt" data-answer="wrong">取决于 key 的类型（string 会在，enum 不会）</div>
+  <div class="quiz__opt" data-answer="wrong">取决于注册顺序</div>
+  <div class="quiz__opt" data-answer="correct">不会，Keyed Service 被明确排除</div>
+  <div class="quiz__feedback" id="quiz3-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz4" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！如果 T 是 Transient，Func&lt;T&gt; 每次调用返回新实例。这正是解决 Singleton→Transient 语义囚禁的首选方案（见第 4 课深入讨论）。"
+     data-feedback-wrong="❌ 不对。Func&lt;T&gt; 遵循 T 被注册时的生命周期——Transient 每次新实例，Scoped 同 Scope 内相同，Singleton 永远相同。">
+  <div class="quiz__q">❓ 如果 IEmailSender 注册为 Transient，注入 Func&lt;IEmailSender&gt; 并调用两次，两次结果相同吗？</div>
+  <div class="quiz__opt" data-answer="wrong">相同——Func&lt;T&gt; 总是缓存第一个结果</div>
+  <div class="quiz__opt" data-answer="wrong">取决于调用时所在 Scope</div>
+  <div class="quiz__opt" data-answer="correct">不相同——每次调用返回新实例</div>
+  <div class="quiz__opt" data-answer="wrong">只有第一次调用返回实例，之后返回 null</div>
+  <div class="quiz__feedback" id="quiz4-feedback"></div>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+<h2>关键术语</h2>
+
+<dl>
+  <dt><strong>Func&lt;T&gt; 工厂委托</strong></dt>
+  <dd>MSDI 自动提供的延迟解析机制。不需要注册——容器自动理解 <code>Func&lt;T&gt;</code> 为"按需创建 T 的工厂"。每次调用遵循 T 的注册生命周期。Singleton 需要 Transient 行为时的首选解。</dd>
+  <dt><strong>IEnumerable&lt;T&gt; 注入</strong></dt>
+  <dd>一次性获取接口的所有注册实现。每次 <code>AddXxx&lt;T, U&gt;()</code> 追加到列表，不会互相覆盖。解析单个 T 返回最后一个注册的，解析 <code>IEnumerable&lt;T&gt;</code> 返回全部。适用于责任链、管道、复合处理器。</dd>
+  <dt><strong>Keyed Service</strong></dt>
+  <dd>.NET 8 新增——同一接口按 object key 区分不同实现。注册：<code>AddKeyedTransient/Scoped/Singleton&lt;TService, TImpl&gt;(key)</code>。注入：构造函数用 <code>[FromKeyedServices(key)]</code> 特性，方法内用 <code>IServiceProvider.GetRequiredKeyedService&lt;T&gt;(key)</code>。Keyed Service 不出现在 <code>IEnumerable&lt;T&gt;</code> 中。</dd>
+  <dt><strong>[FromKeyedServices]</strong></dt>
+  <dd>.NET 8 特性——标记构造函数参数要从 keyed 注册中解析。只能用于构造函数参数。运行时动态选择时仍需 <code>GetRequiredKeyedService</code>。</dd>
+  <dt><strong>Service Locator（服务定位器）</strong></dt>
+  <dd>在方法体内手动调用 <code>GetService/GetRequiredService</code> 而不是通过构造函数注入。通常被视为反模式，但在运行时根据数据选择实现的场景中有正当性——key 本身无法在构造时确定。</dd>
+</dl>
+
+<h2>推荐阅读</h2>
+
+<p>📖 <strong>首选参考：</strong><a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection#keyed-services">Keyed service registration</a> — MSDI 官方文档中关于 Keyed Service 的章节</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection/factory-patterns">Factory patterns in DI</a> — Func&lt;T&gt;、IServiceProvider 工厂的官方模式文档</p>
+
+<p>📖 <a href="https://andrewlock.net/exploring-the-dotnet-8-preview-keyed-services-in-dependency-injection/">Exploring .NET 8 Keyed Services</a> — Andrew Lock 对 Keyed Service 的深入解析</p>
+
+<p>📖 <strong>本课速查：</strong> <a href="../reference/di-lifetime-reference.html">DI 生命周期与注册速查</a></p>
+
+<h2>接下来</h2>
+
+<p>
+  这一课覆盖了同一接口多实现的三种方案。下一课是 DI 模块的最后一课——<strong>超越 MSDI：Scrutor、容器替换与反模式总结</strong>。
+  我们探讨 MSDI 有意不做的那些事（程序集扫描、装饰器模式），以及什么时候该换容器、什么时候不该换。
+</p>
+
+<div class="callout callout--info">
+💬 <strong>有问题？</strong> 直接问我！比如"我的项目还在 .NET 6，没有 Keyed Service，怎么办？"
+或"Func&lt;T&gt; 和 IServiceScopeFactory 有什么区别——什么时候该用哪个？"
+或"我以前的 Autofac IIndex&lt;K,T&gt; 怎么迁移？"
+</div>
+
+<div class="lesson-nav">
+  <a href="0004-dependency-injection-fundamentals.html">← 上一课：DI 基础</a>
+  <a href="0006-di-scrutor-container-replacement.html">下一课：超越 MSDI →</a>
+</div>
+
+</body>
+</html>
