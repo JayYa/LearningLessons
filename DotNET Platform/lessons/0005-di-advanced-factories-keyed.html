@@ -49,10 +49,11 @@ public class CreditCardProcessor : IPaymentProcessor { /* ... */ }
   如果只注册一个：
 </p>
 
-<pre><code>// ❌ 只注册一个——后面两个覆盖前面的
+<pre><code>// ❌ 解析单个 T 时只拿到最后一个——但两个都注册了！
 services.AddTransient&lt;IPaymentProcessor, AlipayProcessor&gt;();
-services.AddTransient&lt;IPaymentProcessor, WeChatPayProcessor&gt;(); // 覆盖！
-// 解析 IPaymentProcessor → 永远是 WeChatPayProcessor
+services.AddTransient&lt;IPaymentProcessor, WeChatPayProcessor&gt;(); // 最后注册，"胜出"
+// 解析 IPaymentProcessor → 永远是 WeChatPayProcessor（最后注册胜出）
+// 但两个实现都在容器里——解析 IEnumerable&lt;IPaymentProcessor&gt; 能拿到全部
 </code></pre>
 
 <p>MSDI 提供了三种解决方案，从简单到复杂依次展开。</p>
@@ -271,6 +272,13 @@ services.AddKeyedScoped&lt;IPaymentProcessor, CreditCardProcessor&gt;("credit");
 services.AddKeyedSingleton&lt;ICache, RedisCache&gt;("remote");
 services.AddKeyedSingleton&lt;ICache, MemoryCache&gt;("local");
 </code></pre>
+
+<div class="callout callout--warn">
+⚠️ <strong>重复 key 不会报错：</strong>和普通注册一样，ServiceCollection 是列表不是字典——同一个
+<code>(TService, key)</code> 组合可以注册多次。<code>GetRequiredKeyedService&lt;T&gt;(key)</code> 返回<strong>最后一个</strong>，
+<code>GetKeyedServices&lt;T&gt;(key)</code> 返回<strong>全部</strong>。所以 key 不会自动保证唯一性——需要你自行保证每个
+key 只注册一个实现，否则可能出现难以调试的"最后注册意外胜出"。
+</div>
 
 <h3>注入 Keyed Service</h3>
 

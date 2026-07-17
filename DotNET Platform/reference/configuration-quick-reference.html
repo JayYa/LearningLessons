@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参考：配置系统速查 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>🔧 参考：配置系统速查</h1>
+<div class="lesson-meta">
+  模块：配置系统 &nbsp;|&nbsp; 速查参考
+</div>
+
+<h2>管道模型</h2>
+
+<div class="diagram">
+<pre>
+IConfigurationBuilder
+  .AddJsonFile("appsettings.json")          ← 基础配置
+  .AddJsonFile($"appsettings.{env}.json")   ← 环境覆盖（optional: true）
+  .AddEnvironmentVariables()                ← K8s/容器注入
+  .AddCommandLine(args)                     ← 命令行最高优先级
+  .Build()
+  → IConfigurationRoot
+</pre>
+</div>
+
+<h2>注册顺序 = 优先级（最后胜出）</h2>
+
+<table class="tbl">
+  <tr><th>顺序</th><th>源</th><th>典型用途</th></tr>
+  <tr><td>1（最低优先级）</td><td><code>appsettings.json</code></td><td>所有环境的通用默认值</td></tr>
+  <tr><td>2</td><td><code>appsettings.{ENV}.json</code></td><td>开发/预发布/生产——环境差异</td></tr>
+  <tr><td>3</td><td><code>AddEnvironmentVariables()</code></td><td>K8s ConfigMap、Docker、12-Factor App</td></tr>
+  <tr><td>4（最高优先级）</td><td><code>AddCommandLine(args)</code></td><td>CI/CD 传入参数，或开发时快速覆盖</td></tr>
+</table>
+
+<h2>读取方式速查</h2>
+
+<pre><code>IConfiguration config = builder.Build();
+
+// ── 基本读取 ──
+config["A:B:C"]                         // string? —— 返回 null 如果不存在
+config.GetSection("A:B")                // IConfigurationSection —— 切子节点
+
+// ── 类型转换 ──
+config.GetValue&lt;int&gt;("Timeout")         // int —— 不存在返回 default(int) = 0
+config.GetValue&lt;int&gt;("Timeout", 30)     // int —— 不存在返回 30
+config.GetValue&lt;bool&gt;("Enabled")        // bool —— "true"/"false" → bool
+config.GetValue&lt;Uri&gt;("ServiceUrl")      // Uri —— 自动调用 TypeConverter
+
+// ── 绑定到对象 ──
+var opts = new MyOptions();
+config.GetSection("MyOptions").Bind(opts);
+// 或
+var opts = config.GetSection("MyOptions").Get&lt;MyOptions&gt;();
+</code></pre>
+
+<h2>NuGet 包速查</h2>
+
+<table class="tbl">
+  <tr><th>功能</th><th>NuGet 包</th><th>注册方法</th></tr>
+  <tr><td>核心抽象</td><td><code>Microsoft.Extensions.Configuration</code></td><td>—（IConfigurationBuilder/IConfiguration 接口）</td></tr>
+  <tr><td>JSON</td><td><code>Microsoft.Extensions.Configuration.Json</code></td><td><code>AddJsonFile("file.json")</code></td></tr>
+  <tr><td>环境变量</td><td><code>Microsoft.Extensions.Configuration.EnvironmentVariables</code></td><td><code>AddEnvironmentVariables()</code></td></tr>
+  <tr><td>命令行</td><td><code>Microsoft.Extensions.Configuration.CommandLine</code></td><td><code>AddCommandLine(args)</code></td></tr>
+  <tr><td>内存集合</td><td>（包含在核心包中）</td><td><code>AddInMemoryCollection(dict)</code></td></tr>
+  <tr><td>INI 文件</td><td><code>Microsoft.Extensions.Configuration.Ini</code></td><td><code>AddIniFile("file.ini")</code></td></tr>
+  <tr><td>XML 文件</td><td><code>Microsoft.Extensions.Configuration.Xml</code></td><td><code>AddXmlFile("file.xml")</code></td></tr>
+  <tr><td>Key Vault</td><td><code>Azure.Extensions.AspNetCore.Configuration.Secrets</code></td><td><code>AddAzureKeyVault(...)</code></td></tr>
+  <tr><td>Options 模式</td><td><code>Microsoft.Extensions.Options</code></td><td><code>services.Configure&lt;T&gt;(config.GetSection(...))</code></td></tr>
+</table>
+
+<h2>环境变量命名规则</h2>
+
+<pre><code>// JSON 中的结构：
+// { "Database": { "ConnectionString": "..." } }
+
+// 环境变量（Windows / Docker / Linux 都支持）：
+Database__ConnectionString=Server=prod;...      // 双下划线 __
+
+// 命令行参数：
+--Database:ConnectionString="Server=prod;..."   // 冒号 :
+
+// 两者都会映射到同一个 key：config["Database:ConnectionString"]
+</code></pre>
+
+<h2>JSON 配置模板</h2>
+
+<pre><code>{
+  "App": {
+    "Name": "MyApp",
+    "Version": "1.0.0"
+  },
+  "Database": {
+    "ConnectionString": "Server=.;Database=MyDb;Trusted_Connection=true;",
+    "CommandTimeout": 30,
+    "EnableRetryOnFailure": true,
+    "MaxRetryCount": 3
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information"
+    }
+  },
+  "FeatureFlags": {
+    "EnableNewCheckout": false,
+    "EnableCaching": true
+  }
+}
+</code></pre>
+
+<h2>热重载配置</h2>
+
+<pre><code>// 注册时开启热重载
+builder.AddJsonFile("appsettings.json", reloadOnChange: true);
+
+// 读取——两种模式
+// 1. IOptionsSnapshot&lt;T&gt; —— 每个请求重新读取（Scoped）
+// 2. IOptionsMonitor&lt;T&gt; —— 实时推送变更通知 + 回调
+//    monitor.OnChange(opts => Console.WriteLine($"Changed! {opts.Value}"));
+</code></pre>
+
+<h2>Framework 4.8 → 现代 .NET 迁移</h2>
+
+<table class="tbl">
+  <tr><th>Framework 4.8</th><th>现代 .NET</th></tr>
+  <tr><td><code>ConfigurationManager.AppSettings["x"]</code></td><td><code>config["x"]</code></td></tr>
+  <tr><td><code>ConfigurationManager.ConnectionStrings["x"].ConnectionString</code></td><td><code>config.GetConnectionString("x")</code></td></tr>
+  <tr><td><code>int.Parse(ConfigurationManager.AppSettings["n"])</code></td><td><code>config.GetValue&lt;int&gt;("n")</code></td></tr>
+  <tr><td><code>web.Debug.config</code></td><td><code>appsettings.{Environment}.json</code></td></tr>
+  <tr><td>自定义 <code>ConfigurationSection</code></td><td><code>GetSection("X").Bind(opts)</code></td></tr>
+</table>
+
+<hr class="section">
+
+<h2>Options 模式三接口速查</h2>
+
+<table class="tbl">
+  <tr><th>接口</th><th>生命周期</th><th>热重载</th><th>变更回调</th><th>何时用</th></tr>
+  <tr>
+    <td><code>IOptions&lt;T&gt;</code></td>
+    <td>Singleton</td>
+    <td>❌</td>
+    <td>❌</td>
+    <td>不该在运行时变的配置（密钥、SDK 初始化参数）</td>
+  </tr>
+  <tr>
+    <td><code>IOptionsSnapshot&lt;T&gt;</code></td>
+    <td>Scoped</td>
+    <td>✅</td>
+    <td>❌</td>
+    <td>Scoped 服务需要热重载——每个请求自动拿新配置</td>
+  </tr>
+  <tr>
+    <td><code>IOptionsMonitor&lt;T&gt;</code></td>
+    <td>Singleton</td>
+    <td>✅</td>
+    <td>✅</td>
+    <td>Singleton 需要热重载 + 配置变更时自动触发操作</td>
+  </tr>
+</table>
+
+<h2>Options 注册速查</h2>
+
+<pre><code>// ── 基本注册 ──
+services.Configure&lt;MyOptions&gt;(config.GetSection("MySection"));
+
+// ── 代码覆盖 ──
+services.Configure&lt;MyOptions&gt;(opts =>
+{
+    config.GetSection("MySection").Bind(opts);
+    opts.OverrideThis = 42;  // 强制覆盖 JSON 中的值
+});
+
+// ── Named Options ──
+services.Configure&lt;MyOptions&gt;("Redis", config.GetSection("Cache:Redis"));
+services.Configure&lt;MyOptions&gt;("Local", config.GetSection("Cache:Local"));
+// 注入：IOptionsSnapshot&lt;MyOptions&gt; opts; opts.Get("Redis");
+
+// ── 校验（Data Annotations） ──
+services.AddOptions&lt;MyOptions&gt;()
+        .Bind(config.GetSection("MySection"))
+        .ValidateOnStart();
+// POCO 上标记 [Required]、[Range]、[RegularExpression]
+
+// ── 校验（自定义逻辑） ──
+services.AddOptions&lt;MyOptions&gt;()
+        .Bind(config.GetSection("MySection"))
+        .Validate(opts => opts.Max > 0, "Max 必须大于 0");
+
+// ── 校验（IValidateOptions&lt;T&gt;——注入其他服务） ──
+services.AddSingleton&lt;IValidateOptions&lt;MyOptions&gt;, MyOptionsValidator&gt;();
+
+// ── PostConfigure（在所有 Configure 之后运行） ──
+services.PostConfigure&lt;MyOptions&gt;(opts =>
+{
+    if (string.IsNullOrEmpty(opts.Url))
+        opts.Url = "https://default.example.com";
+});
+</code></pre>
+
+<h2>NuGet 包（Options 相关）</h2>
+
+<table class="tbl">
+  <tr><th>功能</th><th>NuGet 包</th></tr>
+  <tr><td>Options 核心（IOptions 等接口）</td><td><code>Microsoft.Extensions.Options</code></td></tr>
+  <tr><td>Configure&lt;T&gt; + Bind 扩展</td><td><code>Microsoft.Extensions.Options.ConfigurationExtensions</code></td></tr>
+  <tr><td>ValidateOnStart + Data Annotations</td><td><code>Microsoft.Extensions.Options.DataAnnotations</code></td></tr>
+</table>
+
+<hr class="section">
+
+<p>
+  ← 返回 <a href="../lessons/0007-configuration-fundamentals.html">第 7 课：配置系统基础</a>
+  &nbsp;|&nbsp;
+  <a href="../lessons/0008-configuration-options-pattern.html">第 8 课：Options 模式</a>
+</p>
+
+</body>
+</html>

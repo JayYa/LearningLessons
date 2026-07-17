@@ -10,7 +10,7 @@
 
 <h1>第 6 课：超越 MSDI——Scrutor、容器替换与反模式总结</h1>
 <div class="lesson-meta">
-  模块：依赖注入（3/3）&nbsp;|&nbsp; 预计阅读/练习时间：25 分钟
+  模块：依赖注入（3/3）&nbsp;|&nbsp; 预计阅读/练习时间：32 分钟
 </div>
 
 <p>
@@ -224,6 +224,64 @@ services.Decorate&lt;IUserRepository, LoggingUserRepository&gt;();     // 外层
   </tr>
 </table>
 
+<h3>那性能呢？MSDI 更快吗？</h3>
+
+<p>
+  是的——MSDI 的解析速度通常优于 Autofac。但这几乎从不成为换不换容器的理由。
+</p>
+
+<table class="tbl">
+  <tr><th>容器</th><th>解析方式</th><th>单次解析 ≈</th><th>备注</th></tr>
+  <tr>
+    <td>MSDI</td>
+    <td>编译好的表达式树（<code>Expression&lt;T&gt;</code>）</td>
+    <td>~50–100 ns</td>
+    <td>接近 <code>new</code> 的开销，路径极其精简</td>
+  </tr>
+  <tr>
+    <td>Autofac</td>
+    <td>反射 + 表达式树混合</td>
+    <td>~100–300 ns</td>
+    <td>启用拦截器时额外开销：每次解析时 Castle DynamicProxy 织入</td>
+  </tr>
+  <tr>
+    <td>Simple Injector</td>
+    <td>编译到委托（<code>Func&lt;T&gt;</code>）</td>
+    <td>~30–80 ns</td>
+    <td>公认最快的 .NET DI 容器之一</td>
+  </tr>
+</table>
+
+<p><strong>为什么 MSDI 更快？</strong> 一句话：它做更少的事，所以做更快。没有拦截器、没有属性注入、
+没有多层 Scope 树——表达式树编译路径极其精简。</p>
+
+<p><strong>但你需要关心吗？</strong> 把纳秒换算成现实的请求：</p>
+
+<div class="diagram">
+<pre>
+一次解析 MSDI            ~100 ns
+一个请求解析 20 个服务     = 2,000 ns = <strong>0.002 ms</strong>
+一次 EF Core 数据库查询    ~1–50 ms  = 1,000,000–50,000,000 ns
+一次 HTTP 请求延迟         ~10–100 ms
+
+结论：DI 解析的开销相比数据库查询 / 网络 IO，
+      差了 <strong>5–6 个数量级</strong>，完全可以忽略。
+</pre>
+</div>
+
+<p><strong>什么时候性能差异才重要？</strong> 两种场景：</p>
+
+<ul>
+  <li><strong>高吞吐场景</strong>——每秒解析百万级对象（消息队列消费者、游戏服务器后端）。这时 Simple Injector 的"编译到委托"策略有明显优势。</li>
+  <li><strong>启动时间</strong>——表达式树编译只在 <code>BuildServiceProvider()</code> 时做一次。Scrutor 扫描 200
+  个服务也就几毫秒，不是瓶颈。</li>
+</ul>
+
+<div class="callout callout--info">
+💡 <strong>结论：</strong>不要为了"性能"换容器。MSDI 对一个典型请求的 DI 解析开销约 0.002ms——相比几十毫秒的
+数据库查询，这<strong>不是你的性能瓶颈</strong>。换容器的真正理由只有表中那四个：AOP 拦截器、属性注入、子容器、Autofac Module 兼容。
+</div>
+
 <h3>如何替换容器：Autofac 示例</h3>
 
 <pre><code>// ASP.NET Core 中换 Autofac
@@ -319,6 +377,105 @@ builder.Host.ConfigureContainer&lt;ContainerBuilder&gt;(containerBuilder =>
     <td>🟢 轻微</td>
   </tr>
 </table>
+
+<h3>反模式详解：async 工厂死锁</h3>
+
+<p>
+  DI 工厂委托是<strong>同步的</strong>——<code>IServiceProvider.GetService&lt;T&gt;()</code> 返回的是
+  <code>T</code>，不是 <code>Task&lt;T&gt;</code>。当你需要一个对象的初始化需要 async（登录、握手、读密钥），
+  新手最常见的错误是在工厂里 <code>.Result</code>：
+</p>
+
+<pre><code>// 🔴 反模式：工厂中 .Result 阻塞——可能死锁！
+services.AddSingleton&lt;IApiClient&gt;(sp =>
+{
+    var config = sp.GetRequiredService&lt;IConfiguration&gt;();
+
+    var client = new ApiClient();
+
+    // 🚨 在同步工厂里"硬塞"异步方法
+    client.LoginAsync(config["Api:Username"], config["Api:Password"]).Result;
+
+    // 同样致命的写法：
+    // client.LoginAsync(...).GetAwaiter().GetResult();
+    // client.LoginAsync(...).Wait();
+
+    return client;
+});
+</code></pre>
+
+<p><strong>死锁是怎么发生的？</strong> 假设工厂跑在 ASP.NET Core 请求线程上（有 <code>SynchronizationContext</code>）：</p>
+
+<div class="diagram">
+<pre>
+工厂委托（同步线程）
+  └─ LoginAsync() 开始
+       └─ await ReadAsync(socket)        ← 等待网络 IO，控制权交出
+            ↓
+       异步操作完成，准备回到原线程继续...
+            ↓
+       ❌ 但原线程被 .Result 阻塞着！      ← 永远等不到释放
+            ↓
+       💀 <strong>死锁</strong>：任务等线程，线程等任务
+</pre>
+</div>
+
+<p>
+  关键在于 <code>SynchronizationContext</code>（ASP.NET Core 早期版本）或线程池饥饿（高并发时）。
+  <code>await</code> 捕获了调用上下文，完成后需要回到原上下文继续执行——但那个上下文正被
+  <code>.Result</code> 死死阻塞。这就是"一步等，两边死"。
+</p>
+
+<p><strong>✅ 正确做法一：工厂保持同步</strong></p>
+
+<pre><code>// 如果初始化不需要网络/IO——就别用 async，保持同步
+services.AddSingleton&lt;IApiClient&gt;(sp =>
+{
+    var config = sp.GetRequiredService&lt;IConfiguration&gt;();
+    var client = new ApiClient();
+    client.Configure(config["Api:Username"], config["Api:Password"]); // 同步配置
+    return client;
+});
+</code></pre>
+
+<p><strong>✅ 正确做法二：异步初始化用 IHostedService</strong></p>
+
+<pre><code>// 初始化确实需要异步——放到 IHostedService 里
+// StartAsync 本身就是 async Task，不会阻塞
+public class ApiClientInitializer : IHostedService
+{
+    private readonly IApiClient _client;
+    private readonly IConfiguration _config;
+
+    public ApiClientInitializer(IApiClient client, IConfiguration config)
+    {
+        _client = client;
+        _config = config;
+    }
+
+    public async Task StartAsync(CancellationToken ct)
+    {
+        // ✅ 真正的异步上下文，await 一路到底，不会死锁
+        await _client.LoginAsync(
+            _config["Api:Username"],
+            _config["Api:Password"]);
+    }
+
+    public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
+}
+
+// 注册
+services.AddSingleton&lt;IApiClient, ApiClient&gt;();
+services.AddHostedService&lt;ApiClientInitializer&gt;();
+</code></pre>
+
+<div class="callout callout--info">
+💡 <strong>分清两个阶段：</strong>
+<ul style="margin-top:0.3rem">
+  <li><strong>注册阶段</strong>（工厂委托）——构建依赖图，必须同步。只做对象的 <code>new</code> 和配置注入，不做 IO。</li>
+  <li><strong>初始化阶段</strong>（<code>IHostedService.StartAsync</code>）——执行异步工作（网络调用、文件读取、密钥拉取）。整个调用链保持 async，没有 <code>.Result</code> 阻塞。</li>
+</ul>
+</div>
 
 <h3>启用开发时检测</h3>
 
@@ -473,7 +630,7 @@ builder.UseDefaultServiceProvider(options =>
 
 <div class="lesson-nav">
   <a href="0005-di-advanced-factories-keyed.html">← 上一课：DI 进阶：工厂与 Keyed Service</a>
-  <a href="0007-configuration-options.html">下一课：配置系统（待生成）→</a>
+  <a href="0007-configuration-fundamentals.html">下一课：配置系统基础 →</a>
 </div>
 
 </body>

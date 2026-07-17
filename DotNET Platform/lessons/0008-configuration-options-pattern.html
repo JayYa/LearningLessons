@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 8 课：Options 模式——强类型、热重载、校验 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>第 8 课：Options 模式——强类型、热重载、校验</h1>
+<div class="lesson-meta">
+  模块：配置系统（2/2）&nbsp;|&nbsp; 预计阅读/练习时间：28 分钟
+</div>
+
+<p>
+  上一课我们学会了从多个源聚合配置、用"最后胜出"覆盖。但 <code>config["Database:ConnectionString"]</code>
+  仍然有两个痛点：<strong>分散的魔法字符串</strong>和<strong>没法热重载</strong>。这一课引入 Options 模式——
+  把配置映射到强类型 POCO 对象，并通过三个接口精准控制重载行为。
+</p>
+
+<div class="summary">
+  <ul>
+    <li>理解 <strong>IOptions&lt;T&gt;</strong>、<strong>IOptionsSnapshot&lt;T&gt;</strong>、<strong>IOptionsMonitor&lt;T&gt;</strong> 的精确区别</li>
+    <li>掌握 <strong>services.Configure&lt;T&gt;()</strong> 的标准注册方式</li>
+    <li>学会 <strong>IOptionsSnapshot</strong> 实现"改 JSON 自动生效"（热重载）</li>
+    <li>学会 <strong>Options 校验</strong>——启动时确保配置完整，而非运行时才发现缺字段</li>
+  </ul>
+</div>
+
+<h2>为什么需要 Options 模式？</h2>
+
+<p>
+  直接把 <code>IConfiguration</code> 注入到每个服务里，代码很快变成这样：
+</p>
+
+<pre><code>// 🔴 反模式：到处散落魔法字符串
+public class UserService
+{
+    public UserService(IConfiguration config)
+    {
+        var conn = config["Database:ConnectionString"];   // "Database:ConnectionString"
+        var timeout = config.GetValue&lt;int&gt;("Database:CommandTimeout");  // 又重复一次路径
+        var retries = config.GetValue&lt;int&gt;("Database:MaxRetryCount");
+        // 如果 JSON 里把 "CommandTimeout" 改成了 "Timeout"……
+        // 编译通过，运行时拿到 0——静默出错
+    }
+}
+
+// ✅ Options 模式：注入一个强类型对象——编译器保护你
+public class UserService
+{
+    public UserService(IOptionsSnapshot&lt;DatabaseOptions&gt; options)
+    {
+        var db = options.Value;
+        var conn = db.ConnectionString;   // ← 属性名拼错？编译器直接报错
+        var timeout = db.CommandTimeout;
+    }
+}
+</code></pre>
+
+<p>
+  三个价值：<strong>强类型</strong>（编译期检查） → <strong>热重载</strong>（改 JSON 不重启） → <strong>校验</strong>（启动时失败，而非凌晨 3 点因为缺配置炸掉）。
+</p>
+
+<h2>三个接口，一句话区分</h2>
+
+<pre><code>// 同一个 DatabaseOptions 类，三种注入方式——行为完全不同
+public class DatabaseOptions
+{
+    public string ConnectionString { get; set; }
+    public int CommandTimeout { get; set; } = 30;
+    public bool EnableRetryOnFailure { get; set; }
+}
+</code></pre>
+
+<table class="tbl">
+  <tr><th>接口</th><th>生命周期</th><th>热重载？</th><th>变更通知？</th><th>一句话</th></tr>
+  <tr>
+    <td><code>IOptions&lt;T&gt;</code></td>
+    <td>Singleton</td>
+    <td>❌</td>
+    <td>❌</td>
+    <td>"程序启动时拍一张照，之后一直用这张"</td>
+  </tr>
+  <tr>
+    <td><code>IOptionsSnapshot&lt;T&gt;</code></td>
+    <td><strong>Scoped</strong></td>
+    <td>✅</td>
+    <td>❌</td>
+    <td>"每个请求重新拍一张——下次请求看到新配置"</td>
+  </tr>
+  <tr>
+    <td><code>IOptionsMonitor&lt;T&gt;</code></td>
+    <td>Singleton</td>
+    <td>✅</td>
+    <td>✅ OnChange 回调</td>
+    <td>"配置改了会通知我——我能立即反应"</td>
+  </tr>
+</table>
+
+<div class="callout callout--info">
+💡 <strong>选择口诀：</strong>不需要热重载→<code>IOptions&lt;T&gt;</code>；需要热重载但不能是 Singleton→<code>IOptionsSnapshot&lt;T&gt;</code>（注意它本身是 Scoped）；Singleton 里要热重载→<code>IOptionsMonitor&lt;T&gt;</code>。
+Scoped 注入 Snapshot，Singleton 注入 Monitor。
+</div>
+
+<h2>注册：从配置到 POCO</h2>
+
+<pre><code>// NuGet: Microsoft.Extensions.Options.ConfigurationExtensions
+
+var builder = WebApplication.CreateBuilder(args);
+
+// 方式一：绑定到 Configuration 的某个 Section（最常用）
+builder.Services.Configure&lt;DatabaseOptions&gt;(
+    builder.Configuration.GetSection("Database"));
+
+// 方式二：混合——Section + 代码覆盖
+builder.Services.Configure&lt;DatabaseOptions&gt;(opts =>
+{
+    // 先读 JSON
+    builder.Configuration.GetSection("Database").Bind(opts);
+    // 代码中强制覆盖某些值
+    opts.EnableRetryOnFailure = true;
+});
+
+// 方式三：纯代码（没有 JSON）
+builder.Services.Configure&lt;DatabaseOptions&gt;(opts =>
+{
+    opts.ConnectionString = "Server=localhost;...";
+    opts.CommandTimeout = 60;
+});
+
+// 无论哪种方式，注入的都是同一个 T——注入 IOptionsSnapshot&lt;DatabaseOptions&gt; 就能拿到
+</code></pre>
+
+<h2>IOptions&lt;T&gt;：启动时快照，之后不变</h2>
+
+<pre><code>// IOptions&lt;T&gt; 是 Singleton——程序启动时"拍一张照"
+// JSON 文件改了？代码里还是旧的值。直到程序重启。
+
+public class AuthService
+{
+    private readonly AuthOptions _options;
+
+    public AuthService(IOptions&lt;AuthOptions&gt; options)
+    {
+        _options = options.Value;  // ← 启动时快照，之后 _options 不变
+    }
+}
+</code></pre>
+
+<p><strong>为什么需要它？</strong> 有些配置就不该在运行时变——JWT 密钥、加密算法参数、第三方 SDK 初始化参数。改了应该走发布流程，不是偷偷热重载。</p>
+
+<h2>IOptionsSnapshot&lt;T&gt;：每个 Scope 重新读</h2>
+
+<pre><code>// IOptionsSnapshot&lt;T&gt; 是 Scoped——每个请求（Scope）重新从 Provider 读取
+// JSON 文件改了？下一个请求自动用新值
+
+public class ReportService
+{
+    private readonly DatabaseOptions _db;
+
+    // ⚠️ 注意：IOptionsSnapshot 是 Scoped！
+    // 不能注进 Singleton 服务——Semantic Captive Dependency（回顾第 4 课）
+    public ReportService(IOptionsSnapshot&lt;DatabaseOptions&gt; options)
+    {
+        _db = options.Value;  // ← 每次构造 ReportService（一个新 Scope）时重新读
+    }
+}
+</code></pre>
+
+<p>工作流程：</p>
+
+<div class="diagram">
+<pre>
+请求 1 ── Scope A ── IOptionsSnapshot&lt;T&gt;.Value ── 读取 JSON（Timeout=30）
+  │
+  │  改 JSON → Timeout=60
+  │
+请求 2 ── Scope B ── IOptionsSnapshot&lt;T&gt;.Value ── 重新读取 JSON（Timeout=60 ✅）
+
+→ 不重启，新请求自动拿到新配置
+</pre>
+</div>
+
+<div class="callout callout--warn">
+⚠️ <strong>生命周期陷阱：</strong>IOptionsSnapshot 本身是 <strong>Scoped</strong>。如果你把它注入 Singleton 服务，
+就会制造 Semantic Captive Dependency——Snapshot 在 Singleton 构造时"被囚禁"，此后再也不更新。
+<b>正确做法：</b>Singleton 里用 <code>IOptionsMonitor&lt;T&gt;</code> 而非 <code>IOptionsSnapshot&lt;T&gt;</code>。
+</div>
+
+<h2>IOptionsMonitor&lt;T&gt;：Singleton 友好的热重载</h2>
+
+<p>
+  前两个接口覆盖了 90% 的场景。但有一个缝——Singleton 服务也需要热重载怎么办？
+  <code>IOptionsSnapshot</code> 是 Scoped，不能用；<code>IOptions</code> 是 Singleton 但不热重载。
+  <code>IOptionsMonitor</code> 填补了这个缝：<strong>Singleton + 实时热重载 + 变更通知</strong>。
+</p>
+
+<pre><code>// IOptionsMonitor&lt;T&gt; —— Singleton 生命周期，但每次 .CurrentValue 都反映最新配置
+public class CacheWarmer : BackgroundService  // BackgroundService 本质是 Singleton
+{
+    private readonly IOptionsMonitor&lt;DatabaseOptions&gt; _options;
+    private readonly ILogger&lt;CacheWarmer&gt; _logger;
+
+    public CacheWarmer(
+        IOptionsMonitor&lt;DatabaseOptions&gt; options,
+        ILogger&lt;CacheWarmer&gt; logger)
+    {
+        _options = options;
+        _logger = logger;
+
+        // ✅ 注册变更回调——JSON 文件改了立即收到通知
+        _options.OnChange(async (newOpts, name) =>
+        {
+            _logger.LogInformation(
+                "数据库配置已变更！新连接串：{Conn}", newOpts.ConnectionString);
+            // 可以立即重建连接池、刷新缓存、调整线程数……
+        });
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            // 每次都拿最新值
+            var db = _options.CurrentValue;  // ← 不是 .Value，是 .CurrentValue
+            await Task.Delay(db.CommandTimeout * 1000, ct);
+        }
+    }
+}
+</code></pre>
+
+<p><strong>IOptionsMonitor vs IOptionsSnapshot：</strong></p>
+
+<table class="tbl">
+  <tr><th></th><th>IOptionsSnapshot</th><th>IOptionsMonitor</th></tr>
+  <tr><td>生命周期</td><td>Scoped</td><td>Singleton</td></tr>
+  <tr><td>获取当前值</td><td><code>.Value</code>（属性）</td><td><code>.CurrentValue</code>（属性）</td></tr>
+  <tr><td>变更通知</td><td>❌ 无回调</td><td><code>.OnChange(callback)</code> 注册回调</td></tr>
+  <tr><td>典型使用</td><td>Controller / Service（Scoped）</td><td>HostedService / Singleton 组件</td></tr>
+  <tr><td>何时重新读取</td><td>每个 Scope 创建时</td><td>配置源变更时（实时）</td></tr>
+</table>
+
+<h2>Named Options：同一 POCO，多份配置</h2>
+
+<p>
+  同一个 <code>CacheOptions</code> 类，Redis 和本地内存的配置不同怎么办？
+  Options 模式支持"命名选项"——同一个 POCO 类型，注册多份。
+</p>
+
+<pre><code>// 定义——一个 POCO 类就够了，不用写两个
+public class CacheOptions
+{
+    public string Host { get; set; }
+    public int Port { get; set; }
+    public int ExpirationMinutes { get; set; }
+}
+
+// 注册——不同 name，绑定到不同 Section
+services.Configure&lt;CacheOptions&gt;("Redis",     // name = "Redis"
+    config.GetSection("Cache:Redis"));
+services.Configure&lt;CacheOptions&gt;("Local",     // name = "Local"
+    config.GetSection("Cache:Local"));
+
+// 注入——明确取哪个 name
+public class CacheService
+{
+    public CacheService(
+        IOptionsMonitor&lt;CacheOptions&gt; options)  // 未指定 name —— 取默认（无 name 那个）
+    {
+        var redis = options.Get("Redis");       // 按 name 获取
+        var local = options.Get("Local");
+
+        // IOptionsSnapshot 同理—— .Get("name")
+    }
+}
+</code></pre>
+
+<pre><code>// 对应的 JSON
+{
+  "Cache": {
+    "Redis": {
+      "Host": "redis.contoso.com",
+      "Port": 6379,
+      "ExpirationMinutes": 15
+    },
+    "Local": {
+      "Host": "localhost",
+      "Port": 6379,
+      "ExpirationMinutes": 5
+    }
+  }
+}
+</code></pre>
+
+<h2>Options Validation：启动时校验</h2>
+
+<p>
+  这是 Framework 4.8 时代做不到的：<strong>应用启动时就检查配置是否完整/有效</strong>，而不是等到运行时
+  某个请求因为 <code>ConnectionString</code> 为空而炸 500。尽早失败，尽早发现，尽早修复。
+</p>
+
+<pre><code>// 方式一：Data Annotations 标记（适合 80% 场景）
+public class DatabaseOptions
+{
+    [Required(ErrorMessage = "数据库连接串不能为空")]         // ← 必填
+    public string ConnectionString { get; set; }
+
+    [Range(1, 300, ErrorMessage = "超时时间必须在 1-300 秒之间")]
+    public int CommandTimeout { get; set; } = 30;
+
+    [RegularExpression(@"^Server=", ErrorMessage = "连接串必须以 Server= 开头")]
+    public string AdditionalConnectionString { get; set; }
+}
+
+// 注册时加上 ValidateOnStart
+services.AddOptions&lt;DatabaseOptions&gt;()
+        .Bind(config.GetSection("Database"))
+        .ValidateOnStart();  // ← 启动时立即校验！校验失败 → 应用启动失败
+
+// 如果连接串为空，你的应用会在启动时抛出 OptionsValidationException：
+// "DatabaseOptions.ConnectionString: 数据库连接串不能为空"
+// 而不是等某个用户访问功能时 500
+</code></pre>
+
+<pre><code>// 方式二：自定义复杂校验逻辑（跨字段校验）
+services.AddOptions&lt;DatabaseOptions&gt;()
+        .Bind(config.GetSection("Database"))
+        .Validate(opts =>
+        {
+            if (opts.EnableRetryOnFailure && opts.MaxRetryCount <= 0)
+                return false;  // 启用了重试但没设置次数——不合理
+            return true;
+        }, "启用了 EnableRetryOnFailure 但 MaxRetryCount 必须大于 0");
+
+// 方式三：IValidateOptions&lt;T&gt; 接口（注入其他服务的复杂校验）
+public class DatabaseOptionsValidator : IValidateOptions&lt;DatabaseOptions&gt;
+{
+    private readonly IConfiguration _config;
+
+    public DatabaseOptionsValidator(IConfiguration config)
+    {
+        _config = config;
+    }
+
+    public ValidateOptionsResult Validate(string name, DatabaseOptions options)
+    {
+        // 可以访问其他配置、其他服务——比 Data Annotations 更灵活
+        if (string.IsNullOrEmpty(options.ConnectionString))
+            return ValidateOptionsResult.Fail("连接串是必填的！");
+
+        return ValidateOptionsResult.Success;
+    }
+}
+
+// 注册验证器
+services.AddSingleton&lt;IValidateOptions&lt;DatabaseOptions&gt;, DatabaseOptionsValidator&gt;();
+</code></pre>
+
+<div class="callout callout--info">
+💡 <strong>ValidateOnStart = 什么也不做？</strong>只有当 Options 被<strong>第一次解析</strong>时才会触发校验。
+Singleton 服务通常在第一次注入时解析——也就是启动时。但如果你只想"校验一下依赖图，实际上不用这些服务"，
+可能需要手动触发一次解析或依赖 Host 的默认行为（ASP.NET Core 启动时会解析大量服务）。
+</div>
+
+<h2>Framework 4.8 时代 vs 现代 .NET Options</h2>
+
+<table class="tbl">
+  <tr><th></th><th>Framework 4.8</th><th>现代 .NET Options</th></tr>
+  <tr>
+    <td>类型</td>
+    <td>全是 <code>string</code>，手动 <code>int.Parse()</code></td>
+    <td>强类型 POCO——<code>int</code> 就是 <code>int</code></td>
+  </tr>
+  <tr>
+    <td>读写方式</td>
+    <td><code>ConfigurationManager.AppSettings["a:b"]</code></td>
+    <td>注入 <code>IOptions&lt;T&gt;</code> → <code>.Value.Property</code></td>
+  </tr>
+  <tr>
+    <td>热重载</td>
+    <td>❌ 改 web.config → AppDomain 回收</td>
+    <td>✅ <code>reloadOnChange</code> + <code>IOptionsSnapshot</code></td>
+  </tr>
+  <tr>
+    <td>变更通知</td>
+    <td>❌ 无</td>
+    <td>✅ <code>IOptionsMonitor.OnChange(callback)</code></td>
+  </tr>
+  <tr>
+    <td>校验</td>
+    <td>运行时：某个请求因为配置缺失炸 NRE</td>
+    <td>启动时：<code>ValidateOnStart()</code> 直接不让启动</td>
+  </tr>
+  <tr>
+    <td>多环境</td>
+    <td><code>web.Debug.config</code> XML 变换（编译时）</td>
+    <td><code>appsettings.{ENV}.json</code> + 环境变量覆盖（运行时）</td>
+  </tr>
+</table>
+
+<h2>检查理解</h2>
+
+<div class="quiz" id="quiz1"
+     data-feedback-correct="✅ 正确！IOptions<T> 是 Singleton 快照——程序启动时读取一次，之后不再变。"
+     data-feedback-wrong="❌ 不对。IOptions<T> 是 Singleton 快照，启动时拍一张照，之后 JSON 改了也不会变。">
+  <div class="quiz__q">❓ IOptions&lt;T&gt; 注入后，appsettings.json 改了——代码里拿到的是新值还是旧值？</div>
+  <div class="quiz__opt" data-answer="wrong">新值——因为配置系统支持热重载</div>
+  <div class="quiz__opt" data-answer="wrong">取决于 reloadOnChange 是否为 true</div>
+  <div class="quiz__opt" data-answer="wrong">抛异常——运行时不支持配置变更</div>
+  <div class="quiz__opt" data-answer="correct">旧值——IOptions 是启动时快照，不热重载</div>
+  <div class="quiz__feedback" id="quiz1-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz2" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！IOptionsSnapshot 是 Scoped——每个请求重新读。IOptionsMonitor 是 Singleton——通过 CurrentValue 和 OnChange 获取最新值。"
+     data-feedback-wrong="❌ 不对。IOptionsSnapshot 是 Scoped（每个 Scope 构造时读取），IOptionsMonitor 是 Singleton（通过 CurrentValue 实时获取）。">
+  <div class="quiz__q">❓ 一个 Singleton 服务需要感知配置热重载，应该注入哪个接口？</div>
+  <div class="quiz__opt" data-answer="wrong">IOptions&lt;T&gt;——Singleton 就用 Singleton 的 Options</div>
+  <div class="quiz__opt" data-answer="wrong">IOptionsSnapshot&lt;T&gt;——因为 Snapshot 支持热重载</div>
+  <div class="quiz__opt" data-answer="correct">IOptionsMonitor&lt;T&gt;——Singleton 生命周期 + 实时热重载</div>
+  <div class="quiz__opt" data-answer="wrong">IConfiguration——绕过 Options 直接读</div>
+  <div class="quiz__feedback" id="quiz2-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz3" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！ValidateOnStart() 在 Options 首次被解析时立即校验——配置有问题，应用直接启动失败，而非运行到一半炸掉。"
+     data-feedback-wrong="❌ 不对。ValidateOnStart() 会在启动阶段校验配置——如果校验失败，应用就不会启动成功。这是 Fail Fast 设计。">
+  <div class="quiz__q">❓ services.AddOptions&lt;T&gt;().Bind(...).ValidateOnStart() ——配置文件缺了必填字段，应用会怎样？</div>
+  <div class="quiz__opt" data-answer="wrong">正常运行，只是那个字段为 null/default</div>
+  <div class="quiz__opt" data-answer="wrong">运行时第一次访问该字段时抛异常</div>
+  <div class="quiz__opt" data-answer="correct">应用启动失败——抛出 OptionsValidationException</div>
+  <div class="quiz__opt" data-answer="wrong">输出一个警告日志，然后继续启动</div>
+  <div class="quiz__feedback" id="quiz3-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz4" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！IOptionsMonitor 是 Singleton 且支持热重载，还可以注册回调——最适合在 Singleton 的 HostedService 中感知配置变化。"
+     data-feedback-wrong="❌ 不对。IOptionsMonitor 是唯一一个 Singleton + 热重载 + 变更通知的组合。IOptionsSnapshot 是 Scoped（不能安全注入 Singleton），IOptions 不热重载。">
+  <div class="quiz__q">❓ IHostedService（Singleton）需要监听数据库连接串变化并重建连接池，选哪个？</div>
+  <div class="quiz__opt" data-answer="wrong">IOptions&lt;DatabaseOptions&gt;.Value</div>
+  <div class="quiz__opt" data-answer="wrong">IOptionsSnapshot&lt;DatabaseOptions&gt;.Value</div>
+  <div class="quiz__opt" data-answer="correct">IOptionsMonitor&lt;DatabaseOptions&gt;——CurrentValue + OnChange 回调</div>
+  <div class="quiz__opt" data-answer="wrong">IServiceProvider.GetRequiredService + 手动 ReadJson</div>
+  <div class="quiz__feedback" id="quiz4-feedback"></div>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+<h2>关键术语</h2>
+
+<dl>
+  <dt><strong>Options 模式</strong></dt>
+  <dd>将配置映射到强类型 POCO 对象，通过 DI 注入的架构模式。核心 NuGet 包：<code>Microsoft.Extensions.Options</code> 和 <code>Microsoft.Extensions.Options.ConfigurationExtensions</code>。解决了魔法字符串、无类型安全、无法热重载的痛点。</dd>
+  <dt><strong>IOptions&lt;T&gt;</strong></dt>
+  <dd>Singleton 生命周期，<strong>启动时快照</strong>——创建后 JSON 文件变化不会更新 <code>.Value</code>。适合不该在运行时变的配置（JWT 密钥、第三方 SDK 初始化参数），或者你确定配置在部署后不变。</dd>
+  <dt><strong>IOptionsSnapshot&lt;T&gt;</strong></dt>
+  <dd><strong>Scoped</strong> 生命周期，每个 Scope 构造时重新从配置源读取。同一请求内 <code>.Value</code> 不变，下一个请求自动拿到新值。<strong>不能注入 Singleton 服务</strong>——否则变成 Semantic Captive，失去热重载能力。</dd>
+  <dt><strong>IOptionsMonitor&lt;T&gt;</strong></dt>
+  <dd>Singleton 生命周期，但每次访问 <code>.CurrentValue</code> 都反映最新配置。额外提供 <code>.OnChange(callback)</code> 注册变更回调——配置源变化时立即收到通知。适合 Singleton 组件（HostedService、缓存管理器）需要热重载。</dd>
+  <dt><strong>Named Options</strong></dt>
+  <dd>同一 POCO 类型，通过 <code>name</code> 参数注册多份配置。注入时用 <code>.Get("name")</code> 获取指定那份。典型场景：多个数据库连接、多个缓存后端、多个外部 API 端点——都映射到同一个 Options 类，按名称区分。</dd>
+  <dt><strong>ValidateOnStart</strong></dt>
+  <dd><code>.ValidateOnStart()</code> 在 Options 首次被解析时立即运行 Data Annotations 校验（<code>[Required]</code>、<code>[Range]</code>、<code>[RegularExpression]</code>）。校验失败抛 <code>OptionsValidationException</code>——应用启动失败。Fail Fast 哲学：配置问题应该在部署时发现，不是凌晨 3 点。</dd>
+  <dt><strong>IValidateOptions&lt;T&gt;</strong></dt>
+  <dd>自定义校验逻辑接口。实现 <code>Validate(string name, T options)</code> 方法，返回 <code>ValidateOptionsResult.Success</code> 或 <code>.Fail("原因")</code>。可以注入其他服务——实现跨字段校验和外部依赖校验。</dd>
+</dl>
+
+<h2>推荐阅读</h2>
+
+<p>📖 <strong>Options 模式官方文档：</strong><a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/options">Options pattern in .NET</a> — 三个接口的完整 API 参考和示例</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/configuration/options">ASP.NET Core Options</a> — Options 在 Web 场景中的实战（含 OptionsBuilder、PostConfigure、Named Options 深入）</p>
+
+<p>📖 <a href="https://andrewlock.net/validating-configuration-in-asp-net-core/">Validating configuration in ASP.NET Core</a> — Andrew Lock 的 Options Validation 三篇系列（Data Annotations → IValidateOptions → FluentValidation）</p>
+
+<p>📖 <strong>本课速查：</strong> <a href="../reference/configuration-quick-reference.html">配置系统速查</a>（含 Options 注册和热重载速查）</p>
+
+<h2>接下来</h2>
+
+<p>
+  配置模块（第 7–8 课）到此结束。你已经掌握了从 <code>ConfigurationManager</code> 到现代 .NET
+  配置栈的全部知识：多源聚合、分层覆盖、Options 模式、热重载、校验。
+</p>
+
+<p>
+  下一个模块：<strong>Host 模型（Generic Host）</strong>——<code>IHost</code> 是什么？<code>Host.CreateDefaultBuilder()</code>
+  做了什么？它是怎么把配置、DI、日志全部串起来的？<code>IHostedService</code>（后台任务）怎么用？
+  以及一个完整的控制台应用如何获得和 ASP.NET Core 完全相同的 DI/配置/日志基础设施。
+</p>
+
+<div class="callout callout--info">
+💬 <strong>有问题？</strong> 直接问我！比如 "IOptionsMonitor.OnChange 的回调是在哪个线程上执行的？"
+或 "ValidateOnStart 和 IValidateOptions 有什么区别——什么场景该用哪个？"
+或 "我在控制台应用里用了 Host.CreateDefaultBuilder()，但 ValidateOnStart 没生效？"
+</div>
+
+<div class="lesson-nav">
+  <a href="0007-configuration-fundamentals.html">← 上一课：配置系统基础</a>
+  <a href="0009-host-model.html">下一课：Host 模型（待生成）→</a>
+</div>
+
+</body>
+</html>
