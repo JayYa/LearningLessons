@@ -4,57 +4,6 @@
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
-## 河西走廊 第三集 驿站
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [第1课：汉代邮驿制度 — 悬泉置与帝国的信息网络](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0001-han-postal-system.html) | 以悬泉置遗址为切入点，解析汉代邮驿体系的运行机制与帝国治理的信息网络基础 |
-| 2 | [第2课：常惠与苏武 — 19年匈奴囚禁与西域外交](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0002-changhui-and-suwu.html) | 讲述常惠六使西域与苏武十九年匈奴囚禁的故事，展现汉代外交官的坚韧品格与西域经略智慧 |
-| 3 | [第3课：解忧公主 — 和亲乌孙的50年](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0003-princess-jieyou.html) | 讲述解忧公主远嫁乌孙五十年，以和亲维系汉朝与西域联盟的政治智慧与人生传奇 |
-| 4 | [第4课：汉匈西域博弈 — 从军事征服到外交经营](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0004-han-xiongnu-rivalry.html) | 解析汉朝与匈奴在西域的百年博弈，从战场厮杀到外交角力的战略转型与地缘棋局 |
-| 5 | [第5课：屯田戍边 — 赵充国与"兵农合一"的边疆战略](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0005-zhaochongguo-tuntian.html) | 讲述赵充国首创屯田戍边战略，以兵农合一模式巩固汉朝西部边疆的深远影响 |
-| 6 | [第6课：西域都护府 — "汉之号令，班西域矣"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0006-xihu-duhufu.html) | 解析西域都护府的设立与运作，标志着汉朝正式将西域纳入中央管辖的历史转折 |
-| 7 | [第7课：丝绸之路上的驿站 — 帝国的神经网络](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0007-silk-road-stations.html) | 串联丝绸之路沿线驿站体系，揭示信息与物资传递网络如何支撑帝国的远程治理 |
-
-**参考资料：**
-- [冯嫽 — 中国第一位女外交家](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/feng-liao.html) — 中国第一位女外交家冯嫽的生平与西域外交贡献
-- [河西走廊·驿站 — 术语表](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/glossary.html) — 河西走廊邮驿体系与汉代外交核心术语速查
-- [泥靡与刺杀事件 — 解忧公主的第三段婚姻](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/nimi-and-assassination.html) — 泥靡刺杀事件始末，解忧公主第三段婚姻的政治背景
-- [细君公主与《黄鹄歌》](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/princess-xijun.html) — 细君公主和亲乌孙的故事与千古名篇《黄鹄歌》的历史背景
-- [河西走廊大事年表（公元前2世纪–前1世纪）](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/timeline.html) — 公元前2世纪至前1世纪河西走廊与西域重大事件时间线
-- [乌孙大小昆弥分立 — 公元前53年](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/wusun-dual-kunmi.html) — 公元前53年乌孙大小昆弥分立的背景、经过与历史影响
-
-## 河西走廊 第二集 通道
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [第1课：河西走廊地理格局 —— 从乌鞘岭到玉门关](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0001-hexi-corridor-geography.html) | 概览河西走廊的地理格局，从乌鞘岭到玉门关逐段解析这条战略通道的地形与关隘体系 |
-| 2 | [第2课：霍去病与河西之战 —— 公元前121年的闪电战](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0002-huo-qubing-campaigns.html) | 讲述霍去病公元前121年两次河西之战，解析汉军骑兵战术革新与闪电战制胜关键 |
-| 3 | [第3课：张骞与丝绸之路的开启 —— 一个人的"凿空"之旅](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0003-zhang-qian-silk-road.html) | 讲述张骞两次出使西域的凿空之旅，梳理丝绸之路开通的外交脉络与历史意义 |
-| 4 | [第4课：汉长城与河西防御体系 —— 两千年前的"烽火长城"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0004-han-defense-system.html) | 解析汉代河西长城的烽燧布局与防御体系，揭示两千年前的军事工程智慧 |
-| 5 | [第5课：河西生活与东西文化交流 —— 丝绸之路上的日常与传奇](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0005-hexi-life-exchange.html) | 展现河西走廊日常生活中的东西文化交流，从饮食到艺术的丝路融合故事 |
-| 6 | [第6课：旅行串联 —— 从兰州到敦煌，一站一讲](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0006-travel-integration.html) | 沿兰州至敦煌路线串联各课知识点，一站式实地讲解河西走廊的历史地理风貌 |
-
-**参考资料：**
-- [河西走廊历史 · 核心术语表](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/reference/glossary.html) — 河西走廊历史地理核心术语速查
-
-## 河西走廊 第一集 使者
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [第1课：河西走廊 · 地理、族群与时间](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0001-hexi-corridor-panorama.html) | 概览河西走廊的地理格局、族群分布与历史时间轴，为理解张骞出使西域提供时空背景 |
-| 2 | [第2课：匈奴帝国——不只是一个"敌人"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0002-xiongnu-empire.html) | 深入匈奴帝国的政治结构、军事体系与草原文明，重新认识这个被简化为"敌人"的强大政权 |
-| 3 | [第3课：月氏——被追杀者的史诗](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0003-yuezhi-migration.html) | 追踪月氏人被匈奴驱逐后的西迁史诗，从河西走廊到中亚的族群迁徙与文明碰撞 |
-| 4 | [第4课：乌孙——在巨人之间](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0004-wusun.html) | 揭秘乌孙王国如何在匈奴与汉朝两大帝国之间周旋求存，成为西域关键博弈者 |
-| 5 | [第5课：羌——被误解三千年的邻居](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0005-qiang.html) | 重新认识被中原叙事边缘化的羌人族群，梳理三千年演变脉络与华夏文明的互动关系 |
-| 6 | [第6课：大宛——亚历山大最远的回声](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0006-dayuan.html) | 追溯大宛（费尔干纳）的希腊化渊源，探索亚历山大东征在东方遗留的最远文明回响 |
-
-**参考资料：**
-- [参考：河西走廊族群档案](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/ethnic-groups.html) — 河西走廊及西域主要族群的历史档案与关系梳理
-- [参考：术语表](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/glossary.html) — 河西走廊、汉匈关系与西域地理核心术语速查
-- [参考：希腊人为什么停在了中国门口？——两个文明的"擦肩而过"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/greeks-at-chinas-door.html) — 探讨希腊化文明与中华文明擦肩而过的历史因缘，分析亚历山大东征为何止步于中亚
-- [参考：羌族自我认知——从"尔玛"到"羌族"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/qiang-self-identity.html) — 梳理羌族从自称"尔玛"到"羌族"的自我认知演变，揭示族群认同的建构历程
-
 ## Build an Agent
 
 | # | 课程 | 描述 |
@@ -74,19 +23,73 @@
 
 | # | 课程 | 描述 |
 |---|------|------|
-| 1 | [第 1 课：SDK 风格项目系统 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0001-sdk-project-system.html) | 从传统 .csproj 格式到 SDK 风格项目系统的演进，理解 .NET 平台的项目组织与构建基础 |
-| 2 | [第 2 课：运行时架构 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0002-coreclr-runtime-architecture.html) | 深入 CoreCLR 运行时架构，理解 .NET 平台的执行引擎、垃圾回收与 JIT 编译机制 |
-| 3 | [第 3 课：GC 内部机制与内存控制 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0003-gc-internals-memory-control.html) | 深入 .NET GC 内部机制与内存控制策略，掌握代际回收、LOH 管理与性能调优的关键技术 |
-| 4 | [第 4 课：依赖注入基础 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0004-dependency-injection-fundamentals.html) | 系统讲解 .NET 依赖注入容器的注册、解析与生命周期管理，理解 DI 在现代 .NET 应用中的核心角色 |
-| 5 | [第 5 课：DI 进阶：工厂模式与 Keyed Service — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0005-di-advanced-factories-keyed.html) | 深入依赖注入进阶技巧，掌握工厂模式与 Keyed Service 在复杂场景下的灵活应用 |
-| 6 | [第 6 课：超越 MSDI——Scrutor、容器替换与反模式总结 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0006-di-scrutor-container-replacement.html) | 探索 Scrutor 装饰器与程序集扫描、第三方容器替换及 DI 常见反模式，完成依赖注入知识体系闭环 |
+| 1 | [第 1 课：SDK 风格项目系统](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0001-sdk-project-system.html) | 从传统 .csproj 格式到 SDK 风格项目系统的演进，理解 .NET 平台的项目组织与构建基础 |
+| 2 | [第 2 课：运行时架构](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0002-coreclr-runtime-architecture.html) | 深入 CoreCLR 运行时架构，理解 .NET 平台的执行引擎、垃圾回收与 JIT 编译机制 |
+| 3 | [第 3 课：GC 内部机制与内存控制](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0003-gc-internals-memory-control.html) | 深入 .NET GC 内部机制与内存控制策略，掌握代际回收、LOH 管理与性能调优的关键技术 |
+| 4 | [第 4 课：依赖注入基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0004-dependency-injection-fundamentals.html) | 系统讲解 .NET 依赖注入容器的注册、解析与生命周期管理，理解 DI 在现代 .NET 应用中的核心角色 |
+| 5 | [第 5 课：DI 进阶：工厂模式与 Keyed Service](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0005-di-advanced-factories-keyed.html) | 深入依赖注入进阶技巧，掌握工厂模式与 Keyed Service 在复杂场景下的灵活应用 |
+| 6 | [第 6 课：超越 MSDI——Scrutor、容器替换与反模式总结](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0006-di-scrutor-container-replacement.html) | 探索 Scrutor 装饰器与程序集扫描、第三方容器替换及 DI 常见反模式，完成依赖注入知识体系闭环 |
+| 7 | [第 7 课：配置系统基础——多源、分层、热重载](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0007-configuration-fundamentals.html) | 深入 .NET 配置系统的多源加载、分层覆盖与热重载机制，掌握 Options 模式之前的配置基础 |
+| 8 | [第 8 课：Options 模式——强类型、热重载、校验](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0008-configuration-options-pattern.html) | 讲解 Options 模式的强类型绑定、热重载验证与数据校验，完成 .NET 配置体系从基础到进阶的学习闭环 |
 
 **参考资料：**
-- [参考：DI 生命周期与注册速查 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/di-lifetime-reference.html) — 依赖注入三种生命周期（Transient、Scoped、Singleton）的行为差异与选择指南
-- [参考：旧项目迁移到 SDK 风格 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/migrate-to-sdk-style.html) — 传统 .csproj 项目迁移到 SDK 风格的操作指南
-- [参考：NuGet 传递依赖解析规则 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/nuget-dependency-resolution.html) — NuGet 依赖版本选择与冲突解析机制速查
-- [参考：运行时配置速查 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/runtime-configuration.html) — runtimeconfig.json 与 MSBuild 运行时配置选项速查
-- [参考：Span\<T\> / Memory\<T\> 速查 — .NET 平台基础](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/span-memory-patterns.html) — Span\<T\> 与 Memory\<T\> 高性能内存操作模式速查
+- [参考：配置系统速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/configuration-quick-reference.html) — .NET 配置系统常用 API 与配置模式速查
+- [参考：DI 生命周期与注册速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/di-lifetime-reference.html) — 依赖注入三种生命周期（Transient、Scoped、Singleton）的行为差异与选择指南
+- [参考：旧项目迁移到 SDK 风格](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/migrate-to-sdk-style.html) — 传统 .csproj 项目迁移到 SDK 风格的操作指南
+- [参考：NuGet 传递依赖解析规则](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/nuget-dependency-resolution.html) — NuGet 依赖版本选择与冲突解析机制速查
+- [参考：运行时配置速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/runtime-configuration.html) — runtimeconfig.json 与 MSBuild 运行时配置选项速查
+- [参考：Span\<T\> / Memory\<T\> 速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/span-memory-patterns.html) — Span\<T\> 与 Memory\<T\> 高性能内存操作模式速查
+
+## 河西走廊 第一集 使者
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [第1课：河西走廊 · 地理、族群与时间](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0001-hexi-corridor-panorama.html) | 概览河西走廊的地理格局、族群分布与历史时间轴，为理解张骞出使西域提供时空背景 |
+| 2 | [第2课：匈奴帝国——不只是一个"敌人"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0002-xiongnu-empire.html) | 深入匈奴帝国的政治结构、军事体系与草原文明，重新认识这个被简化为"敌人"的强大政权 |
+| 3 | [第3课：月氏——被追杀者的史诗](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0003-yuezhi-migration.html) | 追踪月氏人被匈奴驱逐后的西迁史诗，从河西走廊到中亚的族群迁徙与文明碰撞 |
+| 4 | [第4课：乌孙——在巨人之间](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0004-wusun.html) | 揭秘乌孙王国如何在匈奴与汉朝两大帝国之间周旋求存，成为西域关键博弈者 |
+| 5 | [第5课：羌——被误解三千年的邻居](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0005-qiang.html) | 重新认识被中原叙事边缘化的羌人族群，梳理三千年演变脉络与华夏文明的互动关系 |
+| 6 | [第6课：大宛——亚历山大最远的回声](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0006-dayuan.html) | 追溯大宛（费尔干纳）的希腊化渊源，探索亚历山大东征在东方遗留的最远文明回响 |
+
+**参考资料：**
+- [参考：河西走廊族群档案](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/ethnic-groups.html) — 河西走廊及西域主要族群的历史档案与关系梳理
+- [参考：术语表](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/glossary.html) — 河西走廊、汉匈关系与西域地理核心术语速查
+- [参考：希腊人为什么停在了中国门口？——两个文明的"擦肩而过"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/greeks-at-chinas-door.html) — 探讨希腊化文明与中华文明擦肩而过的历史因缘，分析亚历山大东征为何止步于中亚
+- [参考：羌族自我认知——从"尔玛"到"羌族"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/qiang-self-identity.html) — 梳理羌族从自称"尔玛"到"羌族"的自我认知演变，揭示族群认同的建构历程
+
+## 河西走廊 第二集 通道
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [第1课：河西走廊地理格局 —— 从乌鞘岭到玉门关](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0001-hexi-corridor-geography.html) | 概览河西走廊的地理格局，从乌鞘岭到玉门关逐段解析这条战略通道的地形与关隘体系 |
+| 2 | [第2课：霍去病与河西之战 —— 公元前121年的闪电战](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0002-huo-qubing-campaigns.html) | 讲述霍去病公元前121年两次河西之战，解析汉军骑兵战术革新与闪电战制胜关键 |
+| 3 | [第3课：张骞与丝绸之路的开启 —— 一个人的"凿空"之旅](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0003-zhang-qian-silk-road.html) | 讲述张骞两次出使西域的凿空之旅，梳理丝绸之路开通的外交脉络与历史意义 |
+| 4 | [第4课：汉长城与河西防御体系 —— 两千年前的"烽火长城"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0004-han-defense-system.html) | 解析汉代河西长城的烽燧布局与防御体系，揭示两千年前的军事工程智慧 |
+| 5 | [第5课：河西生活与东西文化交流 —— 丝绸之路上的日常与传奇](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0005-hexi-life-exchange.html) | 展现河西走廊日常生活中的东西文化交流，从饮食到艺术的丝路融合故事 |
+| 6 | [第6课：旅行串联 —— 从兰州到敦煌，一站一讲](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0006-travel-integration.html) | 沿兰州至敦煌路线串联各课知识点，一站式实地讲解河西走廊的历史地理风貌 |
+
+**参考资料：**
+- [河西走廊历史 · 核心术语表](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/reference/glossary.html) — 河西走廊历史地理核心术语速查
+
+## 河西走廊 第三集 驿站
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [第1课：汉代邮驿制度 — 悬泉置与帝国的信息网络](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0001-han-postal-system.html) | 以悬泉置遗址为切入点，解析汉代邮驿体系的运行机制与帝国治理的信息网络基础 |
+| 2 | [第2课：常惠与苏武 — 19年匈奴囚禁与西域外交](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0002-changhui-and-suwu.html) | 讲述常惠六使西域与苏武十九年匈奴囚禁的故事，展现汉代外交官的坚韧品格与西域经略智慧 |
+| 3 | [第3课：解忧公主 — 和亲乌孙的50年](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0003-princess-jieyou.html) | 讲述解忧公主远嫁乌孙五十年，以和亲维系汉朝与西域联盟的政治智慧与人生传奇 |
+| 4 | [第4课：汉匈西域博弈 — 从军事征服到外交经营](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0004-han-xiongnu-rivalry.html) | 解析汉朝与匈奴在西域的百年博弈，从战场厮杀到外交角力的战略转型与地缘棋局 |
+| 5 | [第5课：屯田戍边 — 赵充国与"兵农合一"的边疆战略](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0005-zhaochongguo-tuntian.html) | 讲述赵充国首创屯田戍边战略，以兵农合一模式巩固汉朝西部边疆的深远影响 |
+| 6 | [第6课：西域都护府 — "汉之号令，班西域矣"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0006-xihu-duhufu.html) | 解析西域都护府的设立与运作，标志着汉朝正式将西域纳入中央管辖的历史转折 |
+| 7 | [第7课：丝绸之路上的驿站 — 帝国的神经网络](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0007-silk-road-stations.html) | 串联丝绸之路沿线驿站体系，揭示信息与物资传递网络如何支撑帝国的远程治理 |
+
+**参考资料：**
+- [冯嫽 — 中国第一位女外交家](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/feng-liao.html) — 中国第一位女外交家冯嫽的生平与西域外交贡献
+- [河西走廊·驿站 — 术语表](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/glossary.html) — 河西走廊邮驿体系与汉代外交核心术语速查
+- [泥靡与刺杀事件 — 解忧公主的第三段婚姻](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/nimi-and-assassination.html) — 泥靡刺杀事件始末，解忧公主第三段婚姻的政治背景
+- [细君公主与《黄鹄歌》](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/princess-xijun.html) — 细君公主和亲乌孙的故事与千古名篇《黄鹄歌》的历史背景
+- [河西走廊大事年表（公元前2世纪–前1世纪）](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/timeline.html) — 公元前2世纪至前1世纪河西走廊与西域重大事件时间线
+- [乌孙大小昆弥分立 — 公元前53年](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/wusun-dual-kunmi.html) — 公元前53年乌孙大小昆弥分立的背景、经过与历史影响
 
 ## Morden .NET
 
