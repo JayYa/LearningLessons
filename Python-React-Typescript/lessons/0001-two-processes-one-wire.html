@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 1 课 · 两个进程，一根线</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/widgets.css">
+<script src="../assets/widgets.js" defer></script>
+</head>
+<body>
+<main class="page">
+
+<p class="eyebrow">Lesson 0001 · 约 50 分钟</p>
+<h1>两个进程，一根线</h1>
+<p class="subtitle">把 React + TypeScript 前端和 Python 后端同时跑起来，让它们说上第一句话 —— 并撞一次墙。</p>
+
+<div class="block win">
+  <span class="label">本课的收获</span>
+  <p>课程结束时你会有：两个正在运行的终端窗口、一个浏览器页面显示着来自 Python 的字符串、以及一次亲手撞上并解决 CORS 的经历。更重要的是，你能回答面试里那个几乎必问的开场题：<em>“讲讲你这个项目的架构。”</em></p>
+</div>
+
+<h2>一、先建立心智模型：为什么是两个进程</h2>
+
+<p>这是你作为 C# 开发者进入这个技术栈时，<strong>第一个需要重装的直觉</strong>。</p>
+
+<div class="block csharp">
+  <span class="label">你熟悉的世界</span>
+  <p>在 ASP.NET Core MVC / Razor Pages 里，<code>dotnet run</code> 启动<strong>一个</strong>进程。这个进程既产出 HTML（服务端渲染 Razor 视图），又处理 <code>/api/*</code> 的数据请求，还托管 <code>wwwroot</code> 里的静态文件。一个进程、一个端口、一个 origin。</p>
+</div>
+
+<p>在 React + Python 的组合里，开发时是<strong>两个</strong>独立进程，互相完全不知道对方的存在：</p>
+
+<table>
+  <thead>
+    <tr><th>进程</th><th>启动命令</th><th>默认端口</th><th>它的唯一职责</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>前端</strong><br>Vite dev server</td>
+      <td><code>npm run dev</code></td>
+      <td><code>5173</code></td>
+      <td>把 <code>.tsx</code> 编译成浏览器能跑的 JS，通过 HTTP 交付给浏览器，并在你保存文件时热更新。<strong>它不碰你的业务数据。</strong></td>
+    </tr>
+    <tr>
+      <td><strong>后端</strong><br>FastAPI / Uvicorn</td>
+      <td><code>fastapi dev main.py</code></td>
+      <td><code>8000</code></td>
+      <td>接收 HTTP 请求，返回 JSON。<strong>它不知道 React 的存在</strong>，对它来说调用方是浏览器、curl 还是手机 App 没有区别。</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>连接两者的“一根线”，是浏览器里 React 代码发出的一次 <code>fetch()</code> 调用 —— 一个从 <code>localhost:5173</code> 页面发往 <code>localhost:8000</code> 的普通 HTTP 请求。<strong>整套架构的耦合点只有这一处：HTTP 上的 JSON 契约。</strong></p>
+
+<div class="block trap">
+  <span class="label">类比失效处 · 面试考点</span>
+  <p>不要说“Vite 是我的 Web 服务器”。Vite dev server 只在<strong>开发时</strong>存在。上线时你执行 <code>npm run build</code>，得到一堆静态 <code>.html/.js/.css</code> 文件，Vite 进程就消失了 —— 那些文件由 Nginx、CDN 或后端框架托管。这条“开发时两进程、生产时前端退化为静态文件”的认知，能立刻把你和只跟过教程的人区分开。<a href="https://vite.dev/guide/build.html">Vite 构建文档</a></p>
+</div>
+
+<h2>二、动手：从零到联通</h2>
+
+<p>逐条做，勾掉。进度会存在浏览器里，中断了也不丢。全部命令在 PowerShell 中执行。</p>
+
+<ol class="checklist" data-checklist="0001">
+
+<li>
+<span class="step-title">建立项目骨架</span>
+<pre><code>cd d:\teach\Python-React-Typescript
+mkdir playground\backend
+cd playground</code></pre>
+<p>我们把练手代码放在 <code>playground/</code>，和课程文档分开。</p>
+</li>
+
+<li>
+<span class="step-title">后端：建立虚拟环境</span>
+<pre><code>cd backend
+python -m venv .venv
+.venv\Scripts\Activate.ps1</code></pre>
+<p>提示符前面出现 <code>(.venv)</code> 就对了。<code>.venv</code> 是这个项目<strong>独占</strong>的 Python 与依赖副本。</p>
+<div class="block csharp">
+  <span class="label">对照</span>
+  <p>C# 没有真正的对应物 —— NuGet 包默认装在全局缓存里，由 <code>.csproj</code> 决定引用哪些。Python 的 <code>pip</code> 默认装到<strong>全局</strong>，两个项目要求不同版本的同一个库就会打架。<code>venv</code> 就是为了解决这个而存在的：把依赖关在项目目录里。<a href="https://docs.python.org/3/library/venv.html">venv 官方文档</a></p>
+</div>
+</li>
+
+<li>
+<span class="step-title">安装 FastAPI 并写下 10 行后端</span>
+<pre><code>pip install "fastapi[standard]"</code></pre>
+<p>装完后，在 <code>backend\main.py</code> 写入：</p>
+<pre><code>from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/api/hello")
+def hello() -> dict[str, str]:
+    return {"message": "Hello from Python"}</code></pre>
+<p>注意 <code>@app.get(...)</code> —— 这是 Python 的 <strong>decorator</strong>，作用上非常接近 C# 的 <code>[HttpGet("/api/hello")]</code> attribute。（机制上差别很大，那是后面某一课的内容。）</p>
+</li>
+
+<li>
+<span class="step-title">跑起来，然后去看白送的 Swagger</span>
+<pre><code>fastapi dev main.py</code></pre>
+<p>浏览器打开 <a href="http://127.0.0.1:8000/api/hello">http://127.0.0.1:8000/api/hello</a> 看到 JSON，再打开 <a href="http://127.0.0.1:8000/docs">http://127.0.0.1:8000/docs</a>。</p>
+<div class="block csharp">
+  <span class="label">停下来想三十秒</span>
+  <p>那份 Swagger UI 你一行配置都没写。FastAPI 是从你写的<strong>类型注解</strong>（<code>-&gt; dict[str, str]</code>）反推出 OpenAPI schema 的。这正是 FastAPI 对 C# 开发者最亲切的地方 —— 和 ASP.NET Core 用 Minimal API + Swashbuckle 的思路一致。<a href="https://fastapi.tiangolo.com/features/">FastAPI 特性说明</a></p>
+</div>
+<p><strong>让这个终端保持运行。</strong> 开一个新终端做下一步。</p>
+</li>
+
+<li>
+<span class="step-title">前端：脚手架 + 启动</span>
+<pre><code>cd d:\teach\Python-React-Typescript\playground
+npm create vite@latest frontend -- --template react-ts
+cd frontend
+npm install
+npm run dev</code></pre>
+<p>打开 <a href="http://localhost:5173">http://localhost:5173</a>，应该看到 Vite + React 的默认页面。</p>
+<p><code>--template react-ts</code> 中的 <code>ts</code> 是关键：它生成的是 <code>.tsx</code> 文件并配好 <code>tsconfig.json</code>。<a href="https://vite.dev/guide/">Vite 指南</a></p>
+</li>
+
+<li>
+<span class="step-title">拉起那根线（这一步会失败，这是设计好的）</span>
+<p>把 <code>frontend\src\App.tsx</code> 的<strong>全部</strong>内容替换为：</p>
+<pre><code>import { useEffect, useState } from "react";
+
+export default function App() {
+  const [message, setMessage] = useState("加载中…");
+
+  useEffect(() =&gt; {
+    fetch("http://127.0.0.1:8000/api/hello")
+      .then((res) =&gt; res.json())
+      .then((data) =&gt; setMessage(data.message))
+      .catch((err) =&gt; setMessage("失败：" + err.message));
+  }, []);
+
+  return &lt;h1&gt;{message}&lt;/h1&gt;;
+}</code></pre>
+<p>保存。页面会自动刷新（这就是 HMR）。<strong>按 F12 打开浏览器控制台。</strong></p>
+<p>你会看到一条红色报错，关键词是 <code>CORS policy</code> 与 <code>No 'Access-Control-Allow-Origin' header</code>。</p>
+<p><em>先别修。</em> 请读完下面第三节，再回来做最后一步。</p>
+</li>
+
+<li>
+<span class="step-title">修好它</span>
+<p>在 <code>backend\main.py</code> 中，<code>app = FastAPI()</code> 那一行之后插入：</p>
+<pre><code>from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)</code></pre>
+<p>后端会自动重载（<code>fastapi dev</code> 带热重载）。刷新前端页面 —— 应该显示 <strong>Hello from Python</strong>。</p>
+<div class="block win">
+  <span class="label">你做到了</span>
+  <p>屏幕上那行字，是 Python 生成的、经 HTTP 传输、由 TypeScript 接收、被 React 渲染出来的。这就是整套技术栈的完整回路。</p>
+</div>
+</li>
+
+</ol>
+
+<h2>三、你撞的那堵墙：CORS</h2>
+
+<p>这是新手最常见的第一个坑，也因此是<strong>高频面试题</strong>。三句话讲清：</p>
+
+<ol>
+  <li><strong>Origin（源）= 协议 + 域名 + 端口</strong>。<code>http://localhost:5173</code> 和 <code>http://127.0.0.1:8000</code> 端口不同（域名其实也不同），所以是两个不同的源。</li>
+  <li><strong>浏览器</strong>默认禁止页面读取跨源响应，这叫同源策略。它防的是：你登录了银行网站，然后打开一个恶意页面，该页面用你的 cookie 偷偷调银行 API 并读取结果。</li>
+  <li><strong>CORS 是服务端的放行声明</strong>。后端在响应里加上 <code>Access-Control-Allow-Origin: http://localhost:5173</code>，等于告诉浏览器“这个源可以读我”。<code>CORSMiddleware</code> 干的就是加这个响应头。</li>
+</ol>
+
+<div class="block trap">
+  <span class="label">最容易答错的细节</span>
+  <p>请求<strong>确实发出去了，后端也确实执行了</strong>。是浏览器在收到响应后，检查响应头，发现没有放行声明，于是拒绝把内容交给你的 JS 代码。所以 CORS <strong>不是安全防护</strong> —— curl、Postman、任何非浏览器客户端都不受它约束。这也是为什么你在写 C# 后端时很少遇到它：MVC 页面和 API 同源，压根不跨。<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS">MDN: CORS</a></p>
+</div>
+
+<h2>四、检验一下</h2>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 1 / 3</p>
+  <p class="quiz-q">开发时同时跑着 Vite（5173）与 FastAPI（8000）。两者的分工是？</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>前者交付前端资源，后者只负责数据接口</button></li>
+    <li><button>前者只负责数据接口，后者交付前端资源</button></li>
+    <li><button>两者都交付前端资源，互为负载均衡备份</button></li>
+    <li><button>前者负责编译类型，后者运行时校验类型</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>Vite dev server 只做一件事：把源码编译好交给浏览器，并在文件变动时热更新。它对你的业务数据一无所知。FastAPI 只做一件事：收 HTTP 请求、返 JSON。两者唯一的联系是浏览器发出的那次 <code>fetch</code>。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 2 / 3</p>
+  <p class="quiz-q">前端报 CORS 错误时，实际发生了什么？</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>浏览器依据响应头做的拦截，服务端已执行</button></li>
+    <li><button>服务端依据请求头做的拦截，请求未被执行</button></li>
+    <li><button>网络防火墙依据端口做的拦截，请求未发出</button></li>
+    <li><button>操作系统依据来源做的拦截，响应已被丢弃</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>后端的函数已经跑完并返回了响应。是浏览器在最后一步检查 <code>Access-Control-Allow-Origin</code> 响应头，发现没有放行，才拒绝把结果交给 JS。<strong>推论：</strong>如果你用 curl 请求同一个地址，会成功 —— 这是一个很好的排错手段，也是面试时能顺口说出的加分细节。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 3 / 3</p>
+  <p class="quiz-q">Python 项目里的 <code>.venv</code> 目录，本质上是什么？</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>项目独占的依赖安装目录，用来避免全局污染</button></li>
+    <li><button>项目的编译产物输出目录，相当于中间产物区</button></li>
+    <li><button>项目的源码版本控制目录，用来记录变更历史</button></li>
+    <li><button>项目的运行时配置目录，用来保存环境变量取值</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p><code>pip</code> 默认把包装到全局解释器里，于是两个项目要求同一个库的不同版本时会冲突。<code>venv</code> 创建一份独立的解释器与 <code>site-packages</code>，<code>Activate.ps1</code> 只是把它插到 <code>PATH</code> 最前面。<code>.venv</code> 永远不进 Git —— 它对应的是 <code>node_modules</code>，不是 <code>packages.config</code>。</p>
+  </div>
+</div>
+
+<div class="widget recall">
+  <p class="widget-kind">回忆练习 · 不要跳过</p>
+  <p class="recall-prompt">合上这一页，<strong>出声</strong>回答：开发的时候，为什么不干脆把 React 编译好的文件直接丢进 FastAPI 的静态目录，一个进程搞定？</p>
+  <button class="recall-btn">先出声回答，再点开</button>
+  <div class="recall-answer" hidden>
+    <p>因为会失去 <strong>HMR（热模块替换）</strong>：Vite dev server 会在你保存 <code>.tsx</code> 的瞬间把变更推给浏览器，页面局部更新且保留当前 state。走“编译到静态目录”的路子，每改一行都要重新完整构建。</p>
+    <p><strong>关键补充：</strong>到了<em>生产环境</em>，“一个进程搞定”恰恰是常见做法之一 —— <code>npm run build</code> 产出静态文件，交给 Nginx / CDN，或者确实塞进后端托管。开发与生产的部署形态不同，这本身就是一个值得在面试中主动讲出来的点。</p>
+  </div>
+</div>
+
+<h2>五、面试回答模板</h2>
+
+<div class="block interview">
+  <span class="label">如果面试官问：“讲讲你那个项目的架构”</span>
+  <p>“前后端分离。前端是 React + TypeScript，用 Vite 做构建工具；后端是 Python 的 FastAPI，只提供 JSON API。开发时是两个进程：Vite dev server 跑在 5173 提供前端资源和热更新，FastAPI 跑在 8000 提供接口，两者之间就是 HTTP 上的 JSON 契约。因为跨源，后端要配 CORS 放行前端的 origin。上线时前端 build 成静态文件由 Nginx 或 CDN 托管，Vite 进程本身不进生产环境。”</p>
+  <p style="margin-top:0.7rem;font-size:0.86rem;">这段话之所以可信，是因为其中每一句你都亲手验证过。<strong>把 <code>playground/</code> 留着</strong> —— 后续每一课都在它上面加东西，最后它就是你能在面试中描述的那个项目。</p>
+</div>
+
+<h2>六、去读原始资料</h2>
+
+<p><strong>本课首选阅读：</strong><a href="https://fastapi.tiangolo.com/tutorial/first-steps/">FastAPI 官方教程 · First Steps</a>（约 10 分钟）。它把你刚才那 10 行代码逐行拆开讲，包括 <code>@app.get</code> 到底做了什么、为什么叫 <code>path operation</code>。</p>
+
+<p>注意：官方文档现在默认用 <code>uv</code> 管理环境，所以命令写作 <code>uv run fastapi dev</code>。我们用的是 <code>venv + pip</code>，在激活虚拟环境后直接执行 <code>fastapi dev</code> 即可，其余内容完全一致。选 <code>venv</code> 是因为面试里被问到的几乎总是它。</p>
+
+<div class="footer">
+  <h2>相关文档</h2>
+  <ul>
+    <li><a href="../reference/glossary.html">术语表</a> —— 本课引入：origin、CORS、dev server、HMR、venv、decorator、transpile</li>
+    <li><a href="../reference/csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> —— 本课引入：工具链一栏</li>
+    <li><a href="../RESOURCES.md">RESOURCES.md</a> —— 全部可信资料来源</li>
+    <li><a href="../MISSION.md">MISSION.md</a> —— 我们为什么在学这个</li>
+  </ul>
+
+  <h2>下一课</h2>
+  <p><strong>第 2 课：TypeScript 不是 C#</strong> —— 结构化类型与类型擦除。这是整个课程里对你来说<em>最反直觉、也最容易被面试官问到</em>的一节。微软官方专门为 C#/Java 开发者写了一章讲这个差异，我们会以它为主干。</p>
+
+  <div class="ask">
+    <strong>我是你的老师，随时提问。</strong> 哪一步报错了、哪句话没听懂、哪个类比你觉得不对劲 —— 直接把终端输出或问题贴给我。特别欢迎这类问题：“为什么 <code>useEffect</code> 后面那个 <code>[]</code> 是必须的？”“<code>export default</code> 和 C# 的 <code>public class</code> 是一回事吗？”本课我<em>刻意</em>没有解释 React 的部分（<code>useState</code> / <code>useEffect</code> / JSX），那是后面几课的内容 —— 但如果你现在就想知道，问就是了。
+  </div>
+</div>
+
+</main>
+</body>
+</html>

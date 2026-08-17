@@ -1,0 +1,202 @@
+/* Shared stylesheet for all BeiGene interview-prep lessons & references.
+   Tufte-inspired: generous margins, readable measure, sidenotes, print-friendly. */
+
+:root {
+  --ink: #1a1a1a;
+  --ink-soft: #555;
+  --rule: #d8d4cc;
+  --paper: #fffdf9;
+  --accent: #8a1c1c;
+  --accent-soft: #f6ece9;
+  --good: #1c6b3c;
+  --good-soft: #eaf4ee;
+  --bad: #9c2222;
+  --bad-soft: #faeceb;
+  --code-bg: #f4f1ea;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Songti SC", "Noto Serif CJK SC", Georgia, serif;
+  --mono: "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: 17px; }
+
+body {
+  margin: 0 auto;
+  padding: 4rem 2rem 8rem;
+  max-width: 46rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Masthead ---------- */
+.masthead {
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 1rem;
+  margin-bottom: 2.5rem;
+}
+.kicker {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 0.5rem;
+}
+h1 { font-size: 2.1rem; line-height: 1.15; margin: 0 0 0.6rem; font-weight: 600; }
+.standfirst { font-size: 1.06rem; color: var(--ink-soft); font-style: italic; margin: 0; }
+
+h2 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 3rem 0 0.8rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--rule);
+}
+h3 { font-size: 1.08rem; font-weight: 600; margin: 2rem 0 0.5rem; }
+
+p { margin: 0 0 1.1rem; }
+a { color: var(--accent); text-underline-offset: 2px; }
+
+/* ---------- Code ---------- */
+code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+pre {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  background: var(--code-bg);
+  border-left: 3px solid var(--rule);
+  padding: 0.9rem 1.1rem;
+  overflow-x: auto;
+  margin: 0 0 1.2rem;
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+.cm { color: #6b7d6b; }   /* comment */
+.kw { color: #8a1c1c; }   /* keyword */
+.st { color: #1c5f6b; }   /* string  */
+
+/* ---------- Callouts ---------- */
+.callout {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 0.9rem 1.2rem;
+  margin: 0 0 1.4rem;
+  font-size: 0.95rem;
+}
+.callout > :last-child { margin-bottom: 0; }
+.callout .label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.4rem;
+}
+.callout.ext { border-left-color: var(--good); background: var(--good-soft); }
+.callout.ext .label { color: var(--good); }
+
+/* 面试话术 block — the thing the user says out loud */
+.script {
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--ink);
+  background: #fff;
+  padding: 1.1rem 1.3rem;
+  margin: 0 0 1.5rem;
+}
+.script .label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 0.5rem;
+}
+.script p { font-size: 0.97rem; }
+.script q { quotes: "「" "」"; font-style: normal; }
+
+/* ---------- Table of contents ---------- */
+.toc {
+  border: 1px solid var(--rule);
+  background: #fff;
+  padding: 1rem 1.3rem;
+  margin: 0 0 2.5rem;
+  font-size: 0.9rem;
+}
+.toc .label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 0.6rem;
+}
+.toc ol { margin: 0; padding-left: 1.4rem; }
+.toc li { margin-bottom: 0.25rem; }
+.toc a { text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+.toc .depth { color: var(--ink-soft); font-size: 0.85em; }
+
+/* Anchored headings get a subtle section number in the margin */
+h2[id] { scroll-margin-top: 1rem; }
+
+/* ---------- Tables ---------- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin: 0 0 1.4rem;
+}
+th, td {
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+th {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  border-bottom: 1.5px solid var(--ink);
+}
+tbody tr:nth-child(even) { background: rgba(0,0,0,0.018); }
+
+/* ---------- Footer / nav ---------- */
+.footer {
+  margin-top: 4rem;
+  padding-top: 1.2rem;
+  border-top: 2px solid var(--ink);
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+.footer h2 { border: none; margin-top: 0; font-size: 1.1rem; }
+.nav-links { display: flex; gap: 1.5rem; flex-wrap: wrap; font-family: var(--mono); font-size: 0.8rem; }
+
+.ask {
+  background: #fff;
+  border: 1px dashed var(--rule);
+  padding: 0.9rem 1.2rem;
+  font-size: 0.92rem;
+  margin: 2rem 0 0;
+}
+
+/* ---------- Print ---------- */
+@media print {
+  body { padding: 0; max-width: none; background: #fff; font-size: 11pt; }
+  .quiz, .ask, .nav-links { display: none; }
+  pre, table, .script, .callout { break-inside: avoid; }
+  a { color: var(--ink); text-decoration: none; }
+}

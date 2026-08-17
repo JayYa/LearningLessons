@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference · 索引与 SQL 优化速查表</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<style>
+  /* Reference docs are denser than lessons — tighten for printing on one or two sheets. */
+  body { max-width: 52rem; padding-top: 2.5rem; }
+  h2 { margin-top: 2rem; font-size: 1.15rem; }
+  h3 { margin-top: 1.2rem; font-size: 1rem; }
+  table { font-size: 0.84rem; }
+  pre  { font-size: 0.76rem; margin-bottom: 0.9rem; }
+  p, li { font-size: 0.94rem; }
+  .two-col { column-count: 2; column-gap: 2.2rem; }
+  .two-col > * { break-inside: avoid; }
+  @media (max-width: 40rem) { .two-col { column-count: 1; } }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Reference · 数据库</p>
+  <h1>索引与 SQL 优化 · 速查表</h1>
+  <p class="standfirst">面试前 10 分钟扫一遍。配套 <a href="../lessons/0001-composite-index-leftmost-prefix.html">Lesson 01</a>。</p>
+</header>
+
+<h2>1. 最左前缀 · 一句话规则</h2>
+<div class="callout">
+  <p>联合索引 <code>(a, b, c)</code> = 按 (a, b, c) <strong>多级排序的有序表</strong>。<br>
+  能用来<strong>定位</strong>的部分 = <b>从最左列开始连续的等值条件</b> ＋ <b>其后第一个范围条件</b>。范围条件<strong>之后的列只能过滤，不能定位</strong>。</p>
+</div>
+
+<table>
+  <thead><tr><th>索引 (a,b,c) 上的查询</th><th>用于定位的列</th><th>结论</th></tr></thead>
+  <tbody>
+    <tr><td><code>a=1</code></td><td>a</td><td>✅ 有效</td></tr>
+    <tr><td><code>a=1 AND b=2</code></td><td>a, b</td><td>✅ 有效</td></tr>
+    <tr><td><code>a=1 AND b=2 AND c=3</code></td><td>a, b, c</td><td>✅ 最佳</td></tr>
+    <tr><td><code>a=1 AND c=3</code></td><td>a</td><td>⚠️ 部分：c 退化为过滤</td></tr>
+    <tr><td><code>a=1 AND b&gt;2 AND c=3</code></td><td>a, b</td><td>⚠️ 部分：范围截断，c 只过滤</td></tr>
+    <tr><td><code>b=2 AND c=3</code></td><td>—</td><td>❌ 跳过最左列（PG18+ 可能 skip scan）</td></tr>
+    <tr><td><code>a=1 ORDER BY b</code></td><td>a（并复用 b 的有序性）</td><td>✅ 且免 Sort</td></tr>
+  </tbody>
+</table>
+
+<h3>列顺序黄金法则</h3>
+<p><strong>等值列 → 范围列 → 排序列</strong>；等值列内部按<strong>区分度从高到低</strong>。<br>
+范围列与排序列冲突时，通常把<strong>排序列前置</strong>（免掉 Sort 节点往往比多过滤几行更划算），但要以 <code>EXPLAIN ANALYZE</code> 实测为准。</p>
+
+<h2>2. 索引失效 · 三类归因</h2>
+
+<div class="two-col">
+<h3>A · 违反最左前缀</h3>
+<ul>
+  <li>跳过最左列</li>
+  <li>中间列缺失（右侧列退化为过滤）</li>
+  <li>范围条件之后的列</li>
+  <li><code>OR</code> 连接的条件中有列无索引 → 整体退化</li>
+</ul>
+
+<h3>B · 索引列被加工</h3>
+<ul>
+  <li>函数包裹：<code>lower(col)=…</code></li>
+  <li>类型转换：<code>col::date=…</code>、字符串列传数字</li>
+  <li>列参与运算：<code>price*2&gt;100</code></li>
+  <li>前导通配符：<code>LIKE '%x'</code></li>
+  <li><code>!=</code> / <code>NOT IN</code>（通常命中面过大）</li>
+  <li>排序规则/collation 不匹配（PG 的 <code>LIKE 'x%'</code> 需 <code>text_pattern_ops</code>）</li>
+</ul>
+
+<h3>C · 优化器主动放弃</h3>
+<ul>
+  <li>命中行占比过高（经验 &gt;5–20%）</li>
+  <li>区分度太低（status、gender）</li>
+  <li>统计信息过期 → <code>ANALYZE tbl;</code></li>
+  <li>表太小，全表扫只需一两个 page</li>
+</ul>
+</div>
+
+<h3>修复手法</h3>
+<pre><code><span class="cm">-- 让列「裸奔」：把加工挪到常量侧</span>
+<span class="cm">-- ❌</span> WHERE created_at::date = '2026-05-01'
+<span class="cm">-- ✅</span> WHERE created_at &gt;= '2026-05-01' AND created_at &lt; '2026-05-02'
+
+<span class="cm">-- 表达式索引（写入变慢，读取变快）</span>
+CREATE INDEX ix_lower_email ON users (lower(email));
+
+<span class="cm">-- LIKE 'x%' 在非 C collation 下需要 pattern ops</span>
+CREATE INDEX ix_title_pat ON study (title text_pattern_ops);
+
+<span class="cm">-- 覆盖索引，免回表 → Index Only Scan</span>
+CREATE INDEX ix_cover ON study (owner_id, status) INCLUDE (title, created_at);
+
+<span class="cm">-- 部分索引：只索引真正被查的子集，体积小得多</span>
+CREATE INDEX ix_active ON study (owner_id) WHERE status = 'ACTIVE';</code></pre>
+
+<h2>3. ORM 层的索引杀手（C# / SqlSugar）</h2>
+<table>
+  <thead><tr><th>C# 写法</th><th>生成的 SQL</th><th>修复</th></tr></thead>
+  <tbody>
+    <tr><td><code>it.CreatedAt.Date == d</code></td><td><code>CAST(created_at AS date)=…</code></td><td>半开区间 <code>&gt;= d &amp;&amp; &lt; d.AddDays(1)</code></td></tr>
+    <tr><td><code>it.Title.Contains(k)</code></td><td><code>LIKE '%k%'</code></td><td><code>StartsWith</code>；真需要全文检索用 tsvector+GIN 或 pg_trgm</td></tr>
+    <tr><td><code>ToPageList(500, 20)</code></td><td><code>LIMIT 20 OFFSET 10000</code></td><td>keyset：<code>WHERE id &lt; @lastId ORDER BY id DESC LIMIT 20</code></td></tr>
+    <tr><td>返回完整实体</td><td><code>SELECT *</code></td><td><code>.Select(…)</code> 投影 + 覆盖索引 → Index Only Scan</td></tr>
+    <tr><td><code>long</code> 参数打到 <code>int</code> 列</td><td>列侧隐式 cast</td><td>对齐实体属性与列的类型</td></tr>
+  </tbody>
+</table>
+<pre><code><span class="cm">// 开发环境务必打开：看 ORM 到底生成了什么 SQL</span>
+db.Aop.OnLogExecuting = (sql, pars) =&gt; _logger.LogDebug("SQL: {Sql}", sql);</code></pre>
+
+<h2>4. 索引的代价（"什么时候该建索引"必答）</h2>
+<ul>
+  <li><strong>写放大</strong>：每个索引一棵 B-tree，INSERT 要多写一次 + WAL</li>
+  <li><strong>阻断 HOT 更新</strong>：给高频更新的列加索引 → 关掉 Heap-Only Tuple 优化，写性能可能断崖</li>
+  <li><strong>膨胀 bloat</strong>：频繁增删改 → <code>REINDEX INDEX CONCURRENTLY</code></li>
+  <li><strong>挤占 shared_buffers</strong>；<strong>增大优化器计划枚举空间</strong></li>
+  <li>生产建索引必须 <code>CREATE INDEX CONCURRENTLY</code>：不锁写，但扫两遍表、<b>不能在事务块里跑</b>、失败留下 INVALID 索引 → 事后查 <code>SELECT * FROM pg_index WHERE NOT indisvalid;</code></li>
+  <li>清理无用索引：<code>SELECT * FROM pg_stat_user_indexes WHERE idx_scan = 0;</code></li>
+</ul>
+
+<h2>5. EXPLAIN 读法（Postgres）</h2>
+<pre><code>EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) SELECT …;</code></pre>
+<table>
+  <thead><tr><th>看什么</th><th>健康</th><th>危险信号</th></tr></thead>
+  <tbody>
+    <tr><td>扫描节点</td><td>Index Scan / Index Only Scan</td><td>大表上的 Seq Scan</td></tr>
+    <tr><td><code>rows=</code> 估算 vs <code>actual rows=</code></td><td>同数量级</td><td>差 10 倍以上 → 统计信息过期，<code>ANALYZE</code></td></tr>
+    <tr><td>Sort 节点</td><td>不存在（索引已有序）</td><td>出现 <code>external merge Disk: …kB</code> → 排序溢出到磁盘</td></tr>
+    <tr><td>Join 方式</td><td>Hash / Merge Join</td><td>大表间 Nested Loop</td></tr>
+    <tr><td>BUFFERS</td><td>shared hit 占比高</td><td>shared read 大 → 缓存未命中，I/O 瓶颈</td></tr>
+    <tr><td>Filter 行数</td><td><code>Rows Removed by Filter</code> 小</td><td>该数字很大 → 索引选择性不足，考虑加列</td></tr>
+  </tbody>
+</table>
+
+<h2>6. SQL 优化的排查顺序（面试可直接背诵这个流程）</h2>
+<ol>
+  <li><strong>定位</strong>：<code>pg_stat_statements</code> 按 total_exec_time 排序，找到真正的大头（而不是凭感觉猜）</li>
+  <li><strong>解释</strong>：对候选 SQL 跑 <code>EXPLAIN (ANALYZE, BUFFERS)</code></li>
+  <li><strong>判因</strong>：不能用索引（A/B 类）还是不想用（C 类）</li>
+  <li><strong>改写</strong>：让列裸奔、消除 <code>SELECT *</code>、把 <code>OR</code> 改 <code>UNION ALL</code>、深分页用 keyset（<code>WHERE id &lt; ? ORDER BY id DESC LIMIT 20</code>）替代 <code>OFFSET</code></li>
+  <li><strong>加索引</strong>：按等值→范围→排序拼列；生产环境务必 <code>CREATE INDEX CONCURRENTLY</code>（不锁写）</li>
+  <li><strong>再往上</strong>：仍不够就上缓存 / 物化视图 / 读写分离 / 分区表</li>
+  <li><strong>验证</strong>：改完再跑一次 EXPLAIN，用数字说话</li>
+</ol>
+
+<h2>7. JOIN 方向速记</h2>
+<table>
+  <thead><tr><th>写法</th><th>"主表"（结果集行数下限）</th><th>记忆</th></tr></thead>
+  <tbody>
+    <tr><td><code>A LEFT JOIN B</code></td><td><strong>A</strong>（左边，写在 JOIN 前）</td><td>A 全保留，B 无匹配则补 NULL</td></tr>
+    <tr><td><code>A RIGHT JOIN B</code></td><td><strong>B</strong>（右边，写在 JOIN 后）</td><td>B 全保留，A 无匹配则补 NULL</td></tr>
+    <tr><td><code>A INNER JOIN B</code></td><td>无主表</td><td>只留两边都匹配的</td></tr>
+    <tr><td><code>A FULL JOIN B</code></td><td>两边都是</td><td>两边都保留</td></tr>
+  </tbody>
+</table>
+<div class="callout">
+  <p><strong>"right join 主表在哪边？"</strong> → <q>右边，也就是 JOIN 关键字后面那张表被完整保留。</q> 补一句加分：<q>实践中我们团队统一只用 LEFT JOIN，把驱动表写在前面，可读性好、也不容易在多表串联时把保留侧搞错——RIGHT JOIN 都可以等价改写成 LEFT JOIN。</q><br>
+  <strong>陷阱：</strong>把过滤条件写进 <code>ON</code> 还是 <code>WHERE</code> 结果完全不同。<code>LEFT JOIN B ON … AND B.x=1</code> 保留 A 全部行；写成 <code>WHERE B.x=1</code> 会把补 NULL 的行过滤掉，LEFT JOIN 退化成 INNER JOIN。</p>
+</div>
+
+<h2>8. 索引类型选型（Postgres）</h2>
+<table>
+  <thead><tr><th>类型</th><th>适用</th><th>典型场景</th></tr></thead>
+  <tbody>
+    <tr><td>B-tree</td><td><code>= &lt; &gt; BETWEEN ORDER BY</code></td><td>默认选择，90% 情况</td></tr>
+    <tr><td>Hash</td><td>仅 <code>=</code></td><td>极少用，B-tree 已够</td></tr>
+    <tr><td>GIN</td><td>多值列内部元素</td><td>JSONB 属性查询、全文检索、数组</td></tr>
+    <tr><td>GiST</td><td>几何、范围、相似度</td><td>地理位置、时间区间重叠检测</td></tr>
+    <tr><td>BRIN</td><td>物理顺序与值高度相关的巨表</td><td>按时间追加写入的日志/时序表，索引体积极小</td></tr>
+  </tbody>
+</table>
+
+<footer class="footer">
+  <p><strong>来源：</strong>
+  <a href="https://www.postgresql.org/docs/current/indexes-multicolumn.html">Multicolumn Indexes</a> ·
+  <a href="https://www.postgresql.org/docs/current/indexes-expressional.html">Indexes on Expressions</a> ·
+  <a href="https://www.postgresql.org/docs/current/indexes-types.html">Index Types</a> ·
+  <a href="https://www.postgresql.org/docs/current/using-explain.html">Using EXPLAIN</a></p>
+  <div class="nav-links">
+    <a href="../lessons/0001-composite-index-leftmost-prefix.html">← Lesson 01</a>
+    <a href="../MISSION.md">Mission</a>
+  </div>
+</footer>
+
+</body>
+</html>

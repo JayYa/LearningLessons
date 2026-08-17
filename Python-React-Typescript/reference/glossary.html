@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>参考 · 术语表</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/widgets.css">
+</head>
+<body>
+<main class="page">
+
+<p class="eyebrow">Reference · 持续增补</p>
+<h1>术语表</h1>
+<p class="subtitle">本课程的权威用词。英文原文是面试中要说出口的形式，务必记英文。</p>
+
+<div class="block interview">
+  <span class="label">使用方式</span>
+  <p>每学完一课回来扫一遍新增条目，能说出「一句话定义 + 一个 C# 参照物」即算掌握。术语说错比不会更致命 —— 面试官会由此判断你是真做过还是背过。</p>
+</div>
+
+<h2>架构与网络</h2>
+
+<table>
+  <thead><tr><th style="width:11rem">术语</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Origin</strong><br>源</td>
+      <td><strong>协议 + 域名 + 端口</strong> 三者构成的元组。三者全同才算同源。<code>http://localhost:5173</code> 与 <code>http://localhost:8000</code> 不同源；<code>localhost</code> 与 <code>127.0.0.1</code> 也不同源。</td>
+    </tr>
+    <tr>
+      <td><strong>CORS</strong><br>跨源资源共享</td>
+      <td>Cross-Origin Resource Sharing。服务端通过 <code>Access-Control-Allow-Origin</code> 等<strong>响应头</strong>，声明允许哪些源读取自己的响应。拦截动作发生在<strong>浏览器</strong>，服务端代码已执行完毕。非浏览器客户端（curl / Postman / 移动端）不受约束。<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS">MDN</a></td>
+    </tr>
+    <tr>
+      <td><strong>Preflight</strong><br>预检请求</td>
+      <td>对于非简单请求（如带自定义头、<code>PUT</code>/<code>DELETE</code>），浏览器会先自动发一个 <code>OPTIONS</code> 请求问服务端“我能发吗”。这就是为什么 <code>CORSMiddleware</code> 里要配 <code>allow_methods</code> 和 <code>allow_headers</code>。</td>
+    </tr>
+    <tr>
+      <td><strong>SPA</strong><br>单页应用</td>
+      <td>Single-Page Application。服务端只返回一个近乎空白的 HTML 外壳，之后由 JS 接管全部渲染与路由。与 Razor Pages / MVC 的服务端渲染相对。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>工具链</h2>
+
+<table>
+  <thead><tr><th style="width:11rem">术语</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Dev server</strong><br>开发服务器</td>
+      <td>仅在开发期存在的进程（此处为 Vite），负责实时编译源码并交付给浏览器。<strong>不进生产环境。</strong></td>
+    </tr>
+    <tr>
+      <td><strong>HMR</strong><br>热模块替换</td>
+      <td>Hot Module Replacement。保存文件后，只把变更的模块推给浏览器并原地替换，页面不整体刷新、当前 state 得以保留。这是 dev server 存在的核心理由。</td>
+    </tr>
+    <tr>
+      <td><strong>Transpile</strong><br>转译</td>
+      <td>把一种高级语言编译成另一种<strong>同层级</strong>的高级语言（TS → JS），而非编译成机器码或 IL。TS 编译器的产物仍然是人类可读的 JS。</td>
+    </tr>
+    <tr>
+      <td><strong>Bundle</strong><br>打包</td>
+      <td>把成百上千个源文件与依赖合并、压缩成少数几个 <code>.js</code> 文件，减少浏览器的请求数。<code>npm run build</code> 做的就是这件事。</td>
+    </tr>
+    <tr>
+      <td><strong>venv</strong><br>虚拟环境</td>
+      <td>Python 的项目级依赖隔离机制。<code>python -m venv .venv</code> 创建一份独立的解释器与 <code>site-packages</code>；<code>Activate.ps1</code> 把它插到 <code>PATH</code> 最前面。<code>.venv</code> 不进版本库。</td>
+    </tr>
+    <tr>
+      <td><strong>node_modules</strong></td>
+      <td>npm 安装依赖的落地目录，位于项目内。不进版本库，由 <code>package.json</code> + <code>package-lock.json</code> 重建。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Python</h2>
+
+<table>
+  <thead><tr><th style="width:11rem">术语</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Decorator</strong><br>装饰器</td>
+      <td><code>@something</code> 语法。<strong>它是一个函数</strong>，接收被装饰的函数、返回一个新函数。<code>@app.get("/x")</code> 的作用是把下面的函数注册进路由表。语法位置像 C# 的 attribute，机制却完全不同 —— attribute 是编译期元数据，装饰器是运行时的函数调用。</td>
+    </tr>
+    <tr>
+      <td><strong>Type hint</strong><br>类型注解</td>
+      <td><code>def f(x: int) -&gt; str:</code> 中的注解。Python 运行时<strong>不会</strong>据此做任何检查 —— 它纯粹是给工具看的元数据。FastAPI 和 Pydantic 的做法是在运行时主动读取这些注解并据此生成校验逻辑，这正是它们「看起来像静态类型语言」的原因。</td>
+    </tr>
+    <tr>
+      <td><strong>ASGI</strong></td>
+      <td>Asynchronous Server Gateway Interface。Python 异步 Web 应用与服务器之间的标准接口。FastAPI 是 ASGI <em>应用</em>，Uvicorn 是 ASGI <em>服务器</em>，二者靠这个约定对接 —— 类比 ASP.NET Core 应用与 Kestrel 的关系。</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="footer">
+  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a></p>
+  <div class="ask"><strong>有词条不清楚？</strong> 问我，我会把解释补进这份文档 —— 它会跟着课程一起长大。</div>
+</div>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 01 · 联合索引、最左前缀与索引失效（精讲）</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 01 · 数据库 · BeiGene 面试备战 · 精讲版</p>
+  <h1>联合索引、最左前缀，与索引失效</h1>
+  <p class="standfirst">题库里有 6 道题指向同一块知识。学完这一课，你能当场判断一条 SQL 会不会走索引、索引该怎么建、以及为什么 ORM 会悄悄把它废掉。</p>
+</header>
+
+<p>本课直接打掉题库第四节这几问：<em>联合索引怎么建、最左前缀原则、什么时候该建索引、索引失效有哪些情形、如何优化 SQL、right join 主表在哪边</em>。</p>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>内容偏长，但结构是"一个模型 + 从它推出的所有结论"。<strong>第 1、2 节是地基，必须真正读懂</strong>；后面各节都是它的推论，读起来会很快。中间的测验请一定动手做——看懂和答对之间的差距，就是面试当天答上和答不上的差距。</p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">为什么索引是 B-tree</a> <span class="depth">— 一切结论的地基</span></li>
+    <li><a href="#s2">联合索引 = 多级排序</a> <span class="depth">— 最左前缀的真正来源</span></li>
+    <li><a href="#s3">列顺序的黄金法则</a> <span class="depth">— 建索引的方法论</span></li>
+    <li><a href="#s4">回表与覆盖索引</a> <span class="depth">— Index Only Scan</span></li>
+    <li><a href="#s5">索引失效清单</a> <span class="depth">— 三类归因</span></li>
+    <li><a href="#s6">C# / SqlSugar 里的索引杀手</a> <span class="depth">— 本岗位强相关</span></li>
+    <li><a href="#s7">索引的代价</a> <span class="depth">— 写放大与膨胀</span></li>
+    <li><a href="#s8">统计信息与优化器</a> <span class="depth">— 深度炸弹</span></li>
+    <li><a href="#s9">检验一下</a> <span class="depth">— 8 题</span></li>
+    <li><a href="#s10">面试话术</a> <span class="depth">— 可直接说出口</span></li>
+    <li><a href="#s11">动手实验</a> <span class="depth">— 25 分钟</span></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、为什么索引是 B-tree</h2>
+
+<p>大部分人跳过这一节，直接背最左前缀，结果一被追问"为什么范围条件之后就断了"就哑了。<strong>所有结论都源自 B-tree 的一个性质：有序。</strong></p>
+
+<h3>先问：为什么不是二叉搜索树？</h3>
+
+<p>因为数据库不是在内存里找数据，是在<strong>磁盘</strong>上找。磁盘 I/O 的最小单位是「页」（Postgres 默认 8KB）。读 1 个字节和读 8KB 的代价几乎一样——瓶颈是寻址次数，不是数据量。</p>
+
+<p>于是设计目标变成：<strong>用最少的页读取次数定位一行</strong>。</p>
+
+<ul>
+  <li><strong>二叉树</strong>：每个节点 2 个分支，1000 万行需要约 <code>log₂(10⁷) ≈ 24</code> 层 → 最坏 24 次磁盘 I/O。</li>
+  <li><strong>B-tree</strong>：一个 8KB 页里能塞几百个键（这个数量叫<strong>扇出 fan-out</strong>）。假设扇出 = 300，1000 万行只需 <code>log₃₀₀(10⁷) ≈ 3</code> 层 → <strong>3 次 I/O</strong>。</li>
+</ul>
+
+<pre><code>            [ 根页：一个 8KB 页，装几百个分隔键 ]
+           /              |                \
+    [中间页]          [中间页]           [中间页]        ← 第 2 层
+    /    |   \        /   |   \          /   |   \
+  [叶] [叶] [叶]   [叶] [叶] [叶]     [叶] [叶] [叶]     ← 第 3 层（叶子）
+   └──── 叶子层通过双向链表首尾相连，天然支持范围扫描 ────┘</code></pre>
+
+<p>三个关键性质，后面每一节都会用到：</p>
+
+<table>
+  <thead><tr><th>性质</th><th>带来的能力</th></tr></thead>
+  <tbody>
+    <tr><td>树高极低（通常 3–4 层）</td><td>等值查找 ≈ 3 次 I/O，且行数增长时几乎不变（对数增长）</td></tr>
+    <tr><td>叶子节点<strong>有序</strong>且用链表相连</td><td>范围查询 <code>BETWEEN</code>、<code>&gt;</code> 只需定位起点后顺着链表走；<code>ORDER BY</code> 可直接复用这个顺序，<strong>免排序</strong></td></tr>
+    <tr><td>键在页内也是有序的</td><td>页内二分查找</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="label">对比：为什么默认不用 Hash 索引</span>
+  <p>Hash 索引等值查找是 O(1)，理论上比 B-tree 快。但它<strong>完全没有顺序</strong>——不能做范围查询、不能免排序、不能支持最左前缀、不能做 <code>ORDER BY</code>。B-tree 用一点点等值性能换来了全部这些能力，所以是所有主流数据库的默认索引。<a href="https://www.postgresql.org/docs/current/indexes-types.html">（PG Index Types）</a></p>
+  <p style="margin-top:0.6rem"><strong>面试可以这么答：</strong><q>索引选 B-tree 不是因为它查得最快，而是因为它<strong>有序</strong>。有序带来范围查询、免排序、最左前缀这三个能力，Hash 一个都给不了。</q></p>
+</div>
+
+<h2 id="s2">二、联合索引 = 多级排序</h2>
+
+<p>忘掉"索引是一本书的目录"这个比喻，它解释不了最左前缀。用这个：</p>
+
+<div class="callout">
+  <span class="label">核心模型（本课唯一需要背的东西）</span>
+  <p>建在 <code>(a, b, c)</code> 上的联合索引，就是一张<strong>按 (a, b, c) 做多级排序的有序表</strong>——先按 a 排，a 相同的按 b 排，b 也相同的按 c 排。<br>就像电话簿按 (省, 市, 姓名) 排序。</p>
+</div>
+
+<p>假设索引建在 <code>study</code> 表的 <code>(status, owner_id, created_at)</code> 上，它在叶子层大致长这样：</p>
+
+<pre><code>status      owner_id   created_at     → 行指针(ctid)
+------------------------------------------------------
+ACTIVE      1001       2024-01-03     → (0,12)
+ACTIVE      1001       2024-05-12     → (3,4)
+ACTIVE      1007       2024-02-08     → (7,1)
+ACTIVE      1007       2024-09-30     → (2,9)
+CLOSED      1001       2024-03-15     → (5,6)
+CLOSED      1002       2024-07-21     → (1,3)
+DRAFT       1007       2024-11-02     → (9,8)</code></pre>
+
+<p>现在所有结论都能<strong>推导</strong>出来，不需要背：</p>
+
+<ul>
+  <li><code>WHERE status='ACTIVE'</code> → 这些行在索引里是<strong>连续的一段</strong>，二分定位段首，顺着链表读。✅</li>
+  <li><code>WHERE status='ACTIVE' AND owner_id=1007</code> → 在上面那一段里，owner_id 依然有序，继续二分收窄。✅</li>
+  <li><code>WHERE owner_id=1007</code>（跳过 status）→ owner_id=1007 的行<strong>散落在 ACTIVE 段、CLOSED 段、DRAFT 段各处</strong>，圈不出连续区间。❌ <strong>这就是最左前缀。</strong></li>
+</ul>
+
+<p>Postgres 官方文档把规则写得很精确：</p>
+
+<div class="callout">
+  <span class="label">PostgreSQL Docs · 11.3 Multicolumn Indexes</span>
+  <p><q>Equality constraints on leading columns, plus any inequality constraints on the first column that does not have an equality constraint, will always be used to limit the portion of the index that is scanned.</q><br>
+  —— <a href="https://www.postgresql.org/docs/current/indexes-multicolumn.html">postgresql.org/docs/current/indexes-multicolumn.html</a></p>
+</div>
+
+<p>拆开这句话，是<strong>两条</strong>规则，不是一条。多数候选人只说得出第一条：</p>
+
+<table>
+  <thead><tr><th>规则</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr><td>① 连续等值</td><td>从最左列开始、<strong>连续不断</strong>的等值条件，都用来缩小索引扫描范围。</td></tr>
+    <tr><td>② 一次范围</td><td>紧跟其后的<strong>第一个</strong>非等值条件（<code>&gt;</code> <code>&lt;</code> <code>BETWEEN</code> <code>LIKE 'x%'</code>）也能用，但<strong>到此为止</strong>——它右边的列不再能限定扫描范围。</td></tr>
+  </tbody>
+</table>
+
+<h3>为什么范围条件会"截断"？——用模型推一遍</h3>
+
+<p>索引 <code>(a, b, c)</code>，查询 <code>WHERE a=1 AND b&gt;5 AND c=9</code>：</p>
+
+<pre><code>a   b   c
+------------
+1   3   9     ← a=1 但 b 不满足
+1   6   2     ┐
+1   6   9     │  b>5 圈出的区间：注意 c 列是 2,9,1,4,9…
+1   7   1     │  在这个区间内部 c 已经不是有序的了！
+1   9   4     │
+1   9   9     ┘</code></pre>
+
+<p>看 c 那一列：<code>2, 9, 1, 4, 9</code>——<strong>无序</strong>。因为 c 只在「a 和 b 都相同」的小组内部才有序，而 <code>b&gt;5</code> 跨越了多个 b 值，把这些小组拼在了一起。无序 → 无法二分 → 只能逐行检查。</p>
+
+<p>所以 <code>c=9</code> 的角色从「定位」降级为「过滤」。在 Postgres 的 <code>EXPLAIN</code> 里，这个区别看得见：</p>
+
+<pre><code>Index Scan using ix1 on study
+  Index Cond: ((a = 1) AND (b &gt; 5))     ← 定位：决定扫多少行
+  Filter: (c = 9)                        ← 过滤：扫完再逐行判断
+  Rows Removed by Filter: 48213          ← 这个数字大 = 索引设计有问题</code></pre>
+
+<div class="callout ext">
+  <span class="label">这是一个极强的面试信号</span>
+  <p>能说出 <q>看 <code>EXPLAIN</code> 里条件落在 <b>Index Cond</b> 还是 <b>Filter</b>，就知道这一列有没有真正参与索引定位</q>，比背十条失效规则更能证明你实际调过 SQL。</p>
+</div>
+
+<h2 id="s3">三、列顺序的黄金法则</h2>
+
+<div class="callout">
+  <span class="label">法则</span>
+  <p><strong>等值列 → 范围列 → 排序列</strong>。等值列内部，<strong>区分度高的放前面</strong>。</p>
+</div>
+
+<pre><code><span class="cm">-- 目标查询：某负责人名下、近三个月的活跃 study，按创建时间倒序取前 20</span>
+<span class="kw">SELECT</span> id, title, created_at <span class="kw">FROM</span> study
+<span class="kw">WHERE</span> owner_id = 1007             <span class="cm">-- 等值，区分度高（5000 个负责人）</span>
+  <span class="kw">AND</span> status = <span class="st">'ACTIVE'</span>          <span class="cm">-- 等值，区分度低（3 种状态）</span>
+  <span class="kw">AND</span> created_at &gt;= <span class="st">'2026-05-01'</span> <span class="cm">-- 范围</span>
+<span class="kw">ORDER BY</span> created_at <span class="kw">DESC</span> <span class="kw">LIMIT</span> 20;
+
+<span class="cm">-- 索引：等值在前（高区分度优先），范围在后</span>
+<span class="kw">CREATE INDEX</span> ix_study_owner_status_created
+  <span class="kw">ON</span> study (owner_id, status, created_at <span class="kw">DESC</span>);</code></pre>
+
+<p>这个索引一次干掉三件事：定位 <code>owner_id</code>、收窄 <code>status</code>、并且因为最后一列有序，<code>ORDER BY created_at DESC LIMIT 20</code> 可以<strong>直接取索引前 20 条就停</strong>——执行计划里昂贵的 <code>Sort</code> 节点消失了。</p>
+
+<h3>区分度：别凭感觉，去查</h3>
+
+<p>Postgres 把每列的统计信息暴露在 <code>pg_stats</code> 视图里，<code>n_distinct</code> 就是区分度指标：</p>
+
+<pre><code><span class="kw">SELECT</span> attname, n_distinct, most_common_vals
+<span class="kw">FROM</span> pg_stats <span class="kw">WHERE</span> tablename = <span class="st">'study'</span>;
+
+<span class="cm">-- n_distinct 为正数  → 就是不同值的个数（如 5000）</span>
+<span class="cm">-- n_distinct 为负数  → 是占总行数的比例（-1 表示每行都唯一，如主键）</span></code></pre>
+
+<p><strong>选择性（selectivity）= 1 / n_distinct</strong>，即一个等值条件平均能筛掉多少。<code>owner_id</code> 有 5000 个值 → 选择性 1/5000，极好；<code>status</code> 只有 3 个值 → 选择性 1/3，很差，单独建索引几乎没意义。</p>
+
+<h3>陷阱一：排序方向必须匹配</h3>
+
+<p>索引的有序性是<strong>有方向</strong>的。<code>ORDER BY a ASC, b DESC</code> 这种混合排序，普通索引 <code>(a, b)</code> 用不上——顺读得到 <code>a↑ b↑</code>，倒读得到 <code>a↓ b↓</code>，都不是你要的。Postgres 支持在索引里指定方向：</p>
+
+<pre><code><span class="kw">CREATE INDEX</span> ix_mixed <span class="kw">ON</span> orders (x <span class="kw">ASC</span>, y <span class="kw">DESC</span>);</code></pre>
+
+<p>同理还有 NULL 的位置：<code>NULLS FIRST</code> 是 <code>DESC</code> 的默认，<code>NULLS LAST</code> 是 <code>ASC</code> 的默认。如果查询写了 <code>ORDER BY x DESC NULLS LAST</code> 而索引是默认的，就免不了排序。<a href="https://www.postgresql.org/docs/current/sql-createindex.html">（CREATE INDEX 文档）</a></p>
+
+<h3>陷阱二：别建冗余索引</h3>
+
+<p>索引 <code>(a, b, c)</code> <strong>已经隐含了</strong> <code>(a)</code> 和 <code>(a, b)</code> 的全部能力——因为最左前缀。所以：</p>
+
+<pre><code><span class="cm">-- ❌ 三个索引，其中两个纯属浪费（占空间 + 拖慢写入）</span>
+<span class="kw">CREATE INDEX</span> ix1 <span class="kw">ON</span> t (a);
+<span class="kw">CREATE INDEX</span> ix2 <span class="kw">ON</span> t (a, b);
+<span class="kw">CREATE INDEX</span> ix3 <span class="kw">ON</span> t (a, b, c);   <span class="cm">-- 只留这一个就够</span>
+
+<span class="cm">-- 但注意：(a,b) 和 (b,a) 不能互相替代，它们是两个不同的排序</span></code></pre>
+
+<p>查冗余索引（面试里提到这个查询会显得你真的运维过）：</p>
+<pre><code><span class="cm">-- 从来没被用过的索引</span>
+<span class="kw">SELECT</span> relname, indexrelname, idx_scan
+<span class="kw">FROM</span> pg_stat_user_indexes <span class="kw">WHERE</span> idx_scan = 0;</code></pre>
+
+<h3>部分索引：Postgres 的一张好牌</h3>
+
+<p>如果业务只查某个子集，就只索引那个子集。索引体积可以小一两个数量级：</p>
+
+<pre><code><span class="cm">-- 100 万工单里只有 2000 单是待处理的，而 99% 的查询只查待处理</span>
+<span class="kw">CREATE INDEX</span> ix_pending <span class="kw">ON</span> work_order (created_at)
+  <span class="kw">WHERE</span> status = <span class="st">'PENDING'</span>;
+
+<span class="cm">-- 还能用来实现「子集唯一」这种普通唯一约束做不到的事</span>
+<span class="kw">CREATE UNIQUE INDEX</span> ux_one_active_claim <span class="kw">ON</span> claim (order_id)
+  <span class="kw">WHERE</span> released_at <span class="kw">IS NULL</span>;   <span class="cm">-- 同一工单同时只能有一个未释放的认领</span></code></pre>
+
+<p>第二个例子先记着——<strong>抢单场景设计题</strong>会用到它，用一个部分唯一索引就能在数据库层杜绝重复抢单。</p>
+
+<h2 id="s4">四、回表与覆盖索引</h2>
+
+<p>索引里只有索引列和行指针。如果 <code>SELECT</code> 要的列不在索引里，数据库必须拿着指针<strong>再去表里捞一次完整行</strong>——这就是「回表」。</p>
+
+<h3>Postgres 与 MySQL 在这里根本不同</h3>
+
+<table>
+  <thead><tr><th></th><th>PostgreSQL（堆表）</th><th>MySQL / InnoDB（聚簇索引）</th></tr></thead>
+  <tbody>
+    <tr><td>表数据存放</td><td>无序堆（heap），插入哪有空放哪</td><td>按主键排序的 B-tree，<strong>数据就在主键索引的叶子里</strong></td></tr>
+    <tr><td>二级索引叶子存什么</td><td><code>ctid</code>（页号,行号）物理位置</td><td><strong>主键值</strong></td></tr>
+    <tr><td>回表代价</td><td>按 ctid 直接访问对应页，一次 I/O</td><td>拿主键再走一遍主键 B-tree，多几次 I/O</td></tr>
+    <tr><td>主键设计影响</td><td>较小</td><td>主键越大，所有二级索引都跟着变大；主键无序（如 UUIDv4）会导致页分裂</td></tr>
+  </tbody>
+</table>
+
+<p>能讲清这张表，面试官基本能确定你不是只背过八股。</p>
+
+<h3>覆盖索引：干脆不回表</h3>
+
+<p>如果查询需要的列<strong>全部</strong>在索引里，就不用回表，执行计划显示为 <code>Index Only Scan</code>。Postgres 提供 <code>INCLUDE</code> 语法，把"只是想顺路带上"的列挂到索引上：</p>
+
+<pre><code><span class="kw">CREATE INDEX</span> ix_cover <span class="kw">ON</span> study (owner_id, status)
+  <span class="kw">INCLUDE</span> (title, created_at);</code></pre>
+
+<p><code>INCLUDE</code> 的列有明确边界，说得出这些限制是加分项<a href="https://www.postgresql.org/docs/current/sql-createindex.html">（官方文档）</a>：</p>
+<ul>
+  <li><strong>不参与检索</strong>：不能出现在 <code>WHERE</code> 的索引定位里，也不影响最左前缀</li>
+  <li><strong>不参与排序</strong>：不能用来免 <code>ORDER BY</code></li>
+  <li>只有 B-tree / GiST / SP-GiST 支持；不能是表达式</li>
+  <li>会增大索引体积，并且<strong>禁用 B-tree 去重（deduplication）</strong></li>
+</ul>
+
+<div class="callout ext">
+  <span class="label">深挖 · Postgres 的 Index Only Scan 有个前提</span>
+  <p>因为 Postgres 的 MVCC 把行版本可见性信息存在<strong>表</strong>里而不是索引里，所以走 Index Only Scan 时它还要查<strong>可见性图（visibility map）</strong>确认那一页是否"全部可见"。如果表最近改动多、<code>VACUUM</code> 没跟上，可见性图不干净，它<strong>仍然要回表</strong>——执行计划里会显示 <code>Heap Fetches: 很大的数字</code>。</p>
+  <p>所以在 Postgres 上，「覆盖索引建了但没提速」的经典原因是 autovacuum 没跟上。这句话说出来，是真实生产经验的味道。</p>
+</div>
+
+<h2 id="s5">五、索引失效清单 · 三类归因</h2>
+
+<p>被问"索引失效有哪些情形"时，<strong>不要零散罗列</strong>。先给三类框架，再往里填例子，回答立刻显得有体系：</p>
+
+<h3>A 类 · 违反最左前缀（索引结构决定的"不能用"）</h3>
+<pre><code><span class="cm">-- 索引 (a, b, c)</span>
+<span class="kw">WHERE</span> b = 1 <span class="kw">AND</span> c = 2          <span class="cm">-- ❌ 跳过最左列 a</span>
+<span class="kw">WHERE</span> a = 1 <span class="kw">AND</span> c = 2          <span class="cm">-- ⚠️ 只有 a 定位，c 退化为 Filter</span>
+<span class="kw">WHERE</span> a &gt; 1 <span class="kw">AND</span> b = 2          <span class="cm">-- ⚠️ a 之后截断，b 退化为 Filter</span>
+<span class="kw">WHERE</span> a = 1 <span class="kw">OR</span> d = 2           <span class="cm">-- ❌ OR 的另一侧无索引，整体退化为全表扫</span></code></pre>
+
+<p><code>OR</code> 值得单独说：<code>OR</code> 要求"任一条件成立"，只要有一侧无法用索引，就必须扫全表才能保证不漏。修复是拆成 <code>UNION ALL</code>（注意去重语义），或给 <code>d</code> 也建索引让优化器走 BitmapOr。</p>
+
+<h3>B 类 · 索引列被"加工"（值对不上了）</h3>
+
+<p>索引里存的是<strong>列的原始值</strong>。一旦对列套函数、做运算、做隐式类型转换，你要找的东西就不在索引里了。</p>
+
+<pre><code><span class="kw">WHERE</span> lower(email) = <span class="st">'a@b.com'</span>          <span class="cm">-- ❌ 函数包裹了列</span>
+<span class="kw">WHERE</span> created_at::date = <span class="st">'2026-05-01'</span>   <span class="cm">-- ❌ 类型转换</span>
+<span class="kw">WHERE</span> price * 2 &gt; 100                     <span class="cm">-- ❌ 列参与运算</span>
+<span class="kw">WHERE</span> title <span class="kw">LIKE</span> <span class="st">'%report'</span>                <span class="cm">-- ❌ 前导通配符，定位不到起点</span></code></pre>
+
+<p>Postgres 官方对第一种给了明确解释：普通索引存的是原值，查询要的是函数结果，两者对不上，只能全表逐行计算<a href="https://www.postgresql.org/docs/current/indexes-expressional.html">（Indexes on Expressions）</a>。两种修复思路：</p>
+
+<pre><code><span class="cm">-- ✅ 思路一（首选）：让列「裸奔」，把加工挪到常量侧</span>
+<span class="kw">WHERE</span> created_at &gt;= <span class="st">'2026-05-01'</span> <span class="kw">AND</span> created_at &lt; <span class="st">'2026-05-02'</span>
+<span class="kw">WHERE</span> price &gt; 50
+
+<span class="cm">-- ✅ 思路二：建表达式索引，让索引里就存加工后的值</span>
+<span class="kw">CREATE INDEX</span> ix_user_lower_email <span class="kw">ON</span> users (lower(email));</code></pre>
+
+<p>表达式索引的代价要主动说出来：<strong>写入变慢</strong>——每次 <code>INSERT</code> 和非 HOT 的 <code>UPDATE</code> 都要重新计算一次表达式。官方原话：<q>Index expressions are relatively expensive to maintain</q>，适用于"读远多于写"的场景。</p>
+
+<h3>C 类 · 优化器主动放弃（"不想用"）</h3>
+
+<p>这一类最容易被忽略，也最能体现深度。<strong>索引扫描不一定比全表扫快。</strong></p>
+
+<p>索引扫描是<strong>随机 I/O</strong>（按索引顺序跳着访问表页），全表扫是<strong>顺序 I/O</strong>（磁盘预读友好）。当预计命中行数占比较高时（经验值 5%–20% 以上），随机 I/O 的总代价反而超过顺序扫全表，优化器会<strong>故意</strong>选 Seq Scan。</p>
+
+<ul>
+  <li><code>WHERE status = 'ACTIVE'</code>，而 ACTIVE 占 60% → 用索引纯属自找麻烦</li>
+  <li>表很小（几百行，一两个页）→ 全表扫本来就只要一次 I/O</li>
+  <li><strong>统计信息过期</strong> → 优化器估错行数 → 选错计划。修复：<code>ANALYZE study;</code></li>
+</ul>
+
+<div class="callout">
+  <span class="label">这句话顶十个例子</span>
+  <p><q>索引没走，先分清是<strong>不能用</strong>还是<strong>不想用</strong>。看 <code>EXPLAIN (ANALYZE, BUFFERS)</code> 里估算 <code>rows</code> 和 <code>actual rows</code> 差多少：差一两个数量级说明统计信息过期，<code>ANALYZE</code> 一下；如果估得准，那就是优化器算过成本认为全表扫更划算——这时候该改的是查询或表设计，不是硬加 hint。</q></p>
+</div>
+
+<h2 id="s6">六、C# / SqlSugar 里的索引杀手</h2>
+
+<p>这一节是本课和这个岗位结合最紧的部分。<strong>实际工作中，绝大多数索引失效不是人手写 SQL 写错的，是 ORM 悄悄翻译出来的。</strong>面试时能举出 ORM 层的具体例子，比只讲 SQL 理论有说服力得多。</p>
+
+<h3>杀手 1：<code>.Date</code> / <code>.Year</code> —— 类型转换</h3>
+
+<pre><code><span class="cm">// ❌ 会被翻译成对列做 cast / date_trunc → 索引失效</span>
+<span class="kw">var</span> list = db.Queryable&lt;Study&gt;()
+    .Where(it =&gt; it.CreatedAt.Date == queryDate)
+    .ToList();
+<span class="cm">// 生成： WHERE CAST(created_at AS date) = '2026-05-01'</span>
+
+<span class="cm">// ✅ 改成半开区间，列保持「裸奔」</span>
+<span class="kw">var</span> start = queryDate.Date;
+<span class="kw">var</span> end   = start.AddDays(1);
+<span class="kw">var</span> list = db.Queryable&lt;Study&gt;()
+    .Where(it =&gt; it.CreatedAt &gt;= start &amp;&amp; it.CreatedAt &lt; end)
+    .ToList();
+<span class="cm">// 生成： WHERE created_at &gt;= @s AND created_at &lt; @e   ← 走索引</span></code></pre>
+
+<div class="callout">
+  <span class="label">顺带一个正确性问题</span>
+  <p>用 <code>&gt;= start AND &lt; end</code> 这种<strong>半开区间</strong>，而不是 <code>BETWEEN start AND end</code>。<code>BETWEEN</code> 两端都闭，对 <code>timestamp</code> 会把 <code>23:59:59.999999</code> 之后、次日零点整的记录算进来，或者漏掉当天最后一毫秒——取决于精度。半开区间没有这个边界问题。</p>
+</div>
+
+<h3>杀手 2：<code>Contains</code> —— 前导通配符</h3>
+
+<pre><code><span class="cm">// ❌ 翻译成 LIKE '%report%'，B-tree 定位不到起点</span>
+.Where(it =&gt; it.Title.Contains(keyword))
+
+<span class="cm">// ✅ 前缀匹配可以走索引</span>
+.Where(it =&gt; it.Title.StartsWith(keyword))   <span class="cm">// LIKE 'report%'</span></code></pre>
+
+<p>但 Postgres 上还有一个坑：在非 <code>C</code> collation 的数据库里，即使是 <code>LIKE 'x%'</code> 也用不了普通索引，需要专门的操作符类：</p>
+
+<pre><code><span class="kw">CREATE INDEX</span> ix_title_pat <span class="kw">ON</span> study (title text_pattern_ops);</code></pre>
+
+<p>真要做<strong>任意位置</strong>的关键词搜索，正确答案不是 <code>LIKE '%x%'</code>，是全文检索（<code>tsvector</code> + GIN 索引）或 <code>pg_trgm</code> 三元组索引。<strong>这个回答会让面试官眼前一亮</strong>，因为它说明你知道"这个需求根本不该用 B-tree 解"。</p>
+
+<h3>杀手 3：<code>Skip(n).Take(m)</code> —— 深分页</h3>
+
+<pre><code><span class="cm">// ❌ 第 500 页：OFFSET 10000</span>
+db.Queryable&lt;Study&gt;().OrderBy(it =&gt; it.Id, OrderByType.Desc)
+  .ToPageList(500, 20);
+<span class="cm">// 生成： ORDER BY id DESC LIMIT 20 OFFSET 10000</span>
+<span class="cm">// 数据库必须先扫出 10020 行、丢弃前 10000 行 —— 页码越大越慢</span></code></pre>
+
+<p>正确解法是 <strong>keyset pagination（游标分页 / seek method）</strong>：不用页码，用"上一页最后一条的 id"当锚点。</p>
+
+<pre><code><span class="cm">// ✅ 无论翻到第几页，代价恒定</span>
+<span class="kw">var</span> q = db.Queryable&lt;Study&gt;();
+<span class="kw">if</span> (lastId <span class="kw">is</span> <span class="kw">not</span> <span class="kw">null</span>)
+    q = q.Where(it =&gt; it.Id &lt; lastId);
+<span class="kw">var</span> page = q.OrderBy(it =&gt; it.Id, OrderByType.Desc).Take(20).ToList();
+<span class="cm">// 生成： WHERE id &lt; @lastId ORDER BY id DESC LIMIT 20</span>
+<span class="cm">// 直接在索引上定位到锚点，往后读 20 条就停</span></code></pre>
+
+<p>代价是<strong>不能跳页</strong>，只能"下一页"。这正好是取舍题的标准答案形态：<q>后台管理需要跳页就用 OFFSET 但限制最大页数；C 端信息流用 keyset，反正用户也不会跳到第 500 页。</q></p>
+
+<h3>杀手 4：实体全字段查询，挡住 Index Only Scan</h3>
+
+<pre><code><span class="cm">// ❌ SELECT * ：只要有一列不在索引里就必须回表</span>
+db.Queryable&lt;Study&gt;().Where(it =&gt; it.OwnerId == id).ToList();
+
+<span class="cm">// ✅ 投影到只需要的列，配合覆盖索引可走 Index Only Scan</span>
+db.Queryable&lt;Study&gt;()
+  .Where(it =&gt; it.OwnerId == id)
+  .Select(it =&gt; <span class="kw">new</span> StudyListItem { Id = it.Id, Title = it.Title })
+  .ToList();</code></pre>
+
+<h3>杀手 5：类型不匹配导致的隐式转换</h3>
+
+<p>C# 侧的 <code>long</code> 参数打到 Postgres 的 <code>integer</code> 列、或实体属性写成 <code>string</code> 而列是 <code>uuid</code>，都可能让数据库在<strong>列侧</strong>插入一个 cast。排查方法是直接看 ORM 打出来的 SQL：</p>
+
+<pre><code><span class="cm">// SqlSugar：把真实执行的 SQL 和参数打到日志里</span>
+db.Aop.OnLogExecuting = (sql, pars) =&gt;
+{
+    _logger.LogDebug(<span class="st">"SQL: {Sql}"</span>, sql);
+};</code></pre>
+
+<div class="callout ext">
+  <span class="label">面试话术 · 这段能直接用</span>
+  <p><q>我们后端用 SqlSugar，我的习惯是把 <code>Aop.OnLogExecuting</code> 打开、在开发环境把生成的 SQL 打到日志。因为 ORM 很容易悄悄写出索引失效的 SQL——最常见的三个是 <code>.Date</code> 被翻成 cast、<code>Contains</code> 被翻成前导通配符 LIKE、还有分页用 <code>Skip/Take</code> 生成大 OFFSET。发现慢查询时，我会把 ORM 生成的原始 SQL 拿出来单独跑 <code>EXPLAIN ANALYZE</code>，看条件落在 Index Cond 还是 Filter。</q></p>
+</div>
+
+<h2 id="s7">七、索引的代价</h2>
+
+<p>面试问"什么时候该建索引"，如果只答"查得慢就建"，是不及格的。<strong>索引是拿写入性能和存储空间换查询性能的交易</strong>，你要说得出成本在哪。</p>
+
+<table>
+  <thead><tr><th>成本</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>写放大</td><td>每个索引都是一棵要维护的 B-tree。一张表 5 个索引，一次 <code>INSERT</code> 就是 6 次结构写入（表 + 5 索引），外加对应的 WAL 日志。</td></tr>
+    <tr><td>阻断 HOT 更新</td><td>Postgres 的 HOT（Heap-Only Tuple）优化：如果更新<strong>没有涉及任何被索引的列</strong>且同页有空间，就能跳过全部索引更新。<strong>给一个高频更新的列加索引，等于关掉了这个优化</strong>，写性能可能断崖下跌。</td></tr>
+    <tr><td>索引膨胀（bloat）</td><td>频繁更新删除会在索引里留下死元组，索引越来越大、越来越慢。需要 <code>REINDEX INDEX CONCURRENTLY</code> 重建。</td></tr>
+    <tr><td>存储与缓存</td><td>索引也要占 shared_buffers。无用索引挤占的缓存，本可以用来缓存热数据。</td></tr>
+    <tr><td>优化器负担</td><td>候选索引越多，计划枚举空间越大，也更容易选错。</td></tr>
+  </tbody>
+</table>
+
+<h3>生产环境建索引：必须加 CONCURRENTLY</h3>
+
+<pre><code><span class="kw">CREATE INDEX CONCURRENTLY</span> ix_study_owner <span class="kw">ON</span> study (owner_id);</code></pre>
+
+<p>普通 <code>CREATE INDEX</code> 会<strong>锁住整表的写入</strong>直到建完——大表上就是一次生产事故。<code>CONCURRENTLY</code> 避免这个锁，但它的代价同样要说得出来<a href="https://www.postgresql.org/docs/current/sql-createindex.html">（官方文档）</a>：</p>
+<ul>
+  <li>要<strong>扫两遍表</strong>，总耗时明显更长</li>
+  <li><strong>不能在事务块里执行</strong>（所以数据库迁移脚本里要特殊处理——EF Core / Flyway 的迁移默认包在事务里，这是个真实的坑）</li>
+  <li>失败时会<strong>留下一个 INVALID 索引</strong>：查询用不上它，但写入仍要维护它。必须 <code>DROP INDEX</code> 后重来。所以建完要检查 <code>SELECT * FROM pg_index WHERE NOT indisvalid;</code></li>
+</ul>
+
+<div class="callout ext">
+  <span class="label">这是一个很好的"踩坑经历"素材</span>
+  <p>如果你在项目里给大表加过索引，把上面这段包装成经历讲：<q>我们在 Postgres 上给一张千万行的表加索引，第一次直接 CREATE INDEX 把线上写入卡住了，后来改成 CONCURRENTLY；又踩了一次迁移脚本默认开事务导致执行不了的坑，最后是拆成独立的运维脚本、并且加了 INVALID 索引的检查。</q>三层细节，面试官会信。</p>
+</div>
+
+<h2 id="s8">八、统计信息与优化器</h2>
+
+<p>这一节是「深度炸弹」——大多数候选人到第五节就到顶了。</p>
+
+<p>Postgres 的优化器是<strong>基于成本</strong>的：它为每个可能的执行计划估算代价，选最便宜的。估算的原料就是 <code>ANALYZE</code> 收集的统计信息<a href="https://www.postgresql.org/docs/current/planner-stats.html">（Planner Statistics）</a>：</p>
+
+<table>
+  <thead><tr><th>统计项</th><th>作用</th></tr></thead>
+  <tbody>
+    <tr><td><code>reltuples</code> / <code>relpages</code></td><td>表的行数和页数（在 <code>pg_class</code>）</td></tr>
+    <tr><td><code>n_distinct</code></td><td>该列不同值的个数 → 决定等值条件的选择性</td></tr>
+    <tr><td><code>most_common_vals</code> + 频率</td><td>高频值列表 → 处理数据倾斜，比如 90% 的行 status 都是 ACTIVE</td></tr>
+    <tr><td><code>histogram_bounds</code></td><td>值分布直方图 → 估算范围条件能命中多少行</td></tr>
+  </tbody>
+</table>
+
+<h3>致命假设：优化器认为各列是独立的</h3>
+
+<p>估算多条件时，Postgres 默认把选择性<strong>相乘</strong>。<code>WHERE city='上海' AND zip='200000'</code>，假设 city 选择性 1/300、zip 选择性 1/5000，它估算 <code>1/300 × 1/5000 = 1/1,500,000</code>。</p>
+
+<p>但现实中<strong>邮编决定城市</strong>——这两列高度相关，实际选择性就是 1/5000。估算差了 300 倍，优化器于是以为只会返回 1 行，选了 Nested Loop，实际返回 30000 行，查询慢到爆炸。</p>
+
+<p>解法是<strong>扩展统计信息</strong>：</p>
+
+<pre><code><span class="cm">-- 告诉优化器：这两列是相关的，请单独统计它们的组合分布</span>
+<span class="kw">CREATE STATISTICS</span> stts (dependencies) <span class="kw">ON</span> city, zip <span class="kw">FROM</span> zipcodes;
+<span class="kw">ANALYZE</span> zipcodes;</code></pre>
+
+<p>三种类型<a href="https://www.postgresql.org/docs/current/planner-stats.html">（官方文档）</a>：</p>
+<ul>
+  <li><code>dependencies</code> —— 函数依赖（邮编 → 城市）。只对等值条件和 <code>IN</code> 有效。</li>
+  <li><code>ndistinct</code> —— 多列组合的不同值个数，主要改善 <code>GROUP BY</code> 多列时的计划选择。</li>
+  <li><code>mcv</code> —— 多列高频值组合。官方例子里，<code>(Washington, DC)</code> 实际出现频率 0.35%，单列统计推出来只有 0.0027%，<strong>差 100 倍</strong>。</li>
+</ul>
+
+<div class="callout ext">
+  <span class="label">怎么把它用在面试里</span>
+  <p>不要主动大段讲这个，太显得背书。<strong>等面试官问"索引都建了还是慢怎么办"或"优化器选错计划怎么处理"的时候再抛</strong>：<q>如果索引没问题、统计信息也 ANALYZE 过了还选错，我会看是不是多个过滤列之间存在相关性。Postgres 的优化器默认假设列与列独立、把选择性直接相乘，遇到像省和市、状态和类型这种强相关的列会严重低估行数，进而选错 join 方式。这种情况可以用 <code>CREATE STATISTICS</code> 建扩展统计信息告诉优化器它们相关。</q></p>
+</div>
+
+<h2 id="s9">九、检验一下</h2>
+
+<p>请<strong>先不要往回翻</strong>。答错比答对更有价值——错一次记得比看十遍牢。</p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "索引为 <code>(tenant_id, status, created_at)</code>。哪条查询<b>完全用不上</b>这个索引来定位数据？",
+    "options": [
+      "WHERE tenant_id = 7 AND created_at > NOW()",
+      "WHERE status = 1 AND created_at > NOW()",
+      "WHERE tenant_id = 7 AND status = 1",
+      "WHERE tenant_id = 7 ORDER BY status"
+    ],
+    "answer": 1,
+    "why": "B 跳过了最左列 tenant_id。status=1 的行散落在整个索引的各个 tenant 区间里，圈不出连续区间，无法二分定位。其余三条都从 tenant_id 开始，至少能先收窄到一段。"
+  },
+  {
+    "q": "查询是 <code>WHERE dept = ? AND age > ? ORDER BY salary</code>。最优的列顺序通常是？",
+    "options": [
+      "(age, dept, salary) —— 把范围条件列放到最前面",
+      "(salary, dept, age) —— 把排序用的列放到最前面",
+      "(dept, age, salary) —— 严格按等值、范围、排序",
+      "(dept, salary, age) —— 让排序列排在范围列前面"
+    ],
+    "answer": 3,
+    "why": "范围条件会截断索引：age 用了 > 之后，它右边的 salary 就不再有序，ORDER BY 免不了排序。把 salary 提到 age 前面，dept 等值定位后 salary 仍然有序，可以省掉 Sort 节点，age 退化为 Filter。这是「范围」与「排序」争夺同一个位置时的经典取舍——实际该选哪个要用 EXPLAIN ANALYZE 实测。"
+  },
+  {
+    "q": "<code>WHERE created_at::date = 某个日期</code> 走不了索引，根本原因是？",
+    "options": [
+      "日期类型在索引结构里以字符串的形式来存储",
+      "索引里存的是列原始值而不是函数运算后的值",
+      "时间戳这种字段本身就不适合建立任何的索引",
+      "范围条件已经截断了该列右边的全部索引列"
+    ],
+    "answer": 1,
+    "why": "B-tree 存的是 created_at 的原始时间戳，查询要找的是 cast 之后的值，两者对不上，只能全表逐行计算。修复：改成半开区间让列裸奔，或者建表达式索引。"
+  },
+  {
+    "q": "EXPLAIN 里某个条件出现在 <code>Filter</code> 而不是 <code>Index Cond</code>，说明什么？",
+    "options": [
+      "该条件参与了索引定位并且有效缩小了扫描范围",
+      "该条件语法有误数据库已经将它自动忽略掉了",
+      "该条件没参与定位只在扫出的行上逐条做判断",
+      "该条件所涉及的那一列上根本就没有任何索引"
+    ],
+    "answer": 2,
+    "why": "Index Cond 决定扫多少行，Filter 是扫出来之后再逐行判断。旁边的 Rows Removed by Filter 如果很大，说明索引选择性不足——通常是因为该列被范围条件截断了，或者压根不在索引里。这是判断「索引真的起作用了吗」最直接的证据。"
+  },
+  {
+    "q": "已有索引 <code>(a, b, c)</code>，下列哪个索引是<b>冗余</b>的？",
+    "options": [
+      "(b, c) —— 因为它是原索引的一个后缀部分",
+      "(a, b) —— 因为它是原索引的一个前缀部分",
+      "(b, a) —— 因为它只是把两列的顺序调换了",
+      "(a, c) —— 因为这两列都已包含在原索引中"
+    ],
+    "answer": 1,
+    "why": "最左前缀意味着 (a,b,c) 天然具备 (a) 和 (a,b) 的全部能力，再单独建 (a,b) 纯属浪费空间和写入性能。而 (b,c)、(b,a)、(a,c) 都是不同的排序顺序，各自能服务原索引服务不了的查询，不算冗余。"
+  },
+  {
+    "q": "在 Postgres 上建了覆盖索引，EXPLAIN 显示 Index Only Scan，但 <code>Heap Fetches</code> 数字很大、性能没提升。最可能的原因是？",
+    "options": [
+      "INCLUDE 里的列并没有真正被存进索引结构中",
+      "覆盖索引在 Postgres 数据库上完全不被支持的",
+      "可见性图不干净所以仍需回表确认行版本可见性",
+      "索引列的排序方向和查询要求的排序方向不一致"
+    ],
+    "answer": 2,
+    "why": "Postgres 把行可见性信息存在表里而非索引里，Index Only Scan 要靠可见性图判断整页是否全部可见。表更新频繁而 autovacuum 跟不上时，可见性图不干净，就仍然要回表拿可见性——Heap Fetches 就是这个次数。这也是「覆盖索引建了却没用」最常见的真实原因。"
+  },
+  {
+    "q": "生产环境给一张千万行大表加索引，正确做法是？",
+    "options": [
+      "直接 CREATE INDEX 但选择在业务低峰期去执行",
+      "用 CREATE INDEX CONCURRENTLY 并事后检查有效性",
+      "先把表整个复制一份再在副本表上建好后换回来",
+      "临时调大 maintenance_work_mem 后正常建立索引"
+    ],
+    "answer": 1,
+    "why": "普通 CREATE INDEX 会锁住整表写入直到建完，大表上就是生产事故。CONCURRENTLY 不阻塞写入，代价是扫两遍表、不能在事务块里跑、且失败会留下 INVALID 索引——所以建完必须检查 pg_index 里 indisvalid 为 false 的项。调大 maintenance_work_mem 能加速但解决不了锁的问题。"
+  },
+  {
+    "q": "索引和统计信息都没问题，但优化器对 <code>WHERE province=? AND city=?</code> 严重低估行数、选错了 join。最对症的手段是？",
+    "options": [
+      "对这张表执行一次 VACUUM FULL 完整清理操作",
+      "把这两个列上的索引全部删掉之后再重新建立",
+      "用 CREATE STATISTICS 建立跨列的扩展统计信息",
+      "调大 default_statistics_target 到最大值再分析"
+    ],
+    "answer": 2,
+    "why": "优化器默认假设列之间相互独立，把选择性相乘。省和市强相关，相乘会把行数估到极小，于是错选 Nested Loop。CREATE STATISTICS 的 dependencies / mcv 正是为跨列相关性设计的。调大 statistics_target 只能让单列统计更精细，救不了列间相关性这个结构性假设。"
+  }
+]'></div>
+
+<h2 id="s10">十、面试话术</h2>
+
+<p>下面四段建议<strong>出声念到顺</strong>。面试是口语考试，脑子里想清楚和嘴上说清楚是两回事。</p>
+
+<div class="script">
+  <span class="label">Q：讲讲联合索引和最左前缀原则</span>
+  <p><q>联合索引在物理上是一棵按索引列做多级排序的 B-tree，比如 (a,b,c) 就是先按 a 排、a 相同再按 b 排。所以能不能用索引定位，本质上取决于查询条件能不能在这个有序结构上圈出一段连续区间——这就是最左前缀。</q></p>
+  <p><q>准确讲是两条规则：从最左列开始<strong>连续</strong>的等值条件都能用来缩小扫描范围；再加上其后<strong>第一个</strong>范围条件也能用，但到此为止，范围条件右边的列就只能做过滤了。原因是范围条件跨越了多个值，把若干个小组拼在一起，右边那一列在拼接后的区间里已经不是有序的了。</q></p>
+  <p><q>在 Postgres 的 EXPLAIN 里这个区别是能直接看到的：参与定位的落在 Index Cond，只做过滤的落在 Filter，旁边还有 Rows Removed by Filter，这个数字大就说明索引设计有优化空间。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">Q：什么时候该建索引？根据什么建？</span>
+  <p><q>我不按字段建，按<strong>查询</strong>建。先把这张表上真实跑的高频 SQL 捞出来——慢查询日志或者 pg_stat_statements 按总耗时排序——看 WHERE、JOIN、ORDER BY 用到哪些列，再按<strong>等值、范围、排序</strong>的顺序拼联合索引，等值列内部把区分度高的放前面。</q></p>
+  <p><q>然后要反过来算成本。索引是拿写入换查询：每加一个索引，每次 INSERT 就多一棵 B-tree 要维护，还多一份 WAL；在 Postgres 上给高频更新的列加索引还会破坏 HOT 更新优化，写性能可能明显下降。所以我会看三件事：这列区分度够不够、这张表读写比多少、有没有已存在的索引能覆盖——(a,b,c) 已经隐含了 (a) 和 (a,b)，不用重复建。我还会定期查 pg_stat_user_indexes 里 idx_scan 为 0 的索引，把从来没被用过的清掉。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">Q：索引失效有哪些情形？</span>
+  <p><q>我一般分三类来看。第一类是<strong>违反最左前缀</strong>，跳过前导列、或者被范围条件截断，这是索引结构决定的「不能用」。第二类是<strong>索引列被加工</strong>——套函数、类型转换、参与运算、前导通配符的 LIKE，因为索引里存的是原始值，加工之后就对不上了；修复要么把加工挪到常量侧让列裸奔，要么建表达式索引，代价是写入变慢。</q></p>
+  <p><q>第三类最容易被忽略，是<strong>优化器主动放弃</strong>。索引扫描是随机 I/O，命中行占比高的时候还不如顺序扫全表，这时候不走索引是<strong>正确</strong>选择。所以我排查的第一步不是加索引，是看 EXPLAIN ANALYZE 里估算行数和实际行数差多少——差得离谱说明统计信息过期，ANALYZE 就行；估得准那就是成本算下来全表扫更划算。</q></p>
+  <p><q>另外实际工作中，索引失效更多是 ORM 悄悄造成的。我们用 SqlSugar，我会把 Aop.OnLogExecuting 打开、在开发环境打印生成的 SQL。最常见的三个坑是 <code>.Date</code> 被翻成 cast、<code>Contains</code> 翻成前导通配符 LIKE、以及分页用 Skip/Take 生成大 OFFSET。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">Q：数据库如何优化查询 SQL 提高执行效率？</span>
+  <p><q>我按一个固定顺序走，避免凭感觉乱改。<strong>第一步定位</strong>：用 pg_stat_statements 按总耗时排序，找真正的大头，而不是猜哪条慢——有时候单次 20ms 但调用百万次的那条才是问题。<strong>第二步解释</strong>：对候选 SQL 跑 EXPLAIN ANALYZE BUFFERS，看扫描方式、估算与实际行数的差距、有没有 Sort 溢出到磁盘、大表之间有没有 Nested Loop。</q></p>
+  <p><q><strong>第三步改写</strong>：让列裸奔、去掉 SELECT *、OR 拆成 UNION ALL、深分页从 OFFSET 换成 keyset。<strong>第四步才是加索引</strong>，按等值范围排序拼列，生产环境一定加 CONCURRENTLY。<strong>再不够才往上走</strong>：缓存、物化视图、读写分离、分区表。最后一定要再跑一次 EXPLAIN 验证，用数字说话而不是「感觉快了」。</q></p>
+</div>
+
+<div class="callout">
+  <span class="label">还缺一块：你的真实经历</span>
+  <p>上面的话术都是「方法论」层。面试官几乎必然会追问<q>你实际做过吗，举个例子</q>。<strong>请把你项目里任何一次调过慢查询的经历告诉我</strong>（哪怕当时只是随手加了个索引），我帮你补齐前因后果、数字和取舍，改写成一段站得住追问的经历。这一步比多学一个知识点重要。</p>
+</div>
+
+<h2 id="s11">十一、动手实验（约 25 分钟）</h2>
+
+<p>光看不练，三天就忘。亲手看一次执行计划的变化，这些结论才会变成你的。</p>
+
+<pre><code><span class="cm"># 1. 起一个 Postgres</span>
+docker run --name pg-prep -e POSTGRES_PASSWORD=pw -p 5432:5432 -d postgres:17
+docker exec -it pg-prep psql -U postgres</code></pre>
+
+<pre><code><span class="cm">-- 2. 造 100 万行</span>
+<span class="kw">CREATE TABLE</span> study (
+  id bigserial <span class="kw">PRIMARY KEY</span>, owner_id int, status text,
+  created_at timestamptz, title text);
+
+<span class="kw">INSERT INTO</span> study (owner_id, status, created_at, title)
+<span class="kw">SELECT</span> (random()*5000)::int,
+       (<span class="kw">ARRAY</span>[<span class="st">'ACTIVE'</span>,<span class="st">'CLOSED'</span>,<span class="st">'DRAFT'</span>])[1+(random()*2)::int],
+       now() - (random()*400) * <span class="kw">interval</span> <span class="st">'1 day'</span>,
+       <span class="st">'study-'</span> || g
+<span class="kw">FROM</span> generate_series(1,1000000) g;
+<span class="kw">ANALYZE</span> study;
+
+<span class="cm">-- 3. 无索引基线：记下 Seq Scan 和耗时</span>
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>, BUFFERS)
+<span class="kw">SELECT</span> * <span class="kw">FROM</span> study <span class="kw">WHERE</span> owner_id=1007 <span class="kw">AND</span> status=<span class="st">'ACTIVE'</span>
+<span class="kw">ORDER BY</span> created_at <span class="kw">DESC</span> <span class="kw">LIMIT</span> 20;
+
+<span class="cm">-- 4. 建索引，再跑一次：Seq Scan 和 Sort 应该同时消失</span>
+<span class="kw">CREATE INDEX</span> ix1 <span class="kw">ON</span> study (owner_id, status, created_at <span class="kw">DESC</span>);
+
+<span class="cm">-- 5. 亲手制造失效 A 类：跳过最左列，观察它退回 Seq Scan</span>
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>) <span class="kw">SELECT</span> * <span class="kw">FROM</span> study <span class="kw">WHERE</span> status=<span class="st">'ACTIVE'</span> <span class="kw">LIMIT</span> 20;
+
+<span class="cm">-- 6. 制造失效 B 类：对列做类型转换</span>
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>) <span class="kw">SELECT</span> * <span class="kw">FROM</span> study
+  <span class="kw">WHERE</span> owner_id=1007 <span class="kw">AND</span> created_at::date = <span class="st">'2026-05-01'</span>;
+<span class="cm">-- 对比：改成半开区间</span>
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>) <span class="kw">SELECT</span> * <span class="kw">FROM</span> study
+  <span class="kw">WHERE</span> owner_id=1007
+    <span class="kw">AND</span> created_at &gt;= <span class="st">'2026-05-01'</span> <span class="kw">AND</span> created_at &lt; <span class="st">'2026-05-02'</span>;
+
+<span class="cm">-- 7. 观察 Index Cond 与 Filter 的区别（范围截断）</span>
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>) <span class="kw">SELECT</span> * <span class="kw">FROM</span> study
+  <span class="kw">WHERE</span> owner_id &gt; 4000 <span class="kw">AND</span> status = <span class="st">'ACTIVE'</span>;
+<span class="cm">-- 看 status 落在哪一行，以及 Rows Removed by Filter</span>
+
+<span class="cm">-- 8. 深分页的代价：对比这两条的耗时</span>
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>) <span class="kw">SELECT</span> * <span class="kw">FROM</span> study <span class="kw">ORDER BY</span> id <span class="kw">DESC</span> <span class="kw">LIMIT</span> 20 <span class="kw">OFFSET</span> 900000;
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>) <span class="kw">SELECT</span> * <span class="kw">FROM</span> study <span class="kw">WHERE</span> id &lt; 100001 <span class="kw">ORDER BY</span> id <span class="kw">DESC</span> <span class="kw">LIMIT</span> 20;
+
+<span class="cm">-- 9. 覆盖索引：观察 Index Only Scan 与 Heap Fetches</span>
+<span class="kw">CREATE INDEX</span> ix_cover <span class="kw">ON</span> study (owner_id, status) <span class="kw">INCLUDE</span> (title);
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>) <span class="kw">SELECT</span> title <span class="kw">FROM</span> study
+  <span class="kw">WHERE</span> owner_id=1007 <span class="kw">AND</span> status=<span class="st">'ACTIVE'</span>;
+<span class="cm">-- 然后 UPDATE 几千行再跑一次，看 Heap Fetches 变大；VACUUM study; 后再看</span></code></pre>
+
+<p>把第 3、4、7 步的输出<strong>贴给我</strong>，我逐行帮你解读执行计划。<strong>会读 EXPLAIN 输出</strong>本身就是面试里最硬的信号之一，而这个技能只能靠看真实输出练出来。</p>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（今天只读一篇的话，读这个）：</strong><br>
+  <a href="https://www.postgresql.org/docs/current/indexes-multicolumn.html">PostgreSQL Documentation — 11.3. Multicolumn Indexes</a>。全文只有一屏，是本课核心结论的原始出处。<br>
+  行有余力再读：<a href="https://www.postgresql.org/docs/current/indexes-expressional.html">11.7 Indexes on Expressions</a>、<a href="https://www.postgresql.org/docs/current/planner-stats.html">75.1 Row Estimation / Planner Statistics</a>。</p>
+
+  <div class="nav-links">
+    <a href="../reference/db-index-cheatsheet.html">→ 速查表：索引与 SQL 优化</a>
+    <a href="../MISSION.md">→ Mission</a>
+    <a href="../RESOURCES.md">→ Resources</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练。</strong>任何地方卡住，或者想让我用面试官的语气连续追问你（"那你说说为什么范围条件之后就断了？"→"那 Postgres 和 MySQL 在这里有区别吗？"），直接在对话里跟我说。也欢迎把你的真实项目经历丢给我，我帮你改写成能挂在这些知识点上的话术。
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>参考 · C# ↔ Python / TypeScript 对照表</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/widgets.css">
+</head>
+<body>
+<main class="page">
+
+<p class="eyebrow">Reference · 持续增补</p>
+<h1>C# ↔ Python / TypeScript 对照表</h1>
+<p class="subtitle">你已有的知识是杠杆。但每个类比都有裂缝，裂缝处才是面试真正考的东西。</p>
+
+<div class="block trap">
+  <span class="label">怎么用这份表</span>
+  <p>「⚠ 裂缝」一列是重点。类比让你上手快，裂缝让你不在面试里露怯。当面试官问「你从 C# 转过来，觉得最不适应的是什么」，答案应该直接从这一列里取 —— 那是一道送分题。</p>
+</div>
+
+<h2>工具链与生态</h2>
+
+<table>
+  <thead><tr><th style="width:8.5rem">C#</th><th style="width:9rem">对应物</th><th>⚠ 裂缝</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>dotnet run</code></td>
+      <td>前端 <code>npm run dev</code><br>后端 <code>fastapi dev</code></td>
+      <td>要开<strong>两个</strong>终端。前后端是两个互不知情的进程，只靠 HTTP 上的 JSON 契约耦合。</td>
+    </tr>
+    <tr>
+      <td>NuGet</td>
+      <td>npm（JS）<br>pip（Python）</td>
+      <td>npm 生态的依赖数量是数量级上的差异：一个空 React 项目的 <code>node_modules</code> 里有上百个包。这是常见的面试吐槽点，也是真实的供应链风险话题。</td>
+    </tr>
+    <tr>
+      <td><code>.csproj</code></td>
+      <td><code>package.json</code><br><code>requirements.txt</code> / <code>pyproject.toml</code></td>
+      <td><code>package.json</code> 同时承担 C# 里 <code>.csproj</code> 和「脚本入口」两个角色 —— <code>npm run dev</code> 跑的是它 <code>scripts</code> 段里定义的命令。</td>
+    </tr>
+    <tr>
+      <td><code>packages.lock.json</code></td>
+      <td><code>package-lock.json</code></td>
+      <td>概念一致：锁定精确版本以保证可复现构建。<strong>要进版本库。</strong></td>
+    </tr>
+    <tr>
+      <td><code>bin/</code> <code>obj/</code></td>
+      <td><code>node_modules/</code><br><code>.venv/</code><br><code>dist/</code></td>
+      <td>前两者是<strong>依赖</strong>不是产物（这点和 <code>bin/obj</code> 不同），<code>dist/</code> 才是构建产物。三者都不进版本库。</td>
+    </tr>
+    <tr>
+      <td>Kestrel</td>
+      <td>Uvicorn</td>
+      <td>对接标准不同：Kestrel ↔ ASP.NET Core，Uvicorn ↔ ASGI 应用（FastAPI）。<code>fastapi dev</code> 内部启动的就是 Uvicorn。</td>
+    </tr>
+    <tr>
+      <td>Swashbuckle<br>/ Swagger</td>
+      <td>FastAPI 内置</td>
+      <td>零配置。FastAPI 从<strong>类型注解</strong>反推 OpenAPI schema，<code>/docs</code> 开箱可用。</td>
+    </tr>
+    <tr>
+      <td>Roslyn 分析器<br>/ EditorConfig</td>
+      <td>ESLint + Prettier（JS/TS）<br>Ruff（Python）</td>
+      <td>在 JS/TS 世界，linter 与格式化器是<strong>要自己装的第三方工具</strong>，不是语言自带。团队间配置差异很大。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>后端框架概念</h2>
+
+<table>
+  <thead><tr><th style="width:8.5rem">C# / ASP.NET Core</th><th style="width:9rem">FastAPI</th><th>⚠ 裂缝</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>[HttpGet("/api/x")]</code></td>
+      <td><code>@app.get("/api/x")</code></td>
+      <td>attribute 是<strong>编译期元数据</strong>，靠反射读取；decorator 是<strong>运行时执行的函数调用</strong>，直接修改/注册被装饰的对象。</td>
+    </tr>
+    <tr>
+      <td>Middleware 管道</td>
+      <td><code>app.add_middleware(...)</code></td>
+      <td>概念高度一致 —— 洋葱模型、顺序敏感。这是你可以直接迁移的知识。</td>
+    </tr>
+    <tr>
+      <td>DTO + 模型绑定<br>+ FluentValidation</td>
+      <td>Pydantic <code>BaseModel</code></td>
+      <td>Pydantic 一个类同时干了 DTO、绑定、校验、序列化四件事，而且校验规则就写在类型注解里。</td>
+    </tr>
+    <tr>
+      <td>内置 DI 容器</td>
+      <td><code>Depends()</code></td>
+      <td>FastAPI 没有全局容器和生命周期注册（singleton/scoped/transient）；依赖是在函数签名上按需显式声明的。<strong>这是个高频追问点。</strong></td>
+    </tr>
+    <tr>
+      <td><code>async Task&lt;T&gt;</code></td>
+      <td><code>async def</code></td>
+      <td>语法几乎一样，模型差别很大：Python 有 GIL，单进程内只有一个事件循环、无线程池并行。CPU 密集任务在 Python 里<strong>不能</strong>靠 async 解决。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>类型系统（预告 · 第 2 课展开）</h2>
+
+<table>
+  <thead><tr><th style="width:8.5rem">C#</th><th style="width:9rem">TypeScript</th><th>⚠ 裂缝</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>名义类型<br>（nominal）</td>
+      <td>结构化类型<br>（structural）</td>
+      <td>C# 看<strong>声明</strong>：没写 <code>: IFoo</code> 就不是 <code>IFoo</code>。TS 看<strong>形状</strong>：只要属性对得上就通过，无需任何声明关系。<a href="https://www.typescriptlang.org/docs/handbook/typescript-in-5-minutes-oop.html">官方为 C#/Java 开发者写的说明</a></td>
+    </tr>
+    <tr>
+      <td>类型在运行时存在<br>（reified）</td>
+      <td>类型被擦除<br>（erased）</td>
+      <td>C# 有 <code>GetType()</code>、反射、泛型实化。TS 的类型在编译后<strong>完全消失</strong>，运行时一行都不剩，没有任何 TS 层面的反射。</td>
+    </tr>
+    <tr>
+      <td><code>interface</code></td>
+      <td><code>interface</code> / <code>type</code></td>
+      <td>同名不同物。TS 的 <code>interface</code> 只是「形状约束」，可以描述函数、数组、任意对象，且无需被实现方知晓。</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="footer">
+  <p>相关：<a href="glossary.html">术语表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a></p>
+  <div class="ask"><strong>觉得某个类比不对劲？</strong> 说出来 —— 你的 C# 直觉在哪里打滑，往往正是下一课该讲的地方。</div>
+</div>
+
+</main>
+</body>
+</html>

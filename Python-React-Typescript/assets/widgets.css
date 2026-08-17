@@ -1,0 +1,145 @@
+/* ============================================================
+   widgets.css — 交互控件样式（配合 widgets.js）
+   控件：.quiz（单选测验）、.recall（回忆练习）、.checklist（可勾选步骤）
+   ============================================================ */
+
+/* ---------- 通用外壳 ---------- */
+
+.widget {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1.1rem 1.2rem;
+  margin: 0 0 1.4rem;
+  background: #fff;
+}
+
+.widget-kind {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 0.6rem;
+}
+
+/* ---------- 测验 ---------- */
+
+.quiz-q {
+  font-size: 1rem;
+  margin: 0 0 0.9rem;
+}
+
+.quiz-opts {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+.quiz-opts li { margin: 0; }
+
+.quiz-btn {
+  font-family: var(--serif);
+  font-size: 0.92rem;
+  line-height: 1.45;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.quiz-btn:hover:not(:disabled) { border-color: var(--ink-soft); background: #fff; }
+.quiz-btn:disabled { cursor: default; }
+
+.quiz-btn.is-right {
+  border-color: var(--ok);
+  background: var(--ok-soft);
+  font-weight: 600;
+}
+.quiz-btn.is-wrong {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  text-decoration: line-through;
+  text-decoration-color: var(--accent);
+}
+.quiz-btn.is-dim { opacity: 0.45; }
+
+.quiz-explain {
+  margin-top: 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px dashed var(--rule);
+  font-size: 0.89rem;
+  color: var(--ink-soft);
+}
+.quiz-explain > :last-child { margin-bottom: 0; }
+
+/* ---------- 回忆练习 ---------- */
+
+.recall-prompt { font-size: 1rem; margin: 0 0 0.8rem; }
+
+.recall-btn {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.05em;
+  padding: 0.45rem 0.9rem;
+  border: 1px dashed var(--ink-soft);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.recall-btn:hover { color: var(--ink); border-color: var(--ink); }
+
+.recall-answer {
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--ok-soft);
+  border-left: 3px solid var(--ok);
+  font-size: 0.91rem;
+}
+.recall-answer > :last-child { margin-bottom: 0; }
+
+/* ---------- 可勾选步骤 ---------- */
+
+.checklist { list-style: none; padding: 0; margin: 0 0 1.4rem; counter-reset: step; }
+
+.checklist > li {
+  position: relative;
+  padding: 0.7rem 0 0.7rem 2.4rem;
+  border-bottom: 1px solid var(--rule);
+  margin: 0;
+}
+.checklist > li:last-child { border-bottom: 0; }
+
+.checklist .step-box {
+  position: absolute;
+  left: 0;
+  top: 0.85rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  accent-color: var(--ok);
+  cursor: pointer;
+}
+
+.checklist > li.done { opacity: 0.5; }
+.checklist > li.done .step-title { text-decoration: line-through; }
+
+.step-title { font-weight: 600; display: block; margin-bottom: 0.35rem; }
+
+.checklist-progress {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  margin: 0 0 0.8rem;
+}
+
+@media print {
+  .widget { break-inside: avoid; }
+  .quiz-explain, .recall-answer { display: block !important; }
+  .recall-btn { display: none; }
+}

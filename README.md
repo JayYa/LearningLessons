@@ -1,8 +1,27 @@
 # 📘 Learning Lessons
 
-本仓库汇集了十门独立课程，覆盖现代 .NET 语言演进与平台基础、AI Agent 构建、VS Code 扩展开发、GitHub Actions 自动化工作流、维京历史文化、河西走廊历史地理与二次元绘画入门。编程方向以 C# 从 8 到 15 每一次语法升级为主线，深入语言机制与 .NET 运行时架构；工程方向通过实战教程带领读者从零构建 VS Code 扩展与 AI 驱动的自动化流程；人文方向以《冰海战纪》为引探索真实维京世界，以《河西走廊》纪录片为引逐集梳理汉代西域地理、族群与外交史，第三集驿站篇聚焦悬泉置邮驿体系与常惠苏武的西域外交传奇；艺术方向则从插画线条基础训练起步。各课程彼此独立、按需选读，共享同一方法论——从表层 API 下沉到底层机制，从孤立知识点串成系统认知。
+本仓库收录五门独立课程，其中三门围绕 .NET 技术栈展开：`Morden .NET` 沿 C# 8 到 15 的每一次语法升级梳理语言演进，`DotNET Platform` 下沉到 SDK 项目系统、CoreCLR 运行时、GC、依赖注入与配置体系，两者互为语言层与平台层的对照；`BeiGene` 是一份面试向的数据库索引专题，聚焦联合索引最左前缀与索引失效场景。`Python-React-Typescript` 从 C# 背景出发，以前后端两个进程如何联通为切入点，配合语言对照表跨入 Python 与 TypeScript 生态。`Build an Agent` 独立成篇，讲 AI Agent 的工具调用、记忆管理、任务编排与多智能体协作。各课程按需选读，共享同一方法论——从表层 API 下沉到底层机制。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
+
+## Python-React-Typescript
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [第 1 课 · 两个进程，一根线](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0001-two-processes-one-wire.html) | 建立前后端两个进程通过 HTTP 联通的心智模型，从零跑通调用链并解决 CORS 这堵墙 |
+
+**参考资料：**
+- [参考 · C# ↔ Python / TypeScript 对照表](https://JayYa.github.io/LearningLessons/Python-React-Typescript/reference/csharp-rosetta.html) — 以 C# 为锚点对照 Python 与 TypeScript 的语法与惯用法
+- [参考 · 术语表](https://JayYa.github.io/LearningLessons/Python-React-Typescript/reference/glossary.html) — Python / React / TypeScript 生态核心术语速查
+
+## BeiGene
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [Lesson 01 · 联合索引、最左前缀与索引失效（精讲）](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0001-composite-index-leftmost-prefix.html) | 精讲联合索引的最左前缀匹配原则，剖析索引失效的典型场景与规避写法 |
+
+**参考资料：**
+- [Reference · 索引与 SQL 优化速查表](https://JayYa.github.io/LearningLessons/BeiGene/reference/db-index-cheatsheet.html) — 数据库索引设计与 SQL 优化常用手法速查
 
 ## Build an Agent
 
@@ -39,57 +58,6 @@
 - [参考：NuGet 传递依赖解析规则](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/nuget-dependency-resolution.html) — NuGet 依赖版本选择与冲突解析机制速查
 - [参考：运行时配置速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/runtime-configuration.html) — runtimeconfig.json 与 MSBuild 运行时配置选项速查
 - [参考：Span\<T\> / Memory\<T\> 速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/span-memory-patterns.html) — Span\<T\> 与 Memory\<T\> 高性能内存操作模式速查
-
-## 河西走廊 第一集 使者
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [第1课：河西走廊 · 地理、族群与时间](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0001-hexi-corridor-panorama.html) | 概览河西走廊的地理格局、族群分布与历史时间轴，为理解张骞出使西域提供时空背景 |
-| 2 | [第2课：匈奴帝国——不只是一个"敌人"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0002-xiongnu-empire.html) | 深入匈奴帝国的政治结构、军事体系与草原文明，重新认识这个被简化为"敌人"的强大政权 |
-| 3 | [第3课：月氏——被追杀者的史诗](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0003-yuezhi-migration.html) | 追踪月氏人被匈奴驱逐后的西迁史诗，从河西走廊到中亚的族群迁徙与文明碰撞 |
-| 4 | [第4课：乌孙——在巨人之间](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0004-wusun.html) | 揭秘乌孙王国如何在匈奴与汉朝两大帝国之间周旋求存，成为西域关键博弈者 |
-| 5 | [第5课：羌——被误解三千年的邻居](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0005-qiang.html) | 重新认识被中原叙事边缘化的羌人族群，梳理三千年演变脉络与华夏文明的互动关系 |
-| 6 | [第6课：大宛——亚历山大最远的回声](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/lessons/0006-dayuan.html) | 追溯大宛（费尔干纳）的希腊化渊源，探索亚历山大东征在东方遗留的最远文明回响 |
-
-**参考资料：**
-- [参考：河西走廊族群档案](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/ethnic-groups.html) — 河西走廊及西域主要族群的历史档案与关系梳理
-- [参考：术语表](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/glossary.html) — 河西走廊、汉匈关系与西域地理核心术语速查
-- [参考：希腊人为什么停在了中国门口？——两个文明的"擦肩而过"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/greeks-at-chinas-door.html) — 探讨希腊化文明与中华文明擦肩而过的历史因缘，分析亚历山大东征为何止步于中亚
-- [参考：羌族自我认知——从"尔玛"到"羌族"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%80%E9%9B%86%20%E4%BD%BF%E8%80%85/reference/qiang-self-identity.html) — 梳理羌族从自称"尔玛"到"羌族"的自我认知演变，揭示族群认同的建构历程
-
-## 河西走廊 第二集 通道
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [第1课：河西走廊地理格局 —— 从乌鞘岭到玉门关](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0001-hexi-corridor-geography.html) | 概览河西走廊的地理格局，从乌鞘岭到玉门关逐段解析这条战略通道的地形与关隘体系 |
-| 2 | [第2课：霍去病与河西之战 —— 公元前121年的闪电战](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0002-huo-qubing-campaigns.html) | 讲述霍去病公元前121年两次河西之战，解析汉军骑兵战术革新与闪电战制胜关键 |
-| 3 | [第3课：张骞与丝绸之路的开启 —— 一个人的"凿空"之旅](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0003-zhang-qian-silk-road.html) | 讲述张骞两次出使西域的凿空之旅，梳理丝绸之路开通的外交脉络与历史意义 |
-| 4 | [第4课：汉长城与河西防御体系 —— 两千年前的"烽火长城"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0004-han-defense-system.html) | 解析汉代河西长城的烽燧布局与防御体系，揭示两千年前的军事工程智慧 |
-| 5 | [第5课：河西生活与东西文化交流 —— 丝绸之路上的日常与传奇](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0005-hexi-life-exchange.html) | 展现河西走廊日常生活中的东西文化交流，从饮食到艺术的丝路融合故事 |
-| 6 | [第6课：旅行串联 —— 从兰州到敦煌，一站一讲](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/lessons/0006-travel-integration.html) | 沿兰州至敦煌路线串联各课知识点，一站式实地讲解河西走廊的历史地理风貌 |
-
-**参考资料：**
-- [河西走廊历史 · 核心术语表](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%BA%8C%E9%9B%86%20%E9%80%9A%E9%81%93/reference/glossary.html) — 河西走廊历史地理核心术语速查
-
-## 河西走廊 第三集 驿站
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [第1课：汉代邮驿制度 — 悬泉置与帝国的信息网络](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0001-han-postal-system.html) | 以悬泉置遗址为切入点，解析汉代邮驿体系的运行机制与帝国治理的信息网络基础 |
-| 2 | [第2课：常惠与苏武 — 19年匈奴囚禁与西域外交](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0002-changhui-and-suwu.html) | 讲述常惠六使西域与苏武十九年匈奴囚禁的故事，展现汉代外交官的坚韧品格与西域经略智慧 |
-| 3 | [第3课：解忧公主 — 和亲乌孙的50年](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0003-princess-jieyou.html) | 讲述解忧公主远嫁乌孙五十年，以和亲维系汉朝与西域联盟的政治智慧与人生传奇 |
-| 4 | [第4课：汉匈西域博弈 — 从军事征服到外交经营](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0004-han-xiongnu-rivalry.html) | 解析汉朝与匈奴在西域的百年博弈，从战场厮杀到外交角力的战略转型与地缘棋局 |
-| 5 | [第5课：屯田戍边 — 赵充国与"兵农合一"的边疆战略](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0005-zhaochongguo-tuntian.html) | 讲述赵充国首创屯田戍边战略，以兵农合一模式巩固汉朝西部边疆的深远影响 |
-| 6 | [第6课：西域都护府 — "汉之号令，班西域矣"](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0006-xihu-duhufu.html) | 解析西域都护府的设立与运作，标志着汉朝正式将西域纳入中央管辖的历史转折 |
-| 7 | [第7课：丝绸之路上的驿站 — 帝国的神经网络](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/lessons/0007-silk-road-stations.html) | 串联丝绸之路沿线驿站体系，揭示信息与物资传递网络如何支撑帝国的远程治理 |
-
-**参考资料：**
-- [冯嫽 — 中国第一位女外交家](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/feng-liao.html) — 中国第一位女外交家冯嫽的生平与西域外交贡献
-- [河西走廊·驿站 — 术语表](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/glossary.html) — 河西走廊邮驿体系与汉代外交核心术语速查
-- [泥靡与刺杀事件 — 解忧公主的第三段婚姻](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/nimi-and-assassination.html) — 泥靡刺杀事件始末，解忧公主第三段婚姻的政治背景
-- [细君公主与《黄鹄歌》](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/princess-xijun.html) — 细君公主和亲乌孙的故事与千古名篇《黄鹄歌》的历史背景
-- [河西走廊大事年表（公元前2世纪–前1世纪）](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/timeline.html) — 公元前2世纪至前1世纪河西走廊与西域重大事件时间线
-- [乌孙大小昆弥分立 — 公元前53年](https://JayYa.github.io/LearningLessons/%E6%B2%B3%E8%A5%BF%E8%B5%B0%E5%BB%8A%20%E7%AC%AC%E4%B8%89%E9%9B%86%20%E9%A9%BF%E7%AB%99/reference/wusun-dual-kunmi.html) — 公元前53年乌孙大小昆弥分立的背景、经过与历史影响
 
 ## Morden .NET
 
@@ -137,85 +105,5 @@
 - [Span / ReadOnlySpan 速查 · 现代 .NET 高性能基石](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/span-readonlyspan-cheatsheet.html) — Span\<T\>、ReadOnlySpan\<T\> 与 stackalloc 高性能内存操作速查
 - [yield return 同步迭代器 · 速查表](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/sync-iterators-cheatsheet.html) — IEnumerable\<T\> 与 yield 状态机速查
 - [SynchronizationContext & await 续延调度](https://JayYa.github.io/LearningLessons/Morden%20.NET/reference/synchronizationcontext-cheatsheet.html) — ConfigureAwait、调度上下文与执行流转速查
-
-## Claude Context Bar
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [Lesson 0001 — VS Code 扩展的解剖结构](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0001-extension-anatomy.html) | 拆解 VS Code 扩展的 manifest、激活事件与代码骨架，理解扩展生命周期 |
-| 2 | [Lesson 0002 — 激活与生命周期](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0002-activation-lifecycle.html) | 深入 VS Code 扩展的激活事件类型与生命周期管理机制 |
-| 3 | [Lesson 0003 — StatusBarItem：状态栏 UI 原语](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0003-statusbar-api.html) | 解析 StatusBarItem API 的设计与用法，掌握状态栏 UI 元素的创建与控制 |
-| 4 | [Lesson 0004 — findActiveSessions：数据引擎](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0004-find-active-sessions.html) | 揭示 findActiveSessions 数据引擎如何扫描 git 仓库与终端会话，驱动扩展的上下文感知 |
-| 5 | [Lesson 0005 — refreshAllSessions：从数据到 UI](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0005-refresh-all-sessions.html) | 串联数据引擎与状态栏 UI，完成从轮询数据源到刷新显示的完整数据闭环 |
-| 6 | [Lesson 0006 — debug.ts：独立调试管线](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0006-debug-harness.html) | 构建扩展的独立调试环境，不依赖 VS Code 运行时可快速验证核心逻辑 |
-| 7 | [Lesson 0007 — 单元测试：从 fixture 设计到安全重构](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0007-unit-tests.html) | 构建扩展的单元测试体系，从 fixture 设计原则到安全重构策略，确保代码可维护性 |
-| 8 | [Lesson 0008 — CI 集成：用 GitHub Actions 自动运行测试](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0008-ci-integration.html) | 在 GitHub Actions 中配置跨平台测试矩阵与自动发布流程，实现 CI/CD 集成 |
-| 9 | [Lesson 0009 — 打包与发布：从代码到 Marketplace](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/lessons/0009-packaging-and-publishing.html) | 讲解 VS Code 扩展的打包配置、版本管理与 Marketplace 发布流程，完成从开发到上线的最后一公里 |
-
-**参考资料：**
-- [参考：数据格式速查](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/data-formats.html) — Claude Context Bar 内部数据结构的序列化格式速查
-- [参考：术语表](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/glossary.html) — VS Code 扩展开发核心术语速查
-- [参考：npm 包命名规则](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/npm-package-naming-rules.html) — npm 包名称约束、作用域包与命名最佳实践
-- [参考：Node.js 测试框架对比](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/testing-frameworks.html) — Node.js 主流测试框架（Mocha、Jest、Vitest、Node Test Runner）对比分析
-- [参考：VS Code 扩展 API 基础](https://JayYa.github.io/LearningLessons/Claude%20Context%20Bar/reference/vscode-extension-api-basics.html) — 扩展清单、贡献点与核心 API 速查
-
-## GitHub and SandCastle
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [Lesson 0001 — 你的第一个标签触发工作流](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0001-your-first-label-triggered-workflow.html) | 从零搭建第一个标签触发工作流，理解 GitHub Actions 的事件驱动模型 |
-| 2 | [Lesson 0002 — 标签状态机](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0002-the-label-state-machine.html) | 将标签工作流抽象为状态机，掌握工作流编排的工程化思维 |
-| 3 | [Lesson 0003 — 高级模式：链式触发、预检、形状检测与 PRD 链式推进](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0003-advanced-patterns.html) | 探索链式触发、预检与形状检测等高级模式，解决真实场景中的复杂自动化需求 |
-| 4 | [Lesson 0004 — AI 分析 Issue：第一个 AI 驱动的工作流](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0004-ai-analyze-issue.html) | 将 AI 能力集成到 GitHub Actions 工作流中，实现 Issue 内容的智能分析与自动处理 |
-| 5 | [Lesson 0005 — 从 YAML 内联到 TypeScript 脚本：迈向 Sandcastle 架构](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/lessons/0005-from-yaml-to-typescript.html) | 将 YAML 内联脚本重构为 TypeScript 模块，为 Sandcastle 可扩展架构奠定基础 |
-
-**参考资料：**
-- [Reference — Agent-Runner 契约速查表](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/reference/agent-runner-contract.html) — Agent-Runner 接口契约与集成规范速查
-- [Reference: 标签触发工作流语法速查表](https://JayYa.github.io/LearningLessons/GitHub%20and%20SandCastle/reference/github-actions-label-workflow-syntax.html) — 标签触发工作流的事件类型、条件筛选与作业配置语法速查
-
-## Vinland Saga
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [Lesson 0001 — 维京时代概览：冰海战纪的历史舞台](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0001-viking-age-overview.html) | 概览维京时代的历史背景与社会结构，为《冰海战纪》的叙事世界提供真实历史锚点 |
-| 2 | [Lesson 0002 — 漫画 vs 史实：《冰海战纪》角色原型对照](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0002-character-prototypes.html) | 对比漫画角色与真实维京历史人物，揭示幸村诚笔下的史实基础与创作改编 |
-| 3 | [Lesson 0003 — 丹麦征服英格兰：维京人的北海霸权](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0003-danish-conquest-of-england.html) | 讲述丹麦王朝对英格兰的征服历程，梳理维京人在北海的霸权兴衰 |
-| 4 | [Lesson 0004 — 克努特大帝与北海帝国](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0004-cnut-north-sea-empire.html) | 剖析克努特大帝如何整合英格兰、丹麦与挪威，建立横跨北海的维京帝国 |
-| 5 | [Lesson 0005 — 维京东线与瓦良格卫队](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0005-varangian-east.html) | 探索维京人的东进之路，讲述瓦良格卫队在拜占庭帝国的传奇与历史影响 |
-| 6 | [Lesson 0006 — 文兰：北欧人发现北美与定居失败](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0006-vinland-norse-in-north-america.html) | 追寻北欧人向西探索文兰的航海壮举，解析北美定居尝试的成败与考古证据 |
-| 7 | [Lesson 0007 — 维京人的社会结构：Jarl、Karl 与奴隶](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0007-viking-social-hierarchy.html) | 拆解维京社会的三层等级体系，从贵族 Jarl、自由民 Karl 到奴隶，揭示《冰海战纪》角色的社会身份根源 |
-| 8 | [Lesson 0008 — 北欧的基督教化：从奥丁到基督](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0008-viking-christianization.html) | 追溯北欧从多神信仰到基督教化的漫长转变，理解《冰海战纪》中信仰冲突的历史根源 |
-| 9 | [Lesson 0009 — 维京人的日常生活：长屋、食物、衣装、营养与体格](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0009-viking-daily-life.html) | 走进维京人的日常世界，了解长屋生活、饮食习俗与衣物装扮，还原战斧之外的真实维京 |
-| 10 | [Lesson 0010 — 维京人的战争方式：武器、盔甲与战术](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0010-viking-warfare.html) | 解析维京人的武器、盔甲与战术体系，还原北海战士在战场上的真实面貌与战斗智慧 |
-| 11 | [Lesson 0011 — 维京长船：设计、航海与海洋帝国](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0011-viking-longship.html) | 深入维京长船的设计原理、航海技术与建造工艺，揭示北欧海洋帝国赖以崛起的工程基础 |
-| 12 | [Lesson 0012 — 冰岛萨迦：口传、书写与历史的炼金术](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0012-icelandic-sagas.html) | 解读冰岛萨迦文学如何将口传记忆转化为书写文本，探讨其作为历史素材的可信度与局限 |
-| 13 | [Lesson 0013 — 维京时代的女性：钥匙、法律与萨迦中的女人](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0013-viking-women.html) | 还原维京女性的法律地位、家庭权力与社会角色，从萨迦中重新发现北欧妇女的真实面貌 |
-| 14 | [Lesson 0014 — 维京人的宗教与仪式：Blót、Seiðr 与不设教会的信仰](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0014-viking-religion.html) | 深入维京人的宗教实践，探索祭祀、占卜与不依赖制度化教会的北欧异教信仰体系 |
-| 15 | [Lesson 0015 — 维京人的艺术与美学：从 Oseberg 到 Urnes 的六种风格](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0015-viking-art.html) | 系统梳理维京艺术六种风格的演变脉络，从动物纹饰到木雕金属工艺的美学解读 |
-| 16 | [Lesson 0016 — 维京时代的终结：1066 与瓦解一个世界的四种力量](https://JayYa.github.io/LearningLessons/Vinland%20Saga/lessons/0016-end-of-viking-age.html) | 剖析导致维京时代终结的四种历史力量，以 1066 年为转折点理解北欧世界的转型 |
-
-**参考资料：**
-- [🗡️ 中国古代佩剑传统参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/chinese-sword-tradition.html) — 中国古代佩剑文化传统与维京武器的跨文化对照
-- [🗺 东部地理术语指南](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/eastern-geography-guide.html) — 拜占庭 · 罗斯 · 基辅 · 君士坦丁堡地理术语速查
-- [⚖️ 冰岛共和国：无国王、有法律](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/icelandic-commonwealth-law.html) — 冰岛自由邦的独特法律体系与议会制度
-- [📖 冰岛识字率：中世纪欧洲的异类](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/icelandic-literacy.html) — 中世纪冰岛异乎寻常的高识字率及其对萨迦文化的影响
-- [🏛 诺曼起源争议参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/normanist-debate.html) — 诺曼起源争议学术背景与关键论据
-- [北欧宗教实践参考 — 诸神、仪式、术语与来源](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/norse-religion-practices.html) — 北欧异教的神祇体系、祭祀仪式与关键术语速查
-- [🧬 斯堪的纳维亚人起源参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/scandinavian-origins.html) — 斯堪的纳维亚人的民族起源、迁徙与遗传谱系学术参考
-- [维京时代大事年表](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-age-timeline.html) — Vinland Saga 历史时间线参考
-- [维京艺术风格参考 — 六种风格的快速识别](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-art-styles.html) — Broa、Oseberg、Borre、Jelling、Mammen、Ringerike、Urnes 风格速查
-- [⚔️ 维京劫掠驱动因素参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-raid-causes.html) — 维京劫掠的经济、人口与技术驱动因素分析
-- [📐 维京战船与 Portage 参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-ships-and-portage.html) — 维京长船设计与陆地运船技术参考
-- [🪙 维京白银经济参考](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/viking-silver-economy.html) — 维京时代白银贸易与经济体系参考
-- [角色-史实对照表](https://JayYa.github.io/LearningLessons/Vinland%20Saga/reference/vinland-saga-character-reference.html) — Vinland Saga 漫画角色与历史原型速查
-
-## Painting
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [第1课：自信的线条 — 二次元绘画基础](https://JayYa.github.io/LearningLessons/Painting/lessons/0001-confident-lines.html) | 从线条控制入手，讲解二次元绘画的起稿技法与手部稳定性训练 |
-
-**参考资料：**
-- [二次元绘画术语表 — Glossary](https://JayYa.github.io/LearningLessons/Painting/reference/glossary.html) — 二次元绘画核心术语速查
 
 *自动生成*
