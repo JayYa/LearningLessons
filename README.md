@@ -9,6 +9,7 @@
 | # | 课程 | 描述 |
 |---|------|------|
 | 1 | [第 1 课 · 两个进程，一根线](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0001-two-processes-one-wire.html) | 建立前后端两个进程通过 HTTP 联通的心智模型，从零跑通调用链并解决 CORS 这堵墙 |
+| 2 | [第 2 课 · TypeScript 不是 C#](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0002-typescript-is-not-csharp.html) | 从 C# 类型系统的心智出发，辨析 TypeScript 结构化类型与鸭子类型带来的本质差异 |
 
 **参考资料：**
 - [参考 · C# ↔ Python / TypeScript 对照表](https://JayYa.github.io/LearningLessons/Python-React-Typescript/reference/csharp-rosetta.html) — 以 C# 为锚点对照 Python 与 TypeScript 的语法与惯用法

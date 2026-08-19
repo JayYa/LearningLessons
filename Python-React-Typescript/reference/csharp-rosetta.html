@@ -26,22 +26,22 @@
   <tbody>
     <tr>
       <td><code>dotnet run</code></td>
-      <td>前端 <code>npm run dev</code><br>后端 <code>fastapi dev</code></td>
+      <td>前端 <code>pnpm dev</code><br>后端 <code>fastapi dev</code></td>
       <td>要开<strong>两个</strong>终端。前后端是两个互不知情的进程，只靠 HTTP 上的 JSON 契约耦合。</td>
     </tr>
     <tr>
       <td>NuGet</td>
-      <td>npm（JS）<br>pip（Python）</td>
-      <td>npm 生态的依赖数量是数量级上的差异：一个空 React 项目的 <code>node_modules</code> 里有上百个包。这是常见的面试吐槽点，也是真实的供应链风险话题。</td>
+      <td>pnpm（JS）<br>pip（Python）</td>
+      <td>npm 生态的依赖数量是数量级上的差异：一个空 React 项目的 <code>node_modules</code> 里有上百个包。这是常见的面试吐槽点，也是真实的供应链风险话题。<br>本课程用 <code>pnpm</code> 作为客户端（包仍来自 npm registry）：它把每个包在全局 store 里只存一份，项目内用硬链接/符号链接引用，因此更省磁盘、更快，且能避免 npm 扁平化 <code>node_modules</code> 带来的「幽灵依赖」。</td>
     </tr>
     <tr>
       <td><code>.csproj</code></td>
       <td><code>package.json</code><br><code>requirements.txt</code> / <code>pyproject.toml</code></td>
-      <td><code>package.json</code> 同时承担 C# 里 <code>.csproj</code> 和「脚本入口」两个角色 —— <code>npm run dev</code> 跑的是它 <code>scripts</code> 段里定义的命令。</td>
+      <td><code>package.json</code> 同时承担 C# 里 <code>.csproj</code> 和「脚本入口」两个角色 —— <code>pnpm dev</code>（即 <code>pnpm run dev</code>）跑的是它 <code>scripts</code> 段里定义的命令。</td>
     </tr>
     <tr>
       <td><code>packages.lock.json</code></td>
-      <td><code>package-lock.json</code></td>
+      <td><code>pnpm-lock.yaml</code><br>（npm 则是 <code>package-lock.json</code>）</td>
       <td>概念一致：锁定精确版本以保证可复现构建。<strong>要进版本库。</strong></td>
     </tr>
     <tr>
@@ -100,7 +100,7 @@
   </tbody>
 </table>
 
-<h2>类型系统（预告 · 第 2 课展开）</h2>
+<h2>类型系统<span style="font-size:0.72rem;font-family:var(--mono);color:var(--ink-soft);letter-spacing:0.08em;">（第 2 课）</span></h2>
 
 <table>
   <thead><tr><th style="width:8.5rem">C#</th><th style="width:9rem">TypeScript</th><th>⚠ 裂缝</th></tr></thead>
@@ -120,11 +120,26 @@
       <td><code>interface</code> / <code>type</code></td>
       <td>同名不同物。TS 的 <code>interface</code> 只是「形状约束」，可以描述函数、数组、任意对象，且无需被实现方知晓。</td>
     </tr>
+    <tr>
+      <td><code>class Foo : IBar</code></td>
+      <td><code>class Foo implements Bar</code></td>
+      <td><strong>TS 的 <code>implements</code> 什么也不建立。</strong>它只是请编译器帮你自查形状是否对得上；写不写都不影响这个类能被赋给谁。C# 里它是身份的一部分。</td>
+    </tr>
+    <tr>
+      <td>private 成员</td>
+      <td>private 成员</td>
+      <td><strong>结构化规则的唯一例外。</strong>含 <code>private</code>/<code>protected</code> 成员的 class 按<strong>声明位置</strong>比较 —— 两个字段完全相同的类互不兼容（<code>TS2322</code>）。面试时补上这一句，比只说「TS 是结构化的」强得多。</td>
+    </tr>
+    <tr>
+      <td>反序列化时校验<br>（<code>JsonSerializer</code> + DTO）</td>
+      <td><strong>没有对应物</strong></td>
+      <td>最大的裂缝。<code>res.json()</code> 返回 <code>any</code>，你写的返回类型只是<strong>一句承诺</strong>，运行时无人核对。跨边界的数据必须自己加运行时校验（Zod / Pydantic）。</td>
+    </tr>
   </tbody>
 </table>
 
 <div class="footer">
-  <p>相关：<a href="glossary.html">术语表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a></p>
+  <p>相关：<a href="glossary.html">术语表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a></p>
   <div class="ask"><strong>觉得某个类比不对劲？</strong> 说出来 —— 你的 C# 直觉在哪里打滑，往往正是下一课该讲的地方。</div>
 </div>
 

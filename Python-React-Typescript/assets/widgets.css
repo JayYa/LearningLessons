@@ -143,3 +143,13 @@
   .quiz-explain, .recall-answer { display: block !important; }
   .recall-btn { display: none; }
 }
+
+/* ---------- 测验的横排变体（用于二选一的「预测编译结果」） ---------- */
+/* <ul class="quiz-opts row"> —— 其余标记与 .quiz 完全一致，无需额外 JS */
+
+.quiz-opts.row { grid-auto-flow: column; grid-auto-columns: 1fr; }
+.quiz-opts.row .quiz-btn { text-align: center; font-family: var(--mono); font-size: 0.82rem; }
+
+@media (max-width: 30rem) {
+  .quiz-opts.row { grid-auto-flow: row; }
+}

@@ -62,7 +62,7 @@
     </tr>
     <tr>
       <td><strong>Bundle</strong><br>打包</td>
-      <td>把成百上千个源文件与依赖合并、压缩成少数几个 <code>.js</code> 文件，减少浏览器的请求数。<code>npm run build</code> 做的就是这件事。</td>
+      <td>把成百上千个源文件与依赖合并、压缩成少数几个 <code>.js</code> 文件，减少浏览器的请求数。<code>pnpm build</code> 做的就是这件事。</td>
     </tr>
     <tr>
       <td><strong>venv</strong><br>虚拟环境</td>
@@ -70,7 +70,43 @@
     </tr>
     <tr>
       <td><strong>node_modules</strong></td>
-      <td>npm 安装依赖的落地目录，位于项目内。不进版本库，由 <code>package.json</code> + <code>package-lock.json</code> 重建。</td>
+      <td>包管理器安装依赖的落地目录，位于项目内。不进版本库，由 <code>package.json</code> + 锁文件（<code>pnpm-lock.yaml</code>）重建。<code>pnpm</code> 下它是一片指向全局 store 的链接，而非真实副本。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>TypeScript 类型系统</h2>
+
+<table>
+  <thead><tr><th style="width:11rem">术语</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Structural typing</strong><br>结构化类型</td>
+      <td>类型之间的兼容性<strong>只看形状</strong>（有哪些属性、类型是什么），与名字、继承关系无关。TS 的默认规则。判定标准是「至少有」而非「刚好是」。</td>
+    </tr>
+    <tr>
+      <td><strong>Nominal typing</strong><br>名义类型</td>
+      <td>兼容性看<strong>名字与声明的继承关系</strong>。C# / Java 的规则。两个结构相同但名字不同的 class 绝不互换。<br><em>TS 中的例外：</em>带 <code>private</code> / <code>protected</code> 成员的 class 会按声明位置比较，等效于名义类型。</td>
+    </tr>
+    <tr>
+      <td><strong>Reified</strong><br>具化</td>
+      <td>类型信息在<strong>运行时依然存在</strong>。C# 的类型是 reified 的（故有反射、<code>is</code>、<code>typeof(T)</code>）；TS 的类型不是。</td>
+    </tr>
+    <tr>
+      <td><strong>Type erasure</strong><br>类型擦除</td>
+      <td>编译时把所有类型信息删除的过程。<code>interface</code>、<code>type</code>、类型注解、泛型参数编译后<strong>一个字节都不剩</strong>。运行时唯一残留的类型痕迹是 <code>class</code>（编译成真实的 JS 函数，故 <code>instanceof</code> 可用）。</td>
+    </tr>
+    <tr>
+      <td><strong>Excess property check</strong><br>多余属性检查</td>
+      <td>把<strong>新鲜的对象字面量</strong>直接赋给某个类型时，TS 会额外禁止多余属性（<code>TS2353</code>）。先赋给变量再传则不触发。设计意图是抓拼写错误。</td>
+    </tr>
+    <tr>
+      <td><strong>Type alias</strong><br>类型别名</td>
+      <td><code>type X = …</code>。与 <code>interface</code> 高度重叠，但能给联合类型、原始类型等任意类型命名（<code>type Id = string | number</code>），<code>interface</code> 不能。</td>
+    </tr>
+    <tr>
+      <td><strong>any</strong> / <strong>unknown</strong></td>
+      <td>都表示「类型未知」。<code>any</code> 关闭检查，可以对它做任何事 —— 类型系统的逃生舱与主要漏洞来源（<code>res.json()</code> 就返回它）。<code>unknown</code> 是安全版：必须先收窄类型才能使用。</td>
     </tr>
   </tbody>
 </table>
@@ -96,7 +132,7 @@
 </table>
 
 <div class="footer">
-  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a></p>
+  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a></p>
   <div class="ask"><strong>有词条不清楚？</strong> 问我，我会把解释补进这份文档 —— 它会跟着课程一起长大。</div>
 </div>
 

@@ -216,3 +216,52 @@ th {
   html { font-size: 16px; }
   body { padding: 2rem 1rem 4rem; }
 }
+
+/* ---------- 编译前后对照（TS → JS） ---------- */
+/* <div class="compile-pair">
+     <figure><figcaption>你写的 TypeScript</figcaption><pre><code>…</code></pre></figure>
+     <figure><figcaption>浏览器实际运行的 JavaScript</figcaption><pre><code>…</code></pre></figure>
+   </div> */
+
+.compile-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1rem;
+  margin: 0 0 1.4rem;
+  align-items: start;
+}
+.compile-pair figure { margin: 0; }
+.compile-pair figcaption {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 0.4rem;
+}
+.compile-pair pre { margin: 0; font-size: 0.74rem; }
+.compile-pair figure:last-child pre {
+  border-left-color: var(--ok);
+  background: var(--ok-soft);
+}
+
+@media (max-width: 40rem) {
+  .compile-pair { grid-template-columns: 1fr; gap: 1rem; }
+}
+
+/* ---------- 原文引用（引用官方文档时使用） ---------- */
+
+blockquote {
+  border-left: 3px solid var(--rule);
+  padding: 0 0 0 1.1rem;
+  margin: 0 0 1.3rem;
+  color: var(--ink-soft);
+  font-size: 0.94rem;
+}
+blockquote > :last-child { margin-bottom: 0; }
+blockquote cite {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  font-style: normal;
+}

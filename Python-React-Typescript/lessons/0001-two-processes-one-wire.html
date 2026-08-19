@@ -38,7 +38,7 @@
   <tbody>
     <tr>
       <td><strong>前端</strong><br>Vite dev server</td>
-      <td><code>npm run dev</code></td>
+      <td><code>pnpm dev</code></td>
       <td><code>5173</code></td>
       <td>把 <code>.tsx</code> 编译成浏览器能跑的 JS，通过 HTTP 交付给浏览器，并在你保存文件时热更新。<strong>它不碰你的业务数据。</strong></td>
     </tr>
@@ -55,7 +55,7 @@
 
 <div class="block trap">
   <span class="label">类比失效处 · 面试考点</span>
-  <p>不要说“Vite 是我的 Web 服务器”。Vite dev server 只在<strong>开发时</strong>存在。上线时你执行 <code>npm run build</code>，得到一堆静态 <code>.html/.js/.css</code> 文件，Vite 进程就消失了 —— 那些文件由 Nginx、CDN 或后端框架托管。这条“开发时两进程、生产时前端退化为静态文件”的认知，能立刻把你和只跟过教程的人区分开。<a href="https://vite.dev/guide/build.html">Vite 构建文档</a></p>
+  <p>不要说“Vite 是我的 Web 服务器”。Vite dev server 只在<strong>开发时</strong>存在。上线时你执行 <code>pnpm build</code>，得到一堆静态 <code>.html/.js/.css</code> 文件，Vite 进程就消失了 —— 那些文件由 Nginx、CDN 或后端框架托管。这条“开发时两进程、生产时前端退化为静态文件”的认知，能立刻把你和只跟过教程的人区分开。<a href="https://vite.dev/guide/build.html">Vite 构建文档</a></p>
 </div>
 
 <h2>二、动手：从零到联通</h2>
@@ -111,13 +111,32 @@ def hello() -> dict[str, str]:
 
 <li>
 <span class="step-title">前端：脚手架 + 启动</span>
+<p><strong>开一个新终端</strong>（后端那个别关）。先确认 <code>pnpm</code> 在：</p>
+<pre><code>pnpm -v</code></pre>
+<p>没有的话，用 Node 自带的 Corepack 装它：<code>corepack enable pnpm</code>。</p>
+<p>然后生成脚手架：</p>
 <pre><code>cd d:\teach\Python-React-Typescript\playground
-npm create vite@latest frontend -- --template react-ts
-cd frontend
-npm install
-npm run dev</code></pre>
-<p>打开 <a href="http://localhost:5173">http://localhost:5173</a>，应该看到 Vite + React 的默认页面。</p>
+pnpm create vite frontend --template react-ts --no-eslint</code></pre>
+<p>如果不加 <code>--no-eslint</code>，它会问你一句 <code>Which linter to use?</code>，两个选项：<strong>Oxlint</strong>（默认）与 <strong>ESLint</strong>。我们选 Oxlint，理由见下面的方框。<code>--no-eslint</code> 就是「不要 ESLint、用默认的 Oxlint」的意思，加上它就全程无提问了。</p>
+<p>命令跑完，<code>playground\frontend\</code> 就生成了。<strong>但它此时只写了文件，还没装依赖。</strong> 终端末尾会打印三行提示，照着做：</p>
+<pre><code>cd frontend
+pnpm install
+pnpm dev</code></pre>
+<p><code>pnpm dev</code> 是 <code>pnpm run dev</code> 的简写；<code>dev</code> 这个名字来自 <code>package.json</code> 的 <code>scripts</code> 段，里面写着 <code>"dev": "vite"</code>。</p>
+<p>终端会打出 <code>Local: http://localhost:5173/</code>。打开它，应该看到 Vite + React 的默认页面（React logo + 一个计数器按钮）。<strong>这个终端也保持运行</strong> —— 从现在起你会一直开着两个终端。</p>
 <p><code>--template react-ts</code> 中的 <code>ts</code> 是关键：它生成的是 <code>.tsx</code> 文件并配好 <code>tsconfig.json</code>。<a href="https://vite.dev/guide/">Vite 指南</a></p>
+<div class="block trap">
+  <span class="label">为什么选 Oxlint 而不是 ESLint</span>
+  <p><strong>Linter ≈ C# 里的 Roslyn analyzers / StyleCop</strong>：不管代码能不能跑，只管它「写得对不对、有没有可疑写法」。JS 生态里这活儿历来由 <strong>ESLint</strong> 干，它是十几年的事实标准，插件生态巨大 —— 面试里提到 lint，默认说的就是它。</p>
+  <p><strong>Oxlint</strong> 是 Rust 写的新一代替代品（属于 Oxc 工具链），官方基准称比 ESLint <strong>快 50–100 倍</strong>，内置 800+ 条规则（从 ESLint core、typescript-eslint、React、jsx-a11y 等插件移植而来），<strong>开箱即用、零配置</strong>。Vite 从 2025 年起把它设为 React 模板的默认选项。<a href="https://oxc.rs/docs/guide/usage/linter.html">Oxlint 官方文档</a></p>
+  <p>我们选它，是因为本课程<strong>不教 lint 配置</strong>：ESLint 会给你生成一个 <code>eslint.config.js</code> 和一串 <code>devDependencies</code>，那是额外的认知负荷；Oxlint 装一个包、零配置就能用。<strong>但面试时你要知道 ESLint 是什么</strong> —— 而且「我们用的是 oxlint，Rust 写的，比 ESLint 快两个数量级，Vite 现在的默认选项」本身就是个比背 ESLint 更有信息量的回答。</p>
+  <p style="margin-top:0.6rem;font-size:0.86rem;">补充一个细节：过去 Oxlint 的短板是不支持<strong>类型感知规则</strong>（需要 TS 类型信息才能查的问题，比如没有 <code>await</code> 的 Promise）。这一块已于 2026 年 7 月转正，靠 Go 版 TS 编译器 <code>tsgolint</code> 实现，覆盖 typescript-eslint 61 条类型感知规则中的 59 条。<a href="https://oxc.rs/blog/2026-07-22-type-aware-linting-stable">Oxlint: Type-Aware Linting Stable</a></p>
+</div>
+
+<div class="block csharp">
+  <span class="label">对照</span>
+  <p><code>package.json</code> ≈ <code>.csproj</code>：<code>dependencies</code> / <code>devDependencies</code> 对应 <code>&lt;PackageReference&gt;</code>，<code>scripts</code> 对应你平时写在 CI 脚本里的那些命令。<code>node_modules\</code> 则对应 <code>obj\</code> + NuGet 缓存 —— 体积大、永不进 Git。<br>本课程统一用 <code>pnpm</code> 而不是 <code>npm</code>：同一个包在磁盘上只存一份，各项目以硬链接引用，省空间也更快。命令基本一一对应（<code>npm install</code> → <code>pnpm install</code>，<code>npm run x</code> → <code>pnpm x</code>）。<a href="https://pnpm.io/motivation">pnpm 的动机</a></p>
+</div>
 </li>
 
 <li>
@@ -227,7 +246,7 @@ app.add_middleware(
   <button class="recall-btn">先出声回答，再点开</button>
   <div class="recall-answer" hidden>
     <p>因为会失去 <strong>HMR（热模块替换）</strong>：Vite dev server 会在你保存 <code>.tsx</code> 的瞬间把变更推给浏览器，页面局部更新且保留当前 state。走“编译到静态目录”的路子，每改一行都要重新完整构建。</p>
-    <p><strong>关键补充：</strong>到了<em>生产环境</em>，“一个进程搞定”恰恰是常见做法之一 —— <code>npm run build</code> 产出静态文件，交给 Nginx / CDN，或者确实塞进后端托管。开发与生产的部署形态不同，这本身就是一个值得在面试中主动讲出来的点。</p>
+    <p><strong>关键补充：</strong>到了<em>生产环境</em>，“一个进程搞定”恰恰是常见做法之一 —— <code>pnpm build</code> 产出静态文件，交给 Nginx / CDN，或者确实塞进后端托管。开发与生产的部署形态不同，这本身就是一个值得在面试中主动讲出来的点。</p>
   </div>
 </div>
 
@@ -255,7 +274,7 @@ app.add_middleware(
   </ul>
 
   <h2>下一课</h2>
-  <p><strong>第 2 课：TypeScript 不是 C#</strong> —— 结构化类型与类型擦除。这是整个课程里对你来说<em>最反直觉、也最容易被面试官问到</em>的一节。微软官方专门为 C#/Java 开发者写了一章讲这个差异，我们会以它为主干。</p>
+  <p><strong><a href="0002-typescript-is-not-csharp.html">第 2 课：TypeScript 不是 C#</a></strong> —— 结构化类型与类型擦除。这是整个课程里对你来说<em>最反直觉、也最容易被面试官问到</em>的一节。微软官方专门为 C#/Java 开发者写了一章讲这个差异，我们会以它为主干。</p>
 
   <div class="ask">
     <strong>我是你的老师，随时提问。</strong> 哪一步报错了、哪句话没听懂、哪个类比你觉得不对劲 —— 直接把终端输出或问题贴给我。特别欢迎这类问题：“为什么 <code>useEffect</code> 后面那个 <code>[]</code> 是必须的？”“<code>export default</code> 和 C# 的 <code>public class</code> 是一回事吗？”本课我<em>刻意</em>没有解释 React 的部分（<code>useState</code> / <code>useEffect</code> / JSX），那是后面几课的内容 —— 但如果你现在就想知道，问就是了。

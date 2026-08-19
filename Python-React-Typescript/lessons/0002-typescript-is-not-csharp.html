@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 2 课 · TypeScript 不是 C#</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/widgets.css">
+<script src="../assets/widgets.js" defer></script>
+</head>
+<body>
+<main class="page">
+
+<p class="eyebrow">Lesson 0002 · 约 45 分钟</p>
+<h1>TypeScript 不是 C#</h1>
+<p class="subtitle">两个类型系统，看着像双胞胎，底层假设完全相反。这一课你会亲手让 TypeScript 对你撒一次谎。</p>
+
+<div class="block win">
+  <span class="label">本课的收获</span>
+  <p>你会拿到两个可复述的判断：<strong>「TS 看形状，C# 看名字」</strong>与<strong>「TS 的类型在运行时不存在」</strong>。然后你会在 <code>playground/</code> 里制造一次「编译完全通过、页面却显示 undefined」的事故 —— 这一次事故，比读十篇文章更能让你记住类型擦除意味着什么。</p>
+</div>
+
+<p>接上一课：你已经有了一条打通的链路（<a href="0001-two-processes-one-wire.html">第 1 课</a>）。现在我们把注意力从「进程」缩小到「类型」。</p>
+
+<h2>一、名义类型 vs 结构类型</h2>
+
+<div class="block csharp">
+  <span class="label">你熟悉的世界 · 名义（nominal）</span>
+  <p>C# 里，一个类型能不能用在某处，看的是<strong>它叫什么、继承自谁</strong>。两个结构完全一样的 class，只要没有显式的继承或 <code>implements</code> 关系，就绝对不能互换。<code>class Point { int X; int Y; }</code> 和 <code>class Coord { int X; int Y; }</code> 是两个毫不相干的类型。</p>
+</div>
+
+<p>TypeScript 反过来 —— 只看<strong>形状</strong>。官方手册说得很直白：</p>
+
+<blockquote>
+“TypeScript's type system is <em>structural</em>, not nominal: We can use <code>obj</code> as a <code>Pointlike</code> because it has <code>x</code> and <code>y</code> properties that are both numbers. The relationships between types are determined by <strong>the properties they contain</strong>, not whether they were declared with some particular relationship.”
+<cite>—— <a href="https://www.typescriptlang.org/docs/handbook/typescript-in-5-minutes-oop.html">TypeScript for Java/C# Programmers · Erased Structural Types</a></cite>
+</blockquote>
+
+<pre><code>interface Point { x: number; y: number }
+
+function log(p: Point) { console.log(p.x, p.y) }
+
+<span class="cmt">// 没有 implements、没有继承、甚至不知道 Point 存在</span>
+class Vec { x = 1; y = 2; scale() {} }
+
+const v: Point = new Vec();   <span class="cmt">// ✅ 通过。形状够了就行</span></code></pre>
+
+<p>再往前一步，官方手册给了一个更好用的心智模型：<strong>把类型看成「值的集合」</strong>，而不是「对象的标签」。</p>
+
+<blockquote>
+“In TypeScript, it's better to think of a type as a <em>set of values</em> that share something in common. Because types are just sets, a particular value can belong to <strong>many</strong> sets at the same time.”
+</blockquote>
+
+<p>这解释了一堆你在 TS 里会觉得奇怪的东西。<code>string | number</code> 不是什么特殊语法，就是两个集合的并集。一个对象同时满足三个 interface 也不矛盾 —— 它同时属于三个集合。C# 里「一个值有且仅有一个确切类型」的直觉，在这里不成立。</p>
+
+<div class="block trap">
+  <span class="label">直接推论 · 为什么 TS 代码里 class 那么少</span>
+  <p>既然满足形状就够用，那定义一个 <code>class</code> 只为了描述数据结构就是纯浪费 —— <code>interface</code> 或 <code>type</code> 更轻，而且编译后<strong>一个字节都不剩</strong>（下一节）。所以在 React 项目里你会看到大量 <code>interface Props { … }</code>，几乎看不到 DTO class。这不是风格偏好，是类型系统性质决定的。<br>面试时如果被问「你们为什么不用 class 建模」，答案就是这句：<em>TS 是结构化类型，class 带来的名义身份在这里没有价值，反而多出运行时开销。</em></p>
+</div>
+
+<h2>二、类型擦除：编译完就没了</h2>
+
+<p>C# 的类型是 <strong>reified</strong> 的 —— 类型信息编译进 IL，运行时还在，所以你有反射、有 <code>obj is IFoo</code>、有 <code>typeof(T)</code>、有基于类型的序列化。</p>
+
+<p>TypeScript 没有。<strong>一个字节都不留。</strong> 官方手册在同一章里写：“There's nothing at runtime that will tell us that <code>obj</code> is <code>Pointlike</code>. In fact, the <code>Pointlike</code> type is not present <em>in any form</em> at runtime.”</p>
+
+<p>下面是我用 <code>tsc</code> 真实编译出来的结果，不是示意图：</p>
+
+<div class="compile-pair">
+<figure>
+<figcaption>你写的 TypeScript</figcaption>
+<pre><code>interface HelloResponse {
+  message: string;
+}
+
+type Id = string | number;
+
+function greet(
+  res: HelloResponse,
+  id: Id
+): string {
+  return `${id}: ${res.message}`;
+}
+
+export { greet };</code></pre>
+</figure>
+<figure>
+<figcaption>浏览器实际运行的 JavaScript</figcaption>
+<pre><code>function greet(res, id) {
+    return `${id}: ${res.message}`;
+}
+export { greet };</code></pre>
+</figure>
+</div>
+
+<p><code>interface</code> 没了，<code>type</code> 没了，所有注解没了。剩下的是纯 JavaScript —— 一个<strong>完全不检查任何东西</strong>的动态语言。</p>
+
+<table>
+  <thead><tr><th style="width:11rem">C# 里你会做的</th><th>TS 里的下场</th></tr></thead>
+  <tbody>
+    <tr><td><code>if (o is IFoo)</code></td><td>做不到。<code>interface</code> 运行时不存在，没有东西可判断。</td></tr>
+    <tr><td>反射 / <code>typeof(T)</code></td><td>做不到。泛型参数 <code>T</code> 编译后消失。</td></tr>
+    <tr><td>反序列化时自动校验类型</td><td>不会发生。<code>res.json()</code> 返回什么就是什么，无人核对。</td></tr>
+    <tr><td><code>class</code> + <code>instanceof</code></td><td><strong>这个还在。</strong> class 会编译成真实的 JS 函数，所以 <code>instanceof</code> 能用 —— 这是运行时唯一残留的类型痕迹。</td></tr>
+  </tbody>
+</table>
+
+<h2>三、动手：让类型对你撒谎</h2>
+
+<p>把上面这句「无人核对」变成你亲眼看见的一次事故。两个终端都开着（<code>fastapi dev</code> 与 <code>pnpm dev</code>）。</p>
+
+<ol class="checklist" data-checklist="0002">
+
+<li>
+<span class="step-title">给响应加上类型</span>
+<p>新建 <code>frontend\src\api.ts</code>：</p>
+<pre><code>export interface HelloResponse {
+  message: string;
+}
+
+export async function fetchHello(): Promise&lt;HelloResponse&gt; {
+  const res = await fetch("http://127.0.0.1:8000/api/hello");
+  return res.json();
+}</code></pre>
+<p>注意 <code>res.json()</code> 的真实类型是 <code>Promise&lt;any&gt;</code>。我们声明返回 <code>Promise&lt;HelloResponse&gt;</code>，TS 二话不说就接受了 —— <strong>记住这个地方，它就是谎言的入口。</strong></p>
+</li>
+
+<li>
+<span class="step-title">用起来</span>
+<p><code>App.tsx</code> 改成：</p>
+<pre><code>import { useEffect, useState } from "react";
+import { fetchHello } from "./api";
+
+export default function App() {
+  const [message, setMessage] = useState("加载中…");
+
+  useEffect(() =&gt; {
+    fetchHello().then((data) =&gt; setMessage(data.message));
+  }, []);
+
+  return &lt;h1&gt;{message}&lt;/h1&gt;;
+}</code></pre>
+<p>页面应该照常显示 <strong>Hello from Python</strong>。在编辑器里把光标放到 <code>data.</code> 后面 —— 会弹出 <code>message</code> 的自动补全。感觉上一切尽在掌握。</p>
+</li>
+
+<li>
+<span class="step-title">确认编译是干净的</span>
+<pre><code>pnpm build</code></pre>
+<p>这条命令会跑 <code>tsc -b</code>（完整类型检查）再 <code>vite build</code>。应当零错误。<strong>记住这个状态。</strong></p>
+</li>
+
+<li>
+<span class="step-title">在后端撒谎</span>
+<p>改 <code>backend\main.py</code>，把返回的键名 <code>message</code> 改成 <code>msg</code>：</p>
+<pre><code>@app.get("/api/hello")
+def hello() -&gt; dict[str, str]:
+    return {"msg": "Hello from Python"}</code></pre>
+<p>保存。后端热重载。<strong>前端一行都不要改。</strong></p>
+</li>
+
+<li>
+<span class="step-title">看着它烂掉</span>
+<p>刷新浏览器 —— 页面显示 <strong><code>undefined</code></strong>。</p>
+<p>现在再跑一次 <code>pnpm build</code>。<strong>依然零错误。</strong></p>
+<div class="block trap">
+  <span class="label">停下来，把这件事想透</span>
+  <p>TypeScript 从头到尾没有说谎的能力，是<em>你</em>骗了它：你在 <code>fetchHello</code> 上写了 <code>Promise&lt;HelloResponse&gt;</code>，那是一句<strong>承诺</strong>，不是一次<strong>检查</strong>。编译器信了你，然后自己被删掉了，运行时没有任何人再去核对。<br>更要命的是这类 bug 的形态：它不在边界处报错，而是让一个 <code>undefined</code> 顺着数据流往下淌，最后在某个八竿子打不着的组件里炸掉。</p>
+</div>
+</li>
+
+<li>
+<span class="step-title">改回来，并记下这笔债</span>
+<p>把后端改回 <code>{"message": ...}</code>，确认页面恢复。</p>
+<div class="block win">
+  <span class="label">你刚刚亲手证明了</span>
+  <p><strong>类型注解只在系统内部有效；跨越系统边界的数据，必须在运行时校验。</strong> 边界包括：HTTP 响应、<code>localStorage</code>、URL 参数、用户输入、第三方 SDK 的回调。<br>这正是下一课的主题 —— 后端用 <strong>Pydantic</strong>、前端用 <strong>Zod</strong> 在边界上立一道真实的检查。你现在有了一个具体的、自己造成的理由去学它。</p>
+</div>
+</li>
+
+</ol>
+
+<h2>四、预测编译结果</h2>
+
+<p>下面四段代码，先在脑子里判断，再点。（这些我都用 <code>tsc --strict</code> 实际跑过。）</p>
+
+<div class="widget quiz">
+  <p class="widget-kind">预测 1 / 4</p>
+  <p class="quiz-q">形状够了，但多带了一个属性：</p>
+<pre><code>interface Point { x: number; y: number }
+function log(p: Point) {}
+
+const obj = { x: 1, y: 2, name: "origin" };
+log(obj);</code></pre>
+  <ul class="quiz-opts row">
+    <li><button data-correct>编译通过</button></li>
+    <li><button>编译报错</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p><code>obj</code> 有 <code>x</code> 和 <code>y</code>，形状满足 <code>Point</code>，多出来的 <code>name</code> 不影响。这就是结构化类型：<strong>「至少有」</strong>，不是「刚好是」。C# 里这段代码连编译器的门都进不去。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">预测 2 / 4</p>
+  <p class="quiz-q">同样的东西，但直接写成字面量传进去：</p>
+<pre><code>interface Point { x: number; y: number }
+function log(p: Point) {}
+
+log({ x: 1, y: 2, name: "origin" });</code></pre>
+  <ul class="quiz-opts row">
+    <li><button>编译通过</button></li>
+    <li><button data-correct>编译报错</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p><code>error TS2353: Object literal may only specify known properties, and 'name' does not exist in type 'Point'.</code></p>
+    <p>和上一题唯一的差别是这个对象是<strong>新鲜的（fresh）</strong>—— 直接写在参数位置的字面量会触发 <strong>excess property checking（多余属性检查）</strong>。TS 的理由很实际：你当场手写一个用不到的属性，八成是拼错了字段名。<a href="https://www.typescriptlang.org/docs/handbook/2/objects.html#excess-property-checks">官方说明</a></p>
+    <p><strong>这一对题是最好的面试素材</strong>：同样的值，赋给变量再传就通过，直接传就报错。能讲清这个差别，说明你真的理解结构化类型，而不只是背过名词。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">预测 3 / 4</p>
+  <p class="quiz-q">一个 class，从没听说过这个 interface：</p>
+<pre><code>interface Point { x: number; y: number }
+
+class Vec { x = 1; y = 2; scale() {} }
+
+const v: Point = new Vec();</code></pre>
+  <ul class="quiz-opts row">
+    <li><button data-correct>编译通过</button></li>
+    <li><button>编译报错</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>不需要 <code>implements</code>。<code>Vec</code> 有 <code>x</code> 和 <code>y</code>，它就是 <code>Point</code>。<code>implements</code> 在 TS 里<strong>只是一个给编译器的自查请求</strong>（「帮我确认这个类形状对不对」），它不建立任何身份关系，也不影响这个类能被赋给谁。这和 C# 的 <code>implements</code> 是截然不同的东西。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">预测 4 / 4</p>
+  <p class="quiz-q">两个一模一样的 class，字段是 <code>private</code>：</p>
+<pre><code>class A { private id = 1 }
+class B { private id = 1 }
+
+const a: A = new B();</code></pre>
+  <ul class="quiz-opts row">
+    <li><button>编译通过</button></li>
+    <li><button data-correct>编译报错</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p><code>error TS2322: Type 'B' is not assignable to type 'A'. Types have separate declarations of a private property 'id'.</code></p>
+    <p><strong>这是结构化规则的唯一例外</strong>：带 <code>private</code> / <code>protected</code> 成员的类，TS 会按<strong>声明位置</strong>比较 —— 也就是退化成名义类型。所以「TS 全是结构化的」这句话严格说是错的。答成「TS 默认结构化，但含私有成员的 class 例外」，含金量完全不同。</p>
+  </div>
+</div>
+
+<h2>五、检验一下</h2>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 1 / 2</p>
+  <p class="quiz-q">「TS 的类型不是 reified 的」这句话，最直接的后果是？</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>无法在运行时判断一个值是否满足某个接口</button></li>
+    <li><button>无法在编译期判断一个值是否满足某个接口</button></li>
+    <li><button>无法为同一个值同时声明两个不同的接口类型</button></li>
+    <li><button>无法把接口用作函数参数的类型而只能用类</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>编译期检查一切正常，那正是 TS 的价值所在。问题出在编译<em>之后</em>：<code>interface</code> 被整个删除，运行时没有任何东西可供比对，所以 <code>o is IFoo</code> 这类判断根本无从写起。要在运行时确认形状，只能靠代码自己去查每个字段 —— 或者用 Zod 这类库替你生成这些检查。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 2 / 2</p>
+  <p class="quiz-q">后端把字段名改了，前端 <code>pnpm build</code> 却依然零错误。原因是？</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>响应体的类型由你手写声明，编译器无从核对</button></li>
+    <li><button>响应体的类型由编译器推断，声明只是一层装饰</button></li>
+    <li><button>响应体的类型在构建时缓存，需要清缓存才会更新</button></li>
+    <li><button>响应体的类型属于运行时范畴，构建阶段一律跳过</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p><code>res.json()</code> 的类型是 <code>any</code>，等于对编译器说「这里我说了算」。你写下 <code>Promise&lt;HelloResponse&gt;</code>，编译器就照单全收 —— 它没有能力去访问你的后端确认。<strong>整条链路上唯一知道真相的是运行中的 Python 进程，而它和 tsc 之间没有任何通道。</strong></p>
+    <p>顺带一提，这个通道其实可以建起来：FastAPI 会生成 OpenAPI schema，前端可以据此自动生成 TS 类型。那是后面的课。</p>
+  </div>
+</div>
+
+<div class="widget recall">
+  <p class="widget-kind">回忆练习 · 不要跳过</p>
+  <p class="recall-prompt">合上这一页，<strong>出声</strong>回答两个问题：<br>（1）为什么 TS 里用 <code>interface</code> 描述数据，比用 <code>class</code> 更常见？<br>（2）上一课的 CORS 和这一课的类型擦除，有什么共同点？</p>
+  <button class="recall-btn">先出声回答，再点开</button>
+  <div class="recall-answer" hidden>
+    <p><strong>(1)</strong> 结构化类型下，class 提供的「名义身份」没有价值 —— 形状满足就能用。而 <code>interface</code> 编译后完全消失，class 会留下真实的 JS 代码。用更轻的东西拿到同样的检查，没有理由不用。</p>
+    <p><strong>(2)</strong> 两者都是<strong>「检查发生在哪一端」</strong>的问题，而且答案都反直觉：CORS 的检查发生在浏览器，不在服务端（所以 curl 不受限）；类型的检查发生在编译期，不在运行时（所以后端改字段编译器不知道）。<em>「谁在检查、什么时候检查」</em>是贯穿这套技术栈的一条主线 —— 面试时能主动把两件事串起来讲，效果远好于分别答对。</p>
+  </div>
+</div>
+
+<h2>六、面试回答模板</h2>
+
+<div class="block interview">
+  <span class="label">如果面试官问：“TypeScript 和 C# / Java 的类型系统有什么区别？”</span>
+  <p>“两个根本差异。第一，TS 是<strong>结构化类型</strong>，C# 是名义类型 —— TS 只看形状，一个 class 不写 <code>implements</code> 也能满足接口。有个例外：带 private 成员的 class 会退化成名义比较。第二，TS 的类型<strong>不是 reified 的</strong>，编译后完全擦除，运行时什么都不剩，所以没有反射、没有运行时类型判断。<br>这在实践中的影响是：所有跨系统边界的数据 —— API 响应、localStorage、URL 参数 —— 类型注解都只是一句承诺，没人验证。我自己就踩过：后端改了个字段名，前端类型检查一片绿，页面直接渲染出 undefined。所以边界上必须加运行时校验，前端用 Zod，后端用 Pydantic。”</p>
+  <p style="margin-top:0.7rem;font-size:0.86rem;">最后那句亲身经历是这段话的核心。<strong>它把一个背下来的知识点变成了一段有代价的经验</strong> —— 面试官能立刻分辨出这两者的区别。</p>
+</div>
+
+<h2>七、去读原始资料</h2>
+
+<p><strong>本课首选阅读：</strong><a href="https://www.typescriptlang.org/docs/handbook/typescript-in-5-minutes-oop.html">TypeScript for Java/C# Programmers</a>（约 15 分钟）。微软<em>专门为你这样的人</em>写的一章，本课的两个核心概念都出自它。重点看 <em>Types as Sets</em> 与 <em>Erased Structural Types</em> 两节。</p>
+
+<p><strong>动手验证工具：</strong><a href="https://www.typescriptlang.org/play">TypeScript Playground</a>。左边写 TS，右边实时显示编译出的 JS。上面那四道预测题都可以贴进去自己跑一遍 —— 想确认「这个类型运行时还剩什么」，这是最快的办法。</p>
+
+<div class="footer">
+  <h2>相关文档</h2>
+  <ul>
+    <li><a href="../reference/glossary.html">术语表</a> —— 本课引入：structural typing、nominal typing、reified、type erasure、excess property check、type alias</li>
+    <li><a href="../reference/csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> —— 本课引入：类型系统一栏</li>
+    <li><a href="0001-two-processes-one-wire.html">第 1 课：两个进程，一根线</a></li>
+    <li><a href="../RESOURCES.md">RESOURCES.md</a> · <a href="../MISSION.md">MISSION.md</a></li>
+  </ul>
+
+  <h2>下一课</h2>
+  <p><strong>第 3 课：在边界上立一道检查</strong> —— 用 Pydantic 定义后端的响应模型，用 Zod 在前端校验收到的 JSON。你今天造出来的那个 <code>undefined</code> 事故，下一课会让它在<em>正确的位置、以看得懂的方式</em>报错。</p>
+
+  <div class="ask">
+    <strong>我是你的老师，随时提问。</strong> 本课有几个我<em>刻意</em>压住没展开的点，你如果好奇就直接问：<code>interface</code> 和 <code>type</code> 到底该用哪个？<code>any</code> 和 <code>unknown</code> 差在哪（<code>unknown</code> 正是 <code>any</code> 的解药）？泛型 <code>&lt;T&gt;</code> 擦除后还剩什么？为什么 <code>useState("加载中…")</code> 不写类型就有类型？—— 另外，第 1 课欠着的 React 部分（<code>useState</code> / <code>useEffect</code> / JSX）我还没还，想提前问也可以。
+  </div>
+</div>
+
+</main>
+</body>
+</html>
