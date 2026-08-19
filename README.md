@@ -19,8 +19,10 @@
 | # | 课程 | 描述 |
 |---|------|------|
 | 1 | [Lesson 01 · 联合索引、最左前缀与索引失效（精讲）](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0001-composite-index-leftmost-prefix.html) | 精讲联合索引的最左前缀匹配原则，剖析索引失效的典型场景与规避写法 |
+| 2 | [Lesson 02 · 内存装不下的时候：排序、选择、Top-K 与外部归并（精讲）](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0002-sorting-selection-topk-external.html) | 讲解大数据量下的排序、选择与 Top-K 算法，深入外部归并排序应对内存不足的场景 |
 
 **参考资料：**
+- [速查表 · 排序、选择、Top-K 与外部排序（C#）](https://JayYa.github.io/LearningLessons/BeiGene/reference/algo-cheatsheet.html) — 排序、选择、Top-K 与外部排序算法速查
 - [Reference · 索引与 SQL 优化速查表](https://JayYa.github.io/LearningLessons/BeiGene/reference/db-index-cheatsheet.html) — 数据库索引设计与 SQL 优化常用手法速查
 
 ## Build an Agent
