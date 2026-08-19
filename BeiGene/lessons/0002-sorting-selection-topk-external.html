@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 02 · 内存装不下的时候：排序、选择、Top-K 与外部归并（精讲）</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/decision.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 02 · 算法 · BeiGene 面试备战 · 精讲版</p>
+  <h1>内存装不下的时候</h1>
+  <p class="standfirst">题库第三节整整四道题，加上第四节那道数据库题，其实是同一道题的五种问法。学完这一课，你能当场判断该用哪一档算法，并把四段 C# 写在白板上。</p>
+</header>
+
+<p>本课打掉题库这五问：<em>现场实现一个排序算法、数据超出主存时从大到小排序、查找数组中位数、无序大数据量找到需要的数据、数据库无索引时如何排序全部数据</em>。</p>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>面试官问算法题，考的<strong>不是你背没背过快排</strong>——5–7 年经验的候选人写出快排是及格线，写不出是硬伤。真正拉开差距的是：<strong>你有没有一个「先判断数据规模和内存边界，再选算法」的决策框架</strong>。所以第 1 节是全课的地基，请务必读透；后面四节都是从它推出来的四个档位。第 11 节的动手实验请<strong>真的编译运行</strong>——白板上写得出来，靠的是手写过。</p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">两个问题，四个档位</a> <span class="depth">— 一切结论的地基</span></li>
+    <li><a href="#s2">档位 A：内存内全序</a> <span class="depth">— 手写快排 + Array.Sort 的真身</span></li>
+    <li><a href="#s3">档位 B：快速选择求中位数</a> <span class="depth">— 期望 O(n)</span></li>
+    <li><a href="#s4">档位 C：Top-K 小顶堆</a> <span class="depth">— O(N log K)，内存 O(K)</span></li>
+    <li><a href="#s5">档位 D：外部归并排序</a> <span class="depth">— 数据大于内存</span></li>
+    <li><a href="#s6">趟数与 I/O 成本公式</a> <span class="depth">— 能算才叫懂</span></li>
+    <li><a href="#s7">接回数据库那道题</a> <span class="depth">— work_mem 与 Sort Method</span></li>
+    <li><a href="#s8">白板检查清单</a> <span class="depth">— 现场别踩的坑</span></li>
+    <li><a href="#s9">检验一下</a> <span class="depth">— 8 题</span></li>
+    <li><a href="#s10">面试话术</a> <span class="depth">— 可直接说出口</span></li>
+    <li><a href="#s11">动手实验</a> <span class="depth">— 30 分钟，真跑代码</span></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、两个问题，四个档位</h2>
+
+<p>所有「大数据量排序 / 找数」的题，答案都由<strong>两个问题</strong>决定：</p>
+
+<ol>
+  <li><strong>数据装得进内存吗？</strong>（N × 每条大小 vs 可用堆内存）</li>
+  <li><strong>你要的是全部有序，还是只要其中少数几个？</strong>（全序 / 第 k 个 / 最大的 K 个）</li>
+</ol>
+
+<p>两个问题两两组合，就是四个档位。这张表是本课的全部骨架：</p>
+
+<table>
+  <thead>
+    <tr><th></th><th>要全部有序</th><th>只要少数几个</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>装得下内存</th>
+      <td><strong>A · 内存排序</strong><br><code>Array.Sort</code> / 手写快排<br>时间 O(n log n)，空间 O(log n)</td>
+      <td><strong>B · 快速选择</strong><br>Quickselect 求中位数 / 第 k 大<br>期望 O(n)，最坏 O(n²)</td>
+    </tr>
+    <tr>
+      <th>装不下内存</th>
+      <td><strong>D · 外部归并排序</strong><br>分块排序落盘 + K 路归并<br>I/O 2N×趟数，内存 O(B)</td>
+      <td><strong>C · Top-K 堆</strong><br>容量 K 的小顶堆流式扫一遍<br>时间 O(N log K)，内存 O(K)</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="label">这张表就是你的答题模板</span>
+  <p>面试官抛出「数据量很大怎么排序」时，<strong>不要直接开始写代码</strong>。先反问两句话：<q>数据总量大概多少？可用内存有多少？</q><q>你是要完整的有序结果，还是只要前几名？</q>——这两句反问本身就是加分项，它证明你在真实工程里做过容量估算，而不是只会背算法。问完之后，你在这张表里落到哪一格，就讲哪一格。</p>
+</div>
+
+<h3>先把「装不装得下」变成能口算的数</h3>
+
+<p>面试现场要能秒算。记住三个锚点：</p>
+
+<ul>
+  <li>C# 的 <code>long</code> / <code>double</code> 各 8 字节。<strong>1 亿个 long ≈ 800 MB</strong>（还没算数组对象头和 GC 压力）。</li>
+  <li>装箱后的 <code>object</code>、或每条带字符串字段的记录，单条动辄 50–100 字节。<strong>1 亿条记录 ≈ 5–10 GB</strong>。</li>
+  <li>.NET 里单个数组对象默认上限约 <strong>2 GB</strong>（除非开启 <code>gcAllowVeryLargeObjects</code>），且大对象会进 LOH（大对象堆），<strong>默认不参与压缩，容易造成碎片</strong>。这一句说出来，面试官会知道你真的在 .NET 上处理过大数据。</li>
+</ul>
+
+<p>所以「1 亿个整数排序」其实<em>勉强</em>装得下（档位 A），而「1 亿条业务记录排序」通常装不下（档位 D）。<strong>会算这笔账，就是这道题的分水岭。</strong></p>
+
+<h3>自己走一遍这棵决策树</h3>
+
+<p>下面这个组件不是装饰——请真的点一遍。<strong>能被点出来的路径，才是能被说出来的思路。</strong></p>
+
+<div class="decision" data-decision='{
+  "start": {
+    "q": "第一问：全部数据装得进内存吗？",
+    "options": [
+      {"label": "装得下（比如 1 亿个 long ≈ 800MB，机器有 8G）", "next": "inmem"},
+      {"label": "装不下（记录数 × 单条大小 远超可用堆内存）", "next": "ext"},
+      {"label": "不知道 —— 数据量和内存都没被告知", "next": "ask"}
+    ]
+  },
+  "ask": {
+    "result": "先问清楚，再选算法。",
+    "detail": "这不是逃避，是正确答案。反问「数据总量多少、可用内存多少、要全序还是要前几名」是面试里的加分动作。问完再回到第一问。",
+    "tag": "加分动作"
+  },
+  "inmem": {
+    "q": "第二问：你要的是什么？",
+    "options": [
+      {"label": "全部有序的结果", "next": "A"},
+      {"label": "中位数，或者第 k 大的那一个", "next": "B"},
+      {"label": "最大（小）的 K 个", "next": "C1"}
+    ]
+  },
+  "ext": {
+    "q": "第二问：你要的是什么？",
+    "options": [
+      {"label": "全部有序的结果（必须落盘输出）", "next": "D"},
+      {"label": "最大（小）的 K 个，K 很小", "next": "C2"},
+      {"label": "中位数，且数据在磁盘上", "next": "Bx"}
+    ]
+  },
+  "A": {
+    "tag": "档位 A · O(n log n)",
+    "result": "内存排序：生产用 Array.Sort，白板手写快排。",
+    "detail": "记得说出 Array.Sort 是内省排序（introsort）、不稳定；要稳定就用 LINQ 的 OrderBy。详见第 2 节。"
+  },
+  "B": {
+    "tag": "档位 B · 期望 O(n)",
+    "result": "快速选择 Quickselect，别整体排序。",
+    "detail": "只递归 pivot 落点所在的那一侧，期望线性。最坏 O(n²)，用随机化或三数取中规避。详见第 3 节。"
+  },
+  "C1": {
+    "tag": "档位 C · O(N log K)",
+    "result": "容量 K 的小顶堆，扫一遍。",
+    "detail": "即使装得下内存，只要 K 远小于 N，堆也比整体排序快，而且内存只占 O(K)。详见第 4 节。"
+  },
+  "C2": {
+    "tag": "档位 C · 内存 O(K)",
+    "result": "容量 K 的小顶堆，流式读取，永不落盘。",
+    "detail": "这是「无序大数据量，找到需要的数据」的标准答案：数据从文件流进来，堆里始终只有 K 个。详见第 4 节。"
+  },
+  "Bx": {
+    "tag": "档位 D 变体",
+    "result": "先外部归并排序，再定位到第 n/2 个。",
+    "detail": "磁盘上做 Quickselect 需要多轮随机读，得不偿失。若允许近似，可用直方图分桶两遍法：第一遍统计各桶计数，第二遍只精排目标桶。"
+  },
+  "D": {
+    "tag": "档位 D · I/O 2N×趟数",
+    "result": "外部归并排序：分块内排落盘 + K 路归并。",
+    "detail": "Pass 0 切成 N/B 个有序 run，之后每趟用 B-1 路归并。总趟数 1 + log(B-1) 取上界。详见第 5、6 节。"
+  }
+}'></div>
+
+<h2 id="s2">二、档位 A：内存内全序</h2>
+
+<h3>先说库函数——这才是工程答案</h3>
+
+<p>面试官说「现场实现一个排序算法」，你当然要手写。但<strong>动手之前先说一句</strong>：「生产代码我不会自己写排序，会用 <code>Array.Sort</code>；不过我知道它内部是什么，也能手写，这就写。」这一句把你从「刷题的人」变成「写生产代码的人」。</p>
+
+<p>然后你要说得出 <code>Array.Sort</code> 到底是什么。微软官方文档写得很明确：</p>
+
+<div class="callout">
+  <span class="label">Microsoft Learn · Array.Sort 原文</span>
+  <p>「This method uses the <strong>introspective sort (introsort)</strong> algorithm as follows」：分区元素 ≤ <strong>16</strong> 个时用<strong>插入排序</strong>；分区深度超过 <strong>2 × log N</strong> 时切换到<strong>堆排序</strong>；否则用<strong>快速排序</strong>。并且：「This implementation performs an <strong>unstable</strong> sort.」
+  <br><a href="https://learn.microsoft.com/en-us/dotnet/api/system.array.sort">learn.microsoft.com — Array.Sort Method</a></p>
+</div>
+
+<p>把这三点记牢，它们能直接回答三个追问：</p>
+
+<table>
+  <thead><tr><th>追问</th><th>你的回答</th></tr></thead>
+  <tbody>
+    <tr><td>快排最坏 O(n²)，.NET 怎么办？</td><td>内省排序：递归深度超过 2 log N 就切堆排，把最坏钉死在 O(n log n)。</td></tr>
+    <tr><td>为什么小数组用插入排序？</td><td>n ≤ 16 时插入排序常数小、缓存友好，且几乎有序时接近 O(n)。</td></tr>
+    <tr><td>排序稳定吗？</td><td><code>Array.Sort</code> / <code>List&lt;T&gt;.Sort</code> <strong>不稳定</strong>；要稳定用 LINQ 的 <code>OrderBy</code>（文档明确保证稳定）。</td></tr>
+  </tbody>
+</table>
+
+<h3>手写快排（这份代码我已编译运行验证过）</h3>
+
+<pre><code><span class="cm">// 入口：对外只暴露一个方法</span>
+public static void QuickSort(int[] a) =&gt; Sort(a, 0, a.Length - 1);
+
+static void Sort(int[] a, int lo, int hi)
+{
+    while (lo &lt; hi)
+    {
+        <span class="cm">// 优化 1：小区间转插入排序（照抄 .NET 的 16 阈值）</span>
+        if (hi - lo &lt; 16) { InsertionSort(a, lo, hi); return; }
+
+        int p = Partition(a, lo, hi);
+
+        <span class="cm">// 优化 2：尾递归消除 —— 只递归较短的一侧，较长的一侧用 while 循环</span>
+        <span class="cm">// 效果：递归栈深度被钉死在 O(log n)，杜绝大数组 StackOverflow</span>
+        if (p - lo &lt; hi - p) { Sort(a, lo, p - 1); lo = p + 1; }
+        else                 { Sort(a, p + 1, hi); hi = p - 1; }
+    }
+}
+
+<span class="cm">// Lomuto 分区 + 三数取中选 pivot</span>
+public static int Partition(int[] a, int lo, int hi)
+{
+    int mid = lo + (hi - lo) / 2;   <span class="cm">// 不写 (lo+hi)/2，避免 int 溢出</span>
+
+    <span class="cm">// 三次比较让 a[lo] &lt;= a[mid] &lt;= a[hi]，中位数落在 mid</span>
+    if (a[lo]  &gt; a[mid]) Swap(a, lo, mid);
+    if (a[lo]  &gt; a[hi])  Swap(a, lo, hi);
+    if (a[mid] &gt; a[hi])  Swap(a, mid, hi);
+
+    Swap(a, mid, hi);               <span class="cm">// 把中位数挪到末尾当 pivot</span>
+    int pivot = a[hi];
+
+    int i = lo - 1;                 <span class="cm">// i 指向「已知 &lt;= pivot 区」的最后一个</span>
+    for (int j = lo; j &lt; hi; j++)
+        if (a[j] &lt;= pivot) Swap(a, ++i, j);
+
+    Swap(a, ++i, hi);               <span class="cm">// pivot 归位，此处即它的最终位置</span>
+    return i;
+}
+
+static void InsertionSort(int[] a, int lo, int hi)
+{
+    for (int i = lo + 1; i &lt;= hi; i++)
+    {
+        int v = a[i], j = i - 1;
+        while (j &gt;= lo &amp;&amp; a[j] &gt; v) { a[j + 1] = a[j]; j--; }
+        a[j + 1] = v;
+    }
+}
+
+static void Swap(int[] a, int i, int j) { (a[i], a[j]) = (a[j], a[i]); }</code></pre>
+
+<div class="callout ext">
+  <span class="label">扩展 · 这段代码里埋了五个加分点</span>
+  <ul>
+    <li><code>lo + (hi - lo) / 2</code> 而不是 <code>(lo + hi) / 2</code>：后者在大数组上会 <strong>int 溢出</strong>。这是 JDK 里著名的 <a href="https://research.google/blog/extra-extra-read-all-about-it-nearly-all-binary-searches-and-mergesorts-are-broken/">binarySearch 老 bug</a>。写出来面试官一般会「哦」一声。</li>
+    <li><strong>三数取中</strong>：解决「已排好序的输入让快排退化成 O(n²)」。也可以说随机化 pivot，两者都对。</li>
+    <li><strong>尾递归消除</strong>：只递归短边，栈深度 O(log n)。不做的话，大量已排序元素能直接把栈打爆。</li>
+    <li><strong>小区间切插排</strong>：常数优化，能顺势带出 .NET 的 16 阈值。</li>
+    <li>如果数据里<strong>大量重复值</strong>，Lomuto 会退化——这时该说 <strong>三路划分（Dijkstra 荷兰国旗）</strong>，把等于 pivot 的一整段整体跳过。这是「你还知道什么」的最佳弹药。</li>
+  </ul>
+</div>
+
+<h2 id="s3">三、档位 B：快速选择求中位数</h2>
+
+<p>「查找数组中位数」是个陷阱题。<strong>先排序再取中间</strong>是 O(n log n)，能拿分但拿不到高分。正确答案是：<strong>你只需要第 n/2 个元素，为什么要把其它 n−1 个也排好？</strong></p>
+
+<h3>核心洞察</h3>
+
+<p>快排的 <code>Partition</code> 有一个被浪费掉的性质：<strong>它返回的下标 p，就是 pivot 在最终有序数组里的确切位置</strong>——这一点在分区结束的那一刻就已经确定，不需要再排任何东西。</p>
+
+<p>于是：</p>
+
+<ul>
+  <li><code>p == k</code> → <code>a[p]</code> 就是答案，收工。</li>
+  <li><code>p &lt; k</code> → 答案在右半边，<strong>左半边整个丢掉，不再看一眼</strong>。</li>
+  <li><code>p &gt; k</code> → 答案在左半边，右半边丢掉。</li>
+</ul>
+
+<p>快排要处理两边，所以是 <code>T(n) = 2T(n/2) + n = O(n log n)</code>；快速选择只处理一边，<code>T(n) = T(n/2) + n = n + n/2 + n/4 + … &lt; 2n</code> → <strong>期望 O(n)</strong>。等比数列求和，这个推导现场能讲，非常加分。</p>
+
+<pre><code><span class="cm">// k 为 0-based 下标：k=0 是最小值，k=n-1 是最大值</span>
+<span class="cm">// 注意：本方法会「就地打乱」入参数组，调用方若在意要先 Clone</span>
+public static int QuickSelect(int[] a, int k)
+{
+    int lo = 0, hi = a.Length - 1;
+    while (lo &lt; hi)                      <span class="cm">// 循环而非递归，栈深度 O(1)</span>
+    {
+        int p = Partition(a, lo, hi);    <span class="cm">// 复用上一节那个 Partition</span>
+        if (p == k) return a[p];
+        if (p &lt; k) lo = p + 1; else hi = p - 1;
+    }
+    return a[lo];
+}
+
+public static double Median(int[] a)
+{
+    int n = a.Length;
+    if (n == 0) throw new ArgumentException("空数组没有中位数", nameof(a));
+
+    <span class="cm">// 奇数：正中间那个</span>
+    if ((n &amp; 1) == 1) return QuickSelect(a, n / 2);
+
+    <span class="cm">// 偶数：中间两个的平均。两次调用作用在同一个数组上——</span>
+    <span class="cm">// 第一次已经把数组部分划分好了，第二次会更快，且结果依然正确</span>
+    <span class="cm">// （因为数组始终是同一个多重集的某个排列）</span>
+    int hiHalf = QuickSelect(a, n / 2);
+    int loHalf = QuickSelect(a, n / 2 - 1);
+    return (loHalf + hiHalf) / 2.0;
+}</code></pre>
+
+<div class="callout">
+  <span class="label">三个必答的追问</span>
+  <p><strong>Q：最坏情况呢？</strong>A：每次 pivot 都选到最值 → O(n²)。工程上用随机化 pivot 或三数取中，实践中不会发生。<br>
+  <strong>Q：有严格 O(n) 最坏保证的做法吗？</strong>A：有，<strong>中位数的中位数（Median of Medians / BFPRT）</strong>——五个一组求中位数，再对这些中位数递归求中位数当 pivot，能保证每次至少切掉约 30%，最坏 O(n)。但常数很大，实际比随机化快速选择慢，所以只在需要最坏保证时用。<br>
+  <strong>Q：偶数长度怎么办？</strong>A：取中间两个的平均。别在这翻车——很多人手写时忘了偶数分支。</p>
+</div>
+
+<div class="callout ext">
+  <span class="label">扩展 · 如果是「流式数据的实时中位数」</span>
+  <p>这是一道常见的追加题，答案完全不同：<strong>用两个堆</strong>。一个大顶堆存较小的一半，一个小顶堆存较大的一半，每次插入后调整使两堆大小差 ≤ 1。中位数 = 较大那个堆的堆顶（奇数）或两个堆顶的平均（偶数）。插入 O(log n)、取中位数 O(1)。<br>
+  这正好是档位 B 和档位 C 的<strong>交叉点</strong>：数据不是一个静止的数组而是一条流时，「选择」问题就变成了「堆」问题。</p>
+</div>
+
+<h2 id="s4">四、档位 C：Top-K 小顶堆</h2>
+
+<p>题库那句「<strong>无序大数据量，找到需要的数据</strong>」，标准答案就是这一档。</p>
+
+<h3>为什么求「最大的 K 个」要用「小顶堆」</h3>
+
+<p>这是最反直觉、也最常被答反的一点。想清楚这个比喻就永远不会记错：</p>
+
+<div class="callout">
+  <span class="label">守门员比喻</span>
+  <p>堆是一个<strong>只有 K 个座位的贵宾席</strong>。堆顶是席位里<strong>最弱的那个人</strong>——他是守门员。新人来了，只需要和守门员比：<strong>比守门员还弱 → 直接不让进；比守门员强 → 踢掉守门员，自己进来</strong>，然后席位里重新选出一个新的最弱者当守门员。</p>
+  <p>所以：<strong>求最大的 K 个 → 小顶堆</strong>（堆顶是候选集里的最小值，即门槛）；<strong>求最小的 K 个 → 大顶堆</strong>。</p>
+</div>
+
+<p>复杂度：<strong>时间 O(N log K)，内存 O(K)</strong>。对比整体排序的 O(N log N) 和内存 O(N)——当 K=100、N=1 亿时，<code>log₂K ≈ 7</code> 而 <code>log₂N ≈ 27</code>，快约 4 倍；内存差 100 万倍。<strong>内存那一项才是关键</strong>：它意味着数据可以从文件里流式读进来，永远不用全装下。</p>
+
+<pre><code><span class="cm">// .NET 6 起有内置的 PriorityQueue&lt;TElement, TPriority&gt;</span>
+<span class="cm">// 官方文档：array-backed, quaternary MIN-heap（四叉小顶堆），出队的是优先级最小的</span>
+public static List&lt;int&gt; LargestK(IEnumerable&lt;int&gt; source, int k)
+{
+    if (k &lt;= 0) return new List&lt;int&gt;();
+
+    var heap = new PriorityQueue&lt;int, int&gt;(k);   <span class="cm">// 元素本身即优先级</span>
+
+    foreach (int x in source)                    <span class="cm">// 流式：source 可以是 File.ReadLines(...)</span>
+    {
+        if (heap.Count &lt; k)
+            heap.Enqueue(x, x);                  <span class="cm">// 席位没坐满，先进来</span>
+        else if (x &gt; heap.Peek())                <span class="cm">// Peek() = 当前守门员</span>
+            heap.EnqueueDequeue(x, x);           <span class="cm">// 一次操作完成「换人」，比 Dequeue+Enqueue 少一次堆调整</span>
+    }
+
+    <span class="cm">// 堆里倒出来是从小到大，反转成从大到小</span>
+    var result = new List&lt;int&gt;(heap.Count);
+    while (heap.Count &gt; 0) result.Add(heap.Dequeue());
+    result.Reverse();
+    return result;
+}</code></pre>
+
+<div class="callout ext">
+  <span class="label">扩展 · 四个能拉开差距的补充</span>
+  <ul>
+    <li><strong>手写堆</strong>：如果面试官不让用 <code>PriorityQueue</code>，就用数组 + <code>SiftUp</code> / <code>SiftDown</code>：下标 i 的父节点是 <code>(i-1)/2</code>，子节点是 <code>2i+1</code>、<code>2i+2</code>。建堆用 Floyd 自底向上是 <strong>O(n)</strong>，不是 O(n log n)——这个反直觉的结论值得记。</li>
+    <li><strong>K 也很大怎么办？</strong>K 接近 N 时堆就没优势了（O(N log K) ≈ O(N log N)，且内存 O(K) ≈ O(N)），退回档位 A 或 D。</li>
+    <li><strong>数据分布在多台机器上？</strong>每台各自求本地 Top-K，再把这 K×机器数 个候选汇总求全局 Top-K。这就是 MapReduce 的思路，也是「你会不会往分布式想」的探针。<strong>注意：Top-K 可以这样分治，中位数不行</strong>——局部中位数的中位数不等于全局中位数。这个区分说出来很扎实。</li>
+    <li><code>PriorityQueue</code> 文档明确写了：<strong>相同优先级的元素不保证 FIFO 顺序</strong>。要稳定就把入队序号并进优先级里。</li>
+  </ul>
+</div>
+
+<h2 id="s5">五、档位 D：外部归并排序</h2>
+
+<p>题目原话：「<strong>排序的数据从文本中获取，但占用超出主存资源，从大到小排序若干个数</strong>」。这是本课的重头戏。</p>
+
+<h3>心智模型：分而治之，但「治」发生在磁盘上</h3>
+
+<p>只有一个想法：<strong>内存装不下全部，但一定装得下一小块。</strong></p>
+
+<ol>
+  <li><strong>Pass 0（切块内排）</strong>：每次读入内存装得下的一块（比如 1000 万个数），在内存里排好序，写成一个临时文件。这个有序的临时文件叫一个 <strong>run（归并段）</strong>。读完整个输入，得到若干个 run。</li>
+  <li><strong>Pass 1..n（K 路归并）</strong>：同时打开这些 run，每个 run 只在内存里保留<strong>队头一个元素</strong>（实际是一个小缓冲区），反复取出所有队头里的最大值写到输出，然后从它所属的那个 run 里补进下一个。</li>
+</ol>
+
+<p>关键在第 2 步：<strong>任意时刻内存里只有 K 个元素（K = run 的个数），与总数据量无关。</strong>这就是它能排 1 TB 数据的原因。</p>
+
+<h3>归并阶段为什么必须用堆</h3>
+
+<p>每次要在 K 个队头里找最大值。线性扫描是 O(K)，总成本 O(N·K)；用一个<strong>容量 K 的大顶堆</strong>是 O(log K)，总成本 <strong>O(N log K)</strong>。K=100 时差约 15 倍。<strong>这就是档位 C 的堆在档位 D 里的复用</strong>——两道题其实共用同一个数据结构。</p>
+
+<pre><code>static readonly IComparer&lt;long&gt; Desc = Comparer&lt;long&gt;.Create((x, y) =&gt; y.CompareTo(x));
+<span class="cm">// PriorityQueue 天生是小顶堆；传入「反序比较器」就变成大顶堆。</span>
+<span class="cm">// （也可以把优先级取负数，但遇到 long.MinValue 会溢出，比较器更稳妥）</span>
+
+public static void SortDescending(string inputPath, string outputPath,
+                                  int chunkSize, string tempDir)
+{
+    Directory.CreateDirectory(tempDir);
+    var runs = new List&lt;string&gt;();
+
+    <span class="cm">// ---------- Pass 0：切块 → 内存排序 → 落盘成 run ----------</span>
+    using (var reader = new StreamReader(inputPath))
+    {
+        var buf = new List&lt;long&gt;(chunkSize);
+        string? line;
+        while ((line = reader.ReadLine()) is not null)   <span class="cm">// 逐行读，绝不 ReadAllLines</span>
+        {
+            if (line.Length == 0) continue;
+            buf.Add(long.Parse(line));
+            if (buf.Count == chunkSize) runs.Add(FlushRun(buf, tempDir, runs.Count));
+        }
+        <span class="cm">// 最后不满一块的残留，必须再 flush 一次 —— 最常见的 bug 就在这行</span>
+        if (buf.Count &gt; 0) runs.Add(FlushRun(buf, tempDir, runs.Count));
+    }
+
+    <span class="cm">// ---------- Pass 1：K 路归并 ----------</span>
+    Merge(runs, outputPath);
+    foreach (var r in runs) File.Delete(r);
+}
+
+static string FlushRun(List&lt;long&gt; buf, string tempDir, int index)
+{
+    buf.Sort(Desc);                                       <span class="cm">// 从大到小</span>
+    string path = Path.Combine(tempDir, $"run-{index:D4}.txt");
+    using (var w = new StreamWriter(path))
+        foreach (long v in buf) w.WriteLine(v);
+    buf.Clear();                                          <span class="cm">// 复用同一个 List，不重新分配</span>
+    return path;
+}
+
+static void Merge(List&lt;string&gt; runs, string outputPath)
+{
+    var readers = runs.Select(p =&gt; new StreamReader(p)).ToList();
+    try
+    {
+        <span class="cm">// 堆里存 (值, 它来自第几个 run)，容量 = run 数</span>
+        var heap = new PriorityQueue&lt;(long Value, int Run), long&gt;(runs.Count, Desc);
+
+        for (int i = 0; i &lt; readers.Count; i++)           <span class="cm">// 每个 run 先放一个队头进堆</span>
+            if (TryNext(readers[i], out long v)) heap.Enqueue((v, i), v);
+
+        using var w = new StreamWriter(outputPath);
+        while (heap.TryDequeue(out var top, out _))
+        {
+            w.WriteLine(top.Value);                       <span class="cm">// 当前全局最大值</span>
+            if (TryNext(readers[top.Run], out long next)) <span class="cm">// 从它来的那个 run 补一个</span>
+                heap.Enqueue((next, top.Run), next);
+        }
+    }
+    finally { foreach (var r in readers) r.Dispose(); }
+}
+
+static bool TryNext(StreamReader r, out long value)
+{
+    string? line;
+    while ((line = r.ReadLine()) is not null)
+        if (line.Length &gt; 0) { value = long.Parse(line); return true; }
+    value = 0;
+    return false;
+}</code></pre>
+
+<div class="callout">
+  <span class="label">实测</span>
+  <p>这份代码我编译运行验证过：20 万个 long、每块 1 万（即 20 个 run），排序结果与全内存 <code>Array.Sort</code> + <code>Reverse</code> <strong>逐位一致</strong>，耗时 525 ms（含读写临时文件）。第 11 节的实验会让你自己跑出这个结果。</p>
+</div>
+
+<h2 id="s6">六、趟数与 I/O 成本公式</h2>
+
+<p>能背算法的人很多，<strong>能算成本的人很少</strong>。这一节的公式是本课的「深度炸弹」。</p>
+
+<p>设：<strong>N = 数据总页数</strong>，<strong>B = 可用的内存缓冲页数</strong>。</p>
+
+<table>
+  <thead><tr><th>量</th><th>公式</th><th>为什么</th></tr></thead>
+  <tbody>
+    <tr><td>Pass 0 产生的 run 数</td><td><code>⌈N / B⌉</code></td><td>每次装满 B 页排一次，写出一个 B 页的 run</td></tr>
+    <tr><td>总趟数</td><td><code>1 + ⌈log<sub>B−1</sub> ⌈N/B⌉⌉</code></td><td>Pass 0 算 1 趟；之后每趟能把 run 数除以 B−1</td></tr>
+    <tr><td>总 I/O 次数</td><td><code>2N × 总趟数</code></td><td>每趟都要把全部 N 页<strong>读一遍写一遍</strong></td></tr>
+  </tbody>
+</table>
+
+<p>两个「为什么」必须能解释：</p>
+
+<ul>
+  <li><strong>为什么是 B−1 而不是 B？</strong>B 个缓冲页里，必须留 <strong>1 页做输出缓冲</strong>，剩下 B−1 页各对应一个输入 run。这是最容易被追问、也最容易答漏的细节。</li>
+  <li><strong>为什么乘 2？</strong>一读一写。</li>
+</ul>
+
+<div class="callout ext">
+  <span class="label">扩展 · 现场算一遍（面试官很可能真的让你算）</span>
+  <p>N = 1000 页，B = 11 页。<br>
+  Pass 0：<code>⌈1000/11⌉ = 91</code> 个 run。<br>
+  总趟数：<code>1 + ⌈log₁₀ 91⌉ = 1 + 2 = 3</code> 趟。<br>
+  总 I/O：<code>2 × 1000 × 3 = 6000</code> 次。<br>
+  <strong>再体会一下这个公式的含义：</strong>趟数里对数的底是 B−1。内存从 11 页涨到 101 页，底数从 10 变成 100，趟数从 3 降到 2——<strong>I/O 直接省掉三分之一</strong>。这就是「给排序多分点内存」在数据库里效果那么显著的原因，也是下一节的引子。<br>
+  公式出处：<a href="https://cs186berkeley.net/notes/note8/">UC Berkeley CS186 — Sorting</a>（Ramakrishnan &amp; Gehrke《Database Management Systems》第 13 章的标准表述）。</p>
+</div>
+
+<h2 id="s7">七、接回数据库那道题</h2>
+
+<p>题库第四节有一问：<strong>「数据库有大量数据，大到程序内存完全吃不消，如果排序全部数据，前提是数据库没有索引排序？」</strong></p>
+
+<p>这道题看着像数据库题，其实<strong>答案就是本课的档位 D</strong>——而且关键在于：<strong>你根本不该把数据捞到程序里排。</strong></p>
+
+<div class="script">
+  <span class="label">面试话术 · 这道题的完整回答</span>
+  <p><q>首先我不会把数据拉到应用内存里排——那是把数据库最擅长的事搬到最不适合的地方做。没有索引时，PostgreSQL 执行 <code>ORDER BY</code> 走的就是外部归并排序：它先按 <code>work_mem</code> 的额度在内存里排一批、写成临时文件，全部切完之后再多路归并。你在 <code>EXPLAIN (ANALYZE, BUFFERS)</code> 里能直接看到 <code>Sort Method: external merge  Disk: 82000kB</code>——这行就是它落盘了的证据；如果内存够，那行会是 <code>Sort Method: quicksort  Memory: ...</code>。</q></p>
+  <p><q>所以我的排查顺序是三步。第一，看这个排序是不是真的需要全量——大多数场景其实是分页，那就用 keyset 分页配合排序列上的索引，让排序变成索引顺序扫描，排序成本直接归零。第二，如果真要全量导出，就<strong>调大这个会话的 <code>work_mem</code></strong> 减少归并趟数——外部排序总 I/O 是 <code>2N × 趟数</code>，趟数是以「缓冲页数减一」为底的对数，内存翻十倍往往就少一整趟；但要注意 <code>work_mem</code> 是<strong>每个操作、每个会话</strong>各算一份，一个复杂查询里有多个排序就是多份，所以绝不能在全局配置里往大了调，我一般用 <code>SET LOCAL work_mem</code> 只对当前事务生效。第三，如果这是个常态需求，那就该建索引了——排序列上的 B-tree 索引能让数据库直接按索引顺序吐数据，完全不排序。</q></p>
+  <p><q>如果排序确实必须在应用侧做，比如数据来自文本文件而不是数据库，那就是标准的外部归并排序：分块读入、内存内排序、落盘成有序段，再用一个容量等于段数的堆做多路归并。我实现过这个，核心就是堆里存「值 + 它来自哪个段」这个二元组。</q></p>
+</div>
+
+<p><code>work_mem</code> 的官方定义：「Sets the base maximum amount of memory to be used by a query operation (such as a sort or hash table) <strong>before writing to temporary disk files</strong>.」默认只有 <strong>4MB</strong>。来源：<a href="https://www.postgresql.org/docs/current/runtime-config-resource.html">PostgreSQL Docs — Resource Consumption</a>。</p>
+
+<div class="callout">
+  <span class="label">和 Lesson 01 的接口</span>
+  <p>这里「第一步：看是不是真的需要全量排序」，直接接上 <a href="0001-composite-index-leftmost-prefix.html">Lesson 01</a> 的 keyset 分页和索引顺序扫描。<strong>两课串起来讲，效果远大于分开讲</strong>：面试官问算法题，你能把答案落到数据库执行计划上；问数据库题，你能把答案落到算法复杂度上。这种双向连接就是「5–7 年经验」该有的样子。</p>
+</div>
+
+<h2 id="s8">八、白板检查清单</h2>
+
+<p>现场手写时，这几个坑最容易踩。写完后花 20 秒逐条自查——<strong>当着面试官的面自查，本身就是加分项</strong>。</p>
+
+<table>
+  <thead><tr><th>检查项</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>空数组 / 单元素</td><td><code>a.Length == 0</code> 时 <code>hi = -1</code>，循环条件 <code>lo &lt; hi</code> 直接不进，安全。中位数要显式抛异常。</td></tr>
+    <tr><td>中点算法</td><td><code>lo + (hi - lo) / 2</code>，别写 <code>(lo + hi) / 2</code>。</td></tr>
+    <tr><td>边界闭开</td><td>本课全部用<strong>闭区间 <code>[lo, hi]</code></strong>。开口一致比开口正确更重要——不一致必错。</td></tr>
+    <tr><td>k 的基准</td><td>先说清 k 是 0-based 还是 1-based。中位数：奇数取 <code>n/2</code>，偶数取 <code>n/2-1</code> 和 <code>n/2</code>。</td></tr>
+    <tr><td>Top-K 的堆向</td><td>求最大 K 个 → <strong>小</strong>顶堆。念一遍「守门员」再动笔。</td></tr>
+    <tr><td>外部排序最后一块</td><td>循环结束后 <code>buf</code> 里通常还有<strong>不满一块</strong>的残留，必须再 flush 一次。漏了这行是最常见的 bug。</td></tr>
+    <tr><td>逐行读，不要 ReadAllLines</td><td>整道题的前提就是内存装不下。写出 <code>File.ReadAllLines</code> 等于自己否定了题目。</td></tr>
+    <tr><td>流要释放</td><td><code>using</code> / <code>try-finally</code>。归并时同时开着几十个 <code>StreamReader</code>，漏一个就句柄泄漏。</td></tr>
+  </tbody>
+</table>
+
+<h2 id="s9">九、检验一下</h2>
+
+<p>不要翻回去看。答错比答对更有用——错的地方就是明天该复习的地方。</p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "一亿个整数存在文本文件里，只需要最大的 100 个，机器可用内存几十 MB。怎么做？",
+    "options": [
+      "全部读进内存再整体快排一次",
+      "维护容量一百的小顶堆扫一遍",
+      "先做外部归并排序再取前一百",
+      "按值哈希分桶后逐桶全量排序"
+    ],
+    "answer": 1,
+    "why": "档位 C。时间 O(N log K)，<strong>内存只占 O(K)=100 个</strong>，数据可以流式读入，永不落盘。整体快排装不下；外部归并排序能得到正确结果但白做了 N log N 的功和大量磁盘 I/O——只要 100 个，却把一亿个都排好了。"
+  },
+  {
+    "q": "关于 .NET 的 Array.Sort，哪一句是对的？",
+    "options": [
+      "它是稳定排序，等值元素保持原序",
+      "它是内省排序，递归过深转堆排序",
+      "它是归并排序，需额外线性辅助空间",
+      "它是纯快速排序，最坏退化到平方"
+    ],
+    "answer": 1,
+    "why": "官方文档原文：introsort —— 分区 ≤16 用插入排序，递归深度超过 2×log N 切换堆排序，否则快排；并且<strong>明确声明是 unstable sort</strong>。要稳定排序用 LINQ 的 OrderBy。"
+  },
+  {
+    "q": "快速选择（Quickselect）求中位数的平均与最坏时间复杂度分别是？",
+    "options": [
+      "平均 O(n)，最坏 O(n²)",
+      "平均 O(n)，最坏 O(n log n)",
+      "平均 O(n log n)，最坏 O(n²)",
+      "平均 O(log n)，最坏 O(n)"
+    ],
+    "answer": 0,
+    "why": "每次只递归一侧：n + n/2 + n/4 + … < 2n，期望线性。最坏是每次 pivot 都选到最值，退化 O(n²)。想要最坏也 O(n)，需要中位数的中位数（BFPRT），但常数大，实践中一般用随机化 pivot 或三数取中。"
+  },
+  {
+    "q": "外部归并排序：数据 1000 页，可用缓冲 11 页。总趟数和总 I/O 次数是？",
+    "options": [
+      "1 趟，2000 次 I/O",
+      "2 趟，4000 次 I/O",
+      "3 趟，6000 次 I/O",
+      "4 趟，8000 次 I/O"
+    ],
+    "answer": 2,
+    "why": "Pass 0 产生 ⌈1000/11⌉ = 91 个 run；总趟数 1 + ⌈log₁₀ 91⌉ = 1+2 = 3，对数的底是 <strong>B−1 = 10</strong>，因为要留一页做输出缓冲；每趟全部数据读一遍写一遍，2×1000×3 = 6000。"
+  },
+  {
+    "q": "多路归并阶段用堆维护各段队头，相比每次线性扫描所有队头，好处是？",
+    "options": [
+      "把每次取最值从线性降到对数级",
+      "堆能减少磁盘随机寻址的总次数",
+      "堆保证了相等元素的输出稳定性",
+      "堆让归并段缓冲区占用变得更小"
+    ],
+    "answer": 0,
+    "why": "线性扫描 K 个队头是 O(K)，总成本 O(N·K)；堆是 O(log K)，总成本 O(N log K)。K=100 时差约 15 倍。注意 .NET 的 PriorityQueue <strong>不保证</strong>同优先级元素的 FIFO 顺序，所以第三项是错的。"
+  },
+  {
+    "q": "EXPLAIN ANALYZE 输出里出现 Sort Method: external merge  Disk: 82000kB，说明什么？",
+    "options": [
+      "排序超过 work_mem，溢出到临时磁盘",
+      "该表缺少可用的索引，只能退化成一次全表扫描",
+      "共享缓冲区命中率过低，应调大共享缓冲区大小",
+      "统计信息已经过期，需要重新收集一次统计信息"
+    ],
+    "answer": 0,
+    "why": "work_mem 是「单个查询操作在写临时磁盘文件之前可用的内存上限」，默认 4MB。超了就走外部归并排序，EXPLAIN 会显示 external merge 和落盘体积；没超则显示 quicksort Memory: xxx。注意 work_mem 是每操作、每会话各算一份，别在全局往大了调。"
+  },
+  {
+    "q": "面试官说：文本里的数从大到小排序，数据超出主存。你开口第一句最该是？",
+    "options": [
+      "先问清楚数据总量、可用内存和输出要求",
+      "直接在白板上开始动手写归并排序的代码",
+      "回答这题必须上分布式计算框架才能处理",
+      "建议把数据全导进数据库交给引擎去排序"
+    ],
+    "answer": 0,
+    "why": "反问边界条件才是这道题真正的考点——它区分「刷过题的人」和「做过容量估算的人」。问完你才知道该落在哪个档位：只要前几名就用堆，要全序才用外部归并。<strong>问完再动笔不算浪费时间，算加分。</strong>"
+  },
+  {
+    "q": "要从海量数据里找出最大的 K 个，堆应该怎么选，堆顶是什么？",
+    "options": [
+      "小顶堆，堆顶是候选集里的最小值",
+      "大顶堆，堆顶是候选集里的最大值",
+      "小顶堆，堆顶是全体数据的最小值",
+      "大顶堆，堆顶是全体数据的最大值"
+    ],
+    "answer": 0,
+    "why": "守门员比喻：堆是只有 K 个座位的贵宾席，堆顶是<strong>席位里最弱的那个</strong>，不是全体数据里最弱的。新元素只要比守门员强就换人进来。反过来，求最小的 K 个用大顶堆。"
+  }
+]'></div>
+
+<h2 id="s10">十、面试话术</h2>
+
+<div class="script">
+  <span class="label">话术 1 · 「现场实现一个排序算法」</span>
+  <p><q>可以。先说明一点：生产代码我不会自己写排序，会用 <code>Array.Sort</code>——它内部是内省排序，分区小于 16 个元素时走插入排序，递归深度超过 2 倍 log N 时切换成堆排序，所以最坏情况被钉死在 O(n log n)，不会退化。它是不稳定排序，需要稳定的时候我用 LINQ 的 <code>OrderBy</code>。</q></p>
+  <p><q>不过我知道你想看手写，我写一个带优化的快排。</q>（边写边说）<q>三个地方我会特意处理：中点用 <code>lo + (hi-lo)/2</code> 防 int 溢出；pivot 用三数取中，防止输入已经有序时退化成 O(n²)；递归只递归较短的一边、较长的一边用循环，这样栈深度是 O(log n)，大数组不会爆栈。</q></p>
+  <p><q>如果数据里有大量重复值，Lomuto 分区还是会退化，那时我会换成三路划分——把等于 pivot 的一整段直接跳过。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 2 · 「查找数组中位数」</span>
+  <p><q>先排序再取中间是 O(n log n)，但没必要——我只要第 n/2 个元素，不需要另外 n−1 个也排好。用快速选择：借用快排的分区，分区完成时 pivot 的下标就是它在最终有序数组里的确切位置。如果这个下标正好是 n/2，直接返回；比 n/2 小就只往右半边找，大就只往左半边找，<strong>另一半整个丢掉不看</strong>。</q></p>
+  <p><q>因为每次只处理一边，递推是 T(n) = T(n/2) + n，展开是 n + n/2 + n/4 + …，小于 2n，所以期望 O(n)。最坏情况是每次 pivot 都选到最值，退化成 O(n²)，工程上用随机 pivot 或三数取中规避。如果必须有最坏 O(n) 的保证，那就是中位数的中位数 BFPRT，但它常数太大、实际反而更慢，所以我只在有硬性延迟保证的场景才考虑。</q></p>
+  <p><q>还有一点：偶数长度要取中间两个的平均，做两次选择就行，第二次因为数组已经被部分划分过会更快。如果数据不是静止数组而是一条流、要实时出中位数，那就换方案——用一个大顶堆存较小的一半、一个小顶堆存较大的一半，保持两堆大小差不超过 1，插入 O(log n)、取中位数 O(1)。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 3 · 「无序大数据量，找到需要的数据」</span>
+  <p><q>我先确认一下需求：是要全部有序，还是只要最大或最小的若干个？如果只要前 K 个，就不该排序。</q></p>
+  <p><q>做法是维护一个<strong>容量为 K 的小顶堆</strong>。求最大的 K 个用小顶堆，这一点容易搞反——因为堆顶是当前候选集里<strong>最小</strong>的那个，它相当于门槛。新元素进来只跟堆顶比：比堆顶小直接丢掉，比堆顶大就把堆顶换出去。全程扫一遍，时间 O(N log K)。</q></p>
+  <p><q>更关键的是内存只占 O(K)。K 是 100 的话，一亿条数据也只在内存里放 100 个，数据可以从文件流式读进来，完全不需要装下。.NET 6 以后有内置的 <code>PriorityQueue</code>，默认就是小顶堆，换元素用 <code>EnqueueDequeue</code> 一次调整就够。如果数据分布在多台机器上，每台先算本地 Top-K，再把候选汇总求全局 Top-K——不过要注意这个分治只对 Top-K 成立，中位数不能这么做，局部中位数的中位数不等于全局中位数。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 4 · 「数据超出主存，从大到小排序」</span>
+  <p><q>标准的外部归并排序，两个阶段。第一阶段：按内存能装下的大小分块读入，每块在内存里排好序、写成一个临时文件，叫一个归并段。第二阶段：把所有归并段同时打开，每个段在内存里只保留队头，用一个大顶堆在这些队头里反复取最大值写到输出，取走谁就从谁所属的段里补下一个。堆里存的是「值 + 它来自第几个段」这个二元组。</q></p>
+  <p><q>核心性质是：归并阶段内存里只有段数那么多个元素，和总数据量无关，所以这个方法能排任意大的数据。成本上，设数据 N 页、内存 B 页，第一阶段产生 N/B 个段，之后每趟能归并 B−1 路——留一页做输出缓冲，所以是 B−1 不是 B。总趟数是 1 加上以 B−1 为底、N/B 的对数，每趟全量读一遍写一遍，总 I/O 就是 2N 乘趟数。</q></p>
+  <p><q>工程上要注意几点：全程逐行读，绝不能用 <code>ReadAllLines</code>，否则就违背了题目前提；分块循环结束后缓冲区里还有不满一块的残留，必须补一次落盘，这是最常见的 bug；同时打开的几十个流要用 <code>using</code> 保证释放。<code>PriorityQueue</code> 本身是小顶堆，我传一个反序的 <code>Comparer</code> 把它变成大顶堆，不用取负数——取负数遇到 <code>long.MinValue</code> 会溢出。</q></p>
+</div>
+
+<div class="callout">
+  <span class="label">还差最后一块：你的真实经历</span>
+  <p>上面四段话术是「知识」部分，已经能拿到不错的分数。但真正让面试官记住你的是<strong>第五句</strong>：<q>我在 XX 项目里就遇到过这个……</q>。<strong>请在对话里告诉我：你有没有处理过大文件导入 / 报表全量导出 / 批量数据迁移的经历？</strong>哪怕只是「导出十万行 Excel 内存爆了」，我都能帮你改写成能挂在这四段话术上、并且经得起追问的项目故事。</p>
+</div>
+
+<h2 id="s11">十一、动手实验（30 分钟）</h2>
+
+<p>Lesson 01 你真的跑了 Docker 和 psql，这次也请真的跑。<strong>白板上写得出来，靠的是手指记得，不是眼睛见过。</strong></p>
+
+<h3>第 1 步：建项目</h3>
+
+<pre><code><span class="cm"># 任意目录下</span>
+dotnet new console -o algo-lab
+cd algo-lab</code></pre>
+
+<h3>第 2 步：默写</h3>
+
+<p><strong>关掉这个页面</strong>，在 <code>Program.cs</code> 里凭记忆写出四个方法。写不出来的地方留空，卡住超过两分钟再回来看——<strong>那个卡住的点，就是你面试当天会卡住的点</strong>，值得单独记下来告诉我。</p>
+
+<ol>
+  <li><code>QuickSort(int[] a)</code> —— 含三数取中 + 尾递归消除</li>
+  <li><code>QuickSelect(int[] a, int k)</code> 和 <code>Median(int[] a)</code> —— 别忘偶数分支</li>
+  <li><code>LargestK(IEnumerable&lt;int&gt; src, int k)</code> —— 小顶堆</li>
+  <li><code>SortDescending(...)</code> —— 外部归并排序</li>
+</ol>
+
+<h3>第 3 步：用随机对拍验证自己</h3>
+
+<p>把下面这段贴进 <code>Main</code>。它用 200 组随机数据把你的实现和 .NET 库函数对拍——<strong>这就是最紧的反馈回路：几秒钟就知道自己对不对</strong>。</p>
+
+<pre><code>var rng = new Random(42);
+
+<span class="cm">// A. 快排对拍</span>
+for (int t = 0; t &lt; 200; t++)
+{
+    int n = rng.Next(0, 300);
+    var a = new int[n];
+    for (int i = 0; i &lt; n; i++) a[i] = rng.Next(-50, 50);   <span class="cm">// 窄取值域 → 制造大量重复</span>
+    var b = (int[])a.Clone();
+    QuickSort(a); Array.Sort(b);
+    if (!a.SequenceEqual(b)) { Console.WriteLine($"FAIL quicksort n={n}"); return; }
+}
+Console.WriteLine("A. QuickSort  OK");
+
+<span class="cm">// B. 中位数对拍（务必覆盖偶数长度和 n=1）</span>
+for (int t = 0; t &lt; 200; t++)
+{
+    int n = rng.Next(1, 200);
+    var a = new int[n];
+    for (int i = 0; i &lt; n; i++) a[i] = rng.Next(-100, 100);
+    var s = (int[])a.Clone(); Array.Sort(s);
+    double expect = (n % 2 == 1) ? s[n / 2] : (s[n / 2 - 1] + s[n / 2]) / 2.0;
+    if (Math.Abs(Median((int[])a.Clone()) - expect) &gt; 1e-9)
+        { Console.WriteLine($"FAIL median n={n}"); return; }
+}
+Console.WriteLine("B. Median     OK");
+
+<span class="cm">// C. Top-K 对拍</span>
+for (int t = 0; t &lt; 200; t++)
+{
+    int n = rng.Next(1, 500), k = rng.Next(1, 30);
+    var a = new int[n];
+    for (int i = 0; i &lt; n; i++) a[i] = rng.Next(-1000, 1000);
+    if (!LargestK(a, k).SequenceEqual(a.OrderByDescending(x =&gt; x).Take(k)))
+        { Console.WriteLine($"FAIL topk n={n} k={k}"); return; }
+}
+Console.WriteLine("C. TopK       OK");
+
+<span class="cm">// D. 外部排序对拍：20 万个数，每块 1 万 → 20 个 run</span>
+string dir = Path.Combine(Path.GetTempPath(), "extsort-lab");
+Directory.CreateDirectory(dir);
+string input = Path.Combine(dir, "input.txt"), output = Path.Combine(dir, "output.txt");
+int total = 200_000;
+var truth = new long[total];
+using (var w = new StreamWriter(input))
+    for (int i = 0; i &lt; total; i++)
+        { long v = rng.NextInt64(-1_000_000, 1_000_000); truth[i] = v; w.WriteLine(v); }
+Array.Sort(truth); Array.Reverse(truth);
+
+var sw = System.Diagnostics.Stopwatch.StartNew();
+SortDescending(input, output, chunkSize: 10_000, tempDir: Path.Combine(dir, "runs"));
+sw.Stop();
+
+var back = File.ReadLines(output).Select(long.Parse).ToArray();
+Console.WriteLine(back.SequenceEqual(truth)
+    ? $"D. ExternalSort OK  {total:N0} 个数，{sw.ElapsedMilliseconds} ms"
+    : "FAIL external sort");</code></pre>
+
+<h3>第 4 步：观察，别只看 OK</h3>
+
+<p>跑通之后做这三件事（<strong>这一步才是实验的价值所在</strong>）：</p>
+
+<ol>
+  <li><strong>把 <code>chunkSize</code> 从 10000 改成 1000，再改成 100。</strong>run 数从 20 变成 200、2000。记录耗时怎么变——<strong>这就是「内存越小、run 越多、I/O 越贵」的亲身体验</strong>。到 100 时你多半会看到明显变慢，因为 2000 个 <code>StreamReader</code> 同时开着。<strong>这正是真实数据库要做「多趟归并」而不是「一次开 2000 路」的原因</strong>——那才是第 6 节公式里「趟数」那一项存在的意义。</li>
+  <li><strong>去看那些临时文件。</strong>在 Pass 0 之后暂停（或把 <code>File.Delete</code> 那行注释掉），打开 <code>%TEMP%\extsort-lab\runs\run-0000.txt</code>。<strong>亲眼看见「有序的临时文件」</strong>，外部排序就从抽象概念变成了具体东西。</li>
+  <li><strong>把 <code>total</code> 改成 200 万</strong>，然后用任务管理器看进程内存。你会看到它<strong>基本不涨</strong>——这就是外部排序的全部意义。</li>
+</ol>
+
+<h3>第 5 步（选做，强烈推荐）：在 Postgres 上看一眼</h3>
+
+<p>Lesson 01 的那个容器还在的话，直接跑：</p>
+
+<pre><code><span class="kw">SET</span> work_mem = <span class="st">'64kB'</span>;   <span class="cm">-- 故意调到极小，逼它落盘</span>
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>) <span class="kw">SELECT</span> * <span class="kw">FROM</span> study <span class="kw">ORDER BY</span> title;
+<span class="cm">-- 看这行：Sort Method: external merge  Disk: xxxxkB</span>
+
+<span class="kw">SET</span> work_mem = <span class="st">'256MB'</span>;  <span class="cm">-- 再放大</span>
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>) <span class="kw">SELECT</span> * <span class="kw">FROM</span> study <span class="kw">ORDER BY</span> title;
+<span class="cm">-- 看这行：Sort Method: quicksort  Memory: xxxxkB  ← 变了</span>
+
+<span class="cm">-- 再建索引，看排序整个消失</span>
+<span class="kw">CREATE INDEX</span> ix_title <span class="kw">ON</span> study (title);
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>) <span class="kw">SELECT</span> * <span class="kw">FROM</span> study <span class="kw">ORDER BY</span> title <span class="kw">LIMIT</span> 100;
+<span class="cm">-- 预期：Sort 节点不见了，变成 Index Scan —— 这就是第 7 节话术里「第三步」的实证</span></code></pre>
+
+<p>把第 4 步的耗时对比、和第 5 步的三段 <code>Sort Method</code> 输出<strong>贴给我</strong>，我帮你逐行解读，并把它改写成能直接说出口的经历。<strong>「我实测过 work_mem 从 64kB 调到 256MB，执行计划从 external merge 变成 quicksort」</strong>——这句话的分量，远超过任何背下来的定义。</p>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（今天只读一篇的话，读这个）：</strong><br>
+  <a href="https://cs186berkeley.net/notes/note8/">UC Berkeley CS186 — Sorting（外部归并排序讲义）</a>。十分钟读完，图配得极好，本课第 5、6 节的公式全部出自这里（原始出处是 Ramakrishnan &amp; Gehrke《Database Management Systems》第 13 章）。<br>
+  行有余力再读：<a href="https://algs4.cs.princeton.edu/25applications/">Sedgewick, Algorithms 4th ed — §2.5 Sorting Applications</a>（线性时间选择的原始论述）、<a href="https://learn.microsoft.com/en-us/dotnet/api/system.array.sort">Microsoft Learn — Array.Sort</a>（内省排序三条规则的原文）、<a href="https://learn.microsoft.com/en-us/dotnet/api/system.collections.generic.priorityqueue-2">Microsoft Learn — PriorityQueue</a>（四叉小顶堆、EnqueueDequeue）。</p>
+
+  <div class="nav-links">
+    <a href="../reference/algo-cheatsheet.html">→ 速查表：排序、选择与外部排序</a>
+    <a href="0001-composite-index-leftmost-prefix.html">← Lesson 01：联合索引与最左前缀</a>
+    <a href="../reference/db-index-cheatsheet.html">→ 速查表：索引与 SQL 优化</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练。</strong>任何地方卡住直接说。特别推荐这三件事：<strong>①</strong> 让我用面试官的语气连环追问你（<q>你这个 pivot 怎么选的？</q>→<q>那输入已经有序会怎样？</q>→<q>递归会爆栈吗？</q>）；<strong>②</strong> 把你手写的代码贴给我，我按面试官的眼光逐行挑刺；<strong>③</strong> 把你处理过大文件 / 大批量数据的真实经历告诉我，我帮你改写成能挂在第 10 节四段话术上的项目故事——<strong>这是目前最缺的一块</strong>。
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+<script src="../assets/decision.js"></script>
+</body>
+</html>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查表 · 排序、选择、Top-K 与外部排序（C#）</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<style>
+  /* 速查表专用：更紧凑，为打印优化 */
+  body { max-width: 52rem; padding-top: 2.5rem; }
+  h2 { margin-top: 2rem; }
+  h3 { margin-top: 1.2rem; }
+  pre { font-size: 0.74rem; margin-bottom: 0.9rem; }
+  table { font-size: 0.84rem; }
+  p, li { font-size: 0.94rem; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1.6rem; }
+  @media (max-width: 45rem) { .grid2 { grid-template-columns: 1fr; } }
+  @media print { .grid2 { grid-template-columns: 1fr 1fr; } h2 { break-after: avoid; } }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">速查表 · 算法 · BeiGene 面试备战</p>
+  <h1>排序、选择、Top-K 与外部排序</h1>
+  <p class="standfirst">面试前 10 分钟扫一遍。配套 <a href="../lessons/0002-sorting-selection-topk-external.html">Lesson 02</a>。</p>
+</header>
+
+<h2>0 · 决策表（先定档，再讲算法）</h2>
+
+<table>
+  <thead><tr><th></th><th>要全部有序</th><th>只要少数几个</th></tr></thead>
+  <tbody>
+    <tr>
+      <th>装得下内存</th>
+      <td><strong>A · 内存排序</strong><br><code>Array.Sort</code> / 手写快排<br>O(n log n)，栈 O(log n)</td>
+      <td><strong>B · 快速选择</strong><br>Quickselect<br>期望 O(n)，最坏 O(n²)</td>
+    </tr>
+    <tr>
+      <th>装不下内存</th>
+      <td><strong>D · 外部归并排序</strong><br>分块内排落盘 + K 路归并<br>I/O = 2N × 趟数</td>
+      <td><strong>C · Top-K 堆</strong><br>容量 K 的堆，流式扫一遍<br>O(N log K)，内存 O(K)</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>开口第一句永远是反问：</strong>「数据总量多少？可用内存多少？要全序还是要前几名？」</p>
+
+<h3>内存口算锚点</h3>
+<ul>
+  <li><code>long</code>/<code>double</code> = 8 字节 → <strong>1 亿个 long ≈ 800 MB</strong></li>
+  <li>带字符串字段的业务记录 ≈ 50–100 字节/条 → <strong>1 亿条 ≈ 5–10 GB</strong></li>
+  <li>.NET 单数组默认上限 ≈ <strong>2 GB</strong>；大对象进 LOH，默认不参与压缩</li>
+</ul>
+
+<h2>1 · .NET 库函数的事实（原文级）</h2>
+
+<table>
+  <thead><tr><th>API</th><th>事实</th><th>面试用途</th></tr></thead>
+  <tbody>
+    <tr><td><code>Array.Sort</code><br><code>List&lt;T&gt;.Sort</code></td>
+      <td><strong>introsort</strong>：分区 ≤ <strong>16</strong> 用插入排序；递归深度 &gt; <strong>2×log N</strong> 切<strong>堆排序</strong>；否则快排。<strong>unstable</strong>。</td>
+      <td>「快排最坏 O(n²) 怎么办」的标准答案</td></tr>
+    <tr><td><code>Enumerable.OrderBy</code></td><td><strong>稳定</strong>排序</td><td>需要保持等值元素原序时用它</td></tr>
+    <tr><td><code>PriorityQueue&lt;TE,TP&gt;</code><br>（.NET 6+）</td>
+      <td>数组支撑的<strong>四叉小顶堆</strong>；出队的是<strong>优先级最小</strong>的；<strong>不保证</strong>同优先级 FIFO</td>
+      <td>Top-K、多路归并；反序 <code>Comparer</code> → 大顶堆</td></tr>
+    <tr><td><code>EnqueueDequeue(x,p)</code></td><td>入队后立刻出最小，<strong>一次堆调整</strong></td><td>Top-K「换守门员」的最优写法</td></tr>
+  </tbody>
+</table>
+
+<h2>2 · 复杂度总表</h2>
+
+<table>
+  <thead><tr><th>问题</th><th>算法</th><th>时间</th><th>额外空间</th><th>坑</th></tr></thead>
+  <tbody>
+    <tr><td>全序（内存）</td><td>快排 + 三数取中</td><td>平均 O(n log n)<br>最坏 O(n²)</td><td>O(log n) 栈</td><td>有序输入退化；大量重复值退化</td></tr>
+    <tr><td>全序（内存）</td><td>归并排序</td><td>O(n log n) 保证</td><td>O(n)</td><td>额外内存；但<strong>稳定</strong></td></tr>
+    <tr><td>全序（内存）</td><td>堆排序</td><td>O(n log n) 保证</td><td>O(1)</td><td>缓存不友好，常数大</td></tr>
+    <tr><td>第 k 个 / 中位数</td><td>Quickselect</td><td>期望 O(n)<br>最坏 O(n²)</td><td>O(1)</td><td>会打乱入参数组；偶数分支易漏</td></tr>
+    <tr><td>第 k 个（最坏保证）</td><td>BFPRT 中位数的中位数</td><td>O(n) 保证</td><td>O(log n)</td><td>常数极大，实际更慢</td></tr>
+    <tr><td>最大 K 个</td><td><strong>小</strong>顶堆</td><td>O(N log K)</td><td><strong>O(K)</strong></td><td>堆向易搞反；K≈N 时无优势</td></tr>
+    <tr><td>流式实时中位数</td><td>对顶双堆</td><td>插入 O(log n)<br>取值 O(1)</td><td>O(n)</td><td>两堆大小差必须 ≤ 1</td></tr>
+    <tr><td>全序（超内存）</td><td>外部归并排序</td><td>I/O = 2N × 趟数</td><td>O(B)</td><td>最后一块残留；ReadAllLines</td></tr>
+  </tbody>
+</table>
+
+<h2>3 · 外部排序成本公式</h2>
+
+<p>N = 数据总<strong>页</strong>数，B = 可用缓冲<strong>页</strong>数。</p>
+
+<table>
+  <thead><tr><th>量</th><th>公式</th><th>记忆点</th></tr></thead>
+  <tbody>
+    <tr><td>Pass 0 的 run 数</td><td><code>⌈N / B⌉</code></td><td>装满 B 页排一次</td></tr>
+    <tr><td>总趟数</td><td><code>1 + ⌈log<sub>B−1</sub> ⌈N/B⌉⌉</code></td><td><strong>底数是 B−1</strong>：留 1 页做输出缓冲</td></tr>
+    <tr><td>总 I/O</td><td><code>2N × 总趟数</code></td><td>每趟全量<strong>读一遍写一遍</strong></td></tr>
+  </tbody>
+</table>
+
+<p><strong>样例（背下来）：</strong>N=1000，B=11 → run 数 <code>⌈1000/11⌉=91</code>；趟数 <code>1+⌈log₁₀91⌉=3</code>；I/O <code>2×1000×3=6000</code>。<br>
+内存 11→101 页，对数底 10→100，趟数 3→2，<strong>I/O 省掉 1/3</strong>。</p>
+
+<h2>4 · 堆向速记：守门员</h2>
+
+<div class="callout">
+  <p>堆 = <strong>只有 K 个座位的贵宾席</strong>。堆顶 = 席位里<strong>最弱</strong>的那个 = 守门员 = 门槛。<br>
+  新人比守门员强 → 踢掉守门员进来；比守门员弱 → 不让进。</p>
+  <p><strong>求最大 K 个 → 小顶堆　　求最小 K 个 → 大顶堆</strong></p>
+  <p>数组堆：父 <code>(i-1)/2</code>，子 <code>2i+1</code> / <code>2i+2</code>。Floyd 自底向上建堆是 <strong>O(n)</strong>。</p>
+</div>
+
+<h2>5 · 四段代码骨架（默写用）</h2>
+
+<h3>5.1 快排 + 分区（分区被 5.2 复用）</h3>
+<pre><code>public static void QuickSort(int[] a) =&gt; Sort(a, 0, a.Length - 1);
+
+static void Sort(int[] a, int lo, int hi) {
+    while (lo &lt; hi) {
+        if (hi - lo &lt; 16) { InsertionSort(a, lo, hi); return; }   <span class="cm">// 16 阈值</span>
+        int p = Partition(a, lo, hi);
+        if (p - lo &lt; hi - p) { Sort(a, lo, p - 1); lo = p + 1; }  <span class="cm">// 只递归短边</span>
+        else                 { Sort(a, p + 1, hi); hi = p - 1; }  <span class="cm">// 栈深 O(log n)</span>
+    }
+}
+
+public static int Partition(int[] a, int lo, int hi) {
+    int mid = lo + (hi - lo) / 2;                    <span class="cm">// 防 int 溢出</span>
+    if (a[lo]  &gt; a[mid]) Swap(a, lo, mid);           <span class="cm">// 三数取中</span>
+    if (a[lo]  &gt; a[hi])  Swap(a, lo, hi);
+    if (a[mid] &gt; a[hi])  Swap(a, mid, hi);
+    Swap(a, mid, hi);                                <span class="cm">// 中位数挪到 hi 当 pivot</span>
+    int pivot = a[hi], i = lo - 1;
+    for (int j = lo; j &lt; hi; j++)
+        if (a[j] &lt;= pivot) Swap(a, ++i, j);
+    Swap(a, ++i, hi);
+    return i;                                        <span class="cm">// = pivot 的最终下标</span>
+}</code></pre>
+
+<h3>5.2 快速选择 / 中位数</h3>
+<pre><code>public static int QuickSelect(int[] a, int k) {      <span class="cm">// k 为 0-based；会打乱 a</span>
+    int lo = 0, hi = a.Length - 1;
+    while (lo &lt; hi) {
+        int p = Partition(a, lo, hi);
+        if (p == k) return a[p];
+        if (p &lt; k) lo = p + 1; else hi = p - 1;       <span class="cm">// 只走一边</span>
+    }
+    return a[lo];
+}
+
+public static double Median(int[] a) {
+    int n = a.Length;
+    if (n == 0) throw new ArgumentException("空数组没有中位数", nameof(a));
+    if ((n &amp; 1) == 1) return QuickSelect(a, n / 2);
+    int hiHalf = QuickSelect(a, n / 2);              <span class="cm">// 偶数：两次选择</span>
+    int loHalf = QuickSelect(a, n / 2 - 1);          <span class="cm">// 第二次更快（已部分划分）</span>
+    return (loHalf + hiHalf) / 2.0;
+}</code></pre>
+
+<h3>5.3 Top-K（最大的 K 个 → 小顶堆）</h3>
+<pre><code>public static List&lt;int&gt; LargestK(IEnumerable&lt;int&gt; source, int k) {
+    if (k &lt;= 0) return new List&lt;int&gt;();
+    var heap = new PriorityQueue&lt;int, int&gt;(k);        <span class="cm">// 默认小顶堆</span>
+    foreach (int x in source) {                       <span class="cm">// source 可为 File.ReadLines(...)</span>
+        if (heap.Count &lt; k)      heap.Enqueue(x, x);
+        else if (x &gt; heap.Peek()) heap.EnqueueDequeue(x, x);   <span class="cm">// 换守门员</span>
+    }
+    var r = new List&lt;int&gt;(heap.Count);
+    while (heap.Count &gt; 0) r.Add(heap.Dequeue());
+    r.Reverse();                                      <span class="cm">// 小→大 反转成 大→小</span>
+    return r;
+}</code></pre>
+
+<h3>5.4 外部归并排序（从大到小）</h3>
+<pre><code>static readonly IComparer&lt;long&gt; Desc = Comparer&lt;long&gt;.Create((x, y) =&gt; y.CompareTo(x));
+
+public static void SortDescending(string inPath, string outPath, int chunkSize, string tmp) {
+    Directory.CreateDirectory(tmp);
+    var runs = new List&lt;string&gt;();
+    using (var rd = new StreamReader(inPath)) {                 <span class="cm">// 逐行读！</span>
+        var buf = new List&lt;long&gt;(chunkSize);
+        string? line;
+        while ((line = rd.ReadLine()) is not null) {
+            if (line.Length == 0) continue;
+            buf.Add(long.Parse(line));
+            if (buf.Count == chunkSize) runs.Add(Flush(buf, tmp, runs.Count));
+        }
+        if (buf.Count &gt; 0) runs.Add(Flush(buf, tmp, runs.Count));   <span class="cm">// ★最后一块，最易漏</span>
+    }
+    Merge(runs, outPath);
+    foreach (var r in runs) File.Delete(r);
+}
+
+static string Flush(List&lt;long&gt; buf, string tmp, int i) {
+    buf.Sort(Desc);
+    string p = Path.Combine(tmp, $"run-{i:D4}.txt");
+    using (var w = new StreamWriter(p)) foreach (long v in buf) w.WriteLine(v);
+    buf.Clear();
+    return p;
+}
+
+static void Merge(List&lt;string&gt; runs, string outPath) {
+    var rs = runs.Select(p =&gt; new StreamReader(p)).ToList();
+    try {
+        var heap = new PriorityQueue&lt;(long V, int R), long&gt;(runs.Count, Desc);  <span class="cm">// 大顶堆</span>
+        for (int i = 0; i &lt; rs.Count; i++)
+            if (TryNext(rs[i], out long v)) heap.Enqueue((v, i), v);
+        using var w = new StreamWriter(outPath);
+        while (heap.TryDequeue(out var top, out _)) {
+            w.WriteLine(top.V);
+            if (TryNext(rs[top.R], out long nx)) heap.Enqueue((nx, top.R), nx);
+        }
+    } finally { foreach (var r in rs) r.Dispose(); }
+}</code></pre>
+
+<h2>6 · 白板检查清单</h2>
+
+<table>
+  <tbody>
+    <tr><td>中点</td><td><code>lo + (hi - lo) / 2</code>，<strong>不是</strong> <code>(lo + hi) / 2</code></td></tr>
+    <tr><td>区间</td><td>全程闭区间 <code>[lo, hi]</code>——一致比正确更重要</td></tr>
+    <tr><td>k 基准</td><td>先声明 0-based；中位数偶数取 <code>n/2-1</code> 与 <code>n/2</code></td></tr>
+    <tr><td>堆向</td><td>最大 K 个 → <strong>小</strong>顶堆（念「守门员」）</td></tr>
+    <tr><td>最后一块</td><td>Pass 0 循环结束后必须再 flush 一次残留</td></tr>
+    <tr><td>逐行读</td><td>绝不 <code>File.ReadAllLines</code>——那否定了题目前提</td></tr>
+    <tr><td>释放流</td><td><code>using</code> / <code>try-finally</code>，几十个 Reader 别泄漏</td></tr>
+    <tr><td>空 / 单元素</td><td><code>n=0</code> 时 <code>hi=-1</code>，循环不进；中位数显式抛异常</td></tr>
+  </tbody>
+</table>
+
+<h2>7 · 接数据库题（PostgreSQL）</h2>
+
+<table>
+  <thead><tr><th>看到什么</th><th>含义</th><th>怎么办</th></tr></thead>
+  <tbody>
+    <tr><td><code>Sort Method: quicksort&nbsp; Memory: xxx</code></td><td>排序在内存里完成</td><td>正常</td></tr>
+    <tr><td><code>Sort Method: external merge&nbsp; Disk: xxx</code></td><td>超出 <code>work_mem</code>，<strong>落盘走外部归并</strong></td><td>见右列三步</td></tr>
+    <tr><td><code>Sort Method: top-N heapsort</code></td><td><code>ORDER BY … LIMIT n</code> 触发的堆式 Top-N</td><td>正是档位 C 在数据库里的实现</td></tr>
+  </tbody>
+</table>
+
+<p><strong>三步排查（话术顺序）：</strong></p>
+<ol>
+  <li><strong>真的需要全量排序吗？</strong>多半是分页 → keyset 分页 + 排序列索引，排序成本归零（见 <a href="db-index-cheatsheet.html">索引速查表</a>）</li>
+  <li><strong>调大会话级 <code>work_mem</code></strong>（默认仅 <strong>4MB</strong>），减少归并趟数。<code>work_mem</code> 是<strong>每操作、每会话各算一份</strong> → 用 <code>SET LOCAL</code>，别改全局</li>
+  <li><strong>常态需求就建索引</strong>：排序列上的 B-tree → 按索引顺序吐数据，<code>Sort</code> 节点整个消失</li>
+</ol>
+
+<h2>8 · 一句话话术卡</h2>
+
+<table>
+  <thead><tr><th>被问</th><th>第一句就说</th></tr></thead>
+  <tbody>
+    <tr><td>现场写排序</td><td>「生产我用 <code>Array.Sort</code>，它是内省排序、不稳定；手写我写带三数取中和尾递归消除的快排。」</td></tr>
+    <tr><td>找中位数</td><td>「不排序。我只要第 n/2 个，用快速选择，每次只递归一边，期望 O(n)。」</td></tr>
+    <tr><td>海量数据找 Top-K</td><td>「容量 K 的<strong>小</strong>顶堆流式扫一遍，O(N log K)，内存只占 O(K)。」</td></tr>
+    <tr><td>超内存全序</td><td>「外部归并排序：分块内排落盘成 run，再用堆做多路归并，内存只放段数个元素。」</td></tr>
+    <tr><td>数据库无索引排序</td><td>「不往应用里捞。数据库自己就走外部归并，<code>EXPLAIN</code> 里看 <code>Sort Method</code>；先看要不要全量，再调 <code>work_mem</code>，常态就建索引。」</td></tr>
+  </tbody>
+</table>
+
+<footer class="footer">
+  <div class="nav-links">
+    <a href="../lessons/0002-sorting-selection-topk-external.html">← Lesson 02（精讲）</a>
+    <a href="db-index-cheatsheet.html">→ 速查表：索引与 SQL 优化</a>
+    <a href="https://cs186berkeley.net/notes/note8/">↗ CS186 外部排序讲义</a>
+    <a href="https://learn.microsoft.com/en-us/dotnet/api/system.array.sort">↗ Array.Sort 文档</a>
+  </div>
+</footer>
+
+</body>
+</html>

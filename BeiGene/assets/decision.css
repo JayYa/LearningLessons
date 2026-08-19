@@ -1,0 +1,87 @@
+/* Styles for the decision.js component. Load after lesson.css. */
+
+.decision {
+  border: 1px solid var(--rule);
+  background: #fff;
+  padding: 1.2rem 1.4rem 1.4rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.dec-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+.dec-head .label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.dec-reset {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.15rem 0.6rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.dec-reset:hover { border-color: var(--ink-soft); color: var(--ink); }
+
+.dec-trail {
+  margin: 0 0 1rem;
+  padding-left: 1.3rem;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+}
+.dec-trail:empty { display: none; }
+.dec-trail li { margin-bottom: 0.2rem; }
+
+.dec-q { font-size: 1rem; font-weight: 600; margin: 0 0 0.8rem; }
+
+.dec-opts { display: flex; flex-direction: column; gap: 0.45rem; }
+.dec-opt {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  text-align: left;
+  padding: 0.6rem 0.85rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.dec-opt:hover { background: var(--code-bg); border-color: var(--accent); }
+
+.dec-leaf {
+  border-left: 3px solid var(--good);
+  background: var(--good-soft);
+  padding: 0.9rem 1.1rem;
+}
+.dec-tag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  background: var(--good);
+  color: #fff;
+  padding: 0.1rem 0.5rem;
+  border-radius: 3px;
+  margin-bottom: 0.5rem;
+}
+.dec-result { font-weight: 600; margin: 0 0 0.4rem; }
+.dec-detail { font-size: 0.92rem; color: var(--ink-soft); margin: 0; }
+
+@media print {
+  .dec-head, .dec-opts { display: none; }
+  .decision::after { content: "（交互组件，见网页版）"; font-size: 0.85rem; color: var(--ink-soft); }
+}

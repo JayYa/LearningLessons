@@ -54,6 +54,27 @@
   <li><strong>B-tree</strong>：一个 8KB 页里能塞几百个键（这个数量叫<strong>扇出 fan-out</strong>）。假设扇出 = 300，1000 万行只需 <code>log₃₀₀(10⁷) ≈ 3</code> 层 → <strong>3 次 I/O</strong>。</li>
 </ul>
 
+<div class="callout">
+  <span class="label">三个词先分清：页 / 键 / 索引</span>
+  <table>
+    <thead><tr><th>词</th><th>是什么</th><th>量级</th></tr></thead>
+    <tbody>
+      <tr><td><strong>索引</strong></td><td>一整棵 B-tree，磁盘上一个文件</td><td>成千上万个页</td></tr>
+      <tr><td><strong>页 page / block</strong></td><td>树上的一个节点，也是数据库 I/O、缓存、空间管理的最小单位</td><td>PG 固定 8KB（InnoDB 16KB）</td></tr>
+      <tr><td><strong>键 key / 索引项</strong></td><td>页里的一条记录 = <b>索引列的值 + 行指针</b>。表里一行，叶子层就有一个键</td><td>几十字节</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:0.6rem">所以「扇出」= 一个页里塞得下多少个键 = 树上一个节点有多少个分叉。<strong>推论：键越宽，扇出越低，树越高。</strong>索引建在 <code>(id)</code>（int4，一个键约 20 字节）时扇出可达 400；建在 <code>(status text, owner_id int, created_at timestamptz)</code> 上可能掉到 100 以下。联合索引多加一列、或用宽类型（长 text、UUID vs int），都在悄悄抬高树高——这是联合索引的一项隐性成本。</p>
+  <p style="margin-top:0.6rem"><strong>注意「页」是数据库自己的逻辑单位</strong>，和文件系统 block（通常 4KB）、OS memory page（4KB）、SSD flash page 都不是一回事。PG 的页大小由编译期常量 <code>BLCKSZ</code> 决定，装好之后改不了。</p>
+</div>
+
+<div class="callout ext">
+  <span class="label">面试冷知识 · B-tree 的 B 是什么？</span>
+  <p>Rudolf <b>B</b>ayer 与 Ed McCreight 在 1970 年提出 B-tree 时（两人任职于 <b>B</b>oeing 研究实验室），论文里<strong>从未解释 B 的含义</strong>，此后也一直拒绝给出定论。流传的说法有 Balanced（平衡）、Bayer（作者姓氏）、Boeing（雇主）、Broad/Bushy（多叉）。McCreight 后来说过大意是<q>B 越是含义不明，你就越能理解 B-tree</q>——这是刻意留白。</p>
+  <p style="margin-top:0.6rem"><strong>唯一能确定的是：B ≠ Binary。</strong>这是最常见的错答，而 B-tree 恰恰是为了摆脱二叉结构才被发明的。</p>
+  <p style="margin-top:0.6rem">中文一般<strong>不译</strong>，直接写「B 树」；需要意译时叫「多路平衡查找树」。⚠️ <code>B-树</code> 里的 <code>-</code> 是<strong>连字符不是减号</strong>，读作「B 树」而非「B 减树」——有中文资料因为读成「B减树」，进而误以为存在「B-树 / B+树」这样一套加减法体系。实际上 B-tree 就是 B 树本身，B+ tree 是它的变体（数据全部下沉到叶子层、叶子用链表相连）。<strong>下面这张图画的严格说是 B+ tree</strong>，也正是 PostgreSQL 与 InnoDB 实际使用的形态（虽然 PG 的源码与文档一直沿用 <code>btree</code> 这个叫法）。</p>
+</div>
+
 <pre><code>            [ 根页：一个 8KB 页，装几百个分隔键 ]
            /              |                \
     [中间页]          [中间页]           [中间页]        ← 第 2 层
@@ -140,16 +161,64 @@ DRAFT       1007       2024-11-02     → (9,8)</code></pre>
 
 <p>看 c 那一列：<code>2, 9, 1, 4, 9</code>——<strong>无序</strong>。因为 c 只在「a 和 b 都相同」的小组内部才有序，而 <code>b&gt;5</code> 跨越了多个 b 值，把这些小组拼在了一起。无序 → 无法二分 → 只能逐行检查。</p>
 
-<p>所以 <code>c=9</code> 的角色从「定位」降级为「过滤」。在 Postgres 的 <code>EXPLAIN</code> 里，这个区别看得见：</p>
+<p>所以 <code>c=9</code> 的角色从「定位」降级为「过滤」。</p>
 
-<pre><code>Index Scan using ix1 on study
-  Index Cond: ((a = 1) AND (b &gt; 5))     ← 定位：决定扫多少行
-  Filter: (c = 9)                        ← 过滤：扫完再逐行判断
-  Rows Removed by Filter: 48213          ← 这个数字大 = 索引设计有问题</code></pre>
+<h3>但「过滤」有两种，代价差很远</h3>
+
+<p>多数资料讲到这里就停了，把条件粗暴分成「Index Cond = 好」和「Filter = 坏」。<strong>实际是三档</strong>，中间那一档最容易被忽略：</p>
+
+<table>
+  <thead><tr><th>档位</th><th>条件长什么样</th><th>代价</th></tr></thead>
+  <tbody>
+    <tr><td><strong>① 边界条件</strong></td><td>从最左列起连续的等值 + 其后第一个范围</td><td>决定扫描区间，最省</td></tr>
+    <tr><td><strong>② 索引内过滤</strong></td><td>条件列<strong>在索引里</strong>，但已被范围截断</td><td>多扫了一些索引项，但<strong>在索引里就判掉，不用回表</strong></td></tr>
+    <tr><td><strong>③ 堆过滤 Filter</strong></td><td>条件列<strong>不在索引里</strong></td><td>必须先回表拿到整行才能判断，最贵</td></tr>
+  </tbody>
+</table>
+
+<p>上面的 <code>c=9</code> 属于第 ② 档，<strong>不是</strong>第 ③ 档——它虽然不能用来定位，但 <code>c</code> 就在索引里，PG 会把它下推给索引扫描，逐个索引项判断，判掉的行根本不会去读表。</p>
+
+<div class="callout">
+  <span class="label">⚠️ Postgres 的 EXPLAIN 在这里会骗你</span>
+  <p>PG <strong>把 ① 和 ② 混印在同一个 <code>Index Cond</code> 里</strong>，输出上看不出区别（MySQL 反而更诚实，会把 ② 显式标成 <code>Using index condition</code>，即索引条件下推 ICP）。所以在 PG 上看到 <code>Index Cond</code> 里有三个条件，<strong>不代表三个都参与了定位</strong>。</p>
+  <p style="margin-top:0.6rem">真正能区分的办法是<strong>看行数</strong>：如果索引扫描节点吐出的行数远大于最终结果，说明有条件属于第 ② 档。</p>
+</div>
+
+<h3>实测：本课实验第 7 步的真实输出</h3>
+
+<p>索引 <code>ix1 (owner_id, status, created_at)</code>，100 万行，查询 <code>WHERE owner_id &gt; 4000 AND status = 'ACTIVE'</code>：</p>
+
+<pre><code>Bitmap Heap Scan on study  (cost=5943.89..16036.90 rows=49801 width=38)
+                           (actual time=17.102..73.597 rows=50010 loops=1)
+  Recheck Cond: ((owner_id &gt; 4000) AND (status = 'ACTIVE'::text))
+  Heap Blocks: exact=9300
+  -&gt;  Bitmap Index Scan on ix1  (cost=0.00..5931.44 rows=49801 width=0)
+                                (actual time=16.099..16.100 rows=50010 loops=1)
+        Index Cond: ((owner_id &gt; 4000) AND (status = 'ACTIVE'::text))
+Planning Time: 0.678 ms
+Execution Time: 75.594 ms</code></pre>
+
+<p><code>status</code> 出现在 <code>Index Cond</code> 里，<strong>没有 <code>Filter</code>，也没有 <code>Rows Removed by Filter</code></strong>。用算术可以严格证明它是在索引里被判掉的：</p>
+
+<ul>
+  <li>造数据时 <code>owner_id</code> 取 0–5000 均匀分布 → <code>&gt; 4000</code> 命中约 <strong>20%</strong> = 200,000 行</li>
+  <li><code>status</code> 三个值的实际概率是 0.25 / 0.5 / 0.25，<code>'ACTIVE'</code> 约 <strong>25%</strong></li>
+  <li>两者相乘：1,000,000 × 0.2 × 0.25 = <strong>50,000</strong></li>
+</ul>
+
+<p>而 <code>Bitmap Index Scan</code> 这一行自己输出的就是 <code>rows=50010</code>。<strong>如果 <code>status</code> 是堆过滤，这个节点应该吐出约 20 万行</strong>，然后在上层出现 <code>Rows Removed by Filter: ~150000</code>。它没有——说明 15 万次回表被省掉了。</p>
+
+<div class="callout ext">
+  <span class="label">顺带读懂这个计划里的另外三件事</span>
+  <p><strong>① 为什么是 Bitmap 而不是 Index Scan？</strong>命中 5 万行占全表 5%，且 <code>SELECT *</code> 要回表。普通 Index Scan 按索引顺序<strong>随机</strong>跳着访问表页；Bitmap 先把所有 ctid 收集成位图、<strong>按物理页号排序</strong>，再顺序扫过去——用一点内存把随机 I/O 变成接近顺序 I/O。<strong>Bitmap Scan 是「索引扫描」与「全表扫描」之间的中间档</strong>，第五节 C 类只讲了两极，其实有三档。</p>
+  <p style="margin-top:0.6rem"><strong>② <code>Recheck Cond</code> 不代表真的重算了。</strong>位图有两种精度：精确到行（exact）和只精确到页（lossy，<code>work_mem</code> 不够时降级）。<strong>只有 lossy 的页才需要 recheck</strong>。这里是 <code>Heap Blocks: exact=9300</code>，没有 <code>lossy=</code>，说明位图全精确，这行条件实际一次也没执行。</p>
+  <p style="margin-top:0.6rem"><strong>③ 时间花在哪：</strong>索引里只用了 16.1ms，总计 75.6ms——<strong>差额约 57ms（四分之三）全是回表读那 9300 个页</strong>（约 73MB）。这正是第四节覆盖索引的动机：如果只 <code>SELECT owner_id, status</code>，这 57ms 可以直接省掉。另外估算 49801 vs 实际 50010，误差 0.4%，属于第五节说的「估得准」——统计信息健康。</p>
+</div>
 
 <div class="callout ext">
   <span class="label">这是一个极强的面试信号</span>
-  <p>能说出 <q>看 <code>EXPLAIN</code> 里条件落在 <b>Index Cond</b> 还是 <b>Filter</b>，就知道这一列有没有真正参与索引定位</q>，比背十条失效规则更能证明你实际调过 SQL。</p>
+  <p><q>退化为 Filter 不等于索引失效——索引还是走了，只是那一列从<b>定位</b>降级成了<b>过滤</b>。判断严不严重看 <code>Rows Removed by Filter</code>：几十行无所谓，几万行就说明索引区间圈大了。另外在 PG 上要注意，如果这一列本身在索引里，它其实是在索引层就过滤掉的，不用回表，代价比真正的堆过滤小得多。</q></p>
+  <p style="margin-top:0.6rem">最后半句，能说出来的人不多。</p>
 </div>
 
 <h2 id="s3">三、列顺序的黄金法则</h2>
@@ -268,8 +337,8 @@ DRAFT       1007       2024-11-02     → (9,8)</code></pre>
 <h3>A 类 · 违反最左前缀（索引结构决定的"不能用"）</h3>
 <pre><code><span class="cm">-- 索引 (a, b, c)</span>
 <span class="kw">WHERE</span> b = 1 <span class="kw">AND</span> c = 2          <span class="cm">-- ❌ 跳过最左列 a</span>
-<span class="kw">WHERE</span> a = 1 <span class="kw">AND</span> c = 2          <span class="cm">-- ⚠️ 只有 a 定位，c 退化为 Filter</span>
-<span class="kw">WHERE</span> a &gt; 1 <span class="kw">AND</span> b = 2          <span class="cm">-- ⚠️ a 之后截断，b 退化为 Filter</span>
+<span class="kw">WHERE</span> a = 1 <span class="kw">AND</span> c = 2          <span class="cm">-- ⚠️ 只有 a 定位，c 降为索引内过滤（不失效，但区间圈大了）</span>
+<span class="kw">WHERE</span> a &gt; 1 <span class="kw">AND</span> b = 2          <span class="cm">-- ⚠️ a 之后截断，b 降为索引内过滤</span>
 <span class="kw">WHERE</span> a = 1 <span class="kw">OR</span> d = 2           <span class="cm">-- ❌ OR 的另一侧无索引，整体退化为全表扫</span></code></pre>
 
 <p><code>OR</code> 值得单独说：<code>OR</code> 要求"任一条件成立"，只要有一侧无法用索引，就必须扫全表才能保证不漏。修复是拆成 <code>UNION ALL</code>（注意去重语义），或给 <code>d</code> 也建索引让优化器走 BitmapOr。</p>
@@ -291,6 +360,39 @@ DRAFT       1007       2024-11-02     → (9,8)</code></pre>
 
 <span class="cm">-- ✅ 思路二：建表达式索引，让索引里就存加工后的值</span>
 <span class="kw">CREATE INDEX</span> ix_user_lower_email <span class="kw">ON</span> users (lower(email));</code></pre>
+
+<h4>特例：<code>LIKE '%report'</code> 是可以救的</h4>
+
+<p>前导通配符要分三种，它们的解法完全不同——<strong>把这三种分开讲，是这道题的加分点</strong>：</p>
+
+<table>
+  <thead><tr><th>模式</th><th>含义</th><th>能否用 B-tree</th></tr></thead>
+  <tbody>
+    <tr><td><code>LIKE 'report%'</code></td><td>前缀</td><td>✅ 直接可以（配 <code>text_pattern_ops</code>）</td></tr>
+    <tr><td><code>LIKE '%report'</code></td><td><strong>后缀</strong></td><td>✅ <strong>反转后就变成前缀</strong></td></tr>
+    <tr><td><code>LIKE '%report%'</code></td><td>任意位置</td><td>❌ B-tree 无解，须换索引类型</td></tr>
+  </tbody>
+</table>
+
+<p><strong>后缀匹配等价于「反转字符串后的前缀匹配」</strong>：</p>
+
+<pre><code><span class="kw">CREATE INDEX</span> ix_title_rev <span class="kw">ON</span> study (reverse(title) text_pattern_ops);
+
+<span class="cm">-- ❌ 原查询用不上</span>
+<span class="kw">WHERE</span> title <span class="kw">LIKE</span> <span class="st">'%report'</span>
+<span class="cm">-- ✅ 改写成索引里的那个表达式形式，即 LIKE 'troper%'</span>
+<span class="kw">WHERE</span> reverse(title) <span class="kw">LIKE</span> reverse(<span class="st">'report'</span>) || <span class="st">'%'</span></code></pre>
+
+<p>三个必须知道的前提：<strong>①优化器不会自动改写</strong>——它不知道两种写法等价，查询必须手写成索引里的表达式形式，一个字都不能差（表达式索引的通用规则）。<strong>②<code>text_pattern_ops</code> 不能省</strong>（原因见杀手 2）。<strong>③函数必须是 IMMUTABLE</strong> 才能建表达式索引，<code>reverse()</code> 是，建之前可以用 <code>\df+ reverse</code> 确认。</p>
+
+<p>另外两条路：需要<strong>任意位置</strong>子串、或不能改查询，就上 <code>pg_trgm</code> 的 GIN 索引（原查询一字不动，但索引体积大、写入慢、模式非通配符部分至少 3 个字符）。而如果这个后缀其实是<strong>结构化字段</strong>（扩展名、邮箱域名、编号后缀），最好的答案是把它变成一个真正的列：</p>
+
+<pre><code><span class="cm">-- PG 12+ 生成列：写入时自动算好，之后就是最普通的等值查询</span>
+<span class="kw">ALTER TABLE</span> study <span class="kw">ADD COLUMN</span> title_ext text
+  <span class="kw">GENERATED ALWAYS AS</span> (split_part(title, <span class="st">'.'</span>, 2)) <span class="kw">STORED</span>;
+<span class="kw">CREATE INDEX</span> ix_title_ext <span class="kw">ON</span> study (title_ext);</code></pre>
+
+<p><strong>这个回答在面试里分量最重</strong>——它说明你会往上一层看需求，而不是死磕怎么给一个畸形查询套索引。</p>
 
 <p>表达式索引的代价要主动说出来：<strong>写入变慢</strong>——每次 <code>INSERT</code> 和非 HOT 的 <code>UPDATE</code> 都要重新计算一次表达式。官方原话：<q>Index expressions are relatively expensive to maintain</q>，适用于"读远多于写"的场景。</p>
 
@@ -570,7 +672,7 @@ db.Aop.OnLogExecuting = (sql, pars) =&gt;
   <span class="label">Q：讲讲联合索引和最左前缀原则</span>
   <p><q>联合索引在物理上是一棵按索引列做多级排序的 B-tree，比如 (a,b,c) 就是先按 a 排、a 相同再按 b 排。所以能不能用索引定位，本质上取决于查询条件能不能在这个有序结构上圈出一段连续区间——这就是最左前缀。</q></p>
   <p><q>准确讲是两条规则：从最左列开始<strong>连续</strong>的等值条件都能用来缩小扫描范围；再加上其后<strong>第一个</strong>范围条件也能用，但到此为止，范围条件右边的列就只能做过滤了。原因是范围条件跨越了多个值，把若干个小组拼在一起，右边那一列在拼接后的区间里已经不是有序的了。</q></p>
-  <p><q>在 Postgres 的 EXPLAIN 里这个区别是能直接看到的：参与定位的落在 Index Cond，只做过滤的落在 Filter，旁边还有 Rows Removed by Filter，这个数字大就说明索引设计有优化空间。</q></p>
+  <p><q>在 EXPLAIN 里这个区别看得到：条件列如果压根不在索引里，会落到 Filter，旁边的 Rows Removed by Filter 大就说明索引设计有优化空间。不过 Postgres 有个细节——如果这一列<strong>在索引里</strong>、只是被范围截断了，它会被下推到索引扫描本身、和边界条件一起印在 Index Cond 里，所以看到 Index Cond 里有三个条件不代表三个都参与了定位。这时候要看索引扫描节点吐出的行数和最终结果差多少。这一档在索引里就判掉了，不用回表，比真正的堆过滤便宜得多。</q></p>
 </div>
 
 <div class="script">
@@ -637,10 +739,17 @@ docker exec -it pg-prep psql -U postgres</code></pre>
   <span class="kw">WHERE</span> owner_id=1007
     <span class="kw">AND</span> created_at &gt;= <span class="st">'2026-05-01'</span> <span class="kw">AND</span> created_at &lt; <span class="st">'2026-05-02'</span>;
 
-<span class="cm">-- 7. 观察 Index Cond 与 Filter 的区别（范围截断）</span>
+<span class="cm">-- 7a. 索引内过滤：status 被范围截断，但它「在索引里」</span>
 <span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>) <span class="kw">SELECT</span> * <span class="kw">FROM</span> study
   <span class="kw">WHERE</span> owner_id &gt; 4000 <span class="kw">AND</span> status = <span class="st">'ACTIVE'</span>;
-<span class="cm">-- 看 status 落在哪一行，以及 Rows Removed by Filter</span>
+<span class="cm">-- 预期：status 出现在 Index Cond 里，没有 Rows Removed by Filter。</span>
+<span class="cm">-- 关键看索引扫描节点吐出的 rows ≈ 5 万（而不是 20 万）→ 证明它在索引里就被判掉了</span>
+
+<span class="cm">-- 7b. 对照组，真正的堆过滤：title 不在 ix1 里</span>
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>) <span class="kw">SELECT</span> * <span class="kw">FROM</span> study
+  <span class="kw">WHERE</span> owner_id &gt; 4000 <span class="kw">AND</span> title = <span class="st">'study-777'</span>;
+<span class="cm">-- 预期：Filter 出现，Rows Removed by Filter ≈ 20 万</span>
+<span class="cm">-- 两条计划并排一看，「索引内过滤」和「堆过滤」的区别就具象了</span>
 
 <span class="cm">-- 8. 深分页的代价：对比这两条的耗时</span>
 <span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>) <span class="kw">SELECT</span> * <span class="kw">FROM</span> study <span class="kw">ORDER BY</span> id <span class="kw">DESC</span> <span class="kw">LIMIT</span> 20 <span class="kw">OFFSET</span> 900000;

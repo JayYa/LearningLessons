@@ -26,6 +26,21 @@
   <p class="standfirst">面试前 10 分钟扫一遍。配套 <a href="../lessons/0001-composite-index-leftmost-prefix.html">Lesson 01</a>。</p>
 </header>
 
+<h2>0. 结构与术语</h2>
+<table>
+  <thead><tr><th>词</th><th>是什么</th><th>量级</th></tr></thead>
+  <tbody>
+    <tr><td>索引</td><td>一整棵 B-tree，磁盘上一个文件</td><td>成千上万个页</td></tr>
+    <tr><td>页 page/block</td><td>树上一个节点；数据库 I/O、缓存、空间管理的<strong>最小单位</strong></td><td>PG 8KB（<code>BLCKSZ</code>，编译期定死）/ InnoDB 16KB</td></tr>
+    <tr><td>键 key/索引项</td><td>页里一条记录 = <strong>索引列的值 + 行指针</strong>；表里一行 = 叶子层一个键</td><td>几十字节</td></tr>
+    <tr><td>扇出 fan-out</td><td>一个页装多少个键 = 一个节点多少分叉</td><td>int4 单列约 400</td></tr>
+  </tbody>
+</table>
+<p><strong>因果链（面试可整段说）：</strong>页是 I/O 单位 → 一页装多少键 = 扇出 → 扇出决定树高 → 树高决定一次查询几次 I/O。<br>
+<strong>推论：键越宽，扇出越低，树越高。</strong>联合索引多一列、用宽类型（长 text、UUID vs int）都在抬高树高——这是联合索引的隐性成本，也是 InnoDB「主键别太大」的原因（二级索引每个键都存一份主键值）。</p>
+<p><strong>单列索引与联合索引不是两种结构</strong>，是同一棵 B-tree，区别只在键是一个值还是一个元组（按字典序排）。所以最左前缀不是给联合索引单定的规矩，而是「B-tree 有序」在多列下的自然结果。</p>
+<p><strong>B ≠ Binary</strong>（最常见错答）。Bayer &amp; McCreight 1970 年从未解释 B 的含义，候选：Balanced / Bayer / Boeing / Broad。中文直接写「B 树」，<code>-</code> 是连字符不是减号。图上画的叶子链表严格说是 <strong>B+ tree</strong>，即 PG 与 InnoDB 的实际形态。</p>
+
 <h2>1. 最左前缀 · 一句话规则</h2>
 <div class="callout">
   <p>联合索引 <code>(a, b, c)</code> = 按 (a, b, c) <strong>多级排序的有序表</strong>。<br>
@@ -87,8 +102,20 @@
 <span class="cm">-- 表达式索引（写入变慢，读取变快）</span>
 CREATE INDEX ix_lower_email ON users (lower(email));
 
-<span class="cm">-- LIKE 'x%' 在非 C collation 下需要 pattern ops</span>
+<span class="cm">-- LIKE 'x%'（前缀）在非 C collation 下需要 pattern ops</span>
 CREATE INDEX ix_title_pat ON study (title text_pattern_ops);
+
+<span class="cm">-- LIKE '%x'（后缀）→ 反转即变前缀。注意：优化器不会自动改写，查询必须照抄表达式</span>
+CREATE INDEX ix_title_rev ON study (reverse(title) text_pattern_ops);
+<span class="cm">-- ❌</span> WHERE title LIKE '%report'
+<span class="cm">-- ✅</span> WHERE reverse(title) LIKE 'troper%'
+
+<span class="cm">-- LIKE '%x%'（任意位置）→ B-tree 无解，上 pg_trgm（模式需 ≥3 字符）</span>
+CREATE INDEX ix_title_trgm ON study USING gin (title gin_trgm_ops);
+
+<span class="cm">-- 最好的答案：若后缀其实是结构化字段，把它变成真正的列</span>
+ALTER TABLE study ADD COLUMN title_ext text
+  GENERATED ALWAYS AS (split_part(title, '.', 2)) STORED;
 
 <span class="cm">-- 覆盖索引，免回表 → Index Only Scan</span>
 CREATE INDEX ix_cover ON study (owner_id, status) INCLUDE (title, created_at);
@@ -131,6 +158,30 @@ db.Aop.OnLogExecuting = (sql, pars) =&gt; _logger.LogDebug("SQL: {Sql}", sql);</
     <tr><td>Join 方式</td><td>Hash / Merge Join</td><td>大表间 Nested Loop</td></tr>
     <tr><td>BUFFERS</td><td>shared hit 占比高</td><td>shared read 大 → 缓存未命中，I/O 瓶颈</td></tr>
     <tr><td>Filter 行数</td><td><code>Rows Removed by Filter</code> 小</td><td>该数字很大 → 索引选择性不足，考虑加列</td></tr>
+    <tr><td>Bitmap 精度</td><td><code>Heap Blocks: exact=N</code></td><td>出现 <code>lossy=N</code> → work_mem 不足，Recheck Cond 真的会执行</td></tr>
+  </tbody>
+</table>
+
+<h3>条件的三档（PG 的 EXPLAIN 会骗你）</h3>
+<table>
+  <thead><tr><th>档位</th><th>条件</th><th>EXPLAIN 显示</th><th>代价</th></tr></thead>
+  <tbody>
+    <tr><td>① 边界</td><td>连续等值 + 第一个范围</td><td><code>Index Cond</code></td><td>决定扫描区间，最省</td></tr>
+    <tr><td>② 索引内过滤</td><td>列<strong>在索引里</strong>但被截断</td><td><code>Index Cond</code>（与①<strong>无法区分</strong>）</td><td>多扫索引项，<strong>不回表</strong></td></tr>
+    <tr><td>③ 堆过滤</td><td>列<strong>不在索引里</strong></td><td><code>Filter</code> + <code>Rows Removed by Filter</code></td><td>必须回表才能判断，最贵</td></tr>
+  </tbody>
+</table>
+<p><strong>①②怎么区分：</strong>看索引扫描节点吐出的 <code>rows</code> 与最终结果差多少，差得多就说明有②。<br>
+<strong>MySQL 反而更诚实</strong>：②会显式标成 <code>Using index condition</code>（ICP 索引条件下推）。<br>
+<strong>「退化为 Filter」≠「索引失效」</strong>——索引还是走了，只是那一列从定位降级为过滤。</p>
+
+<h3>三种扫描形态</h3>
+<table>
+  <thead><tr><th>形态</th><th>何时选</th><th>特点</th></tr></thead>
+  <tbody>
+    <tr><td>Index Scan</td><td>命中行少（&lt;1%）</td><td>按索引顺序<strong>随机</strong>访问表页</td></tr>
+    <tr><td>Bitmap Heap Scan</td><td>中等命中（几 %）</td><td>先收集 ctid 成位图、<strong>按页号排序</strong>再读 → 随机 I/O 变顺序</td></tr>
+    <tr><td>Seq Scan</td><td>命中占比高 / 表很小</td><td>纯顺序 I/O，预读友好</td></tr>
   </tbody>
 </table>
 
