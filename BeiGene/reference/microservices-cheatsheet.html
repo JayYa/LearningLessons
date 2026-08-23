@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查表 · 微服务：四笔开销</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Reference · 微服务 · BeiGene 面试备战</p>
+  <h1>微服务：四笔开销</h1>
+  <p class="standfirst">压缩自 <a href="../lessons/0004-microservices-what-actually-changes.html">Lesson 04</a>。面试前 10 分钟只看这一页。</p>
+</header>
+
+<h2>0 · 一句话根源</h2>
+
+<p><strong>微服务 = 把一次进程内方法调用，换成一次网络调用。</strong>进程内免费的四件事，跨进程之后全部开始收费。所有微服务技术栈，都是这四张账单的付款方式。</p>
+
+<table>
+  <thead><tr><th>进程内免费</th><th>跨进程之后</th><th>付款方式</th></tr></thead>
+  <tbody>
+    <tr><td>调用一定会返回</td><td>可能超时；<strong>可能成功了但你不知道</strong></td><td>超时 + 幂等 + 重试 + 熔断</td></tr>
+    <tr><td>异常带完整堆栈</td><td>只收到一个 500</td><td>TraceId / <code>traceparent</code></td></tr>
+    <tr><td>一个事务能一起回滚</td><td>两个库，回滚不了对方</td><td>Outbox + MQ + 幂等消费</td></tr>
+    <tr><td>方法名就是地址</td><td>要知道 IP / 端口 / 是否活着</td><td>网关 / 服务发现</td></tr>
+  </tbody>
+</table>
+
+<h2>1 · 网络调用的四种结局</h2>
+
+<table>
+  <thead><tr><th>结局</th><th>调用方看到</th><th>数据状态</th></tr></thead>
+  <tbody>
+    <tr><td>成功</td><td>200</td><td>一致</td></tr>
+    <tr><td>快失败</td><td>500，很快</td><td>没执行（最友善的失败）</td></tr>
+    <tr><td>超时</td><td>异常</td><td><strong>未知</strong></td></tr>
+    <tr><td>执行了但响应丢失</td><td><strong>和超时一模一样</strong></td><td>已执行</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="label">全课最值钱的一句</span>
+  <p>「超时」和「执行了但响应丢失」<strong>在调用方看来永远分不清</strong>。所以重试没有意义，除非接口幂等。<br>
+  同一个机制解释了 MQ 为什么只能承诺 at-least-once：<strong>ACK 也会丢</strong>。因此 HTTP 重试要幂等、MQ 消费要幂等，是<strong>同一个原因</strong>。</p>
+</div>
+
+<h2>2 · 幂等的落地写法</h2>
+
+<pre><code>CREATE TABLE reserve_log (request_id uuid PRIMARY KEY, ...);</code></pre>
+
+<p><strong>同一个本地事务里</strong>：先插去重记录，再改业务数据。捕获唯一键冲突（PostgreSQL <code>23505</code>）→ 直接返回成功。<br>
+要点：把并发正确性下沉到数据库唯一约束，而不是应用层 <code>if</code>。同 <a href="db-index-cheatsheet.html">索引速查表</a>的部分唯一索引思路。</p>
+
+<h2>3 · .NET 韧性策略（<code>AddStandardResilienceHandler</code> 默认值）</h2>
+
+<table>
+  <thead><tr><th>#</th><th>策略</th><th>默认</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Rate limiter</td><td>并发 1000</td></tr>
+    <tr><td>2</td><td>Total timeout</td><td>30s</td></tr>
+    <tr><td>3</td><td>Retry</td><td>3 次，指数退避 2s 起，带 jitter</td></tr>
+    <tr><td>4</td><td>Circuit breaker</td><td>失败率 10%，采样 30s，断开 5s</td></tr>
+    <tr><td>5</td><td>Attempt timeout</td><td>10s</td></tr>
+  </tbody>
+</table>
+
+<ul>
+  <li><code>o.Retry.DisableForUnsafeHttpMethods()</code> —— POST/PUT/DELETE 不重试，除非有幂等键</li>
+  <li><strong>jitter</strong>：防止一百个实例同时重试形成洪峰</li>
+  <li><strong>熔断保护的是调用方</strong>（防级联失败）；<strong>限流保护的才是被调用方</strong></li>
+</ul>
+
+<h2>4 · 链路追踪</h2>
+
+<ul>
+  <li>Trace = 一次请求的全过程；Span（.NET 叫 <code>Activity</code>）= 其中一段；TraceId 16B，SpanId 8B</li>
+  <li>传播靠 W3C 头 <code>traceparent: 00-{traceId}-{spanId}-01</code>，<strong>.NET 5+ 默认，自动收发，无需写代码</strong></li>
+  <li>你要做的只有：<code>Activity.Current?.TraceId</code> 写进日志、返给前端</li>
+  <li>采集靠 OpenTelemetry / App Insights；要采样，但<strong>出错的链要保证留下</strong>（尾部采样）</li>
+</ul>
+
+<h2>5 · 最终一致性四步</h2>
+
+<ol>
+  <li><strong>本地事务</strong>：业务数据 + Outbox 消息表，一起提交（解决「写库」与「发消息」无法原子）</li>
+  <li><strong>投递</strong>：后台任务扫表发 MQ，失败重发</li>
+  <li><strong>消费</strong>：幂等（唯一键去重）—— 因为 MQ 是 at-least-once</li>
+  <li><strong>ACK</strong>：业务处理完再手动 ACK，禁用自动 ACK</li>
+</ol>
+
+<p>不用 2PC 的理由：第二阶段前长时间持锁，一方慢就拖垮全部；且对第三方你根本没有回滚权。<br>
+代价：存在不一致窗口 → 必须配<strong>对账任务 + 超时告警</strong>。</p>
+
+<h2>6 · 网关</h2>
+
+<p><strong>第一职责不是路由，是把横切关注点收口</strong>（认证、限流、跨域、TLS、日志）。</p>
+
+<table>
+  <thead><tr><th>YARP</th><th>Ocelot</th><th>Nginx / 云网关</th></tr></thead>
+  <tbody>
+    <tr><td>微软官方 .NET 反向代理，本身是 ASP.NET Core 应用，可写 C# 转换逻辑（灰度、按租户路由）</td><td>较早的社区 .NET 网关，老项目常见</td><td>纯路由 + TLS + 限流时最省事、性能最好</td></tr>
+  </tbody>
+</table>
+
+<p><strong>追问准备</strong>：网关是单点 → 多实例 + 前置负载均衡；<strong>网关里绝不放业务逻辑</strong>，否则它变成新的单体。</p>
+
+<h2>7 · 开场白模板</h2>
+
+<div class="script">
+  <span class="label">「说说你对微服务的了解」</span>
+  <p><q>我理解微服务的本质，是把一次进程内的方法调用换成一次网络调用。进程内免费的四件事——调用一定会返回、异常带完整堆栈、一个事务能一起回滚、方法名就是地址——跨进程之后全部开始收费。微服务的整套技术栈，其实就是这四张账单的付款方式：熔断和幂等买第一笔，链路追踪买第二笔，最终一致性买第三笔，网关和服务发现买第四笔。所以选不选微服务，本质是这四笔钱值不值得付。</q></p>
+</div>
+
+<footer class="footer">
+  <div class="nav-links">
+    <a href="../lessons/0004-microservices-what-actually-changes.html">← Lesson 04（完整版）</a>
+    <a href="db-index-cheatsheet.html">→ 速查表：索引</a>
+    <a href="algo-cheatsheet.html">→ 速查表：排序</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -138,8 +138,46 @@
   </tbody>
 </table>
 
+<h2>数据校验<span style="font-size:0.72rem;font-family:var(--mono);color:var(--ink-soft);letter-spacing:0.08em;">（第 3 课）</span></h2>
+
+<table>
+  <thead><tr><th style="width:8.5rem">C# / ASP.NET Core</th><th style="width:9rem">Python / TypeScript</th><th>⚠ 裂缝</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>DTO + DataAnnotations<br>（<code>[Required]</code>、<code>[Range]</code>）</td>
+      <td>Pydantic <code>BaseModel</code> + <code>Field(...)</code></td>
+      <td>C# 的 attribute 是<strong>编译期元数据</strong>，运行时由框架反射读取；Pydantic 是在<strong>类定义时</strong>读取类型注解并当场生成校验代码。结果相似，机制完全不同。</td>
+    </tr>
+    <tr>
+      <td><code>[ApiController]</code> 自动 400</td>
+      <td>FastAPI 自动 <strong>422</strong></td>
+      <td>行为一致：校验失败时函数体不执行。状态码不同 —— 422 Unprocessable Entity 比 400 更精确，是 FastAPI 的默认选择。</td>
+    </tr>
+    <tr>
+      <td>手写 DTO 投影<br>（防止实体字段外泄）</td>
+      <td>response model 自动过滤</td>
+      <td>路由返回类型注解写成 <code>-&gt; SomeModel</code> 后，模型里<strong>没声明的字段被静默剥离</strong>，不报错。这是安全特性，不是便利特性。<a href="https://fastapi.tiangolo.com/tutorial/response-model/">官方说明</a></td>
+    </tr>
+    <tr>
+      <td>FluentValidation</td>
+      <td><strong>Zod</strong>（前端）</td>
+      <td>地位完全不同。FluentValidation 是<em>补充</em>（.NET 运行时本就带类型信息）；Zod 是前端<strong>唯一</strong>的一道运行时检查 —— 没有它就什么检查都没有。</td>
+    </tr>
+    <tr>
+      <td>类型是源头，校验挂在类型上</td>
+      <td><strong>schema 是源头，类型由它推出</strong></td>
+      <td>方向相反，这是最反直觉的一点。<code>const S = z.object({...})</code> 是<strong>值</strong>（活到运行时），<code>type S = z.infer&lt;typeof S&gt;</code> 是它的投影。类型擦除逼出来的设计。</td>
+    </tr>
+    <tr>
+      <td><code>TryParse</code> 模式</td>
+      <td><code>.safeParse()</code></td>
+      <td>思路一致（不抛异常，返回成败）。差别在返回值是<strong>可辨识联合</strong>：<code>if (r.success)</code> 之后 TS 自动收窄，能直接访问 <code>r.data</code>，不需要 <code>out</code> 参数。</td>
+    </tr>
+  </tbody>
+</table>
+
 <div class="footer">
-  <p>相关：<a href="glossary.html">术语表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a></p>
+  <p>相关：<a href="glossary.html">术语表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a></p>
   <div class="ask"><strong>觉得某个类比不对劲？</strong> 说出来 —— 你的 C# 直觉在哪里打滑，往往正是下一课该讲的地方。</div>
 </div>
 

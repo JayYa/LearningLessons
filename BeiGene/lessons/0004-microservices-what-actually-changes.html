@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 04 · 微服务：一次方法调用变成一次网络调用</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/callchain.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 04 · 微服务 · BeiGene 面试备战 · 机制课</p>
+  <h1>一次方法调用<br>变成一次网络调用</h1>
+  <p class="standfirst">题库里微服务板块有 9 道题（网关、交互方式、故障处理、异常追踪、为什么选微服务……）。它们看起来是九个知识点，其实是<strong>同一件事的九个后果</strong>。这一课只讲那一件事，以及它必然带来的四笔开销。不讲「该不该拆」——那是下一课。</p>
+</header>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>第二节有一个可以点的小组件，请<strong>四种失败模式都点一遍</strong>，并在点之前先自己回答「调用方会看到什么」。这一课约 30 分钟。读完请把第八节的三个素材问题回给我——微服务是你自评第二弱的板块，而且经历偏薄，<strong>话术必须挂在你真实做过的事情上</strong>，我需要那些事实才能帮你写。</p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">唯一真正改变的那一行</a> <span class="depth">— 心智模型</span></li>
+    <li><a href="#s2">第一笔开销：调用会失败</a> <span class="depth">— 而且三种失败长得一样</span></li>
+    <li><a href="#s3">第二笔开销：堆栈断了</a> <span class="depth">— TraceId 与 SpanId</span></li>
+    <li><a href="#s4">第三笔开销：事务没了</a> <span class="depth">— 最终一致性</span></li>
+    <li><a href="#s5">第四笔开销：找不到对方</a> <span class="depth">— 网关的真正职责</span></li>
+    <li><a href="#s6">一页对照</a> <span class="depth">— 九道题挂回四笔开销</span></li>
+    <li><a href="#s7">检验一下</a> <span class="depth">— 6 题，只考机制</span></li>
+    <li><a href="#s8">我需要你的三个素材</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、唯一真正改变的那一行</h2>
+
+<p>先把「微服务」这个词放一边。看这两段 C#，它们做的是同一件事：工单提交后要扣一件库存。</p>
+
+<pre><code><span class="cm">// 单体里：一次进程内的方法调用</span>
+public async Task&lt;Ticket&gt; Submit(TicketDto dto)
+{
+    var ticket = await _tickets.CreateAsync(dto);
+    _inventory.Reserve(dto.PartId, 1);      <span class="cm">// ← 就是这一行</span>
+    return ticket;
+}</code></pre>
+
+<pre><code><span class="cm">// 拆开之后：一次跨进程的网络调用</span>
+public async Task&lt;Ticket&gt; Submit(TicketDto dto)
+{
+    var ticket = await _tickets.CreateAsync(dto);
+    await _http.PostAsJsonAsync(<span class="st">"/reserve"</span>, new { dto.PartId, Qty = 1 });   <span class="cm">// ← 还是这一行</span>
+    return ticket;
+}</code></pre>
+
+<p><strong>整个微服务话题，就是这一行的替换带来的全部后果。</strong>其它一切——网关、熔断、链路追踪、最终一致性、服务注册——都是为了把这一行「换掉之后丢失的东西」重新买回来。</p>
+
+<p>那么丢了什么？在进程内，下面四件事是<strong>免费</strong>的，你从来不用想；换成网络调用之后，四件全部开始收费：</p>
+
+<table>
+  <thead><tr><th>在进程内你免费拥有</th><th>跨进程之后</th><th>要花钱买回来</th></tr></thead>
+  <tbody>
+    <tr><td>调用一定会返回（要么正常，要么抛异常）</td><td>可能超时、可能失败、<strong>可能成功了但你不知道</strong></td><td>重试 + 幂等 + 熔断</td></tr>
+    <tr><td>异常带着完整调用堆栈</td><td>堆栈在对方进程里，你只收到一个 500</td><td>分布式链路追踪（TraceId）</td></tr>
+    <tr><td>一个数据库事务能一起回滚</td><td>两个库、两个事务，回滚不了对方</td><td>最终一致性（消息 + 幂等消费）</td></tr>
+    <tr><td>方法名就是地址，编译器帮你找</td><td>要知道对方的 IP、端口、版本、是否还活着</td><td>网关 / 服务发现</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="label">这就是你的开场白</span>
+  <p>面试问「你对微服务的了解」，不要从「独立部署、技术异构、康威定律」开始背——那是所有人都会背的。<strong>从这张表开始</strong>：微服务的本质是把进程内调用换成网络调用，因此进程内免费的四件事全部开始收费，而微服务的整套技术栈就是这四张账单的付款方式。这个开场立刻把你和背概念的人区分开。</p>
+</div>
+
+<div class="callout ext">
+  <span class="label">扩展 · 为什么有人愿意付这四笔钱</span>
+  <p>Martin Fowler 把这叫 <strong>Microservice Premium</strong>（微服务溢价）：换来的是<q>强模块边界</q>、<q>独立部署</q>、<q>技术异构</q>三项收益，代价是<q>分布式</q>、<q>最终一致性</q>、<q>运维复杂度</q>三项成本，而且只有在系统<strong>复杂到一定程度</strong>时收益才盖得住成本（<a href="https://martinfowler.com/articles/microservice-trade-offs.html">Fowler, Microservice Trade-Offs</a>）。「该不该拆」这道题涉及一整套判断，<strong>放在 Lesson 05 专门讲</strong>——先把这一课的四笔开销吃透，那道题的答案自然就有了骨架。</p>
+</div>
+
+<h2 id="s2">二、第一笔开销：调用会失败，而且三种失败长得一模一样</h2>
+
+<p>进程内调用只有两种结局：返回，或者抛异常。网络调用有<strong>四种</strong>，而其中三种在调用方看起来<strong>几乎无法区分</strong>。这是分布式系统里最反直觉的一点，也是面试官最喜欢往下追的地方。</p>
+
+<p>下面这个组件，把上面那行 <code>POST /reserve</code> 单独拎出来。<strong>先猜，再点</strong>：四种模式下，工单服务分别看到什么？库存到底扣了没有？</p>
+
+<div class="callchain" data-callchain='{
+  "title": "工单提交时调库存服务扣件",
+  "nodes": ["浏览器", "网关", "工单服务", "库存服务"],
+  "focus": 2,
+  "label": "POST /reserve",
+  "modes": [
+    {"id":"ok","label":"正常","tone":"good",
+     "seen":"HTTP 200，耗时 12ms。",
+     "state":"库存已扣，工单已建。两边一致。",
+     "fix":"这是你唯一希望发生的那一种，但它只占故障演练里的一小部分。"},
+    {"id":"fail-fast","label":"对方直接报错 500","tone":"bad",
+     "seen":"HTTP 500，很快返回。",
+     "state":"库存<strong>没扣</strong>。工单已建 —— 已经不一致了，但至少你知道。",
+     "fix":"这是最<em>友善</em>的失败：明确、快速、可重试。捕获后重试，或把工单置为「待扣件」交给补偿任务处理。",
+     "retry":"重试大概率成功，因为对方是明确拒绝的（比如瞬时的数据库连接耗尽）。这类失败正是重试的目标场景。"},
+    {"id":"timeout","label":"超时（对方很慢）","tone":"bad",
+     "seen":"30 秒后 TaskCanceledException。<strong>不知道对方到底做没做。</strong>",
+     "state":"未知。可能扣了，可能没扣，可能正在扣。",
+     "fix":"这是真正的难点。① 客户端必须设超时（不设就是等到 TCP 断，可能几分钟）；② 超时不代表失败，所以重试必须配幂等；③ 慢比错更危险 —— 慢会把调用方的线程和连接全部占住，故障顺着调用链往上传染。",
+     "retry":"<strong>危险。</strong>如果对方其实执行成功了，只是响应慢，重试就会<strong>扣两次库存</strong>。所以重试的前提永远是：这个接口幂等。"},
+    {"id":"lost-response","label":"执行了但响应丢了","tone":"bad",
+     "seen":"和「超时」<strong>完全一样</strong>：一个异常，没有任何附加信息。",
+     "state":"库存<strong>已经扣了</strong>，但工单服务认为失败了。",
+     "fix":"调用方在原理上<strong>无法</strong>区分这一种和上一种。所以正确的做法不是「查明真相」，而是<strong>让真相无所谓</strong> —— 接口设计成幂等，重复调用结果相同。",
+     "retry":"只有幂等能救。带上一个业务唯一的 <code>RequestId</code>，库存服务用它做唯一索引：第二次进来发现已处理过，直接返回上次的结果，不再扣。"}
+  ]
+}'></div>
+
+<div class="callout">
+  <span class="label">这一节只要记住一句话</span>
+  <p><strong>「超时」和「成功但响应丢失」在调用方看来是同一件事，永远分不清。</strong>所以分布式系统里的重试没有意义，除非接口是幂等的。面试时能主动说出这句话，比说得出 Polly 的全部策略名更有分量——因为它说明你知道<em>为什么</em>需要那些策略。</p>
+</div>
+
+<h3>幂等怎么落地（这是最容易被追问的一层）</h3>
+
+<p>「幂等」不是加个 <code>if</code> 判断就行。可靠的做法是让<strong>数据库</strong>来保证，而不是让代码来保证：</p>
+
+<pre><code><span class="cm">-- 库存服务这边：请求去重表，RequestId 上一个唯一索引</span>
+CREATE TABLE reserve_log (
+    request_id  uuid PRIMARY KEY,      <span class="cm">-- 调用方生成，业务上唯一</span>
+    part_id     bigint NOT NULL,
+    qty         int    NOT NULL,
+    created_at  timestamptz NOT NULL DEFAULT now()
+);</code></pre>
+
+<pre><code><span class="cm">// 同一个事务里：先插去重记录，再扣库存。插不进去就说明重复了。</span>
+using var tx = db.BeginTransaction();
+try
+{
+    db.Insertable(new ReserveLog { RequestId = req.RequestId, ... }).ExecuteCommand();
+    db.Updateable&lt;Part&gt;().SetColumns(p =&gt; p.Stock == p.Stock - req.Qty)
+      .Where(p =&gt; p.Id == req.PartId &amp;&amp; p.Stock &gt;= req.Qty).ExecuteCommand();
+    tx.Commit();
+}
+catch (Exception e) when (IsUniqueViolation(e))   <span class="cm">// PostgreSQL 23505</span>
+{
+    tx.Rollback();
+    return Ok(<span class="st">"already processed"</span>);      <span class="cm">// ← 重复请求，直接当成功返回</span>
+}</code></pre>
+
+<p>关键在于<strong>插日志和扣库存在同一个本地事务里</strong>。如果分成两步，就又制造出一个「插了日志但没扣成」的新窗口。这和 <a href="0001-composite-index-leftmost-prefix.html">Lesson 01</a> 里那个<strong>部分唯一索引</strong>是同一个思路：<em>把并发正确性下沉到数据库的唯一约束上，而不是靠应用层的判断</em>。</p>
+
+<h3>重试与熔断：.NET 里具体怎么配</h3>
+
+<p>不要手写重试循环。.NET 8 起官方给了 <code>Microsoft.Extensions.Http.Resilience</code>（内部是 Polly），一行代码挂上五层标准策略：</p>
+
+<pre><code>builder.Services.AddHttpClient&lt;InventoryClient&gt;(c =&gt;
+       {
+           c.BaseAddress = new Uri(<span class="st">"http://inventory"</span>);
+       })
+       .AddStandardResilienceHandler(o =&gt;
+       {
+           o.Retry.DisableForUnsafeHttpMethods();   <span class="cm">// POST/PUT/DELETE 不重试</span>
+       });</code></pre>
+
+<p><code>AddStandardResilienceHandler()</code> 默认从外到内叠这五层（<a href="https://learn.microsoft.com/en-us/dotnet/core/resilience/http-resilience">Microsoft Learn 官方默认值</a>）：</p>
+
+<table>
+  <thead><tr><th>#</th><th>策略</th><th>它挡住什么</th><th>默认值</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Rate limiter</td><td>自己把对方打垮</td><td>并发上限 1000</td></tr>
+    <tr><td>2</td><td>Total timeout</td><td>含重试在内的总耗时失控</td><td>30 秒</td></tr>
+    <tr><td>3</td><td>Retry</td><td>瞬时抖动</td><td>3 次，指数退避 2s 起，<strong>带 jitter</strong></td></tr>
+    <tr><td>4</td><td>Circuit breaker</td><td>对方已经挂了还继续打</td><td>失败率 10%、采样 30s、断开 5s</td></tr>
+    <tr><td>5</td><td>Attempt timeout</td><td>单次调用挂死</td><td>10 秒</td></tr>
+  </tbody>
+</table>
+
+<p>三个细节值得你在面试里主动说出来，每一个都能证明你真的想过这件事：</p>
+
+<ul>
+  <li><strong>jitter（抖动）</strong>：如果一百个实例都「失败后等 2 秒再试」，两秒后会形成一波整齐的重试洪峰，把刚缓过来的服务再打死一次。加随机抖动把重试摊开。</li>
+  <li><strong>熔断的本质是「保护调用方」</strong>，不是保护被调用方。对方挂了还一直调，你的线程和连接会被慢调用占满，故障顺着调用链传染上来——这叫<strong>级联失败</strong>。熔断就是快速失败，把自己的资源守住。</li>
+  <li><strong>POST 默认不该重试</strong>。官方专门给了 <code>DisableForUnsafeHttpMethods()</code>，理由正是上面那张表的第四种情况：<q>if a POST request inserts a new record to a database, then making retries for such a request could lead to data duplication</q>。除非你已经做了幂等键。</li>
+</ul>
+
+<div class="script">
+  <span class="label">面试话术 · 对应题「其中一个微服务故障或调用异常，如何处理」</span>
+  <p><strong>结论：</strong><q>分三层：调用层做超时和熔断，接口层做幂等，业务层做降级。</q></p>
+  <p><strong>原因：</strong><q>网络调用有四种结局，其中「超时」和「对方执行了但响应丢了」在调用方看来完全一样，分不出来。所以我不指望判断真相，而是让真相无所谓——接口做成幂等的，重复调用结果一致，这样重试才是安全的。</q></p>
+  <p><strong>取舍：</strong><q>超时值要卡紧，宁可快失败也不要慢。因为慢调用会把我这边的线程和连接占住，故障会顺着调用链往上传染，一个下游拖垮整条链。熔断的目的其实是保护我自己，不是保护对方。另外 POST 这类写接口默认我不开重试，除非已经有幂等键，否则重试等于制造重复数据。</q></p>
+  <p><strong>落地：</strong><q>.NET 里我不手写重试循环，用 <code>AddStandardResilienceHandler</code>，限流、总超时、指数退避重试、熔断、单次超时五层是标配，重试一定要带 jitter，否则一百个实例会同时重试形成洪峰。</q></p>
+</div>
+
+<h2 id="s3">三、第二笔开销：堆栈断了</h2>
+
+<p>单体里出错，你有一条完整的堆栈，从 Controller 一路到出错那行。拆开之后，工单服务收到的只是一个 <code>500</code>——真正的堆栈在库存服务的日志里，而库存服务今天有 6 个实例。</p>
+
+<p><strong>解决办法：给每一次用户请求发一个全局唯一的编号，让它跟着请求跑遍所有服务。</strong>这就是分布式链路追踪。三个术语，一次说清：</p>
+
+<table>
+  <thead><tr><th>术语</th><th>是什么</th><th>类比</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Trace</strong>（.NET 里是一棵 <code>Activity</code> 树）</td><td>一次用户请求的完整过程，横跨所有服务</td><td>一个快递单号下的全部轨迹</td></tr>
+    <tr><td><strong>Span</strong></td><td>其中一段工作：一次 HTTP 调用、一条 SQL</td><td>轨迹里的一条：「已到达 XX 分拣中心」</td></tr>
+    <tr><td><strong>TraceId / SpanId</strong></td><td>16 字节的全局 trace 号 + 8 字节的段号，每段还记着父段的号</td><td>快递单号 + 每条轨迹的序号与上一站</td></tr>
+  </tbody>
+</table>
+
+<p>它是怎么跨进程传的？靠一个 HTTP 头。W3C 定了标准叫 <a href="https://www.w3.org/TR/trace-context/">Trace Context</a>，头的名字是 <code>traceparent</code>，长这样：</p>
+
+<pre><code>traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+             ^版本 ^--------- TraceId (16B) ---------^ ^-- SpanId --^ ^标志</code></pre>
+
+<div class="callout">
+  <span class="label">.NET 的一个大便宜，一定要说出来</span>
+  <p><q>Unlike many other language runtimes, .NET in-box libraries such as the ASP.NET web server and System.Net.Http natively understand how to decode and encode Activity IDs on HTTP messages ... <strong>with no special coding by the app developer</strong></q>（<a href="https://learn.microsoft.com/en-us/dotnet/core/diagnostics/distributed-tracing-concepts">Microsoft Learn</a>）。也就是说：ASP.NET Core 收到请求时会自动读 <code>traceparent</code>，<code>HttpClient</code> 发请求时会自动带上，<code>Activity.Current</code> 还会自动跟着 <code>async</code> 流转。W3C 格式从 .NET 5 起就是默认。<strong>你要做的只有一件事：把 TraceId 写进日志。</strong></p>
+</div>
+
+<pre><code><span class="cm">// 日志里带上 TraceId —— 这一行是「能排查」和「不能排查」的分界线</span>
+_logger.LogError(ex, <span class="st">"扣件失败 TraceId={TraceId} PartId={PartId}"</span>,
+                 Activity.Current?.TraceId, req.PartId);</code></pre>
+
+<p>有了它，排查流程从「登录 6 台机器 grep 时间段」变成「拿用户报错页面上的那串 TraceId，在日志平台里搜一次，整条链按时间排好」。</p>
+
+<div class="callout ext">
+  <span class="label">扩展 · 采集端怎么选，以及一个必踩的坑</span>
+  <p>Activity 只是<strong>产生</strong>数据，还需要一个采集器把它送到集中存储：OpenTelemetry（厂商中立，现在的默认选择）、Application Insights、或各家 APM。<strong>坑</strong>：全量采集在高流量下开销很大，所以要<strong>采样</strong>；.NET 里未被采样的 Activity 开销可以低到 100 纳秒以下。但采样有个陷阱——<strong>如果按固定比例随机采样，出问题的那条链很可能恰好没被采到</strong>。常见对策是「尾部采样」：先缓存，等整条链结束后发现有错误或超慢再决定留下。面试如果被追到这一层，能说出「采样率」和「出错的链要保证留下」就足够了。</p>
+</div>
+
+<div class="script">
+  <span class="label">面试话术 · 对应题「微服务的异常追踪问题」</span>
+  <p><strong>结论：</strong><q>核心是让一次用户请求在所有服务里有同一个 TraceId，日志按 TraceId 能串起来。</q></p>
+  <p><strong>原因：</strong><q>拆开之后堆栈断在进程边界上，我只收到一个 500，真正的异常在下游某个实例的日志里。没有 TraceId 就只能靠时间戳猜，实例一多就没法查了。</q></p>
+  <p><strong>落地：</strong><q>.NET 这块基本是白送的：ASP.NET Core 和 HttpClient 原生认 W3C 的 <code>traceparent</code> 头，.NET 5 起是默认格式，Activity 还会跟着 async 自动流转，不用自己写传递代码。我要做的就是在日志里输出 <code>Activity.Current.TraceId</code>，再把错误返回给前端时也带上，用户截图就能直接定位。</q></p>
+  <p><strong>取舍：</strong><q>全量采集成本高，所以要采样；但要注意别把出错的链采掉了，理想是尾部采样——整条链结束后发现有错误或超慢再留。</q></p>
+</div>
+
+<h2 id="s4">四、第三笔开销：一个事务变成了两个</h2>
+
+<p>回到第一节那段代码。单体版本里，如果 <code>_inventory.Reserve()</code> 抛异常，外面一个事务全部回滚，工单也不会留下。拆开之后，<strong>这个保证消失了</strong>——工单在你的库，库存在对方的库，你没有任何办法让对方跟着你回滚。</p>
+
+<p>教科书上的答案是分布式事务（2PC）。<strong>实践里基本不用</strong>，理由 Fowler 说得很直接：<q>distributed transactions are frowned on (for good reason)</q>。原因很实际：2PC 要求所有参与者在第二阶段前一直持锁，任何一方慢或挂，其它人的锁就一直握着，吞吐直接塌掉。</p>
+
+<p>实践里的做法是<strong>换一个目标</strong>：不再追求「任何时刻都一致」，改成<strong>「允许短暂不一致，但保证最终一致」</strong>。最常用的一套组合：</p>
+
+<table>
+  <thead><tr><th>步骤</th><th>做什么</th><th>为什么这样才安全</th></tr></thead>
+  <tbody>
+    <tr><td>① 本地事务</td><td>建工单 + <strong>往本地的消息表插一条待发消息</strong>，同一个事务提交</td><td>两件事同生共死。不会出现「工单建了但消息没发」</td></tr>
+    <tr><td>② 投递</td><td>一个后台任务扫消息表，发到 RabbitMQ，成功后标记已发</td><td>发送失败可以一直重发，消息不会丢</td></tr>
+    <tr><td>③ 消费</td><td>库存服务收到消息，<strong>用第二节那张去重表</strong>做幂等扣减</td><td>MQ 保证的是「至少一次」，一定会有重复投递</td></tr>
+    <tr><td>④ 确认</td><td>业务处理成功后才手动 ACK</td><td>处理途中崩溃，消息会重新入队，不会丢</td></tr>
+  </tbody>
+</table>
+
+<p>①叫<strong>本地消息表 / Outbox 模式</strong>。它解决的是一个非常刁钻的问题：<em>你不可能让「写数据库」和「发消息到 MQ」这两件事原子地一起成功</em>——它们是两个系统。Outbox 的技巧是把「发消息」这个动作先变成「往自己库里写一行」，于是它就能和业务数据进同一个本地事务了。</p>
+
+<div class="callout">
+  <span class="label">注意，这里出现了闭环</span>
+  <p>③ 用的正是第二节那张 <code>request_id</code> 去重表。<strong>不是巧合</strong>：MQ 的投递保证是「至少一次」（at-least-once），因为 ACK 本身也可能丢——这和 HTTP 那个「执行了但响应丢了」是<strong>完全同一个问题</strong>。所以答案也是同一个：幂等消费。<br>能在面试里把「HTTP 重试要幂等」和「MQ 消费要幂等」<strong>归结成同一个原因</strong>，是很强的信号——它说明你理解的是机制，不是背了两条最佳实践。</p>
+</div>
+
+<div class="script">
+  <span class="label">面试话术 · 对应题「和第三方交互时如何保证数据一致性」/「RabbitMQ 如何消费」</span>
+  <p><strong>结论：</strong><q>放弃强一致，做最终一致：本地消息表 + MQ + 幂等消费 + 手动 ACK。</q></p>
+  <p><strong>原因：</strong><q>跨系统没有共同的事务。2PC 理论上可以，但要长时间持锁，一方慢就拖垮所有人，实践里基本不用。而且对第三方来说，我连让它回滚的权限都没有。</q></p>
+  <p><strong>机制：</strong><q>关键难点是「写自己的库」和「发消息」没法原子。所以我把发消息先降级成写自己库里的一张消息表，跟业务数据同一个事务提交；再由后台任务扫表投递，投递失败就重发。消费端因为 MQ 是至少一次投递，必须幂等——用业务唯一键建唯一索引，重复的直接当成功返回。ACK 一定是业务处理完再手动 ACK，不能用自动 ACK，否则处理到一半崩了消息就没了。</q></p>
+  <p><strong>取舍：</strong><q>代价是存在一个不一致窗口，所以要配对账任务和告警：超过多少分钟还没最终一致的，捞出来人工处理。这个窗口业务上能不能接受，是拆服务之前就要和业务确认的事。</q></p>
+</div>
+
+<h2 id="s5">五、第四笔开销：调用方不知道该往哪儿打</h2>
+
+<p>单体只有一个地址。拆成 8 个服务之后，前端难道要记 8 个地址、8 套跨域配置、8 处登录校验？<strong>网关的第一职责不是路由，是把所有「每个服务都要做一遍」的横切关注点收到一个地方。</strong></p>
+
+<table>
+  <thead><tr><th>网关承担</th><th>不放网关会怎样</th></tr></thead>
+  <tbody>
+    <tr><td>统一入口 / 路由 / 负载均衡</td><td>前端要知道每个服务在哪，服务一扩容前端就得改</td></tr>
+    <tr><td>认证鉴权（验 JWT 签名、解出身份）</td><td>八个服务各写一遍，改一次密钥要改八个地方</td></tr>
+    <tr><td>限流、TLS 卸载、跨域、请求日志</td><td>同上，且策略必然逐渐不一致</td></tr>
+  </tbody>
+</table>
+
+<p>.NET 生态里三个选项，足够回答「用过哪些网关，为什么选它」：</p>
+
+<table>
+  <thead><tr><th>选项</th><th>是什么</th><th>什么时候选它</th></tr></thead>
+  <tbody>
+    <tr><td><strong>YARP</strong></td><td>微软官方的 .NET 反向代理库，本身就是一个 ASP.NET Core 应用，配置走 JSON；支持 gRPC / WebSocket / HTTP2 / HTTP3（<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/yarp/yarp-overview">官方文档</a>）</td><td>团队是 .NET 栈、需要写自定义转换逻辑（改头、灰度、按租户路由）时的<strong>当前首选</strong></td></tr>
+    <tr><td><strong>Ocelot</strong></td><td>较早的 .NET 开源网关，社区项目</td><td>老项目里常见；新项目微软已把 YARP 作为推荐方向</td></tr>
+    <tr><td><strong>Nginx / 云厂商 API 网关</strong></td><td>与语言无关的成熟基础设施</td><td>纯路由 + TLS + 限流、不需要业务逻辑时最省事、性能最好</td></tr>
+  </tbody>
+</table>
+
+<div class="callout ext">
+  <span class="label">扩展 · 一个能显著加分的追问答案</span>
+  <p>如果被问「网关会不会成为单点」——会。所以网关本身要多实例部署，前面挂负载均衡；并且<strong>网关里绝对不要放业务逻辑</strong>，一旦放了，每次业务改动都要动网关，网关就成了新的单体。这条正是拆微服务的人最容易犯的错，说出来说明你见过真实的坑。</p>
+</div>
+
+<div class="script">
+  <span class="label">面试话术 · 对应题「用过哪些网关，为何选择」</span>
+  <p><strong>结论 + 诚实定位：</strong><q>我理解网关的核心价值不在路由，而在于把认证、限流、跨域、日志这些每个服务都要做一遍的横切关注点收到一处。</q>——如果你实际只用过 Nginx，就直说 <q>我们的场景比较简单，前面是 Nginx 做路由和 TLS，认证在应用侧；如果要往上做，.NET 栈我会优先看 YARP，因为它本身就是一个 ASP.NET Core 应用，能直接写 C# 的转换逻辑做灰度或按租户路由，不用引第二套技术栈。</q></p>
+  <p><strong>为什么这样答更好：</strong>把「用过什么」和「知道该怎么选」分开说。面试官真正想知道的是后者。硬说自己用过 YARP，追问一句配置结构就露馅了——<strong>而承认边界再展示判断力，几乎从不扣分</strong>。</p>
+</div>
+
+<h2 id="s6">六、一页对照：九道题挂回四笔开销</h2>
+
+<p>把题库里微服务板块的题，全部挂回这一课的四笔开销。<strong>请遮住右边一列，自己先说一遍</strong>：</p>
+
+<table>
+  <thead><tr><th>题库原题</th><th>其实在问哪笔开销</th></tr></thead>
+  <tbody>
+    <tr><td>微服务的了解？</td><td>开场用第一节那张表：四件免费的事开始收费</td></tr>
+    <tr><td>几个微服务之间如何交互</td><td>同步 HTTP/gRPC（要幂等 + 熔断）vs 异步 MQ（要 Outbox + 幂等消费）</td></tr>
+    <tr><td>一个微服务故障或调用异常怎么处理</td><td><strong>开销一</strong>：超时、熔断、幂等、降级</td></tr>
+    <tr><td>微服务的异常追踪问题</td><td><strong>开销二</strong>：TraceId / traceparent</td></tr>
+    <tr><td>和第三方交互如何保证一致性 · RabbitMQ 如何消费</td><td><strong>开销三</strong>：最终一致性、Outbox、手动 ACK</td></tr>
+    <tr><td>用过哪些网关，为何选择</td><td><strong>开销四</strong>：横切关注点收口，YARP vs Nginx</td></tr>
+    <tr><td>运维成本高、交互复杂，为什么还选微服务</td><td>Fowler 的 Microservice Premium → <strong>Lesson 05</strong></td></tr>
+    <tr><td>从单一服务扩展到微服务的理解 · 设计时用什么架构</td><td>拆分边界怎么划 → <strong>Lesson 05</strong></td></tr>
+  </tbody>
+</table>
+
+<h2 id="s7">七、检验一下</h2>
+
+<p>下面 6 题只考这一课的机制。<strong>先在心里说出理由再选</strong>——说不出理由的对，等于蒙对。</p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "调用方遇到超时时，关于下游服务的状态，正确的说法是：",
+    "options": [
+      "可以确定下游服务完全没有执行这次请求",
+      "可以确定下游服务已经执行完成了该请求",
+      "无法确定，执行与否两种可能都会存在",
+      "可以通过重新查询下游状态来完全确认"
+    ],
+    "answer": 2,
+    "why": "超时只说明「我没在规定时间内收到响应」，对方可能没收到、正在处理、或者已处理完但响应丢了。<strong>这是分布式系统的根本约束，不是工程没做好</strong>。「再查一次状态」也不可靠——查询本身同样可能超时，而且查的瞬间对方可能刚好处理完。正确的应对不是查明真相，是让真相无所谓：幂等。"
+  },
+  {
+    "q": "在写接口上开启自动重试，最直接的风险是什么？",
+    "options": [
+      "重试会显著拖慢整体的响应时间表现",
+      "对方执行成功过，重试造成重复写入",
+      "重试的次数过多会触发网关限流拦截",
+      "指数退避的等待会让线程池长时间挂起"
+    ],
+    "answer": 1,
+    "why": "官方原文：<q>if a POST request inserts a new record to a database, then making retries for such a request could lead to data duplication</q>，因此 .NET 提供了 <code>DisableForUnsafeHttpMethods()</code>。其它三项在特定情况下也确实存在，但都不是「写接口默认关闭重试」这条规则的理由。<strong>前提做到了幂等，就可以放心开重试</strong>。"
+  },
+  {
+    "q": "熔断器（Circuit Breaker）的主要保护对象是：",
+    "options": [
+      "被调用方，避免它在故障时继续被打",
+      "调用方，避免资源被慢调用全部占住",
+      "数据库，避免连接池被瞬间全部耗尽",
+      "网关本身，避免入口流量超过其阈值"
+    ],
+    "answer": 1,
+    "why": "熔断顺带减轻了下游压力，但它的<strong>设计目的是保护自己</strong>：下游变慢时，你的每个请求都要挂 10 秒，线程和 HTTP 连接迅速被占满，于是<em>你</em>也开始超时，故障顺着调用链往上传染——这就是级联失败。熔断让你在下游明显不健康时立刻失败，把自己的资源守住。「限流」才是主要保护下游的那个策略。"
+  },
+  {
+    "q": "关于 .NET 里的分布式链路追踪，下面哪句是对的？",
+    "options": [
+      "TraceId 需要在每次调用时手动传递下去",
+      "ASP.NET Core 与 HttpClient 自动传递",
+      "必须接入 OpenTelemetry 才会生成 ID",
+      "只有用 Hierarchical 格式才能跨进程"
+    ],
+    "answer": 1,
+    "why": "官方原文：in-box 库<q>natively understand how to decode and encode Activity IDs on HTTP messages ... with no special coding by the app developer</q>，且 W3C TraceContext 自 .NET 5 起是默认格式（Hierarchical 是为了向后兼容的旧格式）。OpenTelemetry 是<strong>采集与导出</strong>用的，不接它 Activity 照样生成和传播，只是没人把数据收集起来看。"
+  },
+  {
+    "q": "本地消息表（Outbox）解决的核心问题是：",
+    "options": [
+      "让消息队列的吞吐量得到明显的提升",
+      "写数据库与发消息无法原子地同时成功",
+      "让消费端不必再考虑幂等去重的问题",
+      "替代分布式事务并且实现了强一致性"
+    ],
+    "answer": 1,
+    "why": "数据库和 MQ 是两个系统，没有共同事务，必然存在「库写了消息没发」或反之的窗口。Outbox 把「发消息」先降级成「往自己库里写一行」，于是它能和业务数据同一个本地事务提交，投递交给后台任务重试。<strong>它不提升吞吐（反而多一次写），不免除消费端幂等</strong>（MQ 仍是至少一次投递），也不给你强一致——它给的是最终一致。"
+  },
+  {
+    "q": "「HTTP 重试要幂等」和「MQ 消费要幂等」，共同的根本原因是：",
+    "options": [
+      "两者都可能因为网络抖动而丢失请求",
+      "确认信号可能丢失，导致重复的投递",
+      "两者的框架默认都开启了重试的策略",
+      "两者都缺少一个跨系统的分布式事务"
+    ],
+    "answer": 1,
+    "why": "两处都是<strong>「动作已执行，但确认丢了」</strong>：HTTP 是响应丢了，MQ 是 ACK 丢了。发送方只能假设失败并重发，于是必然重复——这正是 MQ 只能承诺 at-least-once 的原因。<strong>把这两件事归结成同一个机制，是这一课最值钱的一句话</strong>，面试里主动说出来，比分别背两条最佳实践强得多。"
+  }
+]'></div>
+
+<h2 id="s8">八、我需要你的三个素材</h2>
+
+<p>这一课给了你机制和话术骨架，但<strong>面试官一定会追问「你项目里怎么用的」</strong>。你自评微服务经历偏薄，所以我们要做的不是编，而是<strong>把你真做过的事，精确地挂到上面四笔开销上</strong>。请回答我三个问题，我会据此把话术改写成你的版本：</p>
+
+<ol>
+  <li><strong>你们的系统是几个服务？</strong>它们之间是怎么调的——HTTP、MQ、还是直接读同一个数据库？（「共用一个库」也是很常见的答案，而且它本身就是一个很好的可讨论点）</li>
+  <li><strong>RabbitMQ 你具体做过什么？</strong>发过消息还是消费过？有没有遇到过消息重复、消息堆积、或者消费失败的情况？当时怎么处理的？</li>
+  <li><strong>第三方对接那次</strong>：对方是同步接口还是回调？有没有出现过「我方以为失败，其实对方成功了」这类问题？你们怎么发现和补救的？（哪怕答案是「手工改数据」，也能改写成一段很好的话术——它证明你亲历过不一致）</li>
+</ol>
+
+<div class="callout">
+  <span class="label">如果三个问题的答案都很薄</span>
+  <p>那也完全没问题，而且<strong>不要编</strong>。经历薄的正确打法是：把「我做过的那一小块」讲到非常具体（具体到表名、字段、当时的错误现象），再接一句<q>更完整的那套我们当时没做到，如果重来我会……</q>。<strong>面试官分辨得出「具体但小」和「宏大但空」，前者得分高得多。</strong>Lesson 05 会专门把这个策略做成一套可复用的句式。</p>
+</div>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（只看一个的话，看这个）：</strong><br>
+  <a href="https://martinfowler.com/articles/microservice-trade-offs.html">Martin Fowler — Microservice Trade-Offs</a>。全文约 15 分钟，是「微服务到底换来什么、付出什么」最经得起时间检验的一篇。<strong>重点读 Distribution 和 Eventual Consistency 两节</strong>，它们正是这一课的第一和第三笔开销。<br>
+  想再深一层：<a href="https://learn.microsoft.com/en-us/dotnet/core/resilience/http-resilience">Microsoft Learn — Build resilient HTTP apps</a>（五层标准策略的默认值，本课表格的出处）、<a href="https://learn.microsoft.com/en-us/dotnet/core/diagnostics/distributed-tracing-concepts">Microsoft Learn — Distributed tracing concepts</a>（Activity / TraceId / W3C 传播）。</p>
+
+  <p><strong>下一课（Lesson 05）：</strong>该不该拆、怎么划边界、以及「运维成本这么高为什么还选微服务」。那一课会用决策树组件让你自己走一遍拆分决策——<strong>但它建立在这一课之上</strong>：知道了要付哪四笔钱，才谈得上值不值。</p>
+
+  <div class="nav-links">
+    <a href="0003-how-each-sort-actually-works.html">← Lesson 03：四种排序</a>
+    <a href="0001-composite-index-leftmost-prefix.html">← Lesson 01：联合索引</a>
+    <a href="../reference/db-index-cheatsheet.html">→ 速查表：索引</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练。</strong>请回给我：<strong>①</strong> 第八节那三个素材问题（最重要，直接决定下一步能不能给你写出抗追问的话术）；<strong>②</strong> 第二节那个组件里，四种模式有没有哪一种的结果和你猜的不一样？<strong>③</strong> 六道小测里错的那几题——错题比对题信息量大得多。另外，<strong>想让哪一节更慢、更细都可以说</strong>，比如「Outbox 那张表到底长什么样、后台任务怎么写」我可以单独展开成一段可运行的代码。
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+<script src="../assets/callchain.js"></script>
+</body>
+</html>

@@ -111,6 +111,54 @@
   </tbody>
 </table>
 
+<h2>边界与校验</h2>
+
+<table>
+  <thead><tr><th style="width:11rem">术语</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Boundary</strong><br>边界</td>
+      <td>类型系统<strong>管辖权的国境线</strong>。线内编译器担保，线外什么都可能进来。典型边界：HTTP 请求/响应、<code>localStorage</code>、URL 参数、环境变量、第三方 SDK 回调。<strong>边界上的类型注解是承诺，不是检查</strong>，必须补运行时校验。</td>
+    </tr>
+    <tr>
+      <td><strong>Pydantic</strong></td>
+      <td>Python 的运行时数据校验库，FastAPI 的底座。<code>class X(BaseModel)</code> 在类定义时读取类型注解，据此生成校验与序列化逻辑。对照 C#：一个类同时干了 DTO、模型绑定、校验、序列化四件事。<a href="https://docs.pydantic.dev/latest/concepts/models/">文档</a></td>
+    </tr>
+    <tr>
+      <td><strong>Response model</strong><br>响应模型</td>
+      <td>FastAPI 中写在路由<strong>返回类型注解</strong>上的 Pydantic 模型（<code>def f() -&gt; HelloResponse:</code>）。它做三件事：校验（缺字段 → <code>ResponseValidationError</code> → 500）、<strong>过滤</strong>（多余字段静默剥离，防泄漏）、生成 OpenAPI schema。<a href="https://fastapi.tiangolo.com/tutorial/response-model/">文档</a></td>
+    </tr>
+    <tr>
+      <td><strong>422</strong><br>Unprocessable Entity</td>
+      <td>FastAPI 对<strong>请求体</strong>校验失败的默认响应码（不是 400）。此时路由函数<strong>根本没被调用</strong>。对照：响应体校验失败是服务端自己违约 → 500。4xx 是调用方的错，5xx 是服务端的错。</td>
+    </tr>
+    <tr>
+      <td><strong>JSON Schema</strong></td>
+      <td>用 JSON 描述 JSON 结构的标准。Pydantic 模型会被转成它，嵌进 OpenAPI 文档。<strong>它是前后端契约唯一可机读的形式</strong> —— 前端据此自动生成 TS 类型的基础。</td>
+    </tr>
+    <tr>
+      <td><strong>Zod</strong></td>
+      <td>TS 生态事实标准的运行时校验库。<code>z.object({...})</code> 产生的是<strong>值</strong>（活到运行时），不是类型。<a href="https://zod.dev/">文档</a></td>
+    </tr>
+    <tr>
+      <td><strong><code>z.infer</code></strong></td>
+      <td><code>type T = z.infer&lt;typeof Schema&gt;</code>，从 schema 反推出静态类型。<strong>方向与 C# 相反</strong>：schema（值）是单一事实来源，类型是它的投影。这样类型和校验规则不可能漂移。<br><code>typeof Schema</code> 里的 <code>typeof</code> 是 <em>TS 的类型运算符</em>（取一个值的类型），和 JS 运行时的 <code>typeof</code> 只是同名。</td>
+    </tr>
+    <tr>
+      <td><strong><code>parse</code> / <code>safeParse</code></strong></td>
+      <td><code>.parse()</code> 失败时<strong>抛</strong> <code>ZodError</code>；<code>.safeParse()</code> 不抛，返回 <code>{ success: true, data }</code> 或 <code>{ success: false, error }</code>。后者对应 C# 的 <code>TryParse</code> 模式，但不需要 <code>out</code> 参数。</td>
+    </tr>
+    <tr>
+      <td><strong>Discriminated union</strong><br>可辨识联合</td>
+      <td>联合类型的各成员共有一个<strong>字面量字段</strong>作为标签（如 <code>success: true | false</code>）。判断该字段后，TS 自动知道是哪一支。<code>safeParse</code> 的返回值就是它。对照 C# 9 的 <code>switch</code> 模式匹配，但这里靠的是<strong>值</strong>而非类型。</td>
+    </tr>
+    <tr>
+      <td><strong>Narrowing</strong><br>类型收窄</td>
+      <td>TS 通过控制流分析，在 <code>if</code> / <code>typeof</code> / <code>in</code> 等判断之后把变量类型缩小到更精确的一支。这是 <code>unknown</code> 变得可用的唯一途径。<a href="https://www.typescriptlang.org/docs/handbook/2/narrowing.html">官方手册</a></td>
+    </tr>
+  </tbody>
+</table>
+
 <h2>Python</h2>
 
 <table>
@@ -132,7 +180,7 @@
 </table>
 
 <div class="footer">
-  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a></p>
+  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a></p>
   <div class="ask"><strong>有词条不清楚？</strong> 问我，我会把解释补进这份文档 —— 它会跟着课程一起长大。</div>
 </div>
 

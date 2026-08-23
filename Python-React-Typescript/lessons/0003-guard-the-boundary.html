@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 3 课 · 在边界上立一道检查</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/widgets.css">
+<script src="../assets/widgets.js" defer></script>
+</head>
+<body>
+<main class="page">
+
+<p class="eyebrow">Lesson 0003 · 约 50 分钟</p>
+<h1>在边界上立一道检查</h1>
+<p class="subtitle">上一课你造出了一个 <code>undefined</code>。这一课你把它逼到边界上炸掉 —— 后端用 Pydantic，前端用 Zod。</p>
+
+<div class="block win">
+  <span class="label">本课的收获</span>
+  <p>你会拿到一句能贯穿整个技术栈的判断：<strong>「类型注解管系统内部，边界上必须有运行时校验」</strong>。做完之后，同样把后端字段改坏，你会在<strong>两个不同的位置</strong>各得到一条说人话的错误 —— 而不是一个飘到组件里才炸的 <code>undefined</code>。顺带你会理解 TS 生态里一个方向反直觉的做法：<strong>先写 schema（值），再从 schema 推出类型</strong>。</p>
+</div>
+
+<p>接上一课（<a href="0002-typescript-is-not-csharp.html">第 2 课</a>）的结论：<code>fetchHello(): Promise&lt;HelloResponse&gt;</code> 是一句承诺，编译器信了，然后自己被擦除了，运行时无人核对。现在我们派个人去核对。</p>
+
+<h2>一、什么是「边界」</h2>
+
+<p>边界就是<strong>类型系统管辖权的国境线</strong>。线内，编译器替你担保；线外，什么都可能进来。数一数你的项目里有多少条边界：</p>
+
+<table>
+  <thead><tr><th style="width:13rem">边界</th><th>线外那边是谁</th></tr></thead>
+  <tbody>
+    <tr><td>HTTP 响应 <code>res.json()</code></td><td>另一个进程、另一门语言，可能昨天刚改过字段名</td></tr>
+    <tr><td>HTTP 请求体（后端视角）</td><td>任何人。包括拿 curl 来试你的人</td></tr>
+    <tr><td><code>localStorage</code> / URL 参数</td><td>用户自己，以及三个月前版本的你写进去的旧格式</td></tr>
+    <tr><td>环境变量 / 配置文件</td><td>部署脚本，全是字符串</td></tr>
+    <tr><td>第三方 SDK 回调</td><td>别人的代码，类型声明未必和实现一致</td></tr>
+  </tbody>
+</table>
+
+<div class="block csharp">
+  <span class="label">你熟悉的世界</span>
+  <p>C# 里这件事你其实一直在做，只是被框架藏起来了：<code>[ApiController]</code> + DataAnnotations 让 ASP.NET Core 在 model binding 阶段自动校验请求体，不合法直接返回 400，你的 action 方法根本不会被调用。<code>System.Text.Json</code> 反序列化到 DTO 时也会因类型不匹配抛异常。<br><strong>差异在于：</strong>C# 的运行时本身就带类型信息，校验是<em>顺带</em>的；TS / Python 的运行时没有，校验必须由一个<strong>库</strong>显式地做。所以 Pydantic 和 Zod 在这两个生态里的地位，比 FluentValidation 在 .NET 里重要得多 —— 它们不是「加强校验」，它们是<strong>唯一的一道检查</strong>。</p>
+</div>
+
+<h2>二、后端：Pydantic</h2>
+
+<p>Pydantic 是 FastAPI 的底座。它的核心把戏是：<strong>在运行时读取你写的类型注解，并据此生成校验代码</strong>（回顾术语表里的 <em>type hint</em> —— Python 自己从不检查注解，是 Pydantic 主动去读）。</p>
+
+<pre><code>from pydantic import BaseModel
+
+class HelloResponse(BaseModel):
+    message: str</code></pre>
+
+<p>看起来就是个 C# record / DTO。关键在于把它挂到路由的<strong>返回类型注解</strong>上：</p>
+
+<pre><code>@app.get("/api/hello")
+def hello() -&gt; HelloResponse:          <span class="cmt"># ← 这个注解就是 response model</span>
+    return HelloResponse(message="Hello from Python")</code></pre>
+
+<blockquote>
+“FastAPI will use this return type to: validate the returned data … add a JSON Schema for the response, in the OpenAPI path operation … <strong>And most importantly: It will limit and filter the output data to what is defined in the return type.</strong>”
+<cite>—— <a href="https://fastapi.tiangolo.com/tutorial/response-model/">FastAPI · Response Model - Return Type</a></cite>
+</blockquote>
+
+<p>三件事，逐条对着 C# 想：</p>
+
+<table>
+  <thead><tr><th style="width:9rem">Pydantic 做的</th><th>意味着什么</th></tr></thead>
+  <tbody>
+    <tr><td><strong>校验</strong></td><td>返回的数据缺字段或类型不对 → 抛 <code>ResponseValidationError</code>，客户端收到 <strong>500</strong>。错误发生在<em>产生它的地方</em>，不再往下游流。</td></tr>
+    <tr><td><strong>过滤</strong></td><td>模型里没声明的字段会被<strong>静默剥掉</strong>。这是安全特性：你不小心把整个 user 对象（含 <code>password_hash</code>）返回出去，也只有声明过的字段会出网。等价于 C# 里手写一次 DTO 投影，只不过它是自动的。</td></tr>
+    <tr><td><strong>生成 schema</strong></td><td>模型会变成 OpenAPI 里的 JSON Schema，出现在 <code>/docs</code>。这就是第 1 课埋的伏笔 —— 前端将来可以据此自动生成 TS 类型。</td></tr>
+  </tbody>
+</table>
+
+<p>请求方向同理：把 <code>BaseModel</code> 写成参数类型，FastAPI 就会解析并校验请求体，不合法直接返回 <strong>422</strong>，你的函数体不会执行 —— 和 <code>[ApiController]</code> 的自动 400 是同一个套路（<a href="https://fastapi.tiangolo.com/tutorial/body/">官方文档</a>）。</p>
+
+<h2>三、前端：Zod，以及一个反过来的方向</h2>
+
+<p>后端守住了自己这一侧，但浏览器依然只能选择<em>相信</em>网线那头。所以前端要有自己的一道检查。TS 生态的事实标准是 <a href="https://zod.dev/">Zod</a>。</p>
+
+<pre><code>import { z } from "zod";
+
+const HelloResponse = z.object({
+  message: z.string(),
+});</code></pre>
+
+<div class="block trap">
+  <span class="label">这里必须停一下 —— 方向反了</span>
+  <p><code>HelloResponse</code> 在这里<strong>不是一个类型，是一个值</strong>。它是一个真实存在于运行时的 JS 对象，有方法可以调用。这正是关键：<a href="0002-typescript-is-not-csharp.html">类型会被擦除</a>，<strong>值不会</strong>。要在运行时检查东西，就只能用值去做。<br>然后用 <code>z.infer</code> 反推出静态类型：</p>
+<pre><code>type HelloResponse = z.infer&lt;typeof HelloResponse&gt;;
+<span class="cmt">// 得到 { message: string } —— 和上面的 schema 永远同步</span></code></pre>
+  <p>C# 的方向是「类型是源头，校验规则挂在类型上（attribute）」。TS 这边是<strong>倒过来的</strong>：schema 是唯一的事实来源，类型是它的投影。理由很实在 —— 如果两边分开手写，它们迟早会不一致，而不一致的那一天，编译器不会告诉你。<br>（<code>typeof HelloResponse</code> 里的 <code>typeof</code> 是 <em>TS 的类型运算符</em>，作用是「把这个值的类型取出来」，和 JS 运行时那个 <code>typeof</code> 是同名的两回事。）</p>
+</div>
+
+<p>校验有两种调用法，差别只在失败时的行为：</p>
+
+<table>
+  <thead><tr><th style="width:9rem">方法</th><th>失败时</th></tr></thead>
+  <tbody>
+    <tr><td><code>.parse(data)</code></td><td><strong>抛</strong> <code>ZodError</code>。适合「这里出错就该炸」的场合。</td></tr>
+    <tr><td><code>.safeParse(data)</code></td><td>不抛，返回 <code>{ success: true, data }</code> 或 <code>{ success: false, error }</code>。适合需要在 UI 上显示错误的场合。<br>注意返回值是个<strong>可辨识联合（discriminated union）</strong>：<code>if (r.success)</code> 之后，TS 就知道 <code>r.data</code> 存在了 —— 这是类型收窄（<a href="https://www.typescriptlang.org/docs/handbook/2/narrowing.html">narrowing</a>）的典型用法。</td></tr>
+  </tbody>
+</table>
+
+<div class="block win">
+  <span class="label">顺手还掉一笔知识债：<code>any</code> vs <code>unknown</code></span>
+  <p><code>res.json()</code> 的类型是 <code>any</code> —— 上一课的谎言就是从这里进来的，因为 <code>any</code> 关闭一切检查，能被赋给任何东西。<code>unknown</code> 是它的解药：同样表示「不知道是什么」，但<strong>在收窄之前你什么都不能做</strong>。所以正确的接法是先落到 <code>unknown</code>，再让 Zod 把它收窄成可用的类型。校验之后拿到的类型，是<em>挣来的</em>，不是<em>宣称的</em>。</p>
+</div>
+
+<h2>四、动手</h2>
+
+<p>两个终端开着（<code>fastapi dev</code> 与 <code>pnpm dev</code>）。</p>
+
+<ol class="checklist" data-checklist="0003">
+
+<li>
+<span class="step-title">后端：定义模型</span>
+<p><code>backend\main.py</code>，加导入与模型，并改掉路由的返回类型：</p>
+<pre><code>from pydantic import BaseModel
+
+class HelloResponse(BaseModel):
+    message: str
+
+<span class="cmt"># ...中间的 CORS 配置不动...</span>
+
+@app.get("/api/hello")
+def hello() -&gt; HelloResponse:
+    return HelloResponse(message="Hello from Python")</code></pre>
+<p>页面应当照常显示 <strong>Hello from Python</strong>。顺便打开 <a href="http://127.0.0.1:8000/docs">http://127.0.0.1:8000/docs</a> —— <code>HelloResponse</code> 现在作为 schema 出现在里面了。</p>
+</li>
+
+<li>
+<span class="step-title">再撒一次同样的谎</span>
+<p>把返回改成一个字典，键名写错：</p>
+<pre><code>@app.get("/api/hello")
+def hello() -&gt; HelloResponse:
+    return {"msg": "Hello from Python"}</code></pre>
+<p>刷新浏览器。这次不是 <code>undefined</code> 了 —— 请求直接 <strong>500</strong>，后端终端里印着：</p>
+<pre><code>fastapi.exceptions.ResponseValidationError: 1 validation error:
+  {'type': 'missing', 'loc': ('response', 'message'),
+   'msg': 'Field required', 'input': {'msg': 'Hello from Python'}}</code></pre>
+<p><strong>字段名、文件、行号，一次给全。</strong> 对比上一课那个飘到 <code>&lt;h1&gt;</code> 里才显形的 <code>undefined</code> —— 同一个 bug，诊断成本差了两个数量级。</p>
+</li>
+
+<li>
+<span class="step-title">看一眼「过滤」</span>
+<p>改成多返回一个字段：<code>return {"message": "Hello from Python", "secret": "leak"}</code>。刷新，看 DevTools 的 Network 面板里响应体的内容。</p>
+<p><code>secret</code> <strong>不见了</strong>，也没有报错 —— 声明之外的字段被静默剥离。想清楚这一条对「不小心返回了整个 user 对象」意味着什么。看完把这行改回 <code>return HelloResponse(message="Hello from Python")</code>。</p>
+</li>
+
+<li>
+<span class="step-title">前端：装 Zod</span>
+<pre><code>pnpm add zod</code></pre>
+<p>注意是 <code>add</code> 而不是 <code>add -D</code> —— Zod 的代码要<strong>进生产包</strong>，因为它在运行时真的要执行。这个区分本身就是本课的注脚：类型工具（<code>typescript</code>）是 devDependency，运行时校验库不是。</p>
+</li>
+
+<li>
+<span class="step-title">用 schema 重写 <code>api.ts</code></span>
+<pre><code>import { z } from "zod";
+
+export const HelloResponse = z.object({
+  message: z.string(),
+});
+
+export type HelloResponse = z.infer&lt;typeof HelloResponse&gt;;
+
+export async function fetchHello(): Promise&lt;HelloResponse&gt; {
+  const res = await fetch("http://127.0.0.1:8000/api/hello");
+  const json: unknown = await res.json();
+  return HelloResponse.parse(json);   <span class="cmt">// ← 承诺变成了检查</span>
+}</code></pre>
+<p>（同名的 <code>const</code> 和 <code>type</code> 可以共存：TS 的<strong>值命名空间</strong>与<strong>类型命名空间</strong>是分开的。这是 Zod 代码里非常常见的写法。）</p>
+<p>页面应当照常显示。<code>pnpm build</code> 也应当零错误。</p>
+</li>
+
+<li>
+<span class="step-title">让前端自己抓住它</span>
+<p>为了单独试前端这一侧，先把后端的返回类型注解去掉（<code>def hello():</code>），再返回 <code>{"msg": "Hello from Python"}</code> —— 相当于拆掉后端的守卫，模拟「一个你管不着的第三方 API 改了字段」。</p>
+<p>刷新页面。页面空白，但 <strong>DevTools Console</strong> 里躺着：</p>
+<pre><code>ZodError: [
+  {
+    "expected": "string",
+    "code": "invalid_type",
+    "path": [ "message" ],
+    "message": "Invalid input: expected string, received undefined"
+  }
+]</code></pre>
+<p><code>path</code> 直接指到出问题的字段。<strong>这就是全部意义</strong>：错误出现在数据<em>进门</em>的那一刻，而不是在下游某个组件里。</p>
+</li>
+
+<li>
+<span class="step-title">把错误显示给用户</span>
+<p><code>.parse</code> 抛出的异常在 <code>.then</code> 链里会被悄悄吞掉。换成 <code>safeParse</code>，把结果交给 UI：</p>
+<pre><code><span class="cmt">// api.ts</span>
+export async function fetchHello() {
+  const res = await fetch("http://127.0.0.1:8000/api/hello");
+  const json: unknown = await res.json();
+  return HelloResponse.safeParse(json);
+}</code></pre>
+<pre><code><span class="cmt">// App.tsx —— useEffect 内部</span>
+fetchHello().then((result) =&gt; {
+  if (result.success) {
+    setMessage(result.data.message);      <span class="cmt">// ← 这里 TS 知道 data 存在</span>
+  } else {
+    setMessage("数据格式不对：" + z.prettifyError(result.error));
+  }
+});</code></pre>
+<p>（<code>App.tsx</code> 顶部需要 <code>import { z } from "zod";</code>。）现在页面上会直接显示 <strong>数据格式不对：✖ Invalid input: expected string, received undefined → at message</strong>。</p>
+<p>试试把 <code>if (result.success)</code> 这个判断删掉，直接写 <code>result.data</code> —— TS 会立刻报错。<strong>这就是可辨识联合在替你干活。</strong></p>
+</li>
+
+<li>
+<span class="step-title">全部恢复</span>
+<p>后端改回 <code>-&gt; HelloResponse</code> 与 <code>return HelloResponse(message="Hello from Python")</code>，确认页面正常。前端的 <code>safeParse</code> 版本<strong>保留</strong> —— 那是后面几课要一直用下去的形态。</p>
+<div class="block win">
+  <span class="label">你现在拥有的</span>
+  <p>一条<strong>两端都有守卫</strong>的链路。后端保证「我发出去的一定符合契约」，前端保证「我收进来的一定符合契约」。中间那根网线仍然什么都不保证 —— <strong>它从来就不该保证</strong>。</p>
+</div>
+</li>
+
+</ol>
+
+<h2>五、检验一下</h2>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 1 / 4</p>
+  <p class="quiz-q">Zod 的 schema 必须写成「值」而不是「类型」，根本原因是？</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>类型在编译后被擦除，运行时只有值还在</button></li>
+    <li><button>类型不能被导出，跨文件复用时只有值可用</button></li>
+    <li><button>类型不能描述嵌套结构，复杂对象只有值可写</button></li>
+    <li><button>类型不能参与推断，泛型展开时只有值可查</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>回到上一课的核心：<code>interface</code> 编译后一个字节都不剩，你没法在运行时「拿到」它去比对什么。而 <code>z.object({...})</code> 产生的是一个普通 JS 对象，它活到运行时，所以能真的去检查数据。<strong>「先有 schema，再从 schema 推类型」这个方向，是类型擦除逼出来的。</strong></p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 2 / 4</p>
+  <p class="quiz-q">路由声明了 <code>-&gt; HelloResponse</code>，但函数返回了模型里没有的额外字段。结果是？</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>请求成功，额外字段被静默剥离</button></li>
+    <li><button>请求失败，服务端返回状态码 500</button></li>
+    <li><button>请求失败，服务端返回状态码 422</button></li>
+    <li><button>请求成功，额外字段被原样透传</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p><strong>缺</strong>字段是错误（500），<strong>多</strong>字段是过滤。这个不对称是有意设计的：过滤是一道安全闸门，防止内部字段意外出网。<br>顺带对照上一课的 TS <em>excess property check</em> —— 那是编译期对多余属性<em>报错</em>，这里是运行时对多余字段<em>剥离</em>。两个生态在同一个问题上做了相反的选择，理由也不同：TS 是为了抓拼写错误，Pydantic 是为了防数据泄漏。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 3 / 4</p>
+  <p class="quiz-q">前端请求体不合法时，FastAPI 返回 422 而不是 500，因为：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>校验在进入函数体之前失败，责任在调用方</button></li>
+    <li><button>校验在离开函数体之后失败，责任在调用方</button></li>
+    <li><button>校验在进入函数体之前失败，责任在服务端</button></li>
+    <li><button>校验在离开函数体之后失败，责任在服务端</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>4xx = 你的错，5xx = 我的错。请求体不合法是<strong>调用方</strong>送错了东西，函数根本没被调用 → 422（Unprocessable Entity，比笼统的 400 更精确）。响应体不合法是<strong>服务端</strong>自己违反了契约 → 500。<br><strong>同一个 Pydantic 模型、同一套校验，出现在边界的两侧，语义完全不同。</strong>这个对称性是很好的面试素材。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 4 / 4</p>
+  <p class="quiz-q">既然后端已经用 Pydantic 校验了响应，前端再用 Zod 校验一次是多余的吗？</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>不是。两个进程独立部署，版本可以不一致</button></li>
+    <li><button>不是。浏览器会缓存响应，缓存内容可能已过期</button></li>
+    <li><button>是的。契约已在服务端强制，重复校验纯属开销</button></li>
+    <li><button>是的。构建时会共享类型，重复校验无法发现问题</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>后端保证的是「<em>当前这个版本</em>的后端发出的东西合法」。但用户浏览器里跑的可能是缓存了一天的旧前端，而后端今早刚上线了新版本；或者中间有网关改写、有代理返回了一个 HTML 错误页。<strong>校验的价值来自「不信任」，而不信任的对象是网线那头的一切，不只是数据本身。</strong><br>这也是为什么它叫「边界」校验，而不是「后端」校验 —— <code>localStorage</code> 那一侧根本没有服务端，同样需要它。</p>
+  </div>
+</div>
+
+<div class="widget recall">
+  <p class="widget-kind">回忆练习 · 出声说，别只在心里过</p>
+  <p class="recall-prompt">合上这一页，<strong>连着讲 60 秒</strong>，把这三课串成一条线：<br>（1）为什么 Zod 的 schema 是值而不是类型？<br>（2）后端已经有 Pydantic 了，前端为什么还要 Zod？<br>（3）第 1 课的 CORS、第 2 课的类型擦除、第 3 课的边界校验，共同的那条主线是什么？</p>
+  <button class="recall-btn">先出声回答，再点开</button>
+  <div class="recall-answer" hidden>
+    <p><strong>(1)</strong> 类型编译后被擦除，运行时不存在，无法用来检查任何东西；值活到运行时。所以先写 schema（值），再用 <code>z.infer</code> 反推类型 —— 单一事实来源在运行时那一侧。</p>
+    <p><strong>(2)</strong> 因为它们是两个独立部署、可以各自升级的进程。前端信任的不是「后端的代码」，而是「此刻网线那头返回的字节」，这两者不是一回事。</p>
+    <p><strong>(3)</strong> 三课都在回答同一个问题：<strong>「谁在检查、什么时候检查」</strong>。CORS —— 浏览器在检查，服务端不检查。类型 —— 编译器在检查，运行时不检查。边界校验 —— 补上「运行时没人检查」这个缺口。<br><em>能主动把三件事串成这一条线讲出来，含金量远高于分别答对三道题。</em>面试官听到的是一个有结构的心智模型，而不是三个背下来的知识点。</p>
+  </div>
+</div>
+
+<h2>六、面试回答模板</h2>
+
+<div class="block interview">
+  <span class="label">如果面试官问：“你们前后端怎么保证数据契约？”</span>
+  <p>“分两层。后端用 <strong>Pydantic</strong>，把响应模型写成路由的返回类型注解，FastAPI 会在运行时校验、过滤，并生成 OpenAPI schema —— 过滤这一点其实是安全特性，模型里没声明的字段出不了网。请求方向同理，不合法直接 422，函数体不执行，和 ASP.NET Core 的 <code>[ApiController]</code> 自动 400 是一个套路。<br>前端用 <strong>Zod</strong>。因为 TS 的类型编译后就擦除了，运行时没有任何检查，我们的做法是先定义 Zod schema，再用 <code>z.infer</code> 反推出静态类型 —— schema 是单一事实来源，这样类型和校验规则不可能漂移。<code>res.json()</code> 先落到 <code>unknown</code>，经过 <code>safeParse</code> 才拿到可用的类型。<br>有人会问后端都校验过了前端为什么还要校验 —— 因为那是两个独立部署的进程，用户浏览器里可能跑着昨天的前端。<strong>再往前一步的做法是从 FastAPI 的 OpenAPI schema 自动生成前端类型</strong>，让契约真正只有一份。”</p>
+  <p style="margin-top:0.7rem;font-size:0.86rem;">最后那句主动抛出的「再往前一步」是钩子。它表明你知道当前方案的局限，也知道下一步往哪走 —— 这是区分「用过」和「想过」的地方。</p>
+</div>
+
+<h2>七、去读原始资料</h2>
+
+<p><strong>本课首选阅读：</strong><a href="https://fastapi.tiangolo.com/tutorial/response-model/">FastAPI · Response Model - Return Type</a>（约 10 分钟）。短、准、每段都能跑。重点看它对 “limit and filter the output data” 的解释和 <code>UserIn</code> / <code>UserOut</code> 的密码字段例子 —— 那是过滤这一特性最有说服力的用途。</p>
+
+<p><strong>前端这侧：</strong><a href="https://zod.dev/basics">Zod · Basics</a>（约 10 分钟）。看完 <em>Defining a schema</em> / <em>Parsing data</em> / <em>Handling errors</em> / <em>Inferring types</em> 四节就够本课所需，其余 API 用到再查。</p>
+
+<p><strong>如果还有余力：</strong><a href="https://docs.pydantic.dev/latest/concepts/models/">Pydantic · Models</a> 的开头几段，讲清了「模型即 schema」这个思路。你会发现它和 Zod 长得很像 —— 这不是巧合，两个生态面对的是同一个问题：<strong>动态语言里没有免费的运行时类型检查。</strong></p>
+
+<div class="footer">
+  <h2>相关文档</h2>
+  <ul>
+    <li><a href="../reference/glossary.html">术语表</a> —— 本课引入：boundary validation、Pydantic model、response model、JSON Schema、Zod、<code>z.infer</code>、parse / safeParse、discriminated union、narrowing</li>
+    <li><a href="../reference/csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> —— 本课引入：数据校验一栏</li>
+    <li><a href="0001-two-processes-one-wire.html">第 1 课：两个进程，一根线</a> · <a href="0002-typescript-is-not-csharp.html">第 2 课：TypeScript 不是 C#</a></li>
+    <li><a href="../RESOURCES.md">RESOURCES.md</a> · <a href="../MISSION.md">MISSION.md</a></li>
+  </ul>
+
+  <h2>下一课</h2>
+  <p><strong>第 4 课：React 的状态到底是什么</strong> —— 该还债了。三课下来你一直在用 <code>useState</code> / <code>useEffect</code> / JSX，却没人跟你解释过。下一课把它们讲透，重点在两个 C# 直觉会翻车的地方：<strong>为什么 <code>setMessage</code> 之后立刻读 <code>message</code> 还是旧值</strong>，以及<strong>为什么 hook 不能写在 <code>if</code> 里</strong>。</p>
+
+  <div class="ask">
+    <strong>我是你的老师，随时提问。</strong> 本课刻意压住没展开的：Zod 的 <code>.transform()</code> / <code>.refine()</code>（在校验的同时改造数据，比如把日期字符串转成 <code>Date</code>）？Pydantic 的 <code>Field(ge=0)</code> 这类约束怎么写、错误消息长什么样？从 OpenAPI 自动生成 TS 类型具体怎么做？为什么 <code>safeParse</code> 的返回值一 <code>if</code> 就收窄了（可辨识联合的原理）？—— 想跳过顺序直接问，也随时可以。
+  </div>
+</div>
+
+</main>
+</body>
+</html>

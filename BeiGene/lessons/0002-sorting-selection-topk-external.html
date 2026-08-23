@@ -18,6 +18,11 @@
 
 <p>本课打掉题库这五问：<em>现场实现一个排序算法、数据超出主存时从大到小排序、查找数组中位数、无序大数据量找到需要的数据、数据库无索引时如何排序全部数据</em>。</p>
 
+<div class="callout ext">
+  <span class="label">先修 · 觉得这一课太赶？</span>
+  <p>本课默认你已经知道快排、堆排、归并<strong>各自在干什么</strong>，直接从「选哪一档」讲起。如果这个前提不成立，请先花 25 分钟走一遍 <a href="0003-how-each-sort-actually-works.html">Lesson 03：四种排序，一句话就懂</a>——每种排序只给一句话、一个能一步步点的动画、一段最短的代码。<strong>学完 Lesson 03 隔一天再回来读这一课</strong>，第 2–5 节会轻松很多。</p>
+</div>
+
 <div class="callout">
   <span class="label">怎么用这一课</span>
   <p>面试官问算法题，考的<strong>不是你背没背过快排</strong>——5–7 年经验的候选人写出快排是及格线，写不出是硬伤。真正拉开差距的是：<strong>你有没有一个「先判断数据规模和内存边界，再选算法」的决策框架</strong>。所以第 1 节是全课的地基，请务必读透；后面四节都是从它推出来的四个档位。第 11 节的动手实验请<strong>真的编译运行</strong>——白板上写得出来，靠的是手写过。</p>
@@ -766,6 +771,7 @@ Console.WriteLine(back.SequenceEqual(truth)
   行有余力再读：<a href="https://algs4.cs.princeton.edu/25applications/">Sedgewick, Algorithms 4th ed — §2.5 Sorting Applications</a>（线性时间选择的原始论述）、<a href="https://learn.microsoft.com/en-us/dotnet/api/system.array.sort">Microsoft Learn — Array.Sort</a>（内省排序三条规则的原文）、<a href="https://learn.microsoft.com/en-us/dotnet/api/system.collections.generic.priorityqueue-2">Microsoft Learn — PriorityQueue</a>（四叉小顶堆、EnqueueDequeue）。</p>
 
   <div class="nav-links">
+    <a href="0003-how-each-sort-actually-works.html">← Lesson 03：四种排序，一句话就懂（地基课）</a>
     <a href="../reference/algo-cheatsheet.html">→ 速查表：排序、选择与外部排序</a>
     <a href="0001-composite-index-leftmost-prefix.html">← Lesson 01：联合索引与最左前缀</a>
     <a href="../reference/db-index-cheatsheet.html">→ 速查表：索引与 SQL 优化</a>

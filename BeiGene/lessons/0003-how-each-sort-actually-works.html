@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 03 · 四种排序，一句话 + 一个动画就懂</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/sortviz.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 03 · 算法 · BeiGene 面试备战 · 地基课</p>
+  <h1>四种排序，一句话就懂</h1>
+  <p class="standfirst">Lesson 02 太赶了——它直接从「选哪一档算法」开讲，跳过了「这些算法到底在干什么」。这一课把跳过的地基补上：每种排序只给<strong>一句话的想法</strong>、<strong>一个能一步步点的动画</strong>、<strong>一段最短的代码</strong>。不谈复杂度证明，不谈优化。</p>
+</header>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>每个动画都<strong>别按「自动播放」</strong>。按「下一步」之前，先在心里说一句<q>下一步应该会……</q>，再按下去对答案。<strong>猜错的那一步，就是你还没懂的那一步</strong>——把它贴给我，我单独讲。全程大约 25 分钟。</p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">排序只有两个动作</a> <span class="depth">— 先把地基铺平</span></li>
+    <li><a href="#s2">插入排序</a> <span class="depth">— 像理扑克牌</span></li>
+    <li><a href="#s3">快速排序</a> <span class="depth">— 选个标杆，分两堆</span></li>
+    <li><a href="#s4">堆排序</a> <span class="depth">— 数组当成一棵树</span></li>
+    <li><a href="#s5">归并排序</a> <span class="depth">— 两段有序，合起来很容易</span></li>
+    <li><a href="#s6">一页对比</a> <span class="depth">— 四句口诀</span></li>
+    <li><a href="#s7">检验一下</a> <span class="depth">— 5 题，只考想法</span></li>
+    <li><a href="#s8">回到 Lesson 02</a> <span class="depth">— 现在再读就不难了</span></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、排序只有两个动作</h2>
+
+<p>不管什么排序算法，它能做的事情只有两件：</p>
+
+<ol>
+  <li><strong>比较</strong>两个数，问「谁大」；</li>
+  <li><strong>移动</strong>某个数到另一个位置。</li>
+</ol>
+
+<p>所以所有排序算法的区别，<strong>只在于「用什么策略减少比较和移动的次数」</strong>。最笨的办法是每个数和每个数都比一遍（n² 次），聪明的办法都是想尽办法<strong>让一次比较能排除掉一大片可能性</strong>。</p>
+
+<div class="callout">
+  <span class="label">记住这一句就够了</span>
+  <p>n² 的算法（插入、冒泡、选择）和 n log n 的算法（快排、堆排、归并）的分界线是：<strong>前者每次比较只解决「这两个数谁在前」，后者每次比较能一口气决定「一大批数在另一大批数的哪一边」</strong>。下面四个动画，你会亲眼看到这个差别。</p>
+</div>
+
+<h2 id="s2">二、插入排序：像理扑克牌</h2>
+
+<p><strong>一句话</strong>：左手已经理好一叠有序的牌，右手每次抽一张新牌，从右往左比，找到位置插进去。</p>
+
+<p>它是四个里最好懂的，也是<strong>其它三个的对照组</strong>——先看懂它「笨」在哪，才能体会另外三个「聪明」在哪。</p>
+
+<div class="sortviz" data-algo="insertion" data-title="插入排序 · 8 个数" data-array="[5,3,8,4,2,7,1,6]"></div>
+
+<pre><code>static void InsertionSort(int[] a)
+{
+    for (int i = 1; i &lt; a.Length; i++)
+    {
+        int v = a[i], j = i - 1;
+        while (j &gt;= 0 &amp;&amp; a[j] &gt; v) { a[j + 1] = a[j]; j--; }  <span class="cm">// 比 v 大的都往右让</span>
+        a[j + 1] = v;                                         <span class="cm">// 让出来的空位就是它的位置</span>
+    }
+}</code></pre>
+
+<p><strong>笨在哪</strong>：新牌可能要一路挪到最左边，挪 n 次。n 张牌 → 最坏 n² 次移动。</p>
+
+<p><strong>但它有一个杀手锏</strong>：如果数据本来就<em>接近有序</em>，每张牌几乎不用挪，时间接近 O(n)——而且它常数极小、对 CPU 缓存友好。<strong>这就是为什么 .NET 的 <code>Array.Sort</code> 在区间只剩 16 个元素时会切回插入排序</strong>（Lesson 02 第 2 节那条规则，现在有画面了）。</p>
+
+<h2 id="s3">三、快速排序：选个标杆，分两堆</h2>
+
+<p><strong>一句话</strong>：<strong>随便挑一个数当标杆，把比它小的全赶到它左边、比它大的全赶到右边；然后左右两堆各自再来一遍。</strong></p>
+
+<p>就这么多。快排没有第二个想法。所有你在 Lesson 02 里看到的复杂东西（三数取中、尾递归消除、小区间切插排）<strong>全是优化，不是原理</strong>——原理就是上面这一句。</p>
+
+<div class="callout">
+  <span class="label">为什么这样就能排好序？</span>
+  <p>关键在于分区做完的那一刻：<strong>标杆左边所有数都 ≤ 它，右边所有数都 &gt; 它</strong>。那么不管左右两边内部怎么乱，<strong>标杆已经站在它最终该在的位置上了，永远不用再动</strong>。每做一次分区，就有一个数被永久钉死。做 n 次，全部钉死 → 排好了。</p>
+  <p>动画里<strong>绿色</strong>的柱子就是「已经钉死、再也不会动」的数。盯着绿色柱子一根根出现，快排就懂了。</p>
+</div>
+
+<div class="sortviz" data-algo="quicksort" data-title="快速排序 · 最简版（拿末尾当标杆）" data-array="[5,3,8,4,2,7,1,6]"></div>
+
+<p>最简版的代码——<strong>先把这 14 行背熟，再谈优化</strong>：</p>
+
+<pre><code>static void QuickSort(int[] a, int lo, int hi)
+{
+    if (lo &gt;= hi) return;              <span class="cm">// 0 个或 1 个数，天然有序</span>
+    int p = Partition(a, lo, hi);
+    QuickSort(a, lo, p - 1);           <span class="cm">// 左半堆，不含标杆</span>
+    QuickSort(a, p + 1, hi);           <span class="cm">// 右半堆，不含标杆</span>
+}
+
+static int Partition(int[] a, int lo, int hi)
+{
+    int pivot = a[hi];                 <span class="cm">// 就拿最后一个当标杆</span>
+    int i = lo - 1;                    <span class="cm">// i = 「小值区」的最后一格</span>
+    for (int j = lo; j &lt; hi; j++)
+        if (a[j] &lt;= pivot) Swap(a, ++i, j);   <span class="cm">// 小的就并进小值区</span>
+    Swap(a, ++i, hi);                  <span class="cm">// 标杆归位</span>
+    return i;                          <span class="cm">// 它的最终下标</span>
+}</code></pre>
+
+<p><code>i</code> 那个变量是唯一需要想一下的地方：<strong><code>i</code> 始终指着「已确认比标杆小的那一段」的最后一格</strong>。每发现一个小的，就把它换到 <code>i+1</code>，小值区就长一格。</p>
+
+<div class="callout ext">
+  <span class="label">扩展 · 它什么时候会变慢</span>
+  <p>如果每次挑的标杆都刚好是当前最小或最大的数，那么「两堆」就变成了「空的一堆 + 剩下全部」，一次只钉死一个数，退化成 <strong>O(n²)</strong>。什么输入会触发？<strong>拿末尾当标杆时，输入本来就已经排好序</strong>——最常见的真实场景，偏偏最糟。<br>
+  解决办法就是别老拿末尾：<strong>随机挑一个</strong>，或者<strong>拿头/中/尾三个数的中位数</strong>。这就是 Lesson 02 里「三数取中」那行代码存在的全部理由。</p>
+</div>
+
+<h2 id="s4">四、堆排序：把数组当成一棵树</h2>
+
+<p>堆排序难懂的原因通常不是算法本身，而是<strong>「堆」这个词没被讲清楚</strong>。所以先说堆。</p>
+
+<h3>堆是什么：一个约定，不是一种新数据结构</h3>
+
+<p>堆<strong>就是一个普通数组</strong>。所谓「堆」只是我们对这个数组加了一条<em>读法约定</em>和一条<em>大小约定</em>：</p>
+
+<ul>
+  <li><strong>读法约定</strong>：把 0 号元素看成树根，<strong>i 号元素的两个孩子是 2i+1 和 2i+2</strong>（反过来，i 的父亲是 (i−1)/2）。数组一个字节都没变，只是换了个看法。</li>
+  <li><strong>大小约定</strong>：<strong>每个父节点都 ≥ 它的两个孩子</strong>（这叫大顶堆；反过来是小顶堆）。</li>
+</ul>
+
+<p>这两条约定带来的唯一好处，也是堆存在的全部意义：<strong>根（0 号元素）一定是全场最大值，取它只要 O(1)</strong>。</p>
+
+<div class="callout">
+  <span class="label">注意：堆只保证「上下」，不保证「左右」</span>
+  <p>父 ≥ 子，但<strong>兄弟之间谁大谁小完全没有规定</strong>，第 3 层的某个数也完全可能比第 2 层另一支的数大。<strong>堆是「半有序」的</strong>——它只花力气维护「谁是最大」这一件事，所以才便宜。想不通堆的人，多半是误以为堆是完全有序的。</p>
+</div>
+
+<h3>唯一的操作：下沉（siftDown）</h3>
+
+<p>堆只需要一个动作：<strong>某个节点的值太小、不配当爹了，就让它和「较大的那个孩子」交换，一路往下沉，直到它比孩子都大（或者沉到底）</strong>。</p>
+
+<p>有了下沉，堆排序就是两步：</p>
+
+<ol>
+  <li><strong>建堆</strong>：从最后一个有孩子的节点开始，往前对每个节点执行一次下沉。做完，整个数组就满足堆约定了。</li>
+  <li><strong>反复取最大</strong>：把根（最大值）和数组<em>末尾</em>交换 → 最大值就位；把堆的范围缩小 1（末尾那个不再属于堆）；新根不合格，下沉修复。重复 n−1 次。</li>
+</ol>
+
+<p>下面用 5 个数看（树形视图，红色是根，绿色是已经踢出堆、就位的数）：</p>
+
+<div class="sortviz" data-algo="heapsort" data-view="both" data-title="堆排序 · 树 + 数组同步看" data-array="[3,7,1,9,4]"></div>
+
+<pre><code>static void HeapSort(int[] a)
+{
+    int n = a.Length;
+    for (int i = n / 2 - 1; i &gt;= 0; i--) SiftDown(a, i, n);   <span class="cm">// 1. 建堆</span>
+
+    for (int end = n - 1; end &gt; 0; end--)                     <span class="cm">// 2. 反复取最大</span>
+    {
+        Swap(a, 0, end);                                      <span class="cm">// 最大值换到末尾就位</span>
+        SiftDown(a, 0, end);                                  <span class="cm">// 堆缩小到 end，修复新根</span>
+    }
+}
+
+static void SiftDown(int[] a, int i, int size)
+{
+    while (true)
+    {
+        int l = 2 * i + 1, r = 2 * i + 2, big = i;
+        if (l &lt; size &amp;&amp; a[l] &gt; a[big]) big = l;                <span class="cm">// 和左孩子比</span>
+        if (r &lt; size &amp;&amp; a[r] &gt; a[big]) big = r;                <span class="cm">// 和右孩子比</span>
+        if (big == i) return;                                 <span class="cm">// 已经比孩子都大，沉到位了</span>
+        Swap(a, i, big);
+        i = big;                                              <span class="cm">// 继续往下沉</span>
+    }
+}</code></pre>
+
+<p>两个值得记住的点：</p>
+
+<ul>
+  <li><strong>为什么建堆从 <code>n/2 - 1</code> 开始？</strong>因为下标 ≥ n/2 的节点全都是叶子（没有孩子），叶子天然满足堆约定，不用管。</li>
+  <li><strong>为什么不需要额外内存？</strong>因为「树」是想象出来的，数据始终躺在原来那个数组里。<strong>这是堆排序相对归并排序的最大优势</strong>，也是 .NET 拿它给快排兜底的原因——快排最坏会 O(n²)，那就在递归太深时切成堆排，最坏也是 O(n log n)，而且不多占内存。</li>
+</ul>
+
+<div class="callout ext">
+  <span class="label">扩展 · 堆真正的用处不是排序</span>
+  <p>面试里堆<strong>更常出现在「不排序」的场合</strong>：只要「随时能拿到最大/最小的那个」，就用堆——Top-K、优先级队列、定时任务调度、多路归并挑队头。<strong>Lesson 02 第 4 节的 Top-K 小顶堆和第 5 节外部排序的多路归并，用的就是这里这个 <code>SiftDown</code></strong>，只是包在 .NET 的 <code>PriorityQueue</code> 里而已。看懂这一节，那两节自动就通了。</p>
+</div>
+
+<h2 id="s5">五、归并排序：两段有序，合起来很容易</h2>
+
+<p><strong>一句话</strong>：<strong>把两段各自有序的数据合成一段有序的，非常容易——只要反复比两段的队头，小的先出。</strong>所以：先一路对半切到只剩一个数（一个数天然有序），再一层层合回来。</p>
+
+<p>它和快排正好相反：<strong>快排的力气花在「分」上（分完就不用合），归并的力气花在「合」上（切是无脑对半切）</strong>。这一句对比说给面试官听，很加分。</p>
+
+<div class="sortviz" data-algo="mergesort" data-title="归并排序 · 注意「合」的过程" data-array="[5,3,8,4,2,7,1,6]"></div>
+
+<pre><code>static void MergeSort(int[] a, int[] buf, int lo, int hi)
+{
+    if (lo &gt;= hi) return;
+    int mid = lo + (hi - lo) / 2;
+    MergeSort(a, buf, lo, mid);           <span class="cm">// 左半排好</span>
+    MergeSort(a, buf, mid + 1, hi);       <span class="cm">// 右半排好</span>
+
+    for (int t = lo; t &lt;= hi; t++) buf[t] = a[t];   <span class="cm">// 拷一份到临时数组</span>
+    int i = lo, j = mid + 1;
+    for (int k = lo; k &lt;= hi; k++)                  <span class="cm">// 两个队头比大小，小的先出</span>
+    {
+        if (i &gt; mid)            a[k] = buf[j++];    <span class="cm">// 左边空了</span>
+        else if (j &gt; hi)        a[k] = buf[i++];    <span class="cm">// 右边空了</span>
+        else if (buf[i] &lt;= buf[j]) a[k] = buf[i++]; <span class="cm">// 相等时取左边 → 稳定</span>
+        else                    a[k] = buf[j++];
+    }
+}</code></pre>
+
+<div class="callout">
+  <span class="label">这一节直接接上 Lesson 02 的外部排序</span>
+  <p>盯着合并那一步：<strong>任何时刻，内存里真正需要的只是两段的「队头」而已</strong>。那么如果这两段不在内存里、而是躺在磁盘上的两个文件呢？<strong>照样能合</strong>——每段只读一个数进来。<br>
+  <strong>这就是外部归并排序的全部秘密</strong>：把「两段」换成「K 段文件」，把「比两个队头」换成「用堆在 K 个队头里挑最大」。Lesson 02 第 5 节那一大段代码，内核就是上面这十行。<strong>反过来说，快排和堆排都做不到这件事</strong>——它们要求随机访问任意位置，磁盘上做不了。</p>
+</div>
+
+<h2 id="s6">六、一页对比</h2>
+
+<table>
+  <thead><tr><th>算法</th><th>一句话</th><th>时间</th><th>额外内存</th><th>面试里它的位置</th></tr></thead>
+  <tbody>
+    <tr><td><strong>插入</strong></td><td>理扑克牌，新牌往左插</td><td>O(n²)，近乎有序时 O(n)</td><td>O(1)</td><td>小数组的收尾兵；解释 .NET 的 16 阈值</td></tr>
+    <tr><td><strong>快排</strong></td><td>选标杆，小的左大的右，两边再来一遍</td><td>平均 O(n log n)<br>最坏 O(n²)</td><td>O(log n) 栈</td><td><strong>默认答案</strong>，白板手写第一选择</td></tr>
+    <tr><td><strong>堆排</strong></td><td>数组当树，反复把最大的捞到顶再换到末尾</td><td>O(n log n) 恒定</td><td>O(1)</td><td>快排的兜底；Top-K / 多路归并的引擎</td></tr>
+    <tr><td><strong>归并</strong></td><td>两段有序合一段，先切到底再合回来</td><td>O(n log n) 恒定</td><td><strong>O(n)</strong></td><td><strong>稳定</strong>排序；<strong>外部排序的唯一可行解</strong></td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="label">四句口诀，背下来</span>
+  <p><strong>插入</strong>——理牌。<br>
+  <strong>快排</strong>——分堆，标杆就位。<br>
+  <strong>堆排</strong>——数组是棵树，捞最大。<br>
+  <strong>归并</strong>——合并有序段。<br>
+  面试当场想不起细节时，先把这一句说出来，代码自然会跟着回来。<strong>说出想法比背出代码更能证明你懂</strong>。</p>
+</div>
+
+<h2 id="s7">七、检验一下</h2>
+
+<p>只考「想法」，不考公式。别翻回去看。</p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "快排做完一次分区（partition）之后，可以确定什么？",
+    "options": [
+      "标杆那个数已落到它的最终位置上",
+      "标杆左边那一半已经完全排好序了",
+      "整个数组里最大的那个数被找出来",
+      "剩下需要的比较次数已能精确算出"
+    ],
+    "answer": 0,
+    "why": "分区结束时，标杆左边全部 ≤ 它、右边全部 &gt; 它，所以<strong>标杆的下标就是它在最终有序数组里的位置，永远不用再动</strong>。但左右两边内部仍然是乱的——这正是要递归下去的原因。这个性质也是 Lesson 02 里快速选择（Quickselect）能成立的基础。"
+  },
+  {
+    "q": "堆排序为什么几乎不需要额外内存？",
+    "options": [
+      "树用链表存放，指针本身不占用空间",
+      "它每次只把一个元素读进内存里处理",
+      "那棵树是想象的，数据仍在原数组里",
+      "交换操作会把释放的空间立刻还回去"
+    ],
+    "answer": 2,
+    "why": "堆<strong>就是一个普通数组</strong>，「树」只是「i 的孩子是 2i+1 和 2i+2」这条读法约定。全程只有原地交换，所以额外空间 O(1)。这正是 .NET 用堆排给快排兜底、而不是用归并的原因——归并要 O(n) 的临时数组。"
+  },
+  {
+    "q": "堆排序里的「下沉（siftDown）」在做什么？",
+    "options": [
+      "把整棵树的全部节点从上到下重新排序",
+      "把不合格的父节点与较大孩子逐层交换",
+      "把最小的那个元素一路交换到树的底层",
+      "把数组末尾的元素依次搬运回树的根部"
+    ],
+    "answer": 1,
+    "why": "下沉只修复<strong>一条路径</strong>：拿当前节点和两个孩子中较大的比，小了就交换、继续往下，直到它不比孩子小为止。所以代价是树高 O(log n)，不是 O(n)。注意堆只保证父子关系，兄弟之间不保证顺序——它是「半有序」的。"
+  },
+  {
+    "q": "为什么外部排序（数据在磁盘上）用的是归并而不是快排？",
+    "options": [
+      "合并时需要随机访问磁盘上任意位置",
+      "它的递归深度只有对数级不会爆内存",
+      "它是稳定排序磁盘上的顺序不会乱掉",
+      "合并时每一段只需在内存里留住队头"
+    ],
+    "answer": 3,
+    "why": "归并的合并阶段只看各段的<strong>队头</strong>，所以段可以是磁盘文件，内存里始终只有 K 个数——与总数据量无关。快排和堆排都要在整个数组上跳着读写，磁盘上做不了。这就是 Lesson 02 档位 D 的内核。"
+  },
+  {
+    "q": "输入数据本来就已经基本有序时，下面哪句是对的？",
+    "options": [
+      "快速排序会因为分区更加均匀而变更快",
+      "堆排序会退化成平方级别的时间复杂度",
+      "插入排序几乎不用挪动，接近线性时间",
+      "归并排序可以跳过合并阶段直接输出了"
+    ],
+    "answer": 2,
+    "why": "插入排序在近乎有序时每张牌几乎不挪，接近 O(n)——这是它在小区间被保留的理由。<strong>快排恰恰相反</strong>：拿末尾（或首个）当标杆时，已排序输入会让每次分区都极不均匀，退化成 O(n²)。所以才要随机化或三数取中。堆排和归并则始终是 O(n log n)，不受输入影响。"
+  }
+]'></div>
+
+<h2 id="s8">八、回到 Lesson 02</h2>
+
+<p>现在带着这四句口诀，重读 <a href="0002-sorting-selection-topk-external.html">Lesson 02</a>，你会发现它其实只讲了三件事，而且每一件都建在这一课上：</p>
+
+<table>
+  <thead><tr><th>Lesson 02 讲的</th><th>其实就是这一课的……</th></tr></thead>
+  <tbody>
+    <tr><td>手写快排（三数取中、尾递归、切插排）</td><td>第 3 节那 14 行 + <strong>三个优化</strong>；原理没变</td></tr>
+    <tr><td>快速选择求中位数</td><td>第 3 节的分区，<strong>但只递归一边</strong></td></tr>
+    <tr><td>Top-K 小顶堆</td><td>第 4 节的堆，<strong>但只留 K 个座位</strong></td></tr>
+    <tr><td>外部归并排序</td><td>第 5 节的合并，<strong>但两段换成 K 个文件</strong></td></tr>
+  </tbody>
+</table>
+
+<p><strong>建议顺序</strong>：今天把四个动画点完、把第 3、4 节那两段代码默写一遍；明天再打开 Lesson 02，从第 2 节读起。<strong>隔一天再读是故意的</strong>——间隔重复比连着读两遍记得牢得多。</p>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（只看一个的话，看这个）：</strong><br>
+  <a href="https://visualgo.net/en/sorting">VisuAlgo — Sorting</a>。新加坡国立大学做的算法可视化，能自己输入数组、逐行高亮伪代码同步播放。<strong>用它把快排和堆排各跑两遍</strong>，比读十页文字都管用。<br>
+  想再深一层：<a href="https://algs4.cs.princeton.edu/20sorting/">Sedgewick, Algorithms 4th ed — Chapter 2: Sorting</a>（普林斯顿的教材原文，快排/堆排/归并的权威表述与图示）、<a href="https://www.cs.usfca.edu/~galles/visualization/Algorithms.html">USF — Data Structure Visualizations</a>（堆的建堆过程画得最清楚）。</p>
+
+  <div class="nav-links">
+    <a href="0002-sorting-selection-topk-external.html">→ Lesson 02：内存装不下的时候</a>
+    <a href="../reference/algo-cheatsheet.html">→ 速查表：排序、选择与外部排序</a>
+    <a href="0001-composite-index-leftmost-prefix.html">← Lesson 01：联合索引与最左前缀</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练。</strong>这一课是特意放慢的，所以请把「卡住的那一步」告诉我：<strong>①</strong> 哪个动画的哪一步你按下去之前猜错了？<strong>②</strong> 四段代码里哪一行你说不出它为什么存在（尤其是快排的 <code>i</code> 和堆排的 <code>n/2 - 1</code>）？<strong>③</strong> 想要更慢的版本（比如逐行讲解 <code>SiftDown</code> 的每一次循环）随时说——<strong>这一课可以要多慢有多慢，不用赶</strong>。
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+<script src="../assets/sortviz.js"></script>
+</body>
+</html>

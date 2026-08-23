@@ -1,0 +1,160 @@
+/* Styles for the callchain.js component. Load after lesson.css. */
+
+.callchain {
+  border: 1px solid var(--rule);
+  background: #fff;
+  padding: 1.2rem 1.4rem 1.4rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.cc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.1rem;
+  gap: 1rem;
+}
+.cc-head .label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.cc-head .cc-title { font-size: 0.85rem; color: var(--ink-soft); font-style: italic; }
+
+/* ---------- The chain itself ---------- */
+.cc-chain {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 0;
+  margin-bottom: 1.1rem;
+}
+.cc-node {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  border: 1px solid var(--ink-soft);
+  border-radius: 3px;
+  padding: 0.45rem 0.7rem;
+  background: var(--code-bg);
+  text-align: center;
+  min-width: 5.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cc-edge {
+  flex: 1 1 3.2rem;
+  min-width: 3.2rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--ink-soft);
+  padding: 0 0.2rem;
+}
+.cc-edge .cc-arrow {
+  width: 100%;
+  border-top: 1px solid var(--ink-soft);
+  position: relative;
+  margin: 0.15rem 0;
+}
+.cc-edge .cc-arrow::after {
+  content: "";
+  position: absolute;
+  right: -1px; top: -3.5px;
+  border-left: 6px solid var(--ink-soft);
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+}
+.cc-edge.focus .cc-arrow { border-top-width: 2px; border-color: var(--accent); }
+.cc-edge.focus .cc-arrow::after { border-left-color: var(--accent); }
+.cc-edge.focus { color: var(--accent); font-weight: 700; }
+
+/* state of the focus edge */
+.cc-edge.focus.bad .cc-arrow { border-top-style: dashed; border-color: var(--bad); }
+.cc-edge.focus.bad .cc-arrow::after { border-left-color: var(--bad); }
+.cc-edge.focus.bad { color: var(--bad); }
+.cc-edge.focus.good .cc-arrow { border-color: var(--good); }
+.cc-edge.focus.good .cc-arrow::after { border-left-color: var(--good); }
+.cc-edge.focus.good { color: var(--good); }
+
+.cc-node.dim { opacity: 0.45; }
+
+/* ---------- Controls ---------- */
+.cc-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin-bottom: 0.9rem;
+}
+.cc-mode {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.3rem 0.7rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+.cc-mode:hover { border-color: var(--ink-soft); }
+.cc-mode[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+.cc-retry {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* ---------- Result panel ---------- */
+.cc-out {
+  border-top: 1px dotted var(--rule);
+  padding-top: 0.9rem;
+  font-size: 0.92rem;
+}
+.cc-out:empty { display: none; }
+.cc-row { display: flex; gap: 0.8rem; margin-bottom: 0.55rem; align-items: baseline; }
+.cc-row:last-child { margin-bottom: 0; }
+.cc-key {
+  flex: 0 0 5.4rem;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-align: right;
+}
+.cc-val { flex: 1; }
+.cc-row.fix .cc-val { color: var(--good); }
+.cc-row.state .cc-val { color: var(--bad); }
+.cc-row.state.ok .cc-val { color: var(--ink); }
+.cc-note {
+  margin-top: 0.7rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--good-soft);
+  border-left: 3px solid var(--good);
+  font-size: 0.86rem;
+}
+
+@media print {
+  .cc-controls, .cc-retry { display: none; }
+  .callchain { break-inside: avoid; }
+}
