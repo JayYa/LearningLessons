@@ -10,8 +10,8 @@
 
 <header class="masthead">
   <p class="kicker">Reference · 微服务 · BeiGene 面试备战</p>
-  <h1>微服务：四笔开销</h1>
-  <p class="standfirst">压缩自 <a href="../lessons/0004-microservices-what-actually-changes.html">Lesson 04</a>。面试前 10 分钟只看这一页。</p>
+  <h1>微服务：四笔开销<br>＋ Saga 与补偿</h1>
+  <p class="standfirst">压缩自 <a href="../lessons/0004-microservices-what-actually-changes.html">Lesson 04</a> 与 <a href="../lessons/0005-saga-and-choreography.html">Lesson 05</a>。面试前 10 分钟只看这一页。</p>
 </header>
 
 <h2>0 · 一句话根源</h2>
@@ -113,9 +113,62 @@
   <p><q>我理解微服务的本质，是把一次进程内的方法调用换成一次网络调用。进程内免费的四件事——调用一定会返回、异常带完整堆栈、一个事务能一起回滚、方法名就是地址——跨进程之后全部开始收费。微服务的整套技术栈，其实就是这四张账单的付款方式：熔断和幂等买第一笔，链路追踪买第二笔，最终一致性买第三笔，网关和服务发现买第四笔。所以选不选微服务，本质是这四笔钱值不值得付。</q></p>
 </div>
 
+<h2>8 · Saga 与补偿事务</h2>
+
+<p><strong>Saga</strong>：一串本地事务；任一步失败，就<strong>逆序</strong>执行前面各步的<strong>补偿事务</strong>去撤销。补偿由开发者手写，<em>不是</em> ACID 的自动回滚（<a href="https://microservices.io/patterns/data/saga.html">microservices.io</a>）。</p>
+
+<table>
+  <thead><tr><th></th><th>数据库回滚</th><th>Saga 补偿</th></tr></thead>
+  <tbody>
+    <tr><td>谁做</td><td>引擎自动</td><td><strong>手写业务代码</strong></td></tr>
+    <tr><td>痕迹</td><td>像没发生过</td><td>一正一反两条记录</td></tr>
+    <tr><td>中间态</td><td>外界看不见</td><td><strong>看得见</strong>（丢的是 ACID 的 I）→ 用<strong>语义锁</strong>加中间状态挡住</td></tr>
+    <tr><td>会失败吗</td><td>基本不会</td><td><strong>会</strong>，它也是一次网络调用</td></tr>
+  </tbody>
+</table>
+
+<p><strong>补偿必须「持久化 + 可无限重试 + 幂等」。写在 <code>catch</code> 块里调一次的补偿等于没有补偿。</strong>把补偿意图先落 saga 状态表，后台任务重试到成功或告警转人工。</p>
+
+<h3>补偿的三个坑（同一张 <code>tx_log(biz_id PK, state)</code> 全解）</h3>
+
+<table>
+  <thead><tr><th>坑</th><th>情形</th><th>防法</th></tr></thead>
+  <tbody>
+    <tr><td><strong>空补偿</strong></td><td>正向从未执行，补偿先到</td><td>查不到正向记录 → 插 <code>COMPENSATED</code>，返回成功，什么都不做</td></tr>
+    <tr><td><strong>悬挂</strong></td><td>补偿先到并成功，超时的正向<strong>随后</strong>才到并执行 → 资源永久占住</td><td>正向进来先查：已是 <code>COMPENSATED</code> → <strong>拒绝执行</strong></td></tr>
+    <tr><td><strong>幂等</strong></td><td>补偿超时重试，退了两笔</td><td>正向与补偿都以 <code>biz_id</code> 唯一索引去重</td></tr>
+  </tbody>
+</table>
+
+<p>① 与 ② 必须成对实现：允许了空补偿才产生悬挂；只做 ① 会把明显的错误换成安静的资源泄漏。</p>
+
+<h2>9 · 编排 vs 协同</h2>
+
+<table>
+  <thead><tr><th></th><th>编排 Orchestration</th><th>协同 Choreography</th></tr></thead>
+  <tbody>
+    <tr><td>机制</td><td>协调者告诉各方执行什么</td><td>各方发布领域事件，触发彼此</td></tr>
+    <tr><td>中心</td><td>有，流程写在协调者里</td><td>无，流程散在订阅关系里</td></tr>
+    <tr><td>代价</td><td>协调者变胖，吸走业务逻辑</td><td><strong>没有一处看得到完整流程</strong> → 链路追踪是必需品</td></tr>
+    <tr><td>我的经历</td><td><strong>第三方对接</strong>（顺序调用 + 逆序回退）</td><td><strong>Solace 十个系统</strong>（各订各的 topic）</td></tr>
+  </tbody>
+</table>
+
+<h3>消息式 Request-Reply</h3>
+
+<p><code>ReplyTo</code> = 回信寄到哪个 topic/queue（API 自动生成唯一目的地）；<code>CorrelationId</code> = 响应方原样带回，请求方据此把回信和自己的请求对上。Solace topic 形如 <code>a/b/c/.../n</code>，订阅可用 <code>*</code>（单层）与 <code>&gt;</code>（尾部多层）通配（<a href="https://docs.solace.com/Get-Started/what-are-topics.htm">Solace Docs</a>）。</p>
+
+<p><strong>vs HTTP</strong>：① 解耦（发布方不需知道消费方）② 削峰（对方挂了消息排队）③ 代价：延迟高、<strong>超时要自己管</strong>、响应也会丢所以消费仍需幂等。</p>
+
+<div class="script">
+  <span class="label">「和第三方交互如何保证一致性」</span>
+  <p><q>同步接口，走 Saga 的补偿事务，编排式，协调逻辑在我这边——任一步失败就按逆序调各步的回退接口，最后撤自己的库。关键是补偿不等于回滚：它是我手写的代码，会留下正反两条记录，而且它自己也是网络调用、也会失败。所以补偿意图要先落库、由后台任务持续重试。对第三方的回退接口有三个要求：幂等、允许空补偿、防悬挂。</q></p>
+</div>
+
 <footer class="footer">
   <div class="nav-links">
     <a href="../lessons/0004-microservices-what-actually-changes.html">← Lesson 04（完整版）</a>
+    <a href="../lessons/0005-saga-and-choreography.html">← Lesson 05（Saga）</a>
     <a href="db-index-cheatsheet.html">→ 速查表：索引</a>
     <a href="algo-cheatsheet.html">→ 速查表：排序</a>
     <a href="../MISSION.md">→ Mission</a>

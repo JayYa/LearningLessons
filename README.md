@@ -11,6 +11,7 @@
 | 1 | [第 1 课 · 两个进程，一根线](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0001-two-processes-one-wire.html) | 建立前后端两个进程通过 HTTP 联通的心智模型，从零跑通调用链并解决 CORS 这堵墙 |
 | 2 | [第 2 课 · TypeScript 不是 C#](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0002-typescript-is-not-csharp.html) | 从 C# 类型系统的心智出发，辨析 TypeScript 结构化类型与鸭子类型带来的本质差异 |
 | 3 | [第 3 课 · 在边界上立一道检查](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0003-guard-the-boundary.html) | 讲解如何在前后端边界上做数据校验，用运行时检查守住类型系统覆盖不到的地方 |
+| 4 | [第 4 课 · React 的状态到底是什么](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0004-what-is-react-state.html) | 讲清 React 状态的本质：它不是变量而是一次重新渲染的触发器，以及何时该把数据放进状态 |
 
 **参考资料：**
 - [参考 · C# ↔ Python / TypeScript 对照表](https://JayYa.github.io/LearningLessons/Python-React-Typescript/reference/csharp-rosetta.html) — 以 C# 为锚点对照 Python 与 TypeScript 的语法与惯用法
@@ -24,6 +25,7 @@
 | 2 | [Lesson 02 · 内存装不下的时候：排序、选择、Top-K 与外部归并（精讲）](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0002-sorting-selection-topk-external.html) | 讲解大数据量下的排序、选择与 Top-K 算法，深入外部归并排序应对内存不足的场景 |
 | 3 | [Lesson 03 · 四种排序，一句话 + 一个动画就懂](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0003-how-each-sort-actually-works.html) | 用一句话概括加动画演示，直观理解冒泡、选择、插入与快速排序的核心逻辑 |
 | 4 | [Lesson 04 · 微服务：一次方法调用变成一次网络调用](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0004-microservices-what-actually-changes.html) | 讲解单体应用拆分为微服务后，方法调用变为网络调用带来的延迟、失败与一致性代价 |
+| 5 | [Lesson 05 · 你已经做过 Saga 了，只是没人告诉你它叫这个名字](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0005-saga-and-choreography.html) | 从日常业务补偿逻辑切入讲 Saga 模式，辨析编排式与协同式两种跨服务事务一致性方案 |
 
 **参考资料：**
 - [速查表 · 排序、选择、Top-K 与外部排序（C#）](https://JayYa.github.io/LearningLessons/BeiGene/reference/algo-cheatsheet.html) — 排序、选择、Top-K 与外部排序算法速查

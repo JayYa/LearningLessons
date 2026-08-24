@@ -179,8 +179,48 @@
   </tbody>
 </table>
 
+<h2>React</h2>
+
+<table>
+  <thead><tr><th style="width:11rem">术语</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Render</strong><br>渲染</td>
+      <td>React <strong>调用一次你的组件函数</strong>，拿到一份「界面应该长什么样」的描述。注意：渲染 ≠ 更新 DOM。描述算出来后，React 再去比对并决定真正要改哪些 DOM。</td>
+    </tr>
+    <tr>
+      <td><strong>Declarative</strong><br>声明式</td>
+      <td><code>UI = f(state)</code>：你描述「给定这个 state，界面该是什么样」，而不是一步步命令界面怎么变。与 WPF / WinForms 那种抓住控件对象改属性的<strong>命令式</strong>相对。</td>
+    </tr>
+    <tr>
+      <td><strong>State</strong><br>状态</td>
+      <td>组件的记忆。普通局部变量不行的两个理由：<strong>跨渲染保不住</strong>（retain），且<strong>改了不会触发重新渲染</strong>（trigger）。<code>useState</code> 一次给你这两样。<a href="https://react.dev/learn/state-a-components-memory">react.dev</a></td>
+    </tr>
+    <tr>
+      <td><strong>Snapshot</strong><br>快照</td>
+      <td>本课程最重要的 React 概念。<strong>一次渲染里，state 是个不会变的常量。</strong>每次渲染产生全新一批 <code>const</code> 与全新一批闭包，所以 <code>setTimeout</code> 里读到的是「那一次渲染」的值。说它「异步」是错的 —— 等多久都不会变。<a href="https://react.dev/learn/state-as-a-snapshot">react.dev</a></td>
+    </tr>
+    <tr>
+      <td><strong>Updater function</strong><br>更新函数</td>
+      <td><code>setCount(c =&gt; c + 1)</code> 里的 <code>c =&gt; c + 1</code>。它接收<strong>待处理的 state</strong>并算出下一个。判据：<strong>新值依赖旧值就用它</strong>；不依赖就直接传值。</td>
+    </tr>
+    <tr>
+      <td><strong>Hook</strong></td>
+      <td>以 <code>use</code> 开头、只能在组件（或自定义 hook）顶层调用的函数，用于接入 React 的状态与生命周期。React 内部为每个组件维护一个 <strong>state 数组 + 游标</strong>，每调用一次 hook 就取下一格并 +1。</td>
+    </tr>
+    <tr>
+      <td><strong>Rules of Hooks</strong><br>hook 规则</td>
+      <td>不得在循环、条件、嵌套函数、<code>try</code>/<code>catch</code>/<code>finally</code> 里调用 hook，也不得在<strong>提前 <code>return</code> 之后</strong>调用。<strong>这不是风格约定，是上一条那个数据结构决定的。</strong>违反时的运行时报错：<code>Rendered more/fewer hooks than…</code><a href="https://react.dev/reference/rules/rules-of-hooks">react.dev</a></td>
+    </tr>
+    <tr>
+      <td><strong>Fragment</strong></td>
+      <td><code>&lt;&gt;...&lt;/&gt;</code>。JSX 必须返回<strong>单个</strong>根节点，Fragment 是一个不产生真实 DOM 元素的空壳包装，专用于满足这条规定。</td>
+    </tr>
+  </tbody>
+</table>
+
 <div class="footer">
-  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a></p>
+  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a></p>
   <div class="ask"><strong>有词条不清楚？</strong> 问我，我会把解释补进这份文档 —— 它会跟着课程一起长大。</div>
 </div>
 

@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 4 课 · React 的状态到底是什么</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/widgets.css">
+<script src="../assets/widgets.js" defer></script>
+</head>
+<body>
+<main class="page">
+
+<p class="eyebrow">Lesson 0004 · 约 45 分钟</p>
+<h1>React 的状态到底是什么</h1>
+<p class="subtitle">三课下来你一直在用 <code>useState</code>，却没人告诉你它凭什么工作。该还债了。</p>
+
+<div class="block win">
+  <span class="label">本课的收获</span>
+  <p>一句能解释掉 React 大半「诡异行为」的话：<strong>每一次渲染都是你的组件函数的一次独立调用，state 在那一次调用里是一个不会变的常量。</strong> 做完之后，这三件事你都能讲出原因：为什么连写三次 <code>setCount(count + 1)</code> 只加一；为什么 <code>setTimeout</code> 里读到的是旧值；为什么 hook 不能写在 <code>if</code> 里。</p>
+</div>
+
+<h2>一、组件是函数，渲染是一次调用</h2>
+
+<p>先把最底层的模型摆正，后面所有反直觉的现象都是它的推论。</p>
+
+<div class="block csharp">
+  <span class="label">你熟悉的世界</span>
+  <p>WinForms / WPF 是<strong>命令式</strong>的：控件是一个长期存活的对象，你抓住它去改属性 —— <code>label.Text = "hi"</code>。对象在，你改它，界面跟着变。<br><strong>React 是反过来的。</strong>你的组件是一个<strong>函数</strong>，它接收当前 state，返回一段「界面应该长什么样」的<em>描述</em>。你永远不去改界面，你改 state，然后 React <strong>重新调用你的函数</strong>，拿到一份新描述，自己去算差异并更新 DOM。<br>写成一个式子：<strong><code>UI = f(state)</code></strong>。这就是「声明式 vs 命令式」，是 React 面试题里最常见的第一问。</p>
+</div>
+
+<p>关键推论：<strong>你的组件函数会被调用很多次</strong>。第一次渲染调一次，每次 state 变化再调一次。每一次调用，函数体从头到尾重新执行一遍，里面的局部变量全部重新创建。</p>
+
+<h2>二、为什么普通变量不够用</h2>
+
+<p>既然函数每次都重新跑，用一个普通的 <code>let</code> 存计数为什么不行？官方文档给了两条理由，请分开记，它们是<strong>两个独立的问题</strong>：</p>
+
+<blockquote>
+“<strong>Local variables don't persist between renders.</strong> When React renders this component a second time, it renders it from scratch—it doesn't consider any changes to the local variables.”<br>
+“<strong>Changes to local variables won't trigger renders.</strong> React doesn't realize it needs to render the component again with the new data.”
+<cite>—— <a href="https://react.dev/learn/state-a-components-memory">react.dev · State: A Component's Memory</a></cite>
+</blockquote>
+
+<p>一个是<strong>保存不住</strong>，一个是<strong>叫不醒</strong>。<code>useState</code> 正好一次给你这两样：</p>
+
+<table>
+  <thead><tr><th style="width:11rem">你拿到的</th><th>解决哪个问题</th></tr></thead>
+  <tbody>
+    <tr><td><code>count</code>（state 变量）</td><td><strong>Retain</strong> —— 跨渲染保住数据。React 替你存着，函数重跑时再交还给你。</td></tr>
+    <tr><td><code>setCount</code>（setter）</td><td><strong>Trigger</strong> —— 更新数据<em>并且</em>通知 React「该重新调用这个函数了」。</td></tr>
+  </tbody>
+</table>
+
+<p>第一步动手你会亲手撞一次「叫不醒」：变量的值确实变了，界面纹丝不动。</p>
+
+<h2>三、快照：本课的核心</h2>
+
+<p>现在看这段代码。它是本课全部难度的所在：</p>
+
+<pre><code>const [count, setCount] = useState(0);
+
+function handleClick() {
+  setCount(count + 1);
+  setCount(count + 1);
+  setCount(count + 1);
+}</code></pre>
+
+<p>点一下，<code>count</code> 只加 <strong>1</strong>。原因简单得让人不适应：</p>
+
+<blockquote>
+“Setting state only changes it for the <em>next</em> render.”<br>
+“<strong>A state variable's value never changes within a render,</strong> even if its event handler's code is asynchronous.”
+<cite>—— <a href="https://react.dev/learn/state-as-a-snapshot">react.dev · State as a Snapshot</a></cite>
+</blockquote>
+
+<p><code>count</code> 是一个 <code>const</code>。在<em>这一次</em>渲染里它就是 <code>0</code>，谁也改不了它。所以那三行其实是：</p>
+
+<pre><code>setCount(0 + 1);
+setCount(0 + 1);
+setCount(0 + 1);   <span class="cmt">// 三句一模一样</span></code></pre>
+
+<div class="block trap">
+  <span class="label">这里要停一下 —— 和 C# 的闭包正好相反</span>
+  <p>C# 的 lambda 捕获的是<strong>变量</strong>，所以变量之后变了，lambda 看到的也跟着变：</p>
+<pre><code>int n = 0;
+Action a = () =&gt; Console.WriteLine(n);
+n = 5;
+a();   <span class="cmt">// 打印 5 —— 捕获的是变量，不是值</span></code></pre>
+  <p>React 里，<strong>每一次渲染都产生全新的一批 <code>const</code></strong>。这次渲染创建的事件处理函数，捕获的是<em>这一次</em>的那个 <code>count</code> —— 它是个常量，永远不会变成别的值。<br>所以两边的「闭包陷阱」方向恰好相反：<strong>C# 的坑是「捕获的变量偷偷变了」，React 的坑是「捕获的值顽固地不变」。</strong>把这句说给面试官听，比背「state 是异步的」有说服力得多 —— 顺带一提，<strong>「异步」是个坏解释</strong>：就算你等上三秒再读，读到的还是那个旧值，因为它压根不是同一个变量。</p>
+</div>
+
+<p>那么需要连续累加时怎么办？传<strong>函数</strong>而不是值：</p>
+
+<pre><code>setCount(c =&gt; c + 1);
+setCount(c =&gt; c + 1);
+setCount(c =&gt; c + 1);   <span class="cmt">// 这次真的加 3</span></code></pre>
+
+<blockquote>
+“Here, <code>a =&gt; a + 1</code> is your updater function. <strong>It takes the pending state and calculates the next state from it.</strong>”
+<cite>—— <a href="https://react.dev/reference/react/useState">react.dev · useState 参考</a></cite>
+</blockquote>
+
+<p>差别在于「谁来提供上一个值」：传值时，是<em>你</em>在这次渲染的快照里算；传函数时，是 <strong>React 在处理队列时</strong>把上一个结果喂给你。判断标准就一句：<strong>新值要依赖旧值 → 用函数形式；不依赖 → 直接传值。</strong></p>
+
+<h2>四、hook 为什么不能写在 <code>if</code> 里</h2>
+
+<p>这个问题的答案，比大多数人以为的要朴素得多。看官方文档怎么说 React 内部是怎么存 state 的：</p>
+
+<blockquote>
+“Internally, React holds an <strong>array of state pairs</strong> for every component. It also maintains the <strong>current pair index</strong>, which is set to <code>0</code> before rendering. Each time you call <code>useState</code>, React gives you the next state pair and increments the index.”<br>
+“Hooks <strong>rely on a stable call order on every render of the same component.</strong>”
+<cite>—— <a href="https://react.dev/learn/state-a-components-memory">react.dev · State: A Component's Memory</a></cite>
+</blockquote>
+
+<p>把这句话的分量掂清楚：<strong><code>const [count, setCount] = ...</code> 里的名字 <code>count</code>，React 完全不知道。</strong> 它只知道「这是本次渲染的第 0 个 hook」。名字是你写给自己看的，配对靠的是<strong>顺序</strong>。</p>
+
+<div class="compile-pair">
+  <figure><figcaption>你写的</figcaption><pre><code>const [a, setA] = useState(0);
+const [b, setB] = useState("");
+useEffect(fn, []);</code></pre></figure>
+  <figure><figcaption>React 记的</figcaption><pre><code>slot[0] = 0
+slot[1] = ""
+slot[2] = effect</code></pre></figure>
+</div>
+
+<p>现在把第二个 <code>useState</code> 包进 <code>if</code>：某次条件为假，它没被调用，于是 <code>useEffect</code> 变成了第 1 个 hook —— 它会去拿 <code>slot[1]</code>，也就是<strong>字符串 state 的格子</strong>。整排数据错位一格。</p>
+
+<div class="block csharp">
+  <span class="label">对照 C#</span>
+  <p>C# 的字段靠<strong>名字</strong>绑定，编译期就定死了，怎么写都不会错位。React 的 state 靠<strong>调用顺序</strong>绑定，运行期才确定 —— 这是用「语法极简」换来的，代价就是必须有一条纪律性的规则来兜底：</p>
+  <blockquote style="margin-bottom:0">
+  “<strong>Don't call Hooks inside loops, conditions, nested functions, or <code>try</code>/<code>catch</code>/<code>finally</code> blocks.</strong> Instead, always use Hooks at the top level of your React function, before any early returns.”
+  <cite>—— <a href="https://react.dev/reference/rules/rules-of-hooks">react.dev · Rules of Hooks</a></cite>
+  </blockquote>
+</div>
+
+<p>注意那句 <strong>before any early returns</strong> —— 提前 <code>return</code> 和写在 <code>if</code> 里是同一个错误，这一条最容易被忽略。</p>
+
+<p>你有两道防线会拦住这个错误，动手环节会把两道都触发一次：<strong>lint 在写代码时拦</strong>，<strong>React 在运行时拦</strong>。React 之所以拦得住，正是因为它数得出 hook 的个数。</p>
+
+<h2>五、动手</h2>
+
+<p>两个终端开着（<code>fastapi dev</code> 与 <code>pnpm dev</code>）。全程只改 <code>App.tsx</code>。</p>
+
+<ol class="checklist" data-checklist="0004">
+
+<li>
+<span class="step-title">先用普通变量，撞一次「叫不醒」</span>
+<p>在 <code>App.tsx</code> 里加一个计数器按钮，故意用 <code>let</code>：</p>
+<pre><code>export default function App() {
+  const [message, setMessage] = useState("加载中…");
+  let count = 0;                          <span class="cmt">// ← 一个普通变量</span>
+
+  useEffect(() =&gt; { <span class="cmt">/* …原样不动… */</span> }, []);
+
+  return (
+    &lt;&gt;
+      &lt;h1&gt;{message}&lt;/h1&gt;
+      &lt;button onClick={() =&gt; { count = count + 1; console.log("count =", count); }}&gt;
+        count: {count}
+      &lt;/button&gt;
+    &lt;/&gt;
+  );
+}</code></pre>
+<p>连点五下。<strong>Console 里数字在涨，按钮上的数字一直是 0。</strong></p>
+<p>变量确实变了 —— 只是没有人重新调用这个函数，界面就还是上一次调用留下的那份。这就是「叫不醒」。</p>
+<p>（顺手还一笔债：<code>&lt;&gt;...&lt;/&gt;</code> 是 <strong>Fragment</strong>。JSX 必须返回<em>单个</em>根节点，Fragment 是一个不会产生真实 DOM 元素的空壳包装，专门用来满足这条规定。）</p>
+</li>
+
+<li>
+<span class="step-title">换成 state，但一次点三下</span>
+<p>把 <code>let count = 0;</code> 换成 state，并让点击连续调用三次：</p>
+<pre><code>const [count, setCount] = useState(0);
+
+<span class="cmt">// button 的 onClick 改成：</span>
+onClick={() =&gt; {
+  setCount(count + 1);
+  setCount(count + 1);
+  setCount(count + 1);
+}}</code></pre>
+
+<div class="widget predict">
+  <p class="widget-kind">先预测 · 别偷看</p>
+  <p class="predict-prompt">从 0 开始，点<strong>一次</strong>按钮之后，界面上的数字会变成几？写下来再点击。</p>
+  <div class="predict-answer" hidden>
+    <p><strong>1。</strong>这次渲染里 <code>count</code> 是 <code>0</code>，三句话都是 <code>setCount(1)</code>。<br>如果你预测的是 3 —— 很好，这个错误值钱：你刚刚把 C# 的「变量」直觉套到了 React 的「快照」上，而这正是本课要拆掉的那个直觉。</p>
+  </div>
+</div>
+</li>
+
+<li>
+<span class="step-title">用 updater 修好它</span>
+<p>三句改成函数形式：</p>
+<pre><code>onClick={() =&gt; {
+  setCount(c =&gt; c + 1);
+  setCount(c =&gt; c + 1);
+  setCount(c =&gt; c + 1);
+}}</code></pre>
+<p>点一次，数字跳到 <strong>3</strong>。<strong>同样是三次调用，同样在一次点击里，结果不同</strong> —— 差别只在于「上一个值由谁提供」。</p>
+</li>
+
+<li>
+<span class="step-title">直接看见快照</span>
+<p>把 <code>onClick</code> 临时改成：</p>
+<pre><code>onClick={() =&gt; {
+  setCount(c =&gt; c + 1);
+  setTimeout(() =&gt; console.log("3 秒后我看到的 count =", count), 3000);
+}}</code></pre>
+<p>点一下，然后<strong>立刻再连点四下</strong>。等三秒，看 Console。</p>
+<p>第一条打印的不是 5，而是 <strong>0</strong> —— 你按第一下时那次渲染的值。后面几条依次是 1、2、3、4。<strong>每一条都停在自己那次渲染的快照上。</strong></p>
+<p>这就是为什么「state 更新是异步的」是个糟糕的解释：等待并不会让你读到新值，因为你手里的根本不是同一个变量。看完把 <code>setTimeout</code> 那行删掉。</p>
+</li>
+
+<li>
+<span class="step-title">把 hook 塞进 <code>if</code>，触发两道防线</span>
+<p>在组件里加上这段明知故犯的代码：</p>
+<pre><code>if (count &gt; 2) {
+  const [extra] = useState("boom");
+  console.log(extra);
+}</code></pre>
+<p><strong>第一道防线</strong> —— 另开一个终端跑 <code>pnpm lint</code>：</p>
+<pre><code>error react-hooks(rules-of-hooks): React Hook "useState" is called
+conditionally. React Hooks must be called in the exact same order in
+every component render.</code></pre>
+<p><strong>第二道防线</strong> —— 无视它，回到浏览器把数字点过 2。页面炸掉，Console 里是：</p>
+<pre><code>Error: Rendered more hooks than during the previous render.</code></pre>
+<p>（反过来，如果 hook 是被<em>提前 return</em> 跳过的，你会看到另一条：<code>Rendered fewer hooks than expected. This may be caused by an accidental early return statement.</code>）</p>
+<p><strong>请把这两条报错读进去</strong>：React 说的是「比上次<em>多</em>／<em>少</em>」—— 它在<strong>数个数</strong>。这就是第四节那个 array + index 机制留在报错信息里的指纹。看完把这段删掉。</p>
+</li>
+
+<li>
+<span class="step-title">收尾</span>
+<p>保留第 3 步的 updater 版本计数器，确认页面正常：<code>Hello from Python</code> + 一个能加 3 的按钮。<code>pnpm lint</code> 与 <code>pnpm build</code> 都应零错误。</p>
+<div class="block win">
+  <span class="label">你现在拥有的</span>
+  <p>一个能讲清楚<strong>为什么</strong>的心智模型，而不只是「useState 会更新界面」。你亲手制造并观察了三个现象：变量改了界面不动、三次加一、三秒后读到旧值 —— 它们全部是<strong>同一句话</strong>的推论。</p>
+</div>
+</li>
+
+</ol>
+
+<h2>六、检验一下</h2>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 1 / 4</p>
+  <p class="quiz-q">连写三次 <code>setCount(count + 1)</code> 却只加了 1，根本原因是？</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>本次渲染里 count 是常量，三句算出同一个值</button></li>
+    <li><button>连续三次调用被自动合并，只有最后一次生效</button></li>
+    <li><button>状态更新是异步的，后两次读到了过期的旧值</button></li>
+    <li><button>事件处理器里的更新被批处理，压缩成一次加法</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>不是「合并」，也不是「异步」—— 三次调用<strong>全都发生了</strong>，只是三次都在说同一句话：「把 state 设成 1」。<code>count</code> 在这次渲染里是个 <code>const</code>，值为 0，三行代码里的 <code>count + 1</code> 算出的都是 1。<br>「异步」这个解释之所以特别糟，是因为它暗示「等一等就能读到新值」—— 第 4 步的 <code>setTimeout</code> 实验已经证伪了这一点。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 2 / 4</p>
+  <p class="quiz-q">hook 不能写在 <code>if</code> 里，是因为 React 内部：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>按调用顺序而非变量名来配对 state 格子</button></li>
+    <li><button>按变量名而非调用顺序来配对 state 格子</button></li>
+    <li><button>会为每个条件分支单独维护一份 state 表</button></li>
+    <li><button>需在编译期静态分析出全部分支的类型</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>React 维护一个数组和一个游标，每调用一次 hook 就取下一格并把游标 +1。名字对它毫无意义。少调用一次，后面所有 hook 集体错位一格。<br>报错信息本身就是证据：<code>Rendered <strong>more</strong> hooks than during the previous render</code> —— <strong>它在数个数</strong>。<br>顺带记住那条容易漏的：提前 <code>return</code> 之后再调 hook，和写在 <code>if</code> 里是同一个错误。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 3 / 4</p>
+  <p class="quiz-q">点击后 <code>setTimeout</code> 延迟三秒打印 <code>count</code>，打印出的是：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>你点下那一刻，那一次渲染的值</button></li>
+    <li><button>三秒后定时器到期时的最新值</button></li>
+    <li><button>组件第一次渲染时的初始值</button></li>
+    <li><button>组件卸载前最后一次渲染值</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>每次渲染都创建了<strong>新的一批 <code>const</code> 和新的一批闭包</strong>。那个 <code>setTimeout</code> 回调是「第 N 次渲染」创建的，它捕获的就是第 N 次渲染的 <code>count</code>，一个常量。时间流逝不会改变一个常量。<br>连点五下会得到 0、1、2、3、4 —— 五个回调，五份互不相干的快照。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 4 / 4</p>
+  <p class="quiz-q">什么时候<strong>必须</strong>写 <code>setCount(c =&gt; c + 1)</code> 而不是传值？</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>新值需要基于上一个 state 计算出来时</button></li>
+    <li><button>新值需要传给子组件当作 props 使用时</button></li>
+    <li><button>新值需要出现在 useEffect 的依赖数组时</button></li>
+    <li><button>新值需要在更新后立刻触发重新渲染时</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>判断标准只有一条：<strong>下一个值依不依赖上一个值。</strong>依赖就用函数形式，让 React 在处理队列时把最新的中间结果喂给你；不依赖（比如 <code>setMessage(result.data.message)</code>，值来自外部）就直接传值，没必要绕。<br>最后一个选项是陷阱：<em>两种写法都</em>会触发重新渲染，那不是它们的区别。</p>
+  </div>
+</div>
+
+<div class="widget recall">
+  <p class="widget-kind">回忆练习 · 出声说，别只在心里过</p>
+  <p class="recall-prompt">合上这一页，<strong>连着讲 60 秒</strong>：<br>（1）「渲染是一张快照」这句话，用第 4 步那个 <code>setTimeout</code> 实验讲一遍；<br>（2）hook 不能写在 <code>if</code> 里，讲到 React 内部的数据结构为止；<br>（3）第 2 课的类型擦除和这一课的快照，有没有共同点？</p>
+  <button class="recall-btn">先出声回答，再点开</button>
+  <div class="recall-answer" hidden>
+    <p><strong>(1)</strong> 组件是函数，每次渲染是一次独立调用，函数里的 <code>const</code> 每次都是新的一批。事件处理函数和定时器回调都是<em>那一次</em>渲染创建的闭包，捕获的是那一次的常量。所以连点五下，五个回调各自打印 0、1、2、3、4 —— 时间过去多久都不会变，因为它压根不是同一个变量。</p>
+    <p><strong>(2)</strong> React 为每个组件维护一个 state 数组和一个游标，游标每次渲染前归零，每调用一个 hook 就取下一格并 +1。配对靠<strong>顺序</strong>，不靠名字。写在 <code>if</code> 里会导致某次渲染的 hook 数量变化，后面所有 hook 错位一格。报错说的是「比上次多/少了 hook」，因为它在数个数。</p>
+    <p><strong>(3)</strong> 两课都在说：<strong>你写的代码和真正在跑的东西之间，隔着一层你必须知道的转换。</strong>类型擦除是「你写的类型编译后不存在了」；快照是「你写的 <code>count</code> 不是一个会变的变量，而是每次调用重新绑定的常量」。<br><em>两次都是同一个教训：把 C# 的直觉直接搬过来，会在运行时被打脸。</em></p>
+  </div>
+</div>
+
+<h2>七、面试回答模板</h2>
+
+<div class="block interview">
+  <span class="label">如果面试官问：“React 的状态是怎么管理的？” / “hooks 是什么？”</span>
+  <p>“核心模型是 <strong><code>UI = f(state)</code></strong>：组件是个函数，每次渲染就是把它重新调用一遍，我不去改 DOM，我改 state 让 React 重新调用。这和 WPF 那种抓住控件对象改属性的命令式写法是相反的。<br>普通变量不行有两个原因 —— <strong>跨渲染保不住</strong>，而且<strong>改了不会触发重新渲染</strong>。<code>useState</code> 正好给这两样。<br>最容易踩的坑是 <strong>state 是快照</strong>：一次渲染里 state 是常量，所以连写三次 <code>setCount(count + 1)</code> 只会加一。我自己试过用 <code>setTimeout</code> 延迟三秒去读，读到的还是点击那一刻的值 —— 所以说它「异步」是不准确的，它是每次渲染各自绑定的常量。要连续累加就得用 updater 形式 <code>setCount(c =&gt; c + 1)</code>，让 React 把上一个结果喂进来。<br>至于 hooks 为什么不能写在条件里 —— React 内部是一个 state 数组加一个游标，靠<strong>调用顺序</strong>配对，不靠变量名。少调一次后面全部错位，所以它的报错是『比上次多/少了 hook』。<strong>这条规则不是风格约定，是数据结构决定的。</strong>”</p>
+  <p style="margin-top:0.7rem;font-size:0.86rem;">最后那句是分水岭。大多数人答到「这是 hooks 的规则」就停了；能说出「因为内部是数组 + 游标」的，面试官知道你读过或调试过，而不只是背过规则。</p>
+</div>
+
+<h2>八、去读原始资料</h2>
+
+<p><strong>本课首选阅读：</strong><a href="https://react.dev/learn/state-as-a-snapshot">react.dev · State as a Snapshot</a>（约 10 分钟）。官方文档里写得最好的一篇，配有可交互的例子，把你刚才手动做的实验又做了一遍。读完顺手看下一页 <a href="https://react.dev/learn/queueing-a-series-of-state-updates">Queueing a Series of State Updates</a>，它画出了 updater 函数在队列里被逐个执行的过程。</p>
+
+<p><strong>规则那一侧：</strong><a href="https://react.dev/reference/rules/rules-of-hooks">react.dev · Rules of Hooks</a>（约 5 分钟）。很短，但那张「哪些地方不能调用」的清单值得逐条过一遍 —— <code>try</code>/<code>catch</code> 里也不行这一条，多数人不知道。</p>
+
+<p><strong>如果还有余力：</strong><a href="https://react.dev/reference/react/useState">react.dev · useState 参考</a>的 <em>Caveats</em> 小节。里面有一条本课没展开、但迟早会咬你的：如果新值经 <code>Object.is</code> 判定与当前 state 相同，<strong>React 会跳过这次重新渲染</strong> —— 这正是为什么直接 <code>arr.push(x)</code> 再 <code>setArr(arr)</code> 界面不动（同一个对象引用），必须传新数组。</p>
+
+<div class="footer">
+  <h2>相关文档</h2>
+  <ul>
+    <li><a href="../reference/glossary.html">术语表</a> —— 本课引入：render、state、hook、snapshot、updater function、Rules of Hooks、Fragment、declarative</li>
+    <li><a href="../reference/csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> —— 本课引入：UI 更新模型、闭包捕获语义</li>
+    <li><a href="0001-two-processes-one-wire.html">第 1 课</a> · <a href="0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="0003-guard-the-boundary.html">第 3 课</a></li>
+    <li><a href="../RESOURCES.md">RESOURCES.md</a> · <a href="../MISSION.md">MISSION.md</a></li>
+  </ul>
+
+  <h2>下一课</h2>
+  <p><strong>第 5 课：<code>useEffect</code> 与那个空数组</strong> —— 这一课只还了一半的债。你从第 1 课起就在写 <code>useEffect(..., [])</code>，却没人解释那个 <code>[]</code> 是什么、为什么去掉它会把后端打爆、以及为什么开发模式下你的 effect 会跑两次（StrictMode）。还会讲官方那篇少见的反模式指南 <em>You Might Not Need an Effect</em> —— <strong>「useEffect 什么时候不该用」是面试加分题。</strong></p>
+
+  <div class="ask">
+    <strong>我是你的老师，随时提问。</strong> 本课刻意压住没展开的：React 拿到新描述后怎么算差异、怎么决定复用哪个 DOM 节点（reconciliation 与 <code>key</code>）？多个 <code>setState</code> 为什么只触发一次重新渲染（batching —— 和「三次只加一」是<em>两件不同的事</em>，容易混）？state 里放对象/数组时为什么必须「不可变更新」？<code>useState</code> vs <code>useReducer</code> 怎么选？—— 想跳过顺序直接问，也随时可以。
+  </div>
+</div>
+
+</main>
+</body>
+</html>

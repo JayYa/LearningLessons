@@ -176,8 +176,41 @@
   </tbody>
 </table>
 
+<h2>React 的状态模型<span style="font-size:0.72rem;font-family:var(--mono);color:var(--ink-soft);letter-spacing:0.08em;">（第 4 课）</span></h2>
+
+<table>
+  <thead><tr><th style="width:8.5rem">C#</th><th style="width:9rem">对应物</th><th>&#9888; 裂缝</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>label.Text = "hi"</code><br>（WinForms / WPF）</td>
+      <td><code>setMessage("hi")</code></td>
+      <td><strong>命令式 vs 声明式。</strong>C# 抓住一个长期存活的控件对象改属性；React 里你改 state，React <strong>重新调用你的组件函数</strong>拿到新的 UI 描述，再自己去更新 DOM。式子：<code>UI = f(state)</code>。你永远不碰 DOM。</td>
+    </tr>
+    <tr>
+      <td>字段 <code>private int _count;</code></td>
+      <td><code>const [count, setCount] = useState(0)</code></td>
+      <td>C# 字段靠<strong>名字</strong>绑定，编译期定死。React 的 state 靠 hook 的<strong>调用顺序</strong>绑定（内部是数组 + 游标），运行期才确定 —— 这就是 hook 不能写在 <code>if</code> / 循环 / <code>try</code> 里、也不能写在提前 <code>return</code> 之后的全部原因。</td>
+    </tr>
+    <tr>
+      <td>lambda 捕获变量<br><code>Action a = () =&gt; W(n);</code></td>
+      <td>事件处理函数捕获<br>本次渲染的 <code>const</code></td>
+      <td><strong>方向相反的闭包陷阱。</strong>C# 捕获的是<em>变量</em>，之后变量变了 lambda 就看到新值；React 每次渲染产生<strong>全新一批 <code>const</code></strong>，回调捕获的是那一次的常量，<em>永远不会变</em>。所以 <code>setTimeout</code> 三秒后读到的仍是点击那一刻的值。</td>
+    </tr>
+    <tr>
+      <td><code>_count += 1;</code> 连写三次</td>
+      <td><code>setCount(c =&gt; c + 1)</code> 连写三次</td>
+      <td>写 <code>setCount(count + 1)</code> 三次<strong>只加一</strong> —— 本次渲染里 <code>count</code> 是常量，三句算出同一个值。要连续累加必须用 <strong>updater 形式</strong>，由 React 在处理队列时把上一个结果喂进来。判据：<strong>新值依赖旧值就用函数形式。</strong></td>
+    </tr>
+    <tr>
+      <td><code>list.Add(x)</code> 后刷新绑定</td>
+      <td>必须 <code>setArr([...arr, x])</code></td>
+      <td>直接 <code>arr.push(x)</code> 再 <code>setArr(arr)</code> <strong>界面不动</strong>：React 用 <code>Object.is</code> 比较新旧值，同一个引用会被判定为没变，直接跳过重新渲染。C# 的 <code>ObservableCollection</code> 靠事件通知，React 靠<strong>引用相等</strong>。</td>
+    </tr>
+  </tbody>
+</table>
+
 <div class="footer">
-  <p>相关：<a href="glossary.html">术语表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a></p>
+  <p>相关：<a href="glossary.html">术语表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a></p>
   <div class="ask"><strong>觉得某个类比不对劲？</strong> 说出来 —— 你的 C# 直觉在哪里打滑，往往正是下一课该讲的地方。</div>
 </div>
 

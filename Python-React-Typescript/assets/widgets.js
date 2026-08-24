@@ -5,6 +5,7 @@
    1) 测验 .quiz        —— 单选，点击立即反馈，答对/答错都展开解释
    2) 回忆 .recall      —— 先自己回想，再点开答案（retrieval practice）
    3) 步骤 .checklist   —— 可勾选，进度存 localStorage，刷新不丢
+   4) 预测 .predict     —— 先写下预测再揭晓（generation effect）
 
    标记约定见各初始化函数上方的注释。
    ============================================================ */
@@ -120,9 +121,61 @@
     render();
   }
 
+  /* ---------------------------------------------------------
+     4) 预测练习 —— 先承诺一个答案，再看真相
+     <div class="widget predict">
+       <p class="widget-kind">先预测</p>
+       <p class="predict-prompt">点一次按钮，数字会变成几？</p>
+       <div class="predict-answer" hidden>真相 + 解释</div>
+     </div>
+     输入框与按钮由 JS 生成。写下预测才能揭晓 —— 空着不给看，
+     因为"先承诺一个答案"本身就是学习效应的来源（generation effect）。
+     --------------------------------------------------------- */
+  function initPredict(root) {
+    const answer = root.querySelector('.predict-answer');
+    if (!answer) return;
+
+    const row = document.createElement('div');
+    row.className = 'predict-row';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'predict-input';
+    input.placeholder = '写下你的预测……';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'predict-btn';
+    btn.textContent = '锁定预测，揭晓';
+
+    const reveal = () => {
+      const guess = input.value.trim();
+      if (!guess) {
+        input.classList.add('is-empty');
+        input.focus();
+        return;
+      }
+      input.disabled = true;
+      btn.disabled = true;
+      answer.hidden = false;
+      const mine = document.createElement('p');
+      mine.className = 'predict-mine';
+      mine.textContent = '你的预测：' + guess;
+      answer.prepend(mine);
+    };
+
+    btn.addEventListener('click', reveal);
+    input.addEventListener('input', () => input.classList.remove('is-empty'));
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') reveal(); });
+
+    row.append(input, btn);
+    answer.before(row);
+  }
+
   /* --------------------------------------------------------- */
 
   document.querySelectorAll('.quiz').forEach(initQuiz);
   document.querySelectorAll('.recall').forEach(initRecall);
   document.querySelectorAll('.checklist').forEach(initChecklist);
+  document.querySelectorAll('.predict').forEach(initPredict);
 })();

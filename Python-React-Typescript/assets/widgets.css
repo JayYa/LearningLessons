@@ -138,10 +138,61 @@
   margin: 0 0 0.8rem;
 }
 
+/* ---------- 预测练习 ---------- */
+
+.predict-prompt { font-size: 1rem; margin: 0 0 0.8rem; }
+
+.predict-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+
+.predict-input {
+  flex: 1 1 14rem;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--ink);
+}
+.predict-input:focus { outline: none; border-color: var(--accent); }
+.predict-input.is-empty { border-color: var(--warn); background: var(--warn-soft); }
+.predict-input:disabled { color: var(--ink-soft); background: transparent; }
+
+.predict-btn {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.05em;
+  padding: 0.45rem 0.9rem;
+  border: 1px dashed var(--ink-soft);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.predict-btn:hover:not(:disabled) { color: var(--ink); border-color: var(--ink); }
+.predict-btn:disabled { opacity: 0.4; cursor: default; }
+
+.predict-answer {
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--ok-soft);
+  border-left: 3px solid var(--ok);
+  font-size: 0.91rem;
+}
+.predict-answer > :last-child { margin-bottom: 0; }
+
+.predict-mine {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  margin: 0 0 0.5rem;
+}
+
 @media print {
   .widget { break-inside: avoid; }
-  .quiz-explain, .recall-answer { display: block !important; }
-  .recall-btn { display: none; }
+  .quiz-explain, .recall-answer, .predict-answer { display: block !important; }
+  .recall-btn, .predict-btn { display: none; }
 }
 
 /* ---------- 测验的横排变体（用于二选一的「预测编译结果」） ---------- */

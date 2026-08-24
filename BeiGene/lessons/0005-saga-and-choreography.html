@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 05 · 你已经做过 Saga 了，只是没人告诉你它叫这个名字</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/callchain.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 05 · 微服务 · BeiGene 面试备战 · 命名课</p>
+  <h1>你已经做过 Saga 了<br>只是没人告诉你它叫这个名字</h1>
+  <p class="standfirst">你回收的三条事实，把我原本的判断推翻了。我在校准表里把你的微服务经历记成「有一点」——<strong>那是错的</strong>。你做过的是十个服务、库各自独立、消息驱动的系统，以及一次教科书式的补偿事务。你缺的不是经历，<strong>是把经历翻译成面试官听得懂的词</strong>。这一课就干这件事。</p>
+</header>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>这一课的知识密度低于 Lesson 04，因为<strong>机制你已经在生产环境里跑过了</strong>，我只是给它们贴标签、补漏洞。约 25 分钟。第三节有一个可点组件，请把四种模式都点一遍——它问的是一个你当年很可能没想过的问题：<strong>回退接口自己失败了怎么办？</strong></p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">先把估值改过来</a> <span class="depth">— 你说的 vs 面试官该听到的</span></li>
+    <li><a href="#s2">补偿不是回滚</a> <span class="depth">— Saga 的定义</span></li>
+    <li><a href="#s3">回退接口自己失败了呢</a> <span class="depth">— 可点组件</span></li>
+    <li><a href="#s4">补偿的三个坑</a> <span class="depth">— 空补偿 / 悬挂 / 幂等</span></li>
+    <li><a href="#s5">你的 Solace 那套叫「协同式」</a> <span class="depth">— 编排 vs 协同</span></li>
+    <li><a href="#s6">三段话术</a> <span class="depth">— 每段挂一条你的真事</span></li>
+    <li><a href="#s7">检验一下</a> <span class="depth">— 6 题</span></li>
+    <li><a href="#s8">下一课与两个问题</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、先把估值改过来</h2>
+
+<p>你自评「微服务经历偏薄」，我照单收下并写进了校准记录。看到你的三条回答之后，我认为<strong>这个自评严重低估</strong>。请对照下表——左边是你说的话，右边是同一件事在面试官耳朵里应该激活的词：</p>
+
+<table>
+  <thead><tr><th>你说的</th><th>它的正式名字</th><th>为什么这是加分项</th></tr></thead>
+  <tbody>
+    <tr><td>大约 10 个系统</td><td>真正的多服务系统</td><td>不是「拆了两个服务」的玩具规模</td></tr>
+    <tr><td>各系统数据库独立</td><td><strong>Database per Service</strong></td><td>这是微服务最难做到、也最常被违反的一条。绝大多数号称微服务的系统共用一个库，那叫分布式单体</td></tr>
+    <tr><td>通过 Solace 沟通</td><td><strong>事件驱动架构（EDA）</strong>、消息中间件解耦</td><td>比「服务之间互相 HTTP 调用」高一个层次</td></tr>
+    <tr><td>不同系统订阅不同 topic</td><td><strong>主题订阅 / 协同式（Choreography）</strong></td><td>见第五节</td></tr>
+    <tr><td>message 本身就是请求与响应</td><td><strong>Request-Reply 消息交换模式</strong></td><td>见第五节的 ReplyTo / CorrelationId</td></tr>
+    <tr><td>第三方失败了就按顺序调他们的回退接口，再撤回自己的数据</td><td><strong>Saga 模式 · 编排式 · 补偿事务</strong></td><td>见第二节。这是分布式事务最主流的落地方式，你亲手写过</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="label">这一课要修的真正短板</span>
+  <p>不是经历，是<strong>词汇</strong>。面试官问「你怎么保证跨系统一致性」，你如果答<q>失败了就按顺序调他们的回退接口</q>，听起来像临时想的土办法；你如果答<q>我们走的是 Saga 的补偿事务，编排式，由我方做协调者，按逆序调用各步骤的补偿接口</q>，听起来像你读过书还落过地。<strong>是同一件事。</strong>面试很大程度上就是一场翻译考试。</p>
+</div>
+
+<h2 id="s2">二、补偿不是回滚</h2>
+
+<p>先给定义。Chris Richardson 的 microservices.io 是这个模式的规范出处：</p>
+
+<blockquote>
+  <p><q>A saga is a sequence of local transactions. Each local transaction updates the database and publishes a message or event to trigger the next local transaction in the saga.</q><br>
+  <q>If a local transaction fails because it violates a business rule then the saga executes <strong>a series of compensating transactions that undo the changes that were made by the preceding local transactions</strong>.</q><br>
+  —— <a href="https://microservices.io/patterns/data/saga.html">microservices.io, Pattern: Saga</a></p>
+</blockquote>
+
+<p>把它对到你那次对接上，一一对应：</p>
+
+<table>
+  <thead><tr><th>Saga 术语</th><th>你那次是什么</th></tr></thead>
+  <tbody>
+    <tr><td>local transaction（本地事务）</td><td>调第三方的第 1、2、3 个同步接口，每个都是对方的一次本地提交</td></tr>
+    <tr><td>compensating transaction（补偿事务）</td><td><strong>第三方提供的那些回退接口</strong></td></tr>
+    <tr><td>orchestrator（协调者）</td><td><strong>你的代码</strong>——是你在按顺序调、按逆序退</td></tr>
+    <tr><td>saga 的失败路径</td><td>第 3 步挂了 → 逆序调第 2、第 1 的回退 → 再撤回自己库里的数据</td></tr>
+  </tbody>
+</table>
+
+<p>现在讲这一节最重要的一句话。<strong>补偿（compensation）和回滚（rollback）不是一回事</strong>，Richardson 明确点出了这个区别：</p>
+
+<blockquote><p><q>A developer must design compensating transactions that explicitly undo changes made earlier in a saga <strong>rather than relying on the automatic rollback feature of ACID transactions</strong>.</q></p></blockquote>
+
+<table>
+  <thead><tr><th></th><th>数据库回滚</th><th>Saga 补偿</th></tr></thead>
+  <tbody>
+    <tr><td>谁做的</td><td>数据库引擎自动做</td><td><strong>你手写的业务代码</strong></td></tr>
+    <tr><td>做完之后</td><td>像什么都没发生过</td><td>留下痕迹：一笔正向记录 + 一笔反向记录</td></tr>
+    <tr><td>中间状态</td><td>外界看不见</td><td><strong>外界看得见</strong>，别人可能已经读到并据此做了决定</td></tr>
+    <tr><td>会不会失败</td><td>基本不会</td><td><strong>会</strong>——补偿本身也是一次网络调用，见第三节</td></tr>
+  </tbody>
+</table>
+
+<div class="callout ext">
+  <span class="label">扩展 · 「外界看得见」这件事有个正式名字</span>
+  <p>叫 <strong>lack of isolation</strong>（缺少隔离性）。Richardson：<q>The lack of isolation means that there is risk that the concurrent execution of multiple sagas and transactions can [cause] data anomalies. Consequently, a saga developer must typically use <strong>countermeasures</strong>, which are design techniques that implement isolation.</q></p>
+  <p>ACID 四个字母里，Saga 保住了 A（原子性，靠补偿模拟）、C、D，<strong>唯独丢了 I</strong>。最常用的对策叫<strong>语义锁</strong>：给记录加一个中间状态（比如订单从「已提交」先进「处理中」，而不是直接进「已完成」），别人看到这个状态就知道「这笔还没定，别动」。</p>
+  <p>面试被追问到「补偿期间别人读到了脏数据怎么办」——答<q>Saga 牺牲的是隔离性，实践里用语义锁，给一个业务上的中间态把它挡住</q>，这一句的含金量很高。</p>
+</div>
+
+<h2 id="s3">三、回退接口自己失败了呢</h2>
+
+<p>这是你当年大概率没被逼问过、但面试官一定会问的那一层。<strong>补偿调用也是网络调用</strong>，<a href="0004-microservices-what-actually-changes.html#s2">Lesson 04 第二节</a>那四种结局，它一个都躲不掉。</p>
+
+<p>下面把「我方调第三方的回退接口」这一跳单独拎出来。<strong>先猜，再点</strong>：</p>
+
+<div class="callchain" data-callchain='{
+  "title": "第 3 步失败后，我方逆序调用第三方的回退接口",
+  "nodes": ["我方业务", "我方协调逻辑", "第三方回退接口"],
+  "focus": 1,
+  "label": "POST /rollback/step2",
+  "modes": [
+    {"id":"ok","label":"回退成功","tone":"good",
+     "seen":"HTTP 200。继续逆序调 step1 的回退。",
+     "state":"对方第 2 步已撤销。接着撤第 1 步，最后撤自己的库。三方最终一致。",
+     "fix":"这是理想路径。注意撤自己的数据必须放在<strong>最后</strong>：先撤自己再撤对方，一旦对方撤不掉，你连自己这边还有哪些残留都查不到了。"},
+    {"id":"comp-fail","label":"回退接口报 500","tone":"bad",
+     "seen":"HTTP 500。补偿失败了。",
+     "state":"对方第 2 步<strong>还留着</strong>。这是最难的一种：正向失败了，反向也失败了。",
+     "fix":"关键认知：<strong>补偿必须可以无限重试</strong>，所以补偿动作不能只在内存里跑一遍。正确做法是把补偿意图<strong>先落库</strong>（一张 saga 状态表，记下每一步的状态），再由后台任务不断重试，重试到一定次数就告警转人工。<strong>绝不能在 catch 块里调一次就算完</strong>——那是最常见的写法，也是最常见的事故来源。",
+     "retry":"必须重试，而且要持久化地重试。这正是 Lesson 04 第四节 Outbox 的思路：把「我要做的事」先写进自己的库，再慢慢做。"},
+    {"id":"comp-timeout","label":"回退接口超时","tone":"bad",
+     "seen":"超时异常。<strong>不知道对方到底退没退。</strong>",
+     "state":"未知。可能已撤销，可能没有。",
+     "fix":"和 Lesson 04 完全同一个问题。重试是唯一选择，因此<strong>回退接口也必须幂等</strong>——退过一次的，第二次进来直接返回成功，不能退成负数。这是对第三方接口的硬性要求，对接时就该问清楚。",
+     "retry":"只有对方的回退接口幂等，重试才安全。如果对方没做幂等，你只能先查询状态再决定退不退——但查询本身也会超时，所以这只是降低概率，不能根治。"},
+    {"id":"empty","label":"其实第 2 步压根没成功","tone":"bad",
+     "seen":"第 2 步返回的是超时，你判为失败并发起了回退。",
+     "state":"对方从未执行第 2 步，却收到了第 2 步的回退。<strong>这叫空补偿。</strong>",
+     "fix":"对方必须能接住这种请求：查不到对应的正向记录时，<strong>直接返回成功，什么都不做</strong>，而不是报错、也不是真的退一笔。这是第四节的第一个坑。",
+     "retry":"重试没有意义——问题不在网络，在于这个补偿请求本身就不该产生效果。这是接口<em>语义</em>问题，不是可靠性问题。"}
+  ]
+}'></div>
+
+<div class="callout">
+  <span class="label">这一节的一句话</span>
+  <p><strong>补偿必须是「持久化 + 可无限重试 + 幂等」的；写在 <code>catch</code> 块里调一次的补偿，等于没有补偿。</strong>面试里主动说出这句，等于宣告你不是从文章上读来的。</p>
+</div>
+
+<h2 id="s4">四、补偿的三个坑</h2>
+
+<p>这三个坑在国内是标准考点（阿里 Seata 的 TCC 文档把它们列为必须处理的三件事）。它们不是 TCC 专有的，<strong>任何补偿型分布式事务都会遇到</strong>，包括你那次对接。</p>
+
+<table>
+  <thead><tr><th>坑</th><th>怎么发生的</th><th>怎么防</th></tr></thead>
+  <tbody>
+    <tr><td><strong>① 空补偿</strong><br>（空回滚）</td><td>正向请求根本没到对方，或者对方还没执行，补偿请求就先到了。对方收到一个「撤销一件从没发生过的事」的请求</td><td>补偿方查不到对应的正向记录时，<strong>直接返回成功</strong>并留痕，绝不报错、绝不真的执行反向操作</td></tr>
+    <tr><td><strong>② 悬挂</strong></td><td>更刁钻：补偿请求<strong>先</strong>到达（走了空补偿返回成功），事务已判定结束；结果那个超时的正向请求<strong>随后才到</strong>，对方老老实实执行了。于是这笔资源被永久占住，再也没人来撤</td><td>补偿时留下一条「已补偿」的记录；正向请求进来先检查——<strong>发现已经被补偿过，就拒绝执行</strong></td></tr>
+    <tr><td><strong>③ 幂等</strong></td><td>补偿超时后重试，对方退了两次</td><td>正向和补偿<strong>都</strong>用业务唯一键做去重表，就是 <a href="0004-microservices-what-actually-changes.html#s2">Lesson 04 那张 <code>request_id</code> 唯一索引表</a></td></tr>
+  </tbody>
+</table>
+
+<p>注意 ① 和 ② 是<strong>互相纠缠</strong>的：正因为允许了空补偿（①），才产生了悬挂（②）。所以这两条必须成对实现——只做 ① 不做 ②，你就把一个明显的错误换成了一个安静的资源泄漏。</p>
+
+<div class="callout ext">
+  <span class="label">扩展 · 三个坑用同一张表一起解决</span>
+  <p>被调方（对方，或者你自己作为被调方）维护一张 <code>tx_log</code>：<code>(biz_id PRIMARY KEY, state)</code>，<code>state</code> ∈ {<code>DONE</code>, <code>COMPENSATED</code>}。</p>
+  <ul>
+    <li><strong>正向请求进来</strong>：<code>biz_id</code> 已存在且为 <code>DONE</code> → 幂等，直接返回（③）；已存在且为 <code>COMPENSATED</code> → <strong>拒绝执行</strong>（② 防悬挂）；不存在 → 同一个本地事务里插 <code>DONE</code> + 做业务。</li>
+    <li><strong>补偿请求进来</strong>：查不到 <code>biz_id</code> → 插一条 <code>COMPENSATED</code> 并返回成功（① 空补偿，顺手防住 ②）；查到 <code>DONE</code> → 同一事务里改成 <code>COMPENSATED</code> + 做反向业务；已经是 <code>COMPENSATED</code> → 幂等返回（③）。</li>
+  </ul>
+  <p>Seata 从 1.5.1 起内置了一张 <code>tcc_fence_log</code> 自动干这件事，原理就是上面这张表。<strong>能在白板上画出这张表并说清这几种分支，这道题就满分了。</strong></p>
+</div>
+
+<h2 id="s5">五、你的 Solace 那套叫「协同式」</h2>
+
+<p>Saga 有两种协调方式，你<strong>两种都做过</strong>——这很难得：</p>
+
+<table>
+  <thead><tr><th></th><th>编排式 Orchestration</th><th>协同式 Choreography</th></tr></thead>
+  <tbody>
+    <tr><td>官方定义</td><td><q>An orchestrator tells the participants what local transactions to execute</q></td><td><q>Each local transaction publishes domain events that trigger local transactions in other services</q></td></tr>
+    <tr><td>有没有中心</td><td>有一个协调者，流程写在它里面</td><td>没有中心，流程<strong>散落在各个订阅关系里</strong></td></tr>
+    <tr><td>你的哪一段经历</td><td><strong>第三方对接那次</strong>：你的代码按顺序调、按逆序退</td><td><strong>Solace 那十个系统</strong>：各自订阅各自的 topic</td></tr>
+    <tr><td>优点</td><td>流程一眼看得见，好调试</td><td>服务之间彻底解耦，加一个新消费者不用改发布方</td></tr>
+    <tr><td>缺点</td><td>协调者容易变胖，逐渐吸走业务逻辑</td><td><strong>没有任何一个地方能看到完整流程</strong>，出问题极难追</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="label">这里有一个可以主动抛出的钩子</span>
+  <p>协同式的那个缺点——「没有一个地方看得到完整流程」——正是 <a href="0004-microservices-what-actually-changes.html#s3">Lesson 04 第三节 TraceId</a> 存在的理由。<strong>把这两件事连起来说</strong>：<q>协同式的代价是流程不可见，所以链路追踪在这种架构里不是加分项，是必需品。我们当时排查跨系统问题主要还是靠时间戳和消息里的业务单号去对，如果重来，我会在消息头里统一带一个 trace 号。</q></p>
+  <p>「如果重来我会……」这个句式，是经历有缺口时最好用的一句话——它把短板转成了判断力。</p>
+</div>
+
+<h3>你说的「message 本身就是请求与响应」</h3>
+
+<p>这叫 <strong>Request-Reply 消息交换模式</strong>：用消息中间件做出同步调用的语义。Solace 官方文档说它靠两个字段实现：</p>
+
+<table>
+  <thead><tr><th>字段</th><th>作用</th></tr></thead>
+  <tbody>
+    <tr><td><code>ReplyTo</code></td><td>请求方在消息头里写上「回信寄到哪个 topic / queue」。Solace 的 API 会自动生成一个唯一的 ReplyTo 目的地</td></tr>
+    <tr><td><code>CorrelationId</code></td><td><q>it must be possible for the requestor to correlate the request with the subsequent reply</q>——响应方原样带回这个 id，请求方才能从一堆回来的消息里认出「这条是我那条请求的答复」</td></tr>
+  </tbody>
+</table>
+
+<p>再加上你说的 topic 分层订阅：Solace 的 topic 是 <code>a/b/c/.../n</code> 形式的层级字符串，订阅方可以用 <code>*</code>（单层通配）和 <code>&gt;</code>（尾部多层通配）来筛（<a href="https://docs.solace.com/Get-Started/what-are-topics.htm">Solace Docs — Understanding Topics</a>）。<strong>这一整段都是你的加分素材</strong>——面试官问「几个微服务之间如何交互」，你能答出的东西比只会说「用 HTTP 调」的候选人多得多。</p>
+
+<div class="callout ext">
+  <span class="label">扩展 · 一个必然被追问的问题，请提前想好</span>
+  <p><strong>「用消息做请求-响应，和直接 HTTP 调用，有什么区别？」</strong>好答案有三层：</p>
+  <ul>
+    <li><strong>解耦</strong>：发布方不需要知道谁在消费，加消费者不用改代码；HTTP 必须知道对方地址。</li>
+    <li><strong>削峰与可用性</strong>：对方短暂不可用时消息在 broker 里排队，恢复后继续；HTTP 当场就失败了。</li>
+    <li><strong>代价</strong>：延迟更高，而且<strong>你必须自己处理超时</strong>——HTTP 有天然的连接超时，消息式请求-响应里「回信一直不来」需要你自己设定时器和兜底。而且响应消息一样可能丢，所以<strong>消费仍然必须幂等</strong>（又回到 Lesson 04 那一句）。</li>
+  </ul>
+</div>
+
+<h2 id="s6">六、三段话术</h2>
+
+<p>下面三段全部挂在你的真事上。<strong>不要背，要能用自己的话讲出同样的结构</strong>。</p>
+
+<div class="script">
+  <span class="label">话术 A · 对应题「微服务的了解」「几个微服务之间如何交互」</span>
+  <p><strong>结论：</strong><q>我上一个系统是十个左右的服务，<strong>每个服务有自己独立的数据库</strong>，服务之间不直接调，全部通过 Solace 这个消息中间件通信。</q></p>
+  <p><strong>机制：</strong><q>交互方式是主题订阅：每个系统发布到自己的 topic，需要的系统去订阅，Solace 的 topic 是分层的，可以用通配符订阅一整类事件。有些交互是请求-响应式的，消息头里带 ReplyTo 和 CorrelationId，请求方靠 CorrelationId 把回来的响应和自己发出去的请求对上。</q></p>
+  <p><strong>取舍（这段最值钱）：</strong><q>这种做法在 Saga 的分类里叫协同式，好处是彻底解耦——加一个新的消费方，发布方完全不用动。代价是<strong>没有任何一个地方能看到完整的业务流程</strong>，流程散在各个订阅关系里，出问题很难追。我们当时主要靠消息里的业务单号去各系统对日志。如果重来，我会在消息头里统一带一个 TraceId 贯穿全链路。</q></p>
+  <p><strong>为什么这样答强：</strong>「库独立」是微服务的硬指标，很多号称微服务的系统其实共用一个库、那叫分布式单体。你主动点出这一条，等于告诉面试官你知道真假微服务的分界线在哪。</p>
+</div>
+
+<div class="script">
+  <span class="label">话术 B · 对应题「和第三方交互时如何保证数据一致性」</span>
+  <p><strong>结论：</strong><q>那次是同步接口，走的是 <strong>Saga 的补偿事务</strong>，编排式的——协调逻辑在我这边。第三方提供了每一步的回退接口，任何一步失败，我就<strong>按逆序</strong>调用前面各步的回退，最后再撤我自己库里的数据。</q></p>
+  <p><strong>关键认知：</strong><q>这里最重要的一点是<strong>补偿不等于回滚</strong>。数据库回滚是引擎自动做的、干净的；补偿是我手写的业务代码，做完之后数据上会留下一正一反两条记录，而且<strong>补偿本身也是一次网络调用，它自己也会失败</strong>。</q></p>
+  <p><strong>踩过 / 想过的坑：</strong><q>所以补偿不能写在 catch 块里调一次就算数。要把补偿意图先落到自己库里的一张状态表，由后台任务持续重试，超过阈值就告警转人工。另外对第三方的回退接口有三个要求：<strong>要幂等</strong>，因为超时后我一定会重试；<strong>要允许空补偿</strong>，因为可能正向请求压根没到、它就先收到了回退；<strong>还要防悬挂</strong>——补偿先到、正向后到的话，那笔资源会被永久占住。</q></p>
+  <p><strong>如果被追问「你们当时全做到了吗」：</strong>诚实答。<q>幂等我们要求了；空补偿和悬挂当时没有系统性地防，出问题是靠对账发现再人工处理的。这三个坑是我后来复盘才想清楚的。</q>——<strong>这个回答比声称全做到了强</strong>，因为它证明你事后复盘过，而不是照着文档背。</p>
+</div>
+
+<div class="script">
+  <span class="label">话术 C · 对应题「RabbitMQ 如何消费 / 用过哪些 MQ」（诚实定位型）</span>
+  <p><strong>先划边界，别硬撑：</strong><q>RabbitMQ 我用得不深，主要是两类场景：日志文本的异步处理，和各系统之间的缓存失效通知。消息量级和业务重要性都不高。</q></p>
+  <p><strong>立刻转成判断力（这是全段的重点）：</strong><q>不过这两个场景恰好说明了一个取舍：它们都是<strong>丢一条也不致命</strong>的场景——日志丢一条不影响业务，缓存通知丢了下次读会回源。所以当时没做 ACK 之外的额外保障。<strong>但如果是业务消息</strong>，比如订单状态变更，我就必须加三样东西：发送端用本地消息表，保证「写库」和「发消息」不会只成功一半；消费端必须幂等，因为 MQ 是至少一次投递；ACK 一定手动，业务处理完再 ACK，不能用自动 ACK。</q></p>
+  <p><strong>再把重量级经历拉回来：</strong><q>我更主要的消息中间件经历是在 Solace 上，那边是十个系统的主干通信链路。</q></p>
+  <p><strong>为什么这样答强：</strong>把「用过什么」和「知道该怎么选」分开，是 <a href="0004-microservices-what-actually-changes.html#s5">Lesson 04 网关那段</a>用过的同一招。<strong>承认边界再展示判断力，几乎从不扣分；硬撑被追问三层则必崩。</strong></p>
+</div>
+
+<h2 id="s7">七、检验一下</h2>
+
+<p><strong>先在心里说出理由再选。</strong></p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "Saga 的补偿事务与数据库回滚，最本质的区别是：",
+    "options": [
+      "补偿由开发者手写，且它自身也可能失败",
+      "补偿的执行速度比数据库回滚要慢很多倍",
+      "补偿只能用于跨服务而不能用于单个服务内",
+      "补偿必须依赖消息中间件才可以正确地工作"
+    ],
+    "answer": 0,
+    "why": "官方原文：<q>A developer must design compensating transactions that explicitly undo changes ... rather than relying on the automatic rollback feature of ACID transactions</q>。由此推出三个后果：补偿是业务代码不是引擎能力、补偿会留下正反两条痕迹、<strong>补偿本身是一次网络调用因此会失败</strong>——最后这条是面试官最爱追的一层。速度、适用范围、是否依赖 MQ 都不是本质差别。"
+  },
+  {
+    "q": "关于补偿逻辑的实现位置，正确的做法是：",
+    "options": [
+      "写在 catch 块里，失败时立即调用一次即可",
+      "先把补偿意图落库，再由后台任务持续地重试",
+      "交给数据库的分布式事务协调器统一负责处理",
+      "由第三方系统超时后自动发起，我方无需处理"
+    ],
+    "answer": 1,
+    "why": "补偿调用会超时、会 500。写在 catch 块里就只有一次机会，进程一崩这笔补偿永远消失，数据就此不一致——<strong>这是最常见的写法，也是最常见的事故来源</strong>。正确做法与 Lesson 04 的 Outbox 同构：把「我要做的事」先写进自己的库，再由后台任务重试到成功、或告警转人工。2PC 实践中不用（要长时间持锁），指望第三方自动补偿更是把命运交给别人。"
+  },
+  {
+    "q": "「空补偿」这个问题描述的具体情形是：",
+    "options": [
+      "补偿接口被连续调用了两次导致退了两笔",
+      "正向请求成功但补偿请求超时无法确认状态",
+      "正向操作从未执行，补偿请求却先到达对方",
+      "补偿执行完成之后正向请求才姗姗来迟到达"
+    ],
+    "answer": 2,
+    "why": "空补偿 = <strong>撤销一件从未发生过的事</strong>。成因是正向请求超时（对方压根没收到、或还没执行），调用方判为失败并发起补偿。对方必须查不到正向记录就返回成功、什么都不做。选项 A 是幂等问题；选项 D 是<strong>悬挂</strong>——注意 C 和 D 是一对纠缠的兄弟：正因为允许了空补偿，才产生了悬挂。"
+  },
+  {
+    "q": "补偿方发现查不到正向记录时，正确的响应是：",
+    "options": [
+      "返回失败让调用方重试直到正向记录出现",
+      "返回成功并记录已补偿，防止正向再执行",
+      "返回成功但不留任何记录以保持接口简洁",
+      "抛出业务异常并要求人工介入核对该笔数据"
+    ],
+    "answer": 1,
+    "why": "两件事缺一不可。<strong>返回成功</strong>是为了让空补偿不阻塞整条补偿链——返回失败会让调用方无限重试一件永远不会成立的事。<strong>留下「已补偿」记录</strong>是为了防悬挂：迟到的正向请求进来一看已被补偿，就拒绝执行。只做前半句（选项 C）会把一个明显的错误换成一个安静的资源泄漏，那正是悬挂。"
+  },
+  {
+    "q": "「各服务订阅各自的 topic、没有中心协调者」这种模式叫：",
+    "options": [
+      "编排式，它的主要代价是协调者容易变胖",
+      "协同式，它的主要代价是完整流程不可见",
+      "编排式，它的主要代价是完整流程不可见",
+      "协同式，它的主要代价是协调者容易变胖"
+    ],
+    "answer": 1,
+    "why": "官方定义：协同式是 <q>each local transaction publishes domain events that trigger local transactions in other services</q>，没有中心；编排式是 <q>an orchestrator tells the participants what local transactions to execute</q>。<strong>没有中心，也就没有协调者变胖的问题，但同时没有任何一处能看到完整流程</strong>。你的 Solace 系统是协同式，第三方对接那次是编排式。四个选项两两交叉，分不清代价归属就会选错。"
+  },
+  {
+    "q": "在消息式请求-响应中，CorrelationId 的作用是：",
+    "options": [
+      "指定这条响应消息应该被投递到哪个主题",
+      "保证同一业务的消息按发送顺序依次消费",
+      "让请求方从回流的消息中认出自己那一条",
+      "作为业务唯一键供消费端做幂等的去重用"
+    ],
+    "answer": 2,
+    "why": "Solace 官方：<q>it must be possible for the requestor to correlate the request with the subsequent reply</q>，响应方原样带回该 id，请求方据此匹配。选项 A 是 <code>ReplyTo</code> 的职责，两者必须配对使用——<strong>这是最容易混的一组</strong>。顺序保证靠分区 / 队列语义，与它无关；它<em>可以</em>被拿来当幂等键，但那不是它的定义。"
+  }
+]'></div>
+
+<h2 id="s8">八、下一课与两个问题</h2>
+
+<p><strong>下一课（Lesson 06）＝ 原定的选型课</strong>：该不该拆、边界怎么划、以及题库那道「运维成本高、交互复杂，为什么还选微服务」。<strong>它被推迟了一课，因为你的三条回答改变了它的写法</strong>——现在它能用你自己那十个服务当案例，讨论「这十个的边界划得对不对」，而不是拿一个虚构的电商例子。这比原计划好得多。</p>
+
+<p>为了写好它，我需要两个信息：</p>
+
+<ol>
+  <li><strong>那十个系统是按什么划开的？</strong>按业务领域（订单 / 结算 / 风控……）、按团队、还是按前后端或历史遗留？有没有哪一次改需求，你不得不同时改三四个系统才能上线？（<strong>这个「一改就要改一串」的现象是边界划错的最经典信号</strong>，有的话就是最好的素材；没有反而说明边界划得好，同样是素材。）</li>
+  <li><strong>题库里「从单一服务扩展到微服务」那道题</strong>——你有没有亲历过某个单体被拆开的过程，还是你进去的时候就已经是十个系统了？这两种情况的答法完全不同。</li>
+</ol>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（只看一个的话，看这个）：</strong><br>
+  <a href="https://microservices.io/patterns/data/saga.html">Chris Richardson — Pattern: Saga</a>。约 10 分钟，是这个模式的规范出处。<strong>重点看 Resulting context 一节</strong>（补偿必须手写、缺少隔离性、原子更新问题），那三条正是本课第二节的骨架。<br>
+  想再深一层：<a href="https://microservices.io/patterns/data/database-per-service.html">Database per Service</a>（你已经在做的那件事的正式名字）、<a href="https://docs.solace.com/Get-Started/what-are-topics.htm">Solace — Understanding Topics</a>（topic 分层与通配符，面试可直接引用）。</p>
+
+  <p><strong>社区（获取智慧，不是知识）：</strong>在 <a href="https://www.reddit.com/r/microservices/">r/microservices</a> 搜 <code>saga compensation</code>，能看到大量真实项目里补偿翻车的帖子——这类细节是文档给不了的。</p>
+
+  <div class="nav-links">
+    <a href="0004-microservices-what-actually-changes.html">← Lesson 04：四笔开销</a>
+    <a href="0001-composite-index-leftmost-prefix.html">← Lesson 01：联合索引</a>
+    <a href="../reference/microservices-cheatsheet.html">→ 速查表：微服务</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练，有任何不清楚的直接问我。</strong>请回给我：<strong>①</strong> 第八节那两个问题（直接决定 Lesson 06 能不能用你自己的系统当案例）；<strong>②</strong> 第三节组件里「回退接口报 500」那种情况，你当年的代码是怎么处理的？（如果就是 catch 里调一次——那太正常了，几乎所有人第一次都这么写，而且它是一段很好的「我后来意识到」话术）；<strong>③</strong> 六道小测里错的那几题。另外 <strong>Lesson 04 我还欠一次回收</strong>：那个组件里「超时」和「执行了但响应丢了」，你当时是真的觉得难以区分，还是一眼就看穿了？这决定我要不要给那一块回炉。
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+<script src="../assets/callchain.js"></script>
+</body>
+</html>
