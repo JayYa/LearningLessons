@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 06 · 该不该拆，边界划在哪——以及那个会议的含义</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/binsort.css">
+<link rel="stylesheet" href="../assets/decision.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 06 · 微服务 · BeiGene 面试备战 · 选型课</p>
+  <h1>该不该拆，边界划在哪<br><span style="font-size:0.62em;color:var(--ink-soft);">以及你顺口提到的那个会，到底意味着什么</span></h1>
+  <p class="standfirst">你回答了两个问题，但真正有价值的是你<strong>没被问到、却顺口说出来</strong>的第三件事：「每次需求变更，我们都会先开会讨论对各个系统的影响，然后列出各系统可能要做的改动。」这句话是整节课的支点——它既可能是你们边界划得好的证据，也可能是最经典的病征。<strong>区分这两者的，只有一个问题。</strong></p>
+</header>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>约 30 分钟。<strong>第三节的归类练习请先做再往下读</strong>——它有八条信号，其中一条几乎就是你自己的原话，但答案可能和你预期相反。<a href="#s2">第二节</a>是本课唯一必须记死的一句话；<a href="#s7">第七节</a>三段话术直接对应题库三道题。</p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">先给你的两条回答定级</a> <span class="depth">— 一条满分，一条只能诚实答</span></li>
+    <li><a href="#s2">微服务只买到一样东西</a> <span class="depth">— 独立部署</span></li>
+    <li><a href="#s3">那个会：健康还是病灶</a> <span class="depth">— 归类练习，八条信号</span></li>
+    <li><a href="#s4">该不该拆</a> <span class="depth">— 走一遍决策树</span></li>
+    <li><a href="#s5">Fowler 的两条禁令</a> <span class="depth">— 溢价 与 单体优先</span></li>
+    <li><a href="#s6">边界划在哪</a> <span class="depth">— 六条判据 + 最常见的错拆</span></li>
+    <li><a href="#s7">三段话术</a> <span class="depth">— 含「没亲历拆分」的诚实答法</span></li>
+    <li><a href="#s8">检验一下</a> <span class="depth">— 6 题</span></li>
+    <li><a href="#s9">下一课与一个问题</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、先给你的两条回答定级</h2>
+
+<table>
+  <thead><tr><th>你说的</th><th>它的正式名字</th><th>面试价值</th></tr></thead>
+  <tbody>
+    <tr><td>按业务领域划分</td><td><strong>Decompose by Business Capability</strong>（按业务能力拆分）</td><td><strong>满分答案。</strong>这是官方推荐的首选拆分法，也是最难做对的一种</td></tr>
+    <tr><td>每个系统由不同团队负责</td><td><strong>团队对齐（team-aligned）</strong>、<strong>康威定律</strong></td><td>见第六节。这条比你以为的重要得多</td></tr>
+    <tr><td>每次变更先开会评估各系统影响面</td><td>跨服务变更的<strong>协调成本</strong></td><td><strong>本课的支点。</strong>见第三节——它是加分还是减分，取决于一个你还没告诉我的细节</td></tr>
+    <tr><td>进公司时已经分好了</td><td>无单体拆分经历</td><td>见第七节话术 B。<strong>这不是短板，是需要换一种答法</strong></td></tr>
+  </tbody>
+</table>
+
+<p>先说第一条为什么是满分。microservices.io 把拆分方式分成几类，「按业务能力拆」是首选：</p>
+
+<blockquote>
+  <p><q>A business capability is a concept from business architecture modeling. It is something that a business does in order to generate value.</q><br>
+  —— <a href="https://microservices.io/patterns/decomposition/decompose-by-business-capability.html">microservices.io, Decompose by business capability</a></p>
+</blockquote>
+
+<p>它的好处是<strong>稳定</strong>：一家公司「做什么生意」多年不变，所以按业务能力划出来的边界也多年不用动。相对地，按技术分层拆（一个界面服务、一个逻辑服务、一个数据服务）划出来的边界，改一个需求必然三个都要动——那是第六节要讲的最经典的错拆。</p>
+
+<h2 id="s2">二、微服务只买到一样东西</h2>
+
+<p>Fowler 把收益和成本各列了三条，<strong>请把这张表记住，它是「为什么选微服务」那道题的骨架</strong>：</p>
+
+<table>
+  <thead><tr><th>收益（buy）</th><th>成本（pay）</th></tr></thead>
+  <tbody>
+    <tr><td><strong>强模块边界</strong><br><q>Microservices reinforce modular structure, which is particularly important for larger teams.</q></td><td><strong>分布式</strong><br><q>Distributed systems are harder to program, since remote calls are slow and are always at risk of failure.</q></td></tr>
+    <tr><td><strong>独立部署</strong><br><q>Simple services are easier to deploy, and since they are autonomous, are less likely to cause system failures when they go wrong.</q></td><td><strong>最终一致性</strong><br><q>Maintaining strong consistency is extremely difficult for a distributed system.</q></td></tr>
+    <tr><td><strong>技术异构</strong><br><q>You can mix multiple languages, development frameworks and data-storage technologies.</q></td><td><strong>运维复杂度</strong><br><q>You need a mature operations team to manage lots of services, which are being redeployed regularly.</q></td></tr>
+  </tbody>
+</table>
+<p style="text-align:right;font-size:0.85rem;color:var(--ink-soft);margin-top:-1rem;">—— <a href="https://martinfowler.com/articles/microservice-trade-offs.html">Martin Fowler, Microservice Trade-Offs</a></p>
+
+<p>但收益那三条<strong>不是并列的</strong>。Sam Newman 把「独立部署性（independent deployability）」单独拎出来，作为微服务的根收益：</p>
+
+<blockquote>
+  <p><q>If you create a system architecture with independent deployability, so many benefits flow from that.</q><br>
+  —— Sam Newman，转引自 <a href="https://www.infoq.com/news/2020/05/monolith-decomposition-newman/">InfoQ, Monolith Decomposition Patterns</a></p>
+</blockquote>
+
+<div class="callout">
+  <span class="label">这一课唯一必须记死的一句</span>
+  <p><strong>微服务的全部代价，是为了换「每个服务可以自己上线，不用等别人」这一件事。</strong></p>
+  <p>由此得到一把非常锋利的尺子：<strong>如果一次需求的改动必须几个系统一起上线，那你付了微服务的全部成本，却没买到它唯一的根收益。</strong>这种系统有个名字——<strong>分布式单体（distributed monolith）</strong>。Newman 称它是<q>the worst of the monoliths</q>：比单体还糟，因为它有单体的耦合，又有分布式的全部麻烦。</p>
+</div>
+
+<h2 id="s3">三、那个会：健康还是病灶</h2>
+
+<p>你说：「每次需求变更，我们都会先开会讨论对各个系统的影响，然后列出各系统可能要做的改动。」</p>
+
+<p>而 Newman 描述分布式单体的症状是：<q>a distributed monolith has many services, but everything has to be deployed at the same time, and <strong>requires lots of coordination between teams to get anything done</strong></q>。他还给了一条很毒的判据：<q>One indicator that you have a distributed monolith is if someone in your organization has a full-time job as a release coordination manager.</q></p>
+
+<p>听起来你们那个会正踩在这条线上。<strong>但先别急着给自己判刑</strong>——同样一个会，可能是两件完全不同的事。下面八条信号，请逐条判断它属于哪一边。<strong>先想理由再点。</strong></p>
+
+<div class="binsort" data-binsort='{
+  "label": "归类练习 · 边界健康 vs 分布式单体",
+  "bins": [
+    {"id":"good","label":"边界健康","tone":"good"},
+    {"id":"bad","label":"分布式单体的味道","tone":"bad"}
+  ],
+  "items": [
+    {"text":"变更前开会评估影响面，<strong>结论通常是只有一个系统要改</strong>，会议主要为了确认没有漏掉别人。","bin":"good",
+     "why":"这是<strong>影响面评估会</strong>，是审慎的治理动作，不是耦合的症状。判据在会议的<em>结论</em>，不在会议本身：如果绝大多数需求最后只落在一个服务里，说明业务能力和服务边界对得上。这种会开得越轻越好，但开着不丢人。"},
+    {"text":"改完之后，各系统按自己的节奏上线，谁先谁后不重要，不必等别人一起发。","bin":"good",
+     "why":"<strong>这是决定性的一条。</strong>独立部署性是微服务唯一的根收益，能做到这一点，前面所有成本才算花得值。面试里主动说出「我们各系统是独立发布的」，比说十句「我们用了微服务」都有分量。"},
+    {"text":"每次发版要拉一个跨团队协调会，专门确定谁先上、谁后上、谁不能落下。","bin":"bad",
+     "why":"这是<strong>发布协调会</strong>，和第 1 条的影响面评估会是两回事。需要排上线顺序，说明服务之间存在部署期依赖——A 不先上，B 上了就挂。这正是 Newman 说的 release coordination，分布式单体的标志性症状。"},
+    {"text":"加一个新的消息消费方，发布方完全不用改代码，也不必知道多了个消费者。","bin":"good",
+     "why":"这是<a href=\"0005-saga-and-choreography.html#s5\">协同式（Choreography）</a>解耦到位的表现，也是你 Solace 那套架构的真实优点。发布方对消费方一无所知 = 零耦合，<strong>这条可以直接当面试素材说出口</strong>。"},
+    {"text":"几个系统共用一个数据库，谁要改表结构，得先通知所有相关的团队。","bin":"bad",
+     "why":"违反 <a href=\"https://microservices.io/patterns/data/database-per-service.html\">Database per Service</a>。共享库是最硬的耦合：改一列，所有读它的服务同时受影响，而且这种依赖<strong>在代码里完全看不见</strong>。<strong>你们没有这个问题</strong>——库各自独立，这是你已经拿到手的分。"},
+    {"text":"某系统改了接口字段，另外三个系统必须同一天跟着改，并且必须同时上线。","bin":"bad",
+     "why":"<strong>锁步发布（lockstep release）</strong>，教科书级的分布式单体。健康的做法是接口只做<strong>向后兼容</strong>的演进：加字段不删字段，老消费方不改也能跑，各自按节奏迁移。everything has to be deployed at the same time 说的就是这个。"},
+    {"text":"一个需求下来，多数情况只动一个系统，少数才跨两个，跨三个以上很罕见。","bin":"good",
+     "why":"这是边界质量的<strong>量化检验</strong>，对应 microservices.io 列的判据 <q>Stability: changes should affect only one service when possible</q>。倒过来说：如果几乎每个需求都要动三四个服务，边界就划错了——很可能是按技术分层拆的，见第六节。"},
+    {"text":"团队里有人的主要工作，就是协调各个系统之间的发布节奏与顺序。","bin":"bad",
+     "why":"Newman 那条最毒的判据：<q>if someone in your organization has a full-time job as a release coordination manager</q>。这个岗位存在本身就证明服务之间无法独立部署——它是在用人力填补架构的洞。"}
+  ]
+}'></div>
+
+<div class="callout ext">
+  <span class="label">扩展 · 你需要自己回答的那个问题</span>
+  <p>第 1 条和第 3 条的差别，就是你们那个会的性质所在。<strong>请自己回忆一下</strong>：</p>
+  <ol>
+    <li>那个会开完，典型情况下是<strong>几个系统要改</strong>？一个，还是三四个？</li>
+    <li>这几个系统改完之后，<strong>是各自上线，还是必须同一个窗口一起上</strong>？</li>
+  </ol>
+  <p><strong>第 2 问才是关键。</strong>哪怕每次要改三个系统，只要它们能各自独立上线（靠接口向后兼容），你们仍然是真微服务；反过来，哪怕只改两个，只要必须绑在一起发，就是分布式单体的味道。</p>
+  <p>无论答案是哪个，<strong>都是好素材</strong>——第七节的话术 A 给了两个版本，答案是哪个就用哪个版本。</p>
+</div>
+
+<h2 id="s4">四、该不该拆</h2>
+
+<p>题库那道「微服务运维成本高、交互复杂，为什么还要选它」，本质是在问你有没有<strong>决策标准</strong>。走一遍下面这棵树，走出来的<strong>路径</strong>就是你要说的话。</p>
+
+<div class="decision" data-decision='{
+  "start": {"q":"这是一个全新的项目，还是一个已经跑了几年的系统？",
+    "options":[{"label":"全新项目","next":"new"},{"label":"已有系统","next":"exist"}]},
+  "new": {"q":"团队里有人真正做过微服务系统吗？",
+    "options":[{"label":"有经验","next":"new-exp"},{"label":"没有","next":"mono"}]},
+  "new-exp": {"result":"仍然优先考虑「模块化单体」，除非领域边界你已经非常有把握。",
+    "detail":"Fowler 的原话是 <q>you shouldnt start a new project with microservices, even if youre sure your application will be big enough to make it worthwhile</q>。理由是边界一开始必然划错，而 <q>any refactoring of functionality between services is much harder than it is in a monolith</q>。团队有经验只是让例外可能成立的前提，不是理由本身。",
+    "tag":"MonolithFirst"},
+  "mono": {"result":"单体。而且是有清晰内部模块边界的单体。",
+    "detail":"新项目最缺的是反馈速度，而微服务溢价正好拖慢它——<q>during this first phase you need to prioritize speed (and thus cycle time for feedback), so the premium of microservices is a drag you should do without</q>。先用单体把边界摸清楚，之后再沿着已经稳定的模块缝隙去拆。",
+    "tag":"默认答案"},
+  "exist": {"q":"现在的痛点是什么？",
+    "options":[{"label":"团队互相踩脚 / 发布排队","next":"pain-org"},{"label":"某个模块扛不住量","next":"pain-scale"},{"label":"代码乱、想重构","next":"pain-mess"}]},
+  "pain-org": {"q":"有没有持续交付、自动化部署、集中日志与链路追踪？",
+    "options":[{"label":"都有或能建起来","next":"split"},{"label":"基本没有","next":"tall"}]},
+  "split": {"result":"拆。而且这是唯一真正站得住的理由。",
+    "detail":"痛点是<strong>组织并行度</strong>时，微服务买到的正是它唯一的根收益：独立部署。多个团队各自发布、互不阻塞，收益随团队数量增长；此时分布式与运维的成本才被压得过去。<strong>沿业务能力拆，一个团队一个服务（6 到 10 人），不要按技术分层拆。</strong>",
+    "tag":"该拆"},
+  "tall": {"result":"先补基础设施，再谈拆。",
+    "detail":"Fowler 明确点名前置条件：<q>rapid application deployment and rapid provisioning of infrastructure</q>，加上 devops 文化，缺了这些，微服务系统会 <q>be traumatized</q>。没有自动化部署和链路追踪就拆，等于把一个能打断点调试的问题，换成一个只能靠猜的问题。",
+    "tag":"还不够高"},
+  "pain-scale": {"result":"先做垂直扩容与读写分离；单体同样可以多副本部署。",
+    "detail":"「扛不住量」几乎从不需要拆服务来解决——单体一样可以水平扩成多个实例挂在负载均衡后面。只有当<strong>某一个模块的资源画像和别人截然不同</strong>（比如它需要 GPU，或者它的流量是别人的百倍且波峰完全错开），单独拆出来独立伸缩才划算。这是拆分的<strong>次要理由</strong>，不是主要理由。",
+    "tag":"多半不用拆"},
+  "pain-mess": {"result":"不拆。先在单体里把模块边界理清楚。",
+    "detail":"<strong>这是最危险的一个动机。</strong>拆分不会治好混乱的代码，只会把「难看的函数调用」变成「难查的网络调用」——原来编译器能帮你抓的错，现在要等到线上超时才发现。正确顺序是：先在单体里重构出清晰模块，边界稳定之后，那些模块自然会告诉你该在哪里切开。",
+    "tag":"陷阱"}
+}'></div>
+
+<div class="callout">
+  <span class="label">这棵树的一句话总结</span>
+  <p><strong>拆分是为了解决组织问题，不是技术问题。</strong>「代码乱」「性能不够」都不该拆；「多个团队互相阻塞、发布要排队」才该拆。<strong>面试里说出这一句，几乎立刻和背概念的候选人分开。</strong></p>
+</div>
+
+<h2 id="s5">五、Fowler 的两条禁令</h2>
+
+<p>这两条是「为什么还选微服务」那道题的<strong>反面</strong>。面试官问这题，往往是想看你会不会无脑吹微服务。<strong>你要做的是先站到他那一边。</strong></p>
+
+<table>
+  <thead><tr><th>禁令</th><th>原文</th><th>怎么用</th></tr></thead>
+  <tbody>
+    <tr><td><strong>微服务溢价</strong><br>MicroservicePremium</td><td><q>Dont even consider microservices unless you have a system thats too complex to manage as a monolith.</q><br>（<a href="https://martinfowler.com/bliki/MicroservicePremium.html">原文</a>）</td><td>开场先认成本：<q>微服务本身是有溢价的，Fowler 的说法是，除非单体已经复杂到管不动，否则根本不该考虑它。</q></td></tr>
+    <tr><td><strong>单体优先</strong><br>MonolithFirst</td><td><q>Almost all the cases where Ive heard of a system that was built as a microservice system from scratch, it has ended up in serious trouble.</q><br>（<a href="https://martinfowler.com/bliki/MonolithFirst.html">原文</a>）</td><td>被问「新项目你会怎么选」时的标准答案，理由是<strong>边界一开始必然划错</strong></td></tr>
+  </tbody>
+</table>
+
+<div class="callout ext">
+  <span class="label">扩展 · 为什么「边界一开始必然划错」是一条硬约束</span>
+  <p>Fowler：<q>They only work well if you come up with good, stable boundaries between the services ... <strong>Any refactoring of functionality between services is much harder than it is in a monolith.</strong> But even experienced architects working in familiar domains have great difficulty getting boundaries right at the beginning.</q></p>
+  <p>关键在中间那句。在单体里挪一个功能：IDE 一个快捷键，编译器帮你抓出所有引用，几分钟的事。<strong>在微服务里挪同一个功能</strong>：要改两个服务的代码、迁移数据、设计一段过渡期的双写、协调两个团队、分批上线——几周起步。</p>
+  <p>所以微服务的<strong>纠错成本极高</strong>。这才是「单体优先」的真正理由：不是单体更好，而是<strong>在你还不知道边界在哪的时候，选一个改起来便宜的形态</strong>。你们那十个系统能按业务领域稳定分好，很可能正是因为这个领域已经被做熟了。</p>
+</div>
+
+<h2 id="s6">六、边界划在哪</h2>
+
+<p>microservices.io 给了一组可操作的判据。<strong>把它们当成一份对自己系统的体检表</strong>：</p>
+
+<table>
+  <thead><tr><th>判据</th><th>原文</th><th>怎么自查</th></tr></thead>
+  <tbody>
+    <tr><td>高内聚</td><td><q>Implement a small set of strongly related functions</q></td><td>能用一句话说清这个服务「负责什么生意」吗？说不清就是划歪了</td></tr>
+    <tr><td>低耦合</td><td><q>Each service encapsulates its implementation behind an API</q></td><td>别人能绕过你的接口直接读你的库吗？能，就不算</td></tr>
+    <tr><td><strong>团队规模</strong></td><td><q>Small enough for a 6-10 person team to develop and maintain</q></td><td><strong>你们正好是一个团队一个系统</strong>——这条你天然满足</td></tr>
+    <tr><td><strong>自治</strong></td><td><q>Teams can develop and deploy with minimal cross-team coordination</q></td><td><strong>你们那个会正对着这一条。</strong>关键词是 minimal，不是 zero——开会不等于失败，「必须一起上线」才等于失败</td></tr>
+    <tr><td>可独立测试</td><td><q>Services must be independently testable</q></td><td>不启动别的服务，能不能跑完这个服务的测试？</td></tr>
+    <tr><td><strong>稳定</strong></td><td><q>Changes should affect only one service when possible</q></td><td>就是归类练习第 7 条：一个需求平均动几个服务</td></tr>
+  </tbody>
+</table>
+
+<h3>最常见的错拆：按技术分层</h3>
+
+<p>Fowler 讲「围绕业务能力组织」时，点名了这个反面教材：把系统拆成<strong>一个界面服务、一个业务逻辑服务、一个数据访问服务</strong>，由三个专业团队各管一层。</p>
+
+<p>为什么必错？因为<strong>需求是按业务垂直切的，而边界是按技术水平切的，两者永远垂直相交</strong>。加一个字段：界面要改、逻辑要改、数据层也要改，三个团队、三次排期、三次联调。<strong>这就是「一改就要改一串」的根源。</strong></p>
+
+<div class="callout">
+  <span class="label">康威定律：为什么「一个团队一个系统」这件事这么重要</span>
+  <blockquote><p><q>Any organization that designs a system (defined broadly) will produce a design whose structure is a copy of the organization's communication structure.</q><br>—— Melvin Conway, <a href="https://www.melconway.com/Home/Conways_Law.html">How Do Committees Invent?</a>, Datamation, 1968</p></blockquote>
+  <p>翻译成人话：<strong>系统的结构，最终一定会长成组织的结构。</strong>三个技术团队分层协作，就必然产出分层的架构；按业务领域组队，就产出按业务领域划分的架构。</p>
+  <p>所以你说的「每个系统由不同团队负责」不是一句闲话，<strong>它是那十个系统边界能保持稳定的原因</strong>。面试里把这两件事连起来说，含金量很高：<q>我们是按业务领域划分的，而且每个系统对应一个独立团队——这两件事是配套的。按康威定律，组织上划不开，服务边界迟早也守不住。</q></p>
+</div>
+
+<h2 id="s7">七、三段话术</h2>
+
+<div class="script">
+  <span class="label">话术 A · 对应题「微服务运维成本高、交互复杂，为什么还选它」</span>
+  <p><strong>先站到面试官那边（关键的开场）：</strong><q>先说我同意这个前提——微服务是有溢价的。Fowler 的原话是，除非系统已经复杂到用单体管不动，否则不该考虑它。多出来的成本很具体：分布式调用会失败、强一致性变成最终一致性、运维和排查的复杂度上一个台阶。这三笔我们都实打实付过。</q></p>
+  <p><strong>再给唯一的买入理由：</strong><q>付这些成本只为换一件事：<strong>独立部署</strong>，也就是每个团队能按自己的节奏上线，不用等别人。这个收益是随团队数量放大的——一个团队的时候它一文不值，十个团队各管一个业务域的时候，它就是全部。所以我的判断标准是：<strong>拆分解决的是组织问题，不是技术问题。</strong>因为代码乱或者性能不够去拆，基本都会翻车。</q></p>
+  <p><strong>挂上你的真事（版本一 · 如果各系统能独立上线）：</strong><q>我上一个系统就是十个左右的服务，按业务领域划分，每个系统一个团队，库各自独立。需求变更前我们会开一次影响面评估会，把各系统要做的改动列出来——但改完之后各系统是按自己节奏上线的，不需要绑在一起发。</q></p>
+  <p><strong>版本二 · 如果必须一起上线，这样说：</strong><q>……不过我们有个明显的代价：一次需求经常要几个系统同时改，还得排上线顺序。这其实是分布式单体的味道——付了微服务的成本，却没完全买到独立部署这个收益。<strong>如果重来，我会在接口演进上强制向后兼容</strong>，加字段不删字段，让下游可以不跟着一起发。</q></p>
+  <p><strong>为什么这样答强：</strong>先认成本再给理由，比一上来夸微服务可信得多。而「拆分解决的是组织问题」这一句，是<strong>整段的记忆点</strong>。</p>
+</div>
+
+<div class="script">
+  <span class="label">话术 B · 对应题「从单一服务扩展到微服务」（诚实定位型）</span>
+  <p><strong>先划边界，别编：</strong><q>说实话，我进公司的时候那十个系统已经拆好了，<strong>完整的拆分过程我没有亲历过</strong>。我能讲的是在一个已经拆开的系统里做开发和排查是什么体验，以及我从中看到的边界好坏。</q></p>
+  <p><strong>立刻转成判断力（这是全段重点）：</strong><q>如果让我现在去主导一次拆分，我会按这个顺序做。<strong>第一，先确认动机</strong>——如果是嫌代码乱或者性能不够，我不会拆，那两件事在单体里解决更便宜；只有当多个团队互相阻塞、发布要排队，拆分才真正划算。<strong>第二，先补基础设施</strong>——自动化部署、集中日志、链路追踪，这些没有就拆，出了问题只能靠猜。<strong>第三，绞杀者模式</strong>，不做大爆炸重写：在单体前面放一层路由，把一个业务能力先切出去，跑稳了再切下一个，每一步都可以回退。<strong>第四，最难的是数据</strong>——共享库拆开时要经历一段双写和数据迁移，这一步的工作量通常比拆代码大得多。</q></p>
+  <p><strong>收尾用你的经历兜底：</strong><q>我判断边界好坏的标准，是从现在这个系统里学到的：<strong>一个需求平均要动几个服务</strong>。多数需求只动一个，说明边界对了；如果几乎每个需求都要动三四个，那多半是按技术分层拆的，那种拆法一定会这样。</q></p>
+  <p><strong>为什么这样答强：</strong>和 <a href="0005-saga-and-choreography.html#s6">Lesson 05 话术 C</a> 同一招——<strong>承认边界，再展示判断力</strong>。面试官对「没做过」的容忍度，远高于对「编经历被追问三层就崩」的容忍度。</p>
+</div>
+
+<div class="script">
+  <span class="label">话术 C · 对应题「单体 vs 微服务怎么选」「服务边界怎么划」</span>
+  <p><strong>选型的一句话：</strong><q>默认选单体，而且是模块边界清晰的单体。只有当组织规模大到多个团队互相阻塞时，才值得付微服务的溢价。新项目我一定从单体开始，因为边界一开始必然划错，<strong>而在服务之间挪功能，比在单体里挪贵一个数量级</strong>——单体里是一次重构，微服务里是改两个服务、迁数据、做双写过渡、协调两个团队。</q></p>
+  <p><strong>边界怎么划：</strong><q>按业务能力划，不按技术分层划。判据我记四条：一个服务能用一句话说清它负责什么生意；规模大致对得上一个 6 到 10 人的团队；别人只能走它的 API，不能直接读它的库；<strong>以及最实用的一条——大部分需求应该只落在一个服务里</strong>。</q></p>
+  <p><strong>加一句康威定律（收尾拔高）：</strong><q>还有一点容易被忽略：服务边界和团队边界必须是配套的。康威定律说系统结构会长成组织结构的样子，所以如果组织上划不开，服务边界迟早也守不住。我上一个系统正好是一个团队对一个服务，这大概是那十个系统边界能一直稳定的原因。</q></p>
+</div>
+
+<h2 id="s8">八、检验一下</h2>
+
+<p><strong>先在心里说出理由再选。</strong></p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "微服务付出全部成本，换回的根本收益是：",
+    "options": [
+      "系统整体的运行性能得到了显著的提升",
+      "每个服务可以独立部署而不必等待别人",
+      "开发人员能够自由选用各自喜欢的语言",
+      "分布式系统天然具备更强的数据一致性"
+    ],
+    "answer": 1,
+    "why": "Newman：<q>if you create a system architecture with independent deployability, so many benefits flow from that</q>。Fowler 列的三条收益里，技术异构是次要红利、强模块边界在单体里也能靠纪律做到，<strong>只有独立部署是微服务独有且不可替代的</strong>。性能反而变差（远程调用比进程内调用慢几个数量级），一致性更是从强一致退化为最终一致——这两项都在成本栏里。"
+  },
+  {
+    "q": "「分布式单体」这个说法，指的是这样一种系统：",
+    "options": [
+      "服务数量太多导致运维团队难以有效管理",
+      "拆成了多个服务但必须全部一起才能上线",
+      "多个服务共同部署在同一台物理机器上面",
+      "单体应用被复制成多份挂在负载均衡后面"
+    ],
+    "answer": 1,
+    "why": "Newman：<q>a distributed monolith has many services, but everything has to be deployed at the same time</q>。<strong>判据是部署，不是数量、也不是物理位置。</strong>它被称为 <q>the worst of the monoliths</q>，因为它同时具备单体的耦合和分布式的全部麻烦——成本全付了，收益一分没拿到。选项 D 描述的是单体的水平扩容，那是完全正常的做法。"
+  },
+  {
+    "q": "以下哪一个是真正值得启动服务拆分的理由：",
+    "options": [
+      "现有代码结构混乱急需一次彻底的重构",
+      "多个团队互相阻塞发布必须排队等窗口",
+      "某个接口的响应时间已经慢到无法接受",
+      "团队希望尝试更现代的技术栈与新框架"
+    ],
+    "answer": 1,
+    "why": "<strong>拆分解决的是组织问题，不是技术问题。</strong>代码乱（A）拆了只会把编译器能抓的错变成线上才发现的超时；性能问题（C）单体多副本几乎总是更便宜的解法；为技术而技术（D）是纯粹的溢价支出。只有当组织并行度成为瓶颈时，独立部署这个收益才会随团队数量放大到压过成本。"
+  },
+  {
+    "q": "Fowler 主张新项目应当从单体开始，核心理由是：",
+    "options": [
+      "单体架构的运行效率总是优于微服务架构",
+      "服务边界初期必然划错而事后改动代价高",
+      "微服务需要的工具链目前还不够成熟稳定",
+      "小团队根本没有能力维护多个独立的服务"
+    ],
+    "answer": 1,
+    "why": "原文两句连起来看：<q>even experienced architects working in familiar domains have great difficulty getting boundaries right at the beginning</q>，加上 <q>any refactoring of functionality between services is much harder than it is in a monolith</q>。<strong>不是单体更好，而是在你还不知道边界在哪时，选一个改起来便宜的形态。</strong>纠错成本才是论证的核心，性能与工具链都不是。"
+  },
+  {
+    "q": "把系统拆成界面服务、逻辑服务、数据服务，问题在于：",
+    "options": [
+      "这样拆出来的每个服务体积都过于庞大了",
+      "业务需求是纵向的而边界却是横向切开的",
+      "这三个服务之间无法使用消息中间件通信",
+      "这种拆法会导致三个服务共用一个数据库"
+    ],
+    "answer": 1,
+    "why": "需求按业务垂直切，边界按技术水平切，两者永远垂直相交——<strong>于是任何一个需求都必然穿过全部三层</strong>，三个团队、三次排期、三次联调。这正是「一改就要改一串」的根源，也是 Fowler 讲「围绕业务能力组织」时点名的反面教材。体积和通信方式都不是要害；共库是常见的伴随症状，但不是这种拆法的定义性问题。"
+  },
+  {
+    "q": "判断服务边界划得好不好，最实用的日常检验是：",
+    "options": [
+      "统计每个服务的代码行数是否大致均衡",
+      "观察一个需求平均需要改动多少个服务",
+      "检查服务之间是否全部通过消息来通信",
+      "确认每个服务是否都配备了独立的团队"
+    ],
+    "answer": 1,
+    "why": "对应 microservices.io 的判据 <q>changes should affect only one service when possible</q>。<strong>它的好处是不需要任何工具，回忆最近十个需求就能算出来。</strong>代码行数与边界质量无关（业务复杂度本就不均）；通信方式是实现选择；一个服务一个团队是必要条件而非充分条件——按技术分层拆同样可以做到一层一个团队，边界照样是错的。"
+  }
+]'></div>
+
+<h2 id="s9">九、下一课与一个问题</h2>
+
+<p>微服务这条线到这里<strong>主干已经打通</strong>：<a href="0004-microservices-what-actually-changes.html">机制（04）</a> → <a href="0005-saga-and-choreography.html">命名与一致性（05）</a> → 选型与边界（06）。题库里的微服务题现在应该都有得答了。</p>
+
+<p><strong>下一课（Lesson 07）＝ 抢单场景设计题。</strong>这是你自评薄弱排序里的第三位，而且它的两块地基你已经打好了：<a href="0001-composite-index-leftmost-prefix.html">Lesson 01 的部分唯一索引</a>和 <a href="0004-microservices-what-actually-changes.html#s2">Lesson 04 的幂等去重表</a>。会是一节动手课——你要真的写出表结构和那条并发安全的抢单 SQL。</p>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（只看一个的话，看这个）：</strong><br>
+  <a href="https://martinfowler.com/bliki/MicroservicePremium.html">Martin Fowler — Microservice Premium</a>。只有 5 分钟，是「该不该拆」这道题的最短完整论证，那张生产率曲线图值得记在脑子里。<br>
+  想再深一层：<a href="https://martinfowler.com/bliki/MonolithFirst.html">MonolithFirst</a>（新项目该怎么选，含「边界必然划错」的论证）、<a href="https://microservices.io/patterns/decomposition/decompose-by-business-capability.html">Decompose by business capability</a>（第六节那六条判据的出处）、<a href="https://www.melconway.com/Home/Conways_Law.html">Conway — How Do Committees Invent?</a>（1968 年的原文，两页纸）。</p>
+
+  <p><strong>社区（获取智慧，不是知识）：</strong>在 <a href="https://www.reddit.com/r/microservices/">r/microservices</a> 搜 <code>distributed monolith</code>——有大量「我们拆了之后才发现更糟」的真实复盘，比任何文档都更能让你记住第二节那把尺子。</p>
+
+  <div class="nav-links">
+    <a href="0005-saga-and-choreography.html">← Lesson 05：Saga</a>
+    <a href="0004-microservices-what-actually-changes.html">← Lesson 04：四笔开销</a>
+    <a href="../reference/microservices-cheatsheet.html">→ 速查表：微服务</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练，有任何不清楚的直接问我。</strong>这一课只欠我<strong>一个</strong>问题，但它决定话术 A 用哪个版本：<strong>你们那几个系统改完之后，是各自独立上线，还是必须同一个窗口一起发？</strong>（连带着：一个需求典型要动几个系统？）<br>
+    另外还有三笔旧账，方便的话一起回：<strong>①</strong> Lesson 05 第三节「回退接口报 500」，你当年的代码是怎么处理的；<strong>②</strong> Lesson 05 那六道小测错了哪几题；<strong>③</strong> Lesson 04 组件里「超时」和「执行了但响应丢了」，你当时是真觉得难以区分，还是一眼看穿——这决定我要不要给那一块回炉。
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+<script src="../assets/binsort.js"></script>
+<script src="../assets/decision.js"></script>
+</body>
+</html>

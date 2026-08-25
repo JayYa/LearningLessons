@@ -209,8 +209,41 @@
   </tbody>
 </table>
 
+<h2>React 的副作用与清理<span style="font-size:0.72rem;font-family:var(--mono);color:var(--ink-soft);letter-spacing:0.08em;">（第 5 课）</span></h2>
+
+<table>
+  <thead><tr><th style="width:8.5rem">C#</th><th style="width:9rem">对应物</th><th>&#9888; 裂缝</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>Loaded</code> / <code>Unloaded</code><br>构造函数 / <code>Dispose</code></td>
+      <td><code>useEffect(setup)</code><br>与它 <code>return</code> 的 cleanup</td>
+      <td><strong>「配对」的直觉对，「一次性生命周期」的直觉错。</strong>更准的类比是 <code>event += / event -=</code>，而且写在一个<em>会被反复执行</em>的地方：依赖一变，React 先 cleanup 再 setup。官方用词是 <strong>synchronizing</strong>，不是 lifecycle。</td>
+    </tr>
+    <tr>
+      <td><code>using</code> / <code>IDisposable</code></td>
+      <td><code>return () =&gt; { ... }</code></td>
+      <td>作用相同（释放/撤销），<strong>触发时机完全不同</strong>：<code>using</code> 是词法作用域结束时确定性释放；cleanup 由 React 在「依赖变了」或「组件卸载」时调用，<strong>你不控制什么时候</strong>。</td>
+    </tr>
+    <tr>
+      <td><code>CancellationToken</code></td>
+      <td><code>AbortController</code><br>或 <code>let ignore = false</code></td>
+      <td>两条路而非一条：<code>AbortController</code> <strong>真的取消</strong>请求（对应 <code>CancellationToken</code>）；<code>ignore</code> 标记<strong>不取消</strong>，请求照发照回，只是结果被丢弃。后者能生效靠的是<strong>每次渲染有独立闭包</strong>（第 4 课的快照模型）。</td>
+    </tr>
+    <tr>
+      <td>Debug 构建里的额外断言</td>
+      <td><code>&lt;StrictMode&gt;</code> 让 effect 双跑</td>
+      <td>都是「开发期故意加严、生产期消失」。但 StrictMode 检查的东西很特别：<strong>它在测你的 cleanup</strong>。C# 没有对应物 —— 最接近的心态是「Debug 下故意 <code>Dispose</code> 一次再重建，看你有没有写对」。删掉它 = 把体温计摔了。</td>
+    </tr>
+    <tr>
+      <td><code>async void</code> 事件处理器<br>的竞态问题</td>
+      <td><code>useEffect</code> 里手写 fetch<br>的竞态问题</td>
+      <td><strong>这条是可以直接迁移的知识。</strong>两边同样是「多个异步操作在飞，返回顺序不保证，后到的旧结果覆盖新结果」。C# 里你用 <code>CancellationToken</code> 或版本号解决；React 里用 cleanup + <code>ignore</code>。<strong>面试时主动提这个场景，含金量很高。</strong></td>
+    </tr>
+  </tbody>
+</table>
+
 <div class="footer">
-  <p>相关：<a href="glossary.html">术语表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a></p>
+  <p>相关：<a href="glossary.html">术语表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a> · <a href="../lessons/0005-useeffect-and-that-empty-array.html">第 5 课</a></p>
   <div class="ask"><strong>觉得某个类比不对劲？</strong> 说出来 —— 你的 C# 直觉在哪里打滑，往往正是下一课该讲的地方。</div>
 </div>
 

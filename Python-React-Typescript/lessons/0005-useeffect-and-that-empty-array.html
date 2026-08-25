@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 5 课 · useEffect 与那个空数组</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/widgets.css">
+<script src="../assets/widgets.js" defer></script>
+</head>
+<body>
+<main class="page">
+
+<p class="eyebrow">Lesson 0005 · 约 50 分钟</p>
+<h1><code>useEffect</code> 与那个空数组</h1>
+<p class="subtitle">你从第 1 课起就在写 <code>useEffect(..., [])</code>。今天把那对方括号弄清楚 —— 顺便拆掉一个几乎人人都在传、但<strong>经不起实测</strong>的说法。</p>
+
+<div class="block win">
+  <span class="label">本课的收获</span>
+  <p>一句判据：<strong>Effect 是为「因为组件被显示出来」而必须发生的事准备的；由用户动作引起的事，写进事件处理函数。</strong> 做完之后，这四件事你都能讲出原因：那个 <code>[]</code> 到底是什么；为什么开发模式下 effect 跑了两次；<strong>为什么去掉 <code>[]</code> 有时会打爆后端、有时却只多发一个请求</strong>；以及最像加分题的那一问 —— 什么时候<em>根本不该</em>用 Effect。</p>
+</div>
+
+<h2>一、Effect 不是「生命周期钩子」</h2>
+
+<p>先把最容易走偏的那条路堵死。很多教程会说「<code>useEffect(fn, [])</code> 就是 <code>componentDidMount</code>」。<strong>这个类比会在第 4 节把你坑得很惨。</strong>官方文档的定义完全不是这么说的：</p>
+
+<blockquote>
+“<strong>Effects let you specify side effects that are caused by rendering itself, rather than by a particular event.</strong> Sending a message in the chat is an <em>event</em> because it is directly caused by the user clicking a specific button. However, setting up a server connection is an <em>Effect</em> because it should happen no matter which interaction caused the component to appear.”<br>
+“Effects run at the end of a <strong>commit</strong> after the screen updates.”
+<cite>—— <a href="https://react.dev/learn/synchronizing-with-effects">react.dev · Synchronizing with Effects</a></cite>
+</blockquote>
+
+<p>注意这里的分类维度：<strong>不是「什么时候跑」，而是「被什么引起」。</strong></p>
+
+<table>
+  <thead><tr><th style="width:11rem">被什么引起</th><th>写在哪</th></tr></thead>
+  <tbody>
+    <tr><td><strong>某个特定的用户动作</strong><br>点了这个按钮、提交了这个表单</td><td><strong>事件处理函数</strong>。你知道<em>发生了什么</em>，可以精确响应。</td></tr>
+    <tr><td><strong>组件被显示出来这件事本身</strong><br>不管用户是怎么走到这个页面的</td><td><strong>Effect</strong>。它不关心是谁触发的，只关心「现在屏幕上有我，所以外部世界得跟我同步」。</td></tr>
+  </tbody>
+</table>
+
+<div class="block csharp">
+  <span class="label">找 C# 里的参照物 —— 但要找对</span>
+  <p>直觉会让你想到 WPF 的 <code>Loaded</code> / <code>Unloaded</code>，或者构造函数与 <code>Dispose</code> 的配对。<strong>「配对」这个直觉是对的</strong>（下面的 cleanup 就是它），<strong>但「一次性生命周期」这个直觉是错的</strong>。</p>
+  <p>更准的参照物是 <strong><code>event += / event -=</code> 这对订阅动作</strong>，而且是写在一个<em>会被反复执行</em>的地方：每当依赖变了，React 先替你 <code>-=</code>（cleanup），再 <code>+=</code>（setup）。</p>
+  <p style="margin-bottom:0">所以官方用的词不是 lifecycle，是 <strong>synchronizing</strong> —— <strong>把一个外部系统同步到你当前的 state 上</strong>。外部系统是谁？浏览器 DOM、定时器、WebSocket、<strong>你的 FastAPI 后端</strong>。</p>
+</div>
+
+<h2>二、方括号里的三种写法</h2>
+
+<p>只有三种，官方文档把它们并排放在一起，请连着记：</p>
+
+<blockquote>
+<pre><code>useEffect(() =&gt; {
+  // This runs after every render
+});
+
+useEffect(() =&gt; {
+  // This runs only on mount (when the component appears)
+}, []);
+
+useEffect(() =&gt; {
+  // This runs on mount *and also* if either a or b have changed since the last render
+}, [a, b]);</code></pre>
+<cite>—— <a href="https://react.dev/learn/synchronizing-with-effects">react.dev · Synchronizing with Effects</a></cite>
+</blockquote>
+
+<p>关键在于「变了」是怎么判定的 —— <strong>又是 <code>Object.is</code>，又是引用比较</strong>。这正是第 4 课末尾埋下的那颗雷，它马上要在动手环节炸给你看。</p>
+
+<p>顺带说清楚一个反向的事实：<strong>没有依赖数组</strong>不等于「每次点击都跑」，而是「<strong>每次渲染之后</strong>都跑」。上次的追问里我们已经分清了这两件事 —— 点击调用的是 handler，<strong>state 真的变了</strong>才会调用组件函数、才会有渲染、才会有 effect。</p>
+
+<h2>三、拆掉一个流行说法</h2>
+
+<p>你大概率听过这句：「<code>useEffect</code> 里请求数据千万别忘了写 <code>[]</code>，否则会无限循环把后端打爆。」</p>
+
+<p><strong>这句话只对了一半，而且错的那一半更值钱。</strong>我用你这套代码的等价版本实跑了一遍，数的是 fetch 被调用了几次：</p>
+
+<table>
+  <thead><tr><th>effect 怎么写</th><th style="width:7rem">StrictMode</th><th style="width:8rem">请求次数</th></tr></thead>
+  <tbody>
+    <tr><td><code>[]</code> 依赖数组</td><td>关</td><td><strong>1</strong></td></tr>
+    <tr><td><code>[]</code> 依赖数组</td><td>开</td><td><strong>2</strong></td></tr>
+    <tr><td>无依赖数组，<code>setMessage(字符串)</code></td><td>关</td><td><strong>2</strong> ← 不是无限</td></tr>
+    <tr><td>无依赖数组，<code>setMessage(字符串)</code></td><td>开</td><td><strong>3</strong> ← 还是不是无限</td></tr>
+    <tr><td>无依赖数组，<code>setData(对象)</code></td><td>关</td><td><strong>失控</strong>（设了 300 次上限，撞满）</td></tr>
+  </tbody>
+</table>
+
+<p style="font-size:0.86rem;color:#666;">实测环境：React 19.2.8 + react-dom 19.2.8，jsdom。你在第 2、3 步会在真浏览器 + 真 FastAPI 上复现出同样的数字。</p>
+
+<div class="block trap">
+  <span class="label">为什么？把第 4 课那条脚注请出来</span>
+  <p>无依赖数组时，链条是：<strong>渲染 → effect → setState → 渲染 → effect → …</strong> 要让它停下来，只需其中一环断掉。而断点就在 <code>setState</code>：</p>
+  <blockquote style="margin-bottom:0.7rem">
+  “If you update a state variable to the same value as the current state, as determined by an <code>Object.is</code> comparison, <strong>React will skip re-rendering the component.</strong>”
+  <cite>—— <a href="https://react.dev/reference/react/useState">react.dev · useState · Caveats</a></cite>
+  </blockquote>
+  <p>后端每次都返回同一个字符串 <code>"Hello from Python"</code>。第二次 <code>setMessage("Hello from Python")</code> 时，<code>Object.is</code> 判定与当前 state <strong>相同</strong> → 跳过重渲染 → 没有新渲染 → 没有新 effect → <strong>链条自己断了</strong>。</p>
+  <p>但如果你存的是<strong>对象</strong> —— <code>setData(result.data)</code> —— 每次 <code>await res.json()</code> 都产出一个<strong>全新的对象</strong>。内容一模一样，<code>Object.is</code> 却永远判 <code>false</code>（比的是引用，不是内容）。链条永不断裂，<strong>后端被打爆</strong>。</p>
+  <p style="margin-bottom:0"><strong>所以真正的规则不是「别忘了写 <code>[]</code>」，而是「JS 里 <code>{} !== {}</code>」。</strong>这一条会在 React 里咬你至少三次：依赖数组、<code>useEffect</code> 无限循环、state 的不可变更新。</p>
+</div>
+
+<h2>四、为什么开发模式下跑了两次</h2>
+
+<p>你现在的代码写着 <code>[]</code>，理论上「只在挂载时跑一次」。但去看 FastAPI 那个终端 —— <strong>两条请求日志</strong>。这不是 bug：</p>
+
+<blockquote>
+“<strong>In development, React remounts every component once immediately after its initial mount.</strong>”<br>
+“When Strict Mode is on, React remounts each component once in development <strong>to verify that you've implemented cleanup well.</strong>”
+<cite>—— <a href="https://react.dev/learn/synchronizing-with-effects">react.dev · Synchronizing with Effects</a></cite>
+</blockquote>
+
+<p>它是<strong>故意的</strong>，而且是<strong>一个测试</strong>。React 在替你检查：你的 effect 经得起「装上 → 拆掉 → 再装上」吗？这就是为什么 <code>main.tsx</code> 里包着 <code>&lt;StrictMode&gt;</code>，也是为什么它<strong>只在开发模式生效，生产构建不会双跑</strong>。</p>
+
+<p>于是所有人第一反应都是去问「怎么让它只跑一次」。官方文档罕见地直接把这个问题判为无效：</p>
+
+<blockquote>
+“<strong>The right question isn't “how to run an Effect once”, but “how to fix my Effect so that it works after remounting”.</strong>”<br>
+“Usually, the answer is to implement the cleanup function. … The rule of thumb is that <strong>the user shouldn't be able to distinguish between the Effect running once (as in production) and a <em>setup → cleanup → setup</em> sequence</strong> (as you'd see in development).”
+<cite>—— <a href="https://react.dev/learn/synchronizing-with-effects">react.dev · Synchronizing with Effects</a></cite>
+</blockquote>
+
+<p>cleanup 就是你 <code>return</code> 出去的那个函数：</p>
+
+<blockquote>
+“<strong>React will call your cleanup function each time before the Effect runs again, and one final time when the component unmounts.</strong>”<br>
+“‘connect’ needs ‘disconnect’, ‘subscribe’ needs ‘unsubscribe’, and ‘fetch’ needs either <strong>‘cancel’ or ‘ignore’</strong>.”
+<cite>—— <a href="https://react.dev/learn/synchronizing-with-effects">react.dev · Synchronizing with Effects</a></cite>
+</blockquote>
+
+<p>请求已经发出去了，收不回来 —— 所以 fetch 的 cleanup 走「ignore」这条路：<strong>把过期那次请求的结果丢掉</strong>。</p>
+
+<pre><code>useEffect(() =&gt; {
+  let ignore = false;                      <span class="cmt">// ← 这个闭包属于「这一次」effect</span>
+
+  fetchHello().then((result) =&gt; {
+    if (ignore) return;                    <span class="cmt">// ← 我已经过期了，闭嘴</span>
+    <span class="cmt">/* …setState… */</span>
+  });
+
+  return () =&gt; { ignore = true; };         <span class="cmt">// ← cleanup：把上一次标记为过期</span>
+}, []);</code></pre>
+
+<p><strong>看懂这段的关键，正是第 4 课那句话：每次渲染产生全新一批闭包。</strong>每一次 effect 都有<em>它自己的</em> <code>ignore</code>。cleanup 关掉的永远是上一次那个，不会误伤新的那次。这不是新知识，是快照模型的又一个推论。</p>
+
+<div class="block trap">
+  <span class="label">这才是 cleanup 真正解决的问题：竞态</span>
+  <p>StrictMode 的双跑只是让你<em>提前发现</em>问题。真正的杀伤场景是这个：</p>
+  <blockquote style="margin-bottom:0.7rem">
+  “If the <code>userId</code> changes from <code>'Alice'</code> to <code>'Bob'</code>, cleanup ensures that the <strong><code>'Alice'</code> response is ignored even if it arrives after <code>'Bob'</code></strong>.”
+  <cite>—— <a href="https://react.dev/learn/synchronizing-with-effects">react.dev · Synchronizing with Effects</a></cite>
+  </blockquote>
+  <p style="margin-bottom:0">用户快速点了 Alice、又点 Bob。两个请求在飞，<strong>谁先回来是不保证的</strong>。如果 Alice 慢一步回来，屏幕上写着 Bob 的名字、显示着 Alice 的数据 —— 而且不报错、不复现、测试也测不出。这就是 <strong>race condition</strong>，是手写 <code>useEffect</code> 请求数据最经典的生产事故。<br><strong>面试价值极高</strong>：能主动说出这个场景的人，明显比只会背「useEffect 用来发请求」的人多一层。</p>
+</div>
+
+<h2>五、动手</h2>
+
+<p>两个终端开着（<code>fastapi dev</code> 与 <code>pnpm dev</code>）。这一课<strong>你要一直盯着 FastAPI 那个终端</strong> —— 它的访问日志就是本课的测量仪器。全程只改 <code>App.tsx</code>。</p>
+
+<ol class="checklist" data-checklist="0005">
+
+<li>
+<span class="step-title">先建立基线：数一数它请求了几次</span>
+<p>代码一行不改。把 FastAPI 终端清空（<code>cls</code>），然后刷新浏览器。</p>
+<pre><code>INFO:  127.0.0.1:xxxxx - "GET /api/hello HTTP/1.1" 200 OK
+INFO:  127.0.0.1:xxxxx - "GET /api/hello HTTP/1.1" 200 OK</code></pre>
+<p><strong>两条。</strong>你写着 <code>[]</code>，它却跑了两次 —— 这就是 StrictMode 在替你做那个「拆了再装」的测试。</p>
+<p>去 <code>main.tsx</code> 看一眼，那个 <code>&lt;StrictMode&gt;</code> 是 Vite 模板默认包上的。<strong>别删它</strong>，删掉只是把问题藏起来。</p>
+</li>
+
+<li>
+<span class="step-title">删掉 <code>[]</code> —— 先预测，再看</span>
+<p>把 <code>useEffect(..., []);</code> 结尾的 <code>, []</code> 删掉，变成 <code>useEffect(() =&gt; { ... });</code>。保存前先回答：</p>
+
+<div class="widget predict">
+  <p class="widget-kind">先预测 · 别偷看</p>
+  <p class="predict-prompt">删掉依赖数组后刷新页面，FastAPI 终端里会出现<strong>几条</strong>请求日志？</p>
+  <div class="predict-answer" hidden>
+    <p><strong>3 条，然后停下来。</strong>不是无限循环。<br>如果你预测的是「无限」—— 你答的是网上流传最广的那个版本，而它<strong>不准确</strong>。原因在第三节：后端每次返回同一个字符串，<code>Object.is</code> 判定 state 没变，React 跳过重渲染，链条自己断了。<br>（<code>[]</code> 时是 2 次，去掉后是 3 次 —— 多出来的那一次，就是「effect 引起的那轮额外渲染」。）</p>
+  </div>
+</div>
+<p>保存，刷新，数日志。数完<strong>先别改回去</strong>，下一步还要用。</p>
+</li>
+
+<li>
+<span class="step-title">同样是没有 <code>[]</code>，这次真的打爆它</span>
+<p>依赖数组仍然不要。只把存字符串改成<strong>存整个对象</strong>：</p>
+<pre><code>const [data, setData] = useState&lt;{ message: string } | null&gt;(null);
+
+useEffect(() =&gt; {
+  fetchHello().then((result) =&gt; {
+    if (result.success) setData(result.data);     <span class="cmt">// ← 每次都是一个新对象</span>
+  });
+});                                               <span class="cmt">// ← 依然没有依赖数组</span>
+
+<span class="cmt">// h1 改成：</span>
+&lt;h1&gt;{data?.message ?? "加载中…"}&lt;/h1&gt;</code></pre>
+<p>保存。<strong>盯着 FastAPI 终端。</strong>日志开始瀑布式滚动，停不下来。</p>
+<p><strong>看够十秒就把浏览器标签页关掉</strong>（这是最快的止血方式），然后把这一步的改动撤销，<code>, []</code> 也加回去，确认日志恢复正常。</p>
+<p>同一个「没有依赖数组」，第 2 步温和、第 3 步失控。<strong>差别只有一个：<code>Object.is</code> 比的是引用。</strong>后端返回的 JSON 内容完全一样，但 <code>await res.json()</code> 每次都造一个新对象 —— 内容相同，引用不同，React 认定「变了」，于是永远转下去。</p>
+<p><em>这一步是本课最值钱的十秒钟。真实项目里把后端打爆的，几乎都是这个形状。</em></p>
+</li>
+
+<li>
+<span class="step-title">让 lint 说话 —— 注意它的语气</span>
+<p>回到有 <code>[]</code> 的版本，制造一个「依赖漏了」的情形。加个 state 并在 effect 里读它：</p>
+<pre><code>const [suffix] = useState("!");
+
+useEffect(() =&gt; {
+  fetchHello().then((result) =&gt; {
+    if (result.success) setMessage(result.data.message + suffix);   <span class="cmt">// ← 读了 suffix</span>
+  });
+}, []);                                                             <span class="cmt">// ← 却没申报</span></code></pre>
+<p>跑 <code>pnpm lint</code>：</p>
+<pre><code>warning react-hooks(exhaustive-deps): React Hook useEffect has
+missing dependencies: 'suffix' help: Either include it or remove
+the dependency array.</code></pre>
+<p><strong>请注意那个词是 <code>warning</code>，不是 <code>error</code>。</strong>命令照样退出 0，CI 不会拦你。回想第 4 课：把 hook 写进 <code>if</code> 是 <code>error</code>。</p>
+<p>这个差别是有意的，也是很好的面试谈资：<strong>Rules of Hooks 是纪律（违反必错），exhaustive-deps 是建议（违反通常错，但存在合理例外）。</strong>看完把 <code>suffix</code> 删掉。</p>
+</li>
+
+<li>
+<span class="step-title">写一次 cleanup，亲眼看到 setup → cleanup → setup</span>
+<p>把 effect 改成带 cleanup 的完整形态，并加三行 <code>console.log</code>：</p>
+<pre><code>useEffect(() =&gt; {
+  let ignore = false;
+  console.log("① setup");
+
+  fetchHello().then((result) =&gt; {
+    if (ignore) { console.log("③ 结果被丢弃"); return; }
+    if (result.success) setMessage(result.data.message);
+    else setMessage("数据格式不对：" + z.prettifyError(result.error));
+  });
+
+  return () =&gt; { ignore = true; console.log("② cleanup"); };
+}, []);</code></pre>
+<p>刷新，看 Console。顺序是 <strong>① setup → ② cleanup → ① setup</strong>，中间还夹着一条 <strong>③ 结果被丢弃</strong>。</p>
+<p>这就是 StrictMode 那个测试的全过程 —— <strong>而你通过了</strong>：第一次那个请求的结果被正确地丢掉了，界面上只反映最后一次。</p>
+<p>把 <code>console.log</code> 删掉，<strong><code>ignore</code> 那套留着</strong>。它现在是这段代码的正确写法，不是练习。</p>
+</li>
+
+<li>
+<span class="step-title">最后一步：删掉一个不该存在的 Effect</span>
+<p>假设要显示「消息有多少个字」。先按<strong>错误</strong>的方式写 —— 这是新手最常见的 Effect 误用：</p>
+<pre><code>const [length, setLength] = useState(0);
+useEffect(() =&gt; { setLength(message.length); }, [message]);   <span class="cmt">// ← 多余的一轮渲染</span></code></pre>
+<p>它能跑，但每次 <code>message</code> 变化都要<strong>多渲染一轮</strong>：渲染 → 提交到 DOM → 跑 effect → setState → 再渲染一轮。用户会看到一瞬间的旧长度。</p>
+<p>现在把上面两行全部删掉，换成一行：</p>
+<pre><code>const length = message.length;   <span class="cmt">// 就这样。不需要 state，不需要 Effect。</span></code></pre>
+<p>它自动就是对的 —— 因为组件函数在 <code>message</code> 变化时本来就会被重新调用（第 4 课）。<strong>能在渲染中算出来的东西，不要放进 state。</strong></p>
+<p>收尾：<code>pnpm lint</code> 与 <code>pnpm build</code> 都应零错误，页面显示 <code>Hello from Python</code> + 能加 3 的按钮，刷新时 FastAPI 恰好两条日志。</p>
+<div class="block win">
+  <span class="label">你现在拥有的</span>
+  <p>你亲手让后端被打爆过一次，也亲手让它停下来过。你知道那两次的区别<strong>不在 <code>useEffect</code>，而在 <code>Object.is</code></strong>。这个区别，网上大多数教 <code>useEffect</code> 的文章都没说对。</p>
+</div>
+</li>
+
+</ol>
+
+<h2>六、你可能根本不需要 Effect</h2>
+
+<p>第 6 步不是收尾彩蛋，它指向 React 官方文档里少见的一整篇<strong>反模式指南</strong>。开篇就点名两种情况：</p>
+
+<blockquote>
+“<strong>You don't need Effects to transform data for rendering.</strong> … If your Effect <em>also</em> immediately updates the state, this restarts the whole process from scratch!”<br>
+“<strong>You don't need Effects to handle user events.</strong> … By the time an Effect runs, <strong>you don't know <em>what</em> the user did</strong> (for example, which button was clicked).”
+<cite>—— <a href="https://react.dev/learn/you-might-not-need-an-effect">react.dev · You Might Not Need an Effect</a></cite>
+</blockquote>
+
+<p>第二条那句理由特别漂亮，值得背下来：<strong>Effect 跑起来的时候，「是谁触发的」这个信息已经丢了。</strong>它只知道「渲染完成了」。所以凡是需要知道「用户干了什么」的逻辑，写在 Effect 里天然就是残缺的。</p>
+
+<p>整篇文章可以压成一条判据：</p>
+
+<blockquote>
+“<strong>When you're not sure whether some code should be in an Effect or in an event handler, ask yourself <em>why</em> this code needs to run. Use Effects only for code that should run <em>because</em> the component was displayed to the user.</strong>”
+<cite>—— <a href="https://react.dev/learn/you-might-not-need-an-effect">react.dev · You Might Not Need an Effect</a></cite>
+</blockquote>
+
+<p>问「<strong>为什么</strong>要跑」，不是问「<strong>什么时候</strong>跑」。答案是「因为组件被显示出来了」→ Effect；答案是「因为用户点了那个按钮」→ 事件处理函数。</p>
+
+<h2>七、检验一下</h2>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 1 / 5</p>
+  <p class="quiz-q">删掉依赖数组后，effect 里 <code>setMessage("同一个字符串")</code>，结果是：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>多请求一次之后自己停下，不会失控</button></li>
+    <li><button>立刻进入无限循环，请求会不断发出去</button></li>
+    <li><button>完全不受影响，请求次数和写空数组一样</button></li>
+    <li><button>首次渲染直接报错，React 会拦截这种写法</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>实测：<code>[]</code> 时 2 次，删掉后 3 次，<strong>然后停</strong>。<br>因为 <code>Object.is</code> 判定新旧 state 相同时，<strong>React 跳过重渲染</strong> —— 没有渲染就没有下一次 effect，链条断了。<br>「忘了写 <code>[]</code> 就会无限循环」是个流传很广但不准确的说法。真正的变量是<strong>你 <code>setState</code> 传的是不是一个新引用</strong>。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 2 / 5</p>
+  <p class="quiz-q">同样删掉依赖数组，改成 <code>setData(result.data)</code> 就失控了，因为：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>每次解析出的是新对象，引用比较永不相等</button></li>
+    <li><button>对象类型的 state 会被 React 深度比较，开销更大</button></li>
+    <li><button>解析 JSON 是异步的，异步更新无法被批处理合并</button></li>
+    <li><button>对象放进 state 会绕过依赖数组，强制触发渲染</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p><code>await res.json()</code> 每次都产出一个<strong>全新的对象</strong>。内容一模一样，但 <code>Object.is</code> 比的是<strong>引用</strong>，永远判 <code>false</code> → 每次都重渲染 → 每次都跑 effect → 死循环。<br>「React 会深度比较」是个危险的误解：<strong>React 从不深比较</strong>，依赖数组、<code>Object.is</code>、<code>memo</code> 全都是浅比较。记住 <code>{} !== {}</code>，你会少踩很多坑。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 3 / 5</p>
+  <p class="quiz-q">开发模式下 effect 跑了两次。正确的应对是：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>写好 cleanup，让重挂载也能得到正确结果</button></li>
+    <li><button>移除 StrictMode，让开发行为与生产环境保持一致</button></li>
+    <li><button>用一个 ref 做标记位，确保逻辑只会执行一次</button></li>
+    <li><button>把依赖数组留空，React 就只会在挂载时执行</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>官方原话：<strong>“The right question isn't ‘how to run an Effect once’, but ‘how to fix my Effect so that it works after remounting’.”</strong><br>双跑是 React <strong>故意</strong>安排的一次测试，检查你的 cleanup 写没写对。删掉 StrictMode 或加 ref 标记位都只是把体温计摔了 —— 真正的 bug（竞态）在生产环境照样发生，只是更难复现。<br>最后一个选项本身就是错的：<strong>写了 <code>[]</code> 在开发模式下依然跑两次</strong>，你第 1 步已经亲眼见过。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 4 / 5</p>
+  <p class="quiz-q">fetch 的 cleanup 里那个 <code>let ignore = false</code> 之所以有效，是因为：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>每次 effect 都有属于自己那一次的独立闭包</button></li>
+    <li><button>React 会在重新执行前把该变量自动重置为初值</button></li>
+    <li><button>它被提升到了组件外部，所有渲染共享同一份</button></li>
+    <li><button>cleanup 函数运行时会中止尚未完成的网络请求</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>这是<a href="0004-what-is-react-state.html">第 4 课</a>快照模型的直接推论：<strong>每次渲染产生全新一批闭包</strong>。第 N 次 effect 的 <code>ignore</code> 和第 N+1 次的是两个不同的变量，所以 cleanup 只会让<em>过期的那一次</em>闭嘴，不会误伤新的。<br>最后一个选项是常见混淆：<code>ignore</code> <strong>并不取消请求</strong>，请求照发照回，只是结果被丢弃。想真的取消得用 <code>AbortController</code>。官方说的是 “fetch needs either <strong>cancel or ignore</strong>” —— 两条路。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 5 / 5</p>
+  <p class="quiz-q">判断一段逻辑该不该写进 Effect，标准是：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>它是否因为组件被显示出来而必须发生</button></li>
+    <li><button>它是否需要在页面完成渲染之后才能够执行</button></li>
+    <li><button>它是否会去读取或者修改组件之外的任何状态</button></li>
+    <li><button>它是否包含无法在渲染过程中同步完成的操作</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>判据是「<strong>为什么</strong>要跑」，不是「<strong>什么时候</strong>跑」。因为组件被显示出来 → Effect；因为用户点了某个按钮 → 事件处理函数。<br>官方给的理由很硬：<strong>Effect 跑起来时，「是谁触发的」这个信息已经丢了</strong> —— 它不知道用户点的是哪个按钮。<br>其余选项描述的都是 Effect 的<em>表现</em>（跑在渲染之后、涉及外部系统）。把表现当判据，就会写出那种「用 Effect 把 A 同步到 B」的多余代码。</p>
+  </div>
+</div>
+
+<div class="widget recall">
+  <p class="widget-kind">回忆练习 · 出声说，别只在心里过</p>
+  <p class="recall-prompt">合上这一页，<strong>连着讲 60 秒</strong>：<br>（1）「忘了写 <code>[]</code> 就会无限循环」这句话哪里不准确？用你第 2、3 步数出来的数字讲；<br>（2）StrictMode 为什么要跑两次，它在替你测什么？<br>（3）第 4 课的「快照」怎么解释 <code>ignore</code> 那个变量能生效？</p>
+  <button class="recall-btn">先出声回答，再点开</button>
+  <div class="recall-answer" hidden>
+    <p><strong>(1)</strong> 无依赖数组时链条是「渲染 → effect → setState → 渲染」。能不能停，取决于 <code>setState</code> 那一环断不断得掉。传字符串且内容相同时，<code>Object.is</code> 判相等，React 跳过重渲染 → 停（实测 3 次）。传对象时每次都是新引用，永远判不等 → 失控。<strong>真正的规则是「引用比较」，不是「别忘了写方括号」。</strong></p>
+    <p><strong>(2)</strong> 开发模式下 React 故意把每个组件挂载后立刻重挂载一次，用来检验 cleanup 写对了没有 —— 判据是「用户不应该能区分『跑一次』和『setup → cleanup → setup』」。生产构建不会双跑。正确应对是补 cleanup，不是删 StrictMode。</p>
+    <p><strong>(3)</strong> 每次渲染都产生全新一批闭包，所以第 N 次 effect 里的 <code>ignore</code> 是它<em>专属</em>的变量。cleanup 把它置为 <code>true</code>，只会让第 N 次那个尚未返回的请求闭嘴，不影响第 N+1 次。<br><em>这就是为什么第 4 课必须先学：本课一半的内容是它的推论。</em></p>
+  </div>
+</div>
+
+<h2>八、面试回答模板</h2>
+
+<div class="block interview">
+  <span class="label">如果面试官问：“<code>useEffect</code> 是干什么的？” / “依赖数组有什么用？”</span>
+  <p>“<code>useEffect</code> 是用来把<strong>外部系统同步到当前 state</strong> 的，不是生命周期钩子。判据是问『这段代码<strong>为什么</strong>要跑』—— 因为组件被显示出来了，就用 Effect；因为用户点了某个按钮，就写进事件处理函数。<strong>Effect 跑的时候已经不知道用户干了什么了</strong>，所以事件逻辑放进去天然是残缺的。<br>依赖数组三种形态：不写 = 每次渲染后都跑；<code>[]</code> = 只在挂载时；<code>[a, b]</code> = 挂载时 + a 或 b 变化时。比较用的是 <strong><code>Object.is</code>，浅比较</strong>。<br>我自己实测过一件事：大家都说『忘了写 <code>[]</code> 会无限循环』，<strong>这不准确</strong>。如果 effect 里 set 的是同一个字符串，<code>Object.is</code> 判相等，React 跳过重渲染，多发一个请求就停了；但如果 set 的是 <code>await res.json()</code> 出来的<strong>对象</strong>，每次都是新引用，才会真的把后端打爆。<strong>根因是引用比较，不是方括号。</strong><br>还有 cleanup。开发模式下 StrictMode 会故意让 effect 跑两次，目的是<strong>测你 cleanup 写没写对</strong> —— 正确做法是补 cleanup，不是去掉 StrictMode。fetch 的 cleanup 用一个 <code>ignore</code> 标记丢弃过期结果，它能生效是因为<strong>每次渲染都有自己的闭包</strong>。真正要防的不是双跑，是<strong>竞态</strong>：用户先点 Alice 再点 Bob，如果 Alice 的响应后到，屏幕上就会是 Bob 的标题配 Alice 的数据。”</p>
+  <p style="margin-top:0.7rem;font-size:0.86rem;">两个分水岭句子：<strong>「根因是引用比较，不是方括号」</strong>和<strong>「真正要防的是竞态」</strong>。前者证明你实际调试过，后者证明你想过生产环境。背文档的人给不出这两句。</p>
+</div>
+
+<h2>九、去读原始资料</h2>
+
+<p><strong>本课首选阅读：</strong><a href="https://react.dev/learn/synchronizing-with-effects">react.dev · Synchronizing with Effects</a>（约 15 分钟）。请特别读 <em>How to handle the Effect firing twice in development</em> 那一节，它把聊天室连接、订阅、fetch 三类 cleanup 各演示了一遍。</p>
+
+<p><strong>紧接着读：</strong><a href="https://react.dev/learn/you-might-not-need-an-effect">react.dev · You Might Not Need an Effect</a>（约 20 分钟）。<strong>这是整个 React 文档里性价比最高的一篇</strong>，通篇是「你以为要用 Effect，其实不用」的对照案例。哪怕只读结尾的 <em>Recap</em> 八条也值。<strong>「什么时候不该用 useEffect」是高频面试加分题</strong>，能立刻把你和只会用的人区分开。</p>
+
+<p><strong>如果还有余力：</strong><a href="https://react.dev/reference/react/useEffect">react.dev · useEffect 参考</a>的 <em>Caveats</em>，以及 <a href="https://react.dev/learn/lifecycle-of-reactive-effects">Lifecycle of Reactive Effects</a> —— 后者提出了一个很好的视角：<strong>不要按组件的生命周期去想 effect，要按 effect 自己的「开始同步 / 停止同步」去想。</strong></p>
+
+<div class="footer">
+  <h2>相关文档</h2>
+  <ul>
+    <li><a href="../reference/glossary.html">术语表</a> —— 本课引入：Effect、dependency array、cleanup function、StrictMode、commit、race condition、<code>Object.is</code>、exhaustive-deps</li>
+    <li><a href="../reference/csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> —— 本课引入：副作用与资源清理（<code>IDisposable</code> / <code>event -=</code> vs cleanup）</li>
+    <li><a href="0001-two-processes-one-wire.html">第 1 课</a> · <a href="0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="0003-guard-the-boundary.html">第 3 课</a> · <a href="0004-what-is-react-state.html">第 4 课</a></li>
+    <li><a href="../RESOURCES.md">RESOURCES.md</a> · <a href="../MISSION.md">MISSION.md</a></li>
+  </ul>
+
+  <h2>下一课</h2>
+  <p><strong>第 6 课：不可变更新与 <code>key</code></strong> —— <code>Object.is</code> 这一课已经咬了你两次，第三次就在前面：为什么 <code>arr.push(x); setArr(arr)</code> 界面纹丝不动？为什么列表渲染必须给 <code>key</code>，用数组下标当 key 又会出什么事？这两个问题的答案是同一个，而且都是面试必问。</p>
+
+  <div class="ask">
+    <strong>我是你的老师，随时提问。</strong> 本课刻意压住没展开的：<code>useEffect</code> 的回调为什么不能直接写成 <code>async</code>？<code>AbortController</code> 取消请求和 <code>ignore</code> 该选哪个？为什么真实项目里数据请求大多不手写 <code>useEffect</code>，而是用 TanStack Query 这类库（<strong>面试常问「你们怎么管理服务端状态」</strong>）？<code>useEffect</code> vs <code>useLayoutEffect</code>？—— 想跳过顺序直接问，也随时可以。
+  </div>
+</div>
+
+</main>
+</body>
+</html>

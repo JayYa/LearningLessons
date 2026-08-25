@@ -1,6 +1,6 @@
 # 📘 Learning Lessons
 
-本仓库收录五门独立课程，其中三门围绕 .NET 技术栈展开：`Morden .NET` 沿 C# 8 到 15 的每一次语法升级梳理语言演进，`DotNET Platform` 下沉到 SDK 项目系统、CoreCLR 运行时、GC、依赖注入与配置体系，两者互为语言层与平台层的对照；`BeiGene` 是一份面试向的数据库索引专题，聚焦联合索引最左前缀与索引失效场景。`Python-React-Typescript` 从 C# 背景出发，以前后端两个进程如何联通为切入点，配合语言对照表跨入 Python 与 TypeScript 生态。`Build an Agent` 独立成篇，讲 AI Agent 的工具调用、记忆管理、任务编排与多智能体协作。各课程按需选读，共享同一方法论——从表层 API 下沉到底层机制。
+本仓库收录五门独立课程，其中三门围绕 .NET 技术栈展开：`Morden .NET` 沿 C# 8 到 15 的每一次语法升级梳理语言演进，`DotNET Platform` 下沉到 SDK 项目系统、CoreCLR 运行时、GC、依赖注入与配置体系，两者互为语言层与平台层的对照；`BeiGene` 是一份面试向的综合专题，从联合索引与索引失效讲到排序与 Top-K 算法，再到微服务拆分、Saga 与服务边界。`Python-React-Typescript` 从 C# 背景出发，以前后端两个进程如何联通为切入点，配合语言对照表跨入 Python 与 TypeScript 生态。`Build an Agent` 独立成篇，讲 AI Agent 的工具调用、记忆管理、任务编排与多智能体协作。各课程按需选读，共享同一方法论——从表层 API 下沉到底层机制。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
@@ -12,6 +12,7 @@
 | 2 | [第 2 课 · TypeScript 不是 C#](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0002-typescript-is-not-csharp.html) | 从 C# 类型系统的心智出发，辨析 TypeScript 结构化类型与鸭子类型带来的本质差异 |
 | 3 | [第 3 课 · 在边界上立一道检查](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0003-guard-the-boundary.html) | 讲解如何在前后端边界上做数据校验，用运行时检查守住类型系统覆盖不到的地方 |
 | 4 | [第 4 课 · React 的状态到底是什么](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0004-what-is-react-state.html) | 讲清 React 状态的本质：它不是变量而是一次重新渲染的触发器，以及何时该把数据放进状态 |
+| 5 | [第 5 课 · useEffect 与那个空数组](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0005-useeffect-and-that-empty-array.html) | 讲透 useEffect 的执行时机与依赖数组，说清那个空数组到底意味着什么、又会埋下哪些坑 |
 
 **参考资料：**
 - [参考 · C# ↔ Python / TypeScript 对照表](https://JayYa.github.io/LearningLessons/Python-React-Typescript/reference/csharp-rosetta.html) — 以 C# 为锚点对照 Python 与 TypeScript 的语法与惯用法
@@ -26,11 +27,12 @@
 | 3 | [Lesson 03 · 四种排序，一句话 + 一个动画就懂](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0003-how-each-sort-actually-works.html) | 用一句话概括加动画演示，直观理解冒泡、选择、插入与快速排序的核心逻辑 |
 | 4 | [Lesson 04 · 微服务：一次方法调用变成一次网络调用](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0004-microservices-what-actually-changes.html) | 讲解单体应用拆分为微服务后，方法调用变为网络调用带来的延迟、失败与一致性代价 |
 | 5 | [Lesson 05 · 你已经做过 Saga 了，只是没人告诉你它叫这个名字](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0005-saga-and-choreography.html) | 从日常业务补偿逻辑切入讲 Saga 模式，辨析编排式与协同式两种跨服务事务一致性方案 |
+| 6 | [Lesson 06 · 该不该拆，边界划在哪——以及那个会议的含义](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0006-should-you-split-and-where.html) | 讨论微服务该不该拆、边界如何划分，把服务切分决策还原成组织与业务职责的问题 |
 
 **参考资料：**
 - [速查表 · 排序、选择、Top-K 与外部排序（C#）](https://JayYa.github.io/LearningLessons/BeiGene/reference/algo-cheatsheet.html) — 排序、选择、Top-K 与外部排序算法速查
 - [Reference · 索引与 SQL 优化速查表](https://JayYa.github.io/LearningLessons/BeiGene/reference/db-index-cheatsheet.html) — 数据库索引设计与 SQL 优化常用手法速查
-- [速查表 · 微服务：四笔开销](https://JayYa.github.io/LearningLessons/BeiGene/reference/microservices-cheatsheet.html) — 微服务架构下延迟、失败、序列化与一致性四类新增开销速查
+- [速查表 · 微服务](https://JayYa.github.io/LearningLessons/BeiGene/reference/microservices-cheatsheet.html) — 微服务架构下延迟、失败、序列化与一致性四类新增开销速查
 
 ## Build an Agent
 

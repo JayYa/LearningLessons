@@ -216,11 +216,55 @@
       <td><strong>Fragment</strong></td>
       <td><code>&lt;&gt;...&lt;/&gt;</code>。JSX 必须返回<strong>单个</strong>根节点，Fragment 是一个不产生真实 DOM 元素的空壳包装，专用于满足这条规定。</td>
     </tr>
+    <tr>
+      <td><strong>Batching</strong><br>批处理</td>
+      <td>一次事件里的多次 <code>setState</code> 被<strong>合并成一次重新渲染</strong>。<strong>与「三次只加一」是两件事</strong>：那个讲的是<em>算出什么值</em>（快照），这个讲的是<em>渲染几次</em>。改成 updater 后数字变成 3，但组件函数仍只被调用一次。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>React 的副作用</h2>
+
+<table>
+  <thead><tr><th style="width:11rem">术语</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Effect</strong><br>副作用</td>
+      <td>由<strong>渲染本身</strong>（而非某个特定事件）引起的副作用。判据是问「这段代码<strong>为什么</strong>要跑」：因为组件被显示出来了 → Effect；因为用户点了某个按钮 → 事件处理函数。<strong>不是生命周期钩子</strong>，官方的词是 <em>synchronizing</em>：把外部系统同步到当前 state。<a href="https://react.dev/learn/synchronizing-with-effects">react.dev</a></td>
+    </tr>
+    <tr>
+      <td><strong>Commit</strong><br>提交</td>
+      <td>React 把算出来的 UI 描述实际写进 DOM 的那一步。<strong>Effect 在 commit 之后、屏幕更新之后才跑。</strong>渲染 → commit → effect，这个顺序解释了为什么「用 Effect 算派生数据」会多出一轮渲染。</td>
+    </tr>
+    <tr>
+      <td><strong>Dependency array</strong><br>依赖数组</td>
+      <td>三种形态：<strong>不写</strong> = 每次渲染后都跑；<strong><code>[]</code></strong> = 只在挂载时；<strong><code>[a, b]</code></strong> = 挂载时 + a 或 b 变化时。「变了」用 <code>Object.is</code> <strong>浅比较</strong>判定。</td>
+    </tr>
+    <tr>
+      <td><strong>Cleanup function</strong><br>清理函数</td>
+      <td>effect <code>return</code> 出去的那个函数。React 在<strong>每次重新执行 effect 之前</strong>、以及<strong>组件卸载时</strong>调用它。配对口诀：connect ↔ disconnect，subscribe ↔ unsubscribe，<strong>fetch ↔ cancel 或 ignore</strong>。</td>
+    </tr>
+    <tr>
+      <td><strong>StrictMode</strong><br>严格模式</td>
+      <td>开发模式下 React <strong>故意</strong>把每个组件挂载后立刻重挂载一次，用来检验你的 cleanup 写对了没有。<strong>生产构建不会双跑。</strong>正确应对是补 cleanup，而不是删掉 <code>&lt;StrictMode&gt;</code>。判据：用户不应该能区分「跑一次」和「setup → cleanup → setup」。</td>
+    </tr>
+    <tr>
+      <td><strong>Race condition</strong><br>竞态</td>
+      <td>两个请求同时在飞，<strong>返回顺序不保证</strong>。先点 Alice 再点 Bob，若 Alice 的响应后到，屏幕就是 Bob 的标题配 Alice 的数据。不报错、难复现。这是 cleanup 真正要防的东西，StrictMode 双跑只是让你提前发现它。</td>
+    </tr>
+    <tr>
+      <td><strong><code>Object.is</code></strong></td>
+      <td>React 判断「变没变」用的唯一标尺，贯穿 state、依赖数组、<code>memo</code>。<strong>永远是浅比较，React 从不深比较。</strong>记住 <code>{} !== {}</code> —— <code>await res.json()</code> 每次都是新对象，这是 <code>useEffect</code> 无限循环的真正根因。</td>
+    </tr>
+    <tr>
+      <td><strong>exhaustive-deps</strong></td>
+      <td>lint 规则：effect 里读到的每个响应式值都应申报进依赖数组。<strong>它是 <code>warning</code>，不是 <code>error</code></strong>（<code>pnpm lint</code> 仍退出 0）。对比上一节的 <strong>Rules of Hooks</strong> 是 <code>error</code> —— <strong>一个是纪律，一个是建议。</strong></td>
+    </tr>
   </tbody>
 </table>
 
 <div class="footer">
-  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a></p>
+  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a> · <a href="../lessons/0005-useeffect-and-that-empty-array.html">第 5 课</a></p>
   <div class="ask"><strong>有词条不清楚？</strong> 问我，我会把解释补进这份文档 —— 它会跟着课程一起长大。</div>
 </div>
 

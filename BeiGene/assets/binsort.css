@@ -1,0 +1,66 @@
+/* Styles for the binsort.js component. Load after lesson.css. */
+
+.binsort {
+  border: 1px solid var(--rule);
+  background: #fff;
+  padding: 1.2rem 1.4rem 0.8rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.bs-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+.bs-head .label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.bs-score { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); }
+
+.bs-list { margin: 0; padding-left: 1.5rem; }
+.bs-item { margin: 0.9rem 0 1.1rem; padding-left: 0.2rem; }
+.bs-item::marker { font-family: var(--mono); font-size: 0.8rem; color: var(--ink-soft); }
+
+.bs-text { margin: 0 0 0.5rem; font-size: 0.95rem; line-height: 1.5; }
+
+.bs-opts { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.bs-opt {
+  font-family: var(--serif);
+  font-size: 0.85rem;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.25rem 0.9rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+.bs-opt:hover:not(:disabled) { border-color: var(--ink-soft); background: var(--code-bg); }
+.bs-opt:disabled { cursor: default; opacity: 0.55; }
+.bs-opt.picked-right { opacity: 1; border-color: var(--good); background: var(--good-soft); color: var(--good); }
+.bs-opt.picked-wrong { opacity: 1; border-color: var(--bad); background: var(--bad-soft); color: var(--bad); text-decoration: line-through; }
+.bs-opt.was-right { opacity: 1; border-color: var(--good); border-style: dashed; color: var(--good); }
+
+.bs-why { display: none; }
+.bs-why.show {
+  display: block;
+  margin-top: 0.55rem;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  border-left: 3px solid var(--rule);
+  background: var(--code-bg);
+}
+.bs-why.show.good { border-left-color: var(--good); background: var(--good-soft); }
+.bs-why.show.bad  { border-left-color: var(--bad);  background: var(--bad-soft); }
+
+@media print {
+  .bs-opts { display: none; }
+  .bs-why { display: block !important; margin-top: 0.4rem; }
+}

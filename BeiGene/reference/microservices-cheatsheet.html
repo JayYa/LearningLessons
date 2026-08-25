@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>速查表 · 微服务：四笔开销</title>
+<title>速查表 · 微服务</title>
 <link rel="stylesheet" href="../assets/lesson.css">
 </head>
 <body>
@@ -115,6 +115,8 @@
 
 <h2>8 · Saga 与补偿事务</h2>
 
+<p><strong>词源</strong>（面试可直接引用）：Saga <strong>不是缩写</strong>，就是古诺尔斯语的「长篇叙事」。出处是 Garcia-Molina &amp; Salem, <a href="https://dl.acm.org/doi/10.1145/38713.38742"><em>Sagas</em></a>, ACM SIGMOD 1987，解的是单库里长事务（LLT）占锁的问题，<strong>与微服务无关</strong>；2010 年代才被借来做跨服务一致性。隐喻是精确的：长故事拆成一章一章（子事务各自提交、当场放锁），中途讲不下去时没法「当这本书没写过」，只能<strong>再补写几章把情节撤销</strong>——那就是补偿事务。</p>
+
 <p><strong>Saga</strong>：一串本地事务；任一步失败，就<strong>逆序</strong>执行前面各步的<strong>补偿事务</strong>去撤销。补偿由开发者手写，<em>不是</em> ACID 的自动回滚（<a href="https://microservices.io/patterns/data/saga.html">microservices.io</a>）。</p>
 
 <table>
@@ -165,10 +167,64 @@
   <p><q>同步接口，走 Saga 的补偿事务，编排式，协调逻辑在我这边——任一步失败就按逆序调各步的回退接口，最后撤自己的库。关键是补偿不等于回滚：它是我手写的代码，会留下正反两条记录，而且它自己也是网络调用、也会失败。所以补偿意图要先落库、由后台任务持续重试。对第三方的回退接口有三个要求：幂等、允许空补偿、防悬挂。</q></p>
 </div>
 
+<h2>10 · 选型：该不该拆</h2>
+
+<p><strong>一句话尺子：微服务的全部代价，只为换「每个服务能自己上线，不用等别人」。改动必须几个系统一起发 = <strong>分布式单体</strong>，成本全付、收益没拿。</strong></p>
+
+<table>
+  <thead><tr><th>收益 buy（Fowler）</th><th>成本 pay（Fowler）</th></tr></thead>
+  <tbody>
+    <tr><td>强模块边界</td><td>分布式（远程调用慢且会失败）</td></tr>
+    <tr><td><strong>独立部署 ← 根收益</strong></td><td>最终一致性</td></tr>
+    <tr><td>技术异构</td><td>运维复杂度</td></tr>
+  </tbody>
+</table>
+
+<table>
+  <thead><tr><th>痛点</th><th>该不该拆</th></tr></thead>
+  <tbody>
+    <tr><td>多团队互相阻塞、发布排队</td><td><strong>拆。唯一站得住的理由</strong>（且需先有 CD／自动部署／链路追踪）</td></tr>
+    <tr><td>某模块扛不住量</td><td>多半不拆——单体也能多副本；除非资源画像截然不同</td></tr>
+    <tr><td>代码乱想重构</td><td><strong>不拆（陷阱）</strong>——只会把编译期能抓的错换成线上超时</td></tr>
+    <tr><td>全新项目</td><td>单体优先。边界一开始必然划错，而服务间挪功能比单体里贵一个数量级</td></tr>
+  </tbody>
+</table>
+
+<p>两条禁令：<q>Dont even consider microservices unless you have a system thats too complex to manage as a monolith</q>（<a href="https://martinfowler.com/bliki/MicroservicePremium.html">MicroservicePremium</a>）；<q>Almost all the cases ... built as a microservice system from scratch ... ended up in serious trouble</q>（<a href="https://martinfowler.com/bliki/MonolithFirst.html">MonolithFirst</a>）。</p>
+
+<h2>11 · 边界：划在哪、怎么自查</h2>
+
+<p><strong>按业务能力划（Decompose by Business Capability），不按技术分层划。</strong>拆成界面／逻辑／数据三个服务必错：需求纵向切、边界横向切，永远垂直相交 → 任一需求都穿过三层。</p>
+
+<table>
+  <thead><tr><th>判据（microservices.io）</th><th>自查</th></tr></thead>
+  <tbody>
+    <tr><td>高内聚</td><td>能一句话说清它「负责什么生意」吗</td></tr>
+    <tr><td>低耦合</td><td>别人能绕过 API 直接读你的库吗</td></tr>
+    <tr><td>团队规模</td><td>6–10 人一个服务</td></tr>
+    <tr><td>自治</td><td><q>minimal cross-team coordination</q>——minimal 不是 zero；<strong>开会不等于失败，「必须一起上线」才等于失败</strong></td></tr>
+    <tr><td>可独立测试</td><td>不启动别的服务能否跑完测试</td></tr>
+    <tr><td><strong>稳定</strong></td><td><strong>一个需求平均动几个服务</strong>——最实用的一条，不需任何工具</td></tr>
+  </tbody>
+</table>
+
+<p><strong>康威定律</strong>（Conway, Datamation, 1968）：<q>Any organization that designs a system will produce a design whose structure is a copy of the organization&#39;s communication structure.</q> → 服务边界与团队边界必须配套；组织上划不开，服务边界迟早守不住。</p>
+
+<div class="script">
+  <span class="label">「运维成本高、交互复杂，为什么还选微服务」</span>
+  <p><q>先说我同意这个前提——微服务是有溢价的，除非单体复杂到管不动否则不该考虑。成本很具体：调用会失败、强一致变最终一致、排查复杂度上台阶。付这些只换一件事：独立部署，每个团队按自己节奏上线。这个收益随团队数量放大——一个团队时一文不值，十个团队时就是全部。所以我的标准是：<strong>拆分解决的是组织问题，不是技术问题。</strong>因为代码乱或性能不够去拆，基本都会翻车。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">「从单一服务扩展到微服务」（没亲历过拆分时）</span>
+  <p><q>我进去时已经拆好了，完整拆分过程没亲历过。如果让我主导：① 先确认动机，只有多团队互相阻塞才拆；② 先补自动化部署、集中日志、链路追踪；③ 绞杀者模式，路由挡在单体前面，一次切一个业务能力，每步可回退；④ 最难的是数据，共享库拆开要经历双写与迁移，工作量通常比拆代码大。</q></p>
+</div>
+
 <footer class="footer">
   <div class="nav-links">
     <a href="../lessons/0004-microservices-what-actually-changes.html">← Lesson 04（完整版）</a>
     <a href="../lessons/0005-saga-and-choreography.html">← Lesson 05（Saga）</a>
+    <a href="../lessons/0006-should-you-split-and-where.html">← Lesson 06（选型与边界）</a>
     <a href="db-index-cheatsheet.html">→ 速查表：索引</a>
     <a href="algo-cheatsheet.html">→ 速查表：排序</a>
     <a href="../MISSION.md">→ Mission</a>
