@@ -13,6 +13,7 @@
 | 3 | [第 3 课 · 在边界上立一道检查](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0003-guard-the-boundary.html) | 讲解如何在前后端边界上做数据校验，用运行时检查守住类型系统覆盖不到的地方 |
 | 4 | [第 4 课 · React 的状态到底是什么](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0004-what-is-react-state.html) | 讲清 React 状态的本质：它不是变量而是一次重新渲染的触发器，以及何时该把数据放进状态 |
 | 5 | [第 5 课 · useEffect 与那个空数组](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0005-useeffect-and-that-empty-array.html) | 讲透 useEffect 的执行时机与依赖数组，说清那个空数组到底意味着什么、又会埋下哪些坑 |
+| 6 | [第 6 课 · 不可变更新与 key](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0006-immutability-and-key.html) | 讲清为什么 React 里要不可变地更新状态，以及列表 key 该怎么选才不会渲染错位 |
 
 **参考资料：**
 - [参考 · C# ↔ Python / TypeScript 对照表](https://JayYa.github.io/LearningLessons/Python-React-Typescript/reference/csharp-rosetta.html) — 以 C# 为锚点对照 Python 与 TypeScript 的语法与惯用法
@@ -28,9 +29,11 @@
 | 4 | [Lesson 04 · 微服务：一次方法调用变成一次网络调用](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0004-microservices-what-actually-changes.html) | 讲解单体应用拆分为微服务后，方法调用变为网络调用带来的延迟、失败与一致性代价 |
 | 5 | [Lesson 05 · 你已经做过 Saga 了，只是没人告诉你它叫这个名字](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0005-saga-and-choreography.html) | 从日常业务补偿逻辑切入讲 Saga 模式，辨析编排式与协同式两种跨服务事务一致性方案 |
 | 6 | [Lesson 06 · 该不该拆，边界划在哪——以及那个会议的含义](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0006-should-you-split-and-where.html) | 讨论微服务该不该拆、边界如何划分，把服务切分决策还原成组织与业务职责的问题 |
+| 7 | [Lesson 07 · 抢单——把「查一下再改」压成一句话](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0007-claiming-a-ticket.html) | 用抢单场景讲并发下的先查后改竞态，把两步操作压成一条带条件的原子更新 |
 
 **参考资料：**
 - [速查表 · 排序、选择、Top-K 与外部排序（C#）](https://JayYa.github.io/LearningLessons/BeiGene/reference/algo-cheatsheet.html) — 排序、选择、Top-K 与外部排序算法速查
+- [速查表 · 并发抢单与审批流](https://JayYa.github.io/LearningLessons/BeiGene/reference/claim-patterns-cheatsheet.html) — 并发抢单的原子更新写法与审批流状态流转速查
 - [Reference · 索引与 SQL 优化速查表](https://JayYa.github.io/LearningLessons/BeiGene/reference/db-index-cheatsheet.html) — 数据库索引设计与 SQL 优化常用手法速查
 - [速查表 · 微服务](https://JayYa.github.io/LearningLessons/BeiGene/reference/microservices-cheatsheet.html) — 微服务架构下延迟、失败、序列化与一致性四类新增开销速查
 

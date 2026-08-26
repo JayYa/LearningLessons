@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 07 · 抢单——把「查一下再改」压成一句话</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/race.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 07 · 场景设计 · BeiGene 面试备战 · 动手课</p>
+  <h1>抢单<br><span style="font-size:0.62em;color:var(--ink-soft);">把「先查一下、再改」压成一句话</span></h1>
+  <p class="standfirst">题库那道场景题有四问，但它们其实是<strong>同一个问题的四个切面</strong>：多个复核员同时点「抢单」，怎么保证一张工单只被一个人拿走。这一课的核心只有一行 SQL——而它之所以正确，靠的是你可能从没注意过的一条 PostgreSQL 规则。<strong>这是一节动手课：你要真的把表建出来，开两个窗口把冲突跑出来。</strong></p>
+</header>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>约 40 分钟，其中 15 分钟在敲命令。<strong>第三节的赛跑模拟请按顺序一个个点，每点「下一步」之前先在心里猜下一行会发生什么</strong>——五种写法里有两种是错的，但错法不一样。<a href="#s5">第五节是动手环节</a>，做完把输出贴回来给我，这一课就算收了。</p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">先反问，别急着画表</a> <span class="depth">— 场景题的第一动作</span></li>
+    <li><a href="#s2">三段流程的表怎么设计</a> <span class="depth">— 状态机 + 两张表</span></li>
+    <li><a href="#s3">抢单的本质与五种写法</a> <span class="depth">— 赛跑模拟，先猜再点</span></li>
+    <li><a href="#s4">哪个任务被谁抢掉了</a> <span class="depth">— 认领记录 + 超时回收</span></li>
+    <li><a href="#s5">动手：把冲突真的跑出来</a> <span class="depth">— 两个窗口，六步</span></li>
+    <li><a href="#s6">权限那一问</a> <span class="depth">— 岗位 + 数据范围</span></li>
+    <li><a href="#s7">话术</a> <span class="depth">— 四问的完整答法</span></li>
+    <li><a href="#s8">检验一下</a> <span class="depth">— 6 题</span></li>
+    <li><a href="#s9">下一课</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、先反问，别急着画表</h2>
+
+<p>场景设计题最容易丢分的地方，是<strong>听完题目直接开始画表</strong>。面试官给的四行描述里，至少有五个没说的参数会彻底改变设计。<a href="0002-sorting-selection-topk-external.html">Lesson 02 的「先问边界」框架</a>在这里可以原样复用：</p>
+
+<table>
+  <thead><tr><th>要反问的</th><th>为什么它会改变设计</th></tr></thead>
+  <tbody>
+    <tr><td><strong>抢单的并发量级</strong>：十个人抢，还是一千个人抢？</td><td>十个人：一句条件更新就够。上千：要考虑预分配或分片，否则所有人打同一批热点行</td></tr>
+    <tr><td><strong>抢到之后能不能放弃</strong>？</td><td>能放弃 → 必须有「释放」和「超时自动回收」，认领就不是终态而是<strong>中间态</strong></td></tr>
+    <tr><td><strong>一个人能同时持有几单</strong>？</td><td>限一单 → 约束加在「人」这一侧；不限 → 只约束「单」这一侧</td></tr>
+    <tr><td><strong>绩效按「抢到」算还是按「完成」算</strong>？</td><td><strong>这一问最关键。</strong>按完成算，抢到只是占坑，放弃不计分；按抢到算，会诱发恶意刷单，要加风控</td></tr>
+    <tr><td><strong>审核被打回后回到哪一步</strong>？</td><td>决定状态机是单向链还是带环，直接影响状态字段的取值集合</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="label">这一节的面试价值</span>
+  <p>先反问 30 秒再作答，<strong>本身就是一个信号</strong>：你把它当工程问题，不是当八股题。而且反问会给你争取到思考时间。真实面试里，问两到三个就够，别把它变成盘问——问完就自己给出假设：<q>我先按「十几个复核员、可以放弃、绩效按完成算」这个假设往下设计。</q></p>
+</div>
+
+<h2 id="s2">二、三段流程的表怎么设计</h2>
+
+<p>A 提交 → B 审核 → C 复核，本质是<strong>一张工单在一条状态链上前进</strong>。新手容易设计成三张表（提交表、审核表、复核表），那是<a href="0006-should-you-split-and-where.html#s6">按技术流程切</a>的老毛病：一次查询要连三次表，还没法回答「这张单现在在谁手上」。</p>
+
+<p>正确的骨架是<strong>一张主表存当前状态 + 一张流水表存所有流转</strong>：</p>
+
+<pre><code>-- 主表：一张工单一行，永远只有一个当前状态
+CREATE TABLE ticket (
+  id            bigserial    PRIMARY KEY,
+  biz_no        text         NOT NULL UNIQUE,   -- 业务单号，对外用，也是幂等键
+  payload       jsonb        NOT NULL,          -- 业务数据本体（属性不固定，见 Lesson 01 的 JSONB）
+  status        text         NOT NULL,          -- 状态机的当前节点
+  submitted_by  bigint       NOT NULL,          -- 用户 A
+  approved_by   bigint,                         -- 用户 B
+  claimed_by    bigint,                         -- 用户 C：谁抢到了
+  claimed_at    timestamptz,
+  claim_expires_at timestamptz,                 -- 抢到不干活，到点回收
+  reviewed_by   bigint,
+  version       int          NOT NULL DEFAULT 0,
+  created_at    timestamptz  NOT NULL DEFAULT now(),
+  updated_at    timestamptz  NOT NULL DEFAULT now()
+);
+
+-- 流水表：每一次状态流转追加一行，只增不改
+CREATE TABLE ticket_transition (
+  id          bigserial   PRIMARY KEY,
+  ticket_id   bigint      NOT NULL REFERENCES ticket(id),
+  from_status text,
+  to_status   text        NOT NULL,
+  actor_id    bigint      NOT NULL,
+  action      text        NOT NULL,             -- submit/approve/reject/claim/release/finish
+  comment     text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);</code></pre>
+
+<p>状态链：</p>
+
+<pre><code>draft ──submit──▸ submitted ──approve──▸ approved ──claim──▸ reviewing ──finish──▸ done
+                      ▲                      │                   │
+                      └───────reject─────────┘                   └──release/超时──▸ approved</code></pre>
+
+<div class="callout ext">
+  <span class="label">扩展 · 为什么必须有流水表</span>
+  <p>主表只回答「<strong>现在</strong>在哪」，流水表回答「<strong>怎么走到这的</strong>」。题库第四问「如何确定哪个任务被某个用户抢掉了」，靠主表的 <code>claimed_by</code> 只能查到当下的持有人；一旦这单被释放又被别人抢走，那段历史就永久丢失了——而绩效核算、申诉、审计恰恰要的就是那段历史。</p>
+  <p>这个「<strong>当前态放主表、历史放追加表</strong>」的模式，和 <a href="0005-saga-and-choreography.html">Lesson 05 的 <code>tx_log(biz_id, state)</code></a> 是同一个东西。面试里能指出这两处是同一模式，比分别答对两题更有分量。</p>
+  <p>另外注意 <code>reviewing</code> 这个状态：它就是 Lesson 05 讲的<strong>语义锁（semantic lock）</strong>——用一个业务上的中间态，把「这行正在被人处理」表达出来，而不是去持有一把数据库的锁。<strong>抢单的整个方案，本质上就是语义锁的一次具体实现。</strong></p>
+</div>
+
+<h2 id="s3">三、抢单的本质与五种写法</h2>
+
+<p>把问题剥到最小：多个复核员同时执行「<strong>如果这单还没人认领，就把它记到我名下</strong>」。它是一个<strong>检查—然后—行动（check-then-act）</strong>，而所有并发 bug 都长在检查和行动之间的那道缝里。</p>
+
+<div class="callout">
+  <span class="label">这一课唯一必须记死的一句</span>
+  <p><strong>不要「先查再改」，要让那一次改自己带着条件。</strong>把状态判断从应用代码搬进 <code>UPDATE</code> 的 <code>WHERE</code> 里，检查和行动就发生在同一条语句、同一把行锁之下，缝隙消失。<strong>成败看返回的受影响行数：1 就是抢到，0 就是被别人抢了。</strong></p>
+</div>
+
+<p>下面五种写法请一个个点。<strong>每次点「下一步」之前先猜一下这一行会发生什么</strong>——猜错的地方才是你真正的知识缺口。</p>
+
+<div class="race" data-race='{
+  "label": "赛跑模拟 · 张三和李四同时抢 1001 号工单",
+  "actors": [{"id":"c1","label":"复核员 张三"},{"id":"c2","label":"复核员 李四"}],
+  "state": [
+    {"key":"status","label":"status","init":"approved"},
+    {"key":"claimed_by","label":"claimed_by","init":"NULL"}
+  ],
+  "strategies": [
+    {
+      "id":"naive",
+      "label":"① 读后写（最常见的错）",
+      "sql":"-- 应用代码里两步走\nSELECT claimed_by FROM ticket WHERE id = 1001;\n-- if (claimed_by == null) {\nUPDATE ticket SET claimed_by = @me, status = &#39;reviewing&#39;\n WHERE id = 1001;\n-- }",
+      "steps":[
+        {"actor":"c1","text":"SELECT 读到 claimed_by = NULL","note":"张三的代码判断：没人抢，可以抢。"},
+        {"actor":"c2","text":"SELECT 读到 claimed_by = NULL","note":"李四读到的是同一个快照。此刻两人都认为自己能抢——<strong>缝隙就在这里</strong>。","tone":"bad"},
+        {"actor":"c1","text":"UPDATE 写入 claimed_by = 张三","set":{"claimed_by":"张三","status":"reviewing"},"note":"UPDATE 无条件执行，成功，受影响行数 1。"},
+        {"actor":"c2","text":"UPDATE 写入 claimed_by = 李四","set":{"claimed_by":"李四"},"note":"同样无条件执行，同样成功，同样返回受影响行数 1。<strong>张三被静默覆盖了。</strong>","tone":"bad"}
+      ],
+      "verdict":{"tone":"bad","title":"两个人都以为自己抢到了。",
+        "text":"这就是<strong>丢失更新（lost update）</strong>。要命的地方在于：<strong>两条 UPDATE 都返回成功</strong>，应用层拿到的都是「受影响行数 1」，没有任何异常、没有任何报错。张三的界面上工单还在，他做完复核提交时才会发现单子早已不属于他。绩效对不上账的投诉就是这么来的。<br>低并发下它<strong>大概率不复现</strong>——两次点击差几十毫秒就相安无事——所以它能一路活到生产环境。"}
+    },
+    {
+      "id":"applock",
+      "label":"② 应用层加锁",
+      "sql":"// C# 里加一把进程内的锁\nprivate static readonly object _gate = new object();\n\nlock (_gate)\n{\n    var t = db.Queryable&amp;lt;Ticket&amp;gt;().InSingle(1001);\n    if (t.ClaimedBy == null) { /* 更新 */ }\n}",
+      "steps":[
+        {"actor":"c1","text":"请求落到 <strong>实例 A</strong>，拿到实例 A 的锁","note":"在这个进程里，这段代码确实是串行的。"},
+        {"actor":"c2","text":"请求落到 <strong>实例 B</strong>，拿到实例 B 的锁","note":"负载均衡把李四分到了另一台机器。<strong>两把锁互不相识。</strong>","tone":"bad"},
+        {"actor":"c1","text":"实例 A：读到 NULL，写入 张三","set":{"claimed_by":"张三","status":"reviewing"}},
+        {"actor":"c2","text":"实例 B：读到 NULL，写入 李四","set":{"claimed_by":"李四"},"note":"退化成了写法 ①。","tone":"bad"}
+      ],
+      "verdict":{"tone":"bad","title":"锁的作用域错了。",
+        "text":"<code>lock</code> / <code>SemaphoreSlim</code> 这类是<strong>进程内</strong>同步原语，它保护的边界是一个进程，而竞争发生的边界是<strong>一行数据</strong>。只要服务有第二个副本——而生产环境一定有——它就完全失效。<br><strong>面试里这是个高频陷阱题。</strong>正确的答法：<q>竞争资源在数据库里，锁就应该加在数据库上，或者用 Redis 这类外部的分布式锁；用进程内的 lock 只在单实例下有效，扩容当天就会破。</q><br>顺带一提，它还顺手毁掉了吞吐——所有抢单请求在这台机器上排成一队，哪怕抢的是不同的工单。"}
+    },
+    {
+      "id":"cond",
+      "label":"③ 条件更新（推荐）",
+      "sql":"-- 一条语句，检查和行动不再分家\nUPDATE ticket\n   SET status = &#39;reviewing&#39;,\n       claimed_by = @me,\n       claimed_at = now(),\n       claim_expires_at = now() + interval &#39;30 minutes&#39;,\n       version = version + 1\n WHERE id = 1001\n   AND status = &#39;approved&#39;   -- ← 就是这一行在防抢\n   AND claimed_by IS NULL\nRETURNING id;",
+      "steps":[
+        {"actor":"c1","text":"UPDATE 开始，命中 1001 行，加上行锁","note":"此刻行状态仍是 approved / NULL，条件满足。"},
+        {"actor":"c2","text":"UPDATE 开始，发现 1001 行被锁住，<strong>阻塞等待</strong>","note":"PostgreSQL 文档：<q>the would-be updater will wait for the first updating transaction to commit or roll back</q>。李四的语句卡在这里，通常几毫秒。","tone":"wait"},
+        {"actor":"c1","text":"提交，claimed_by = 张三，返回 1 行","set":{"claimed_by":"张三","status":"reviewing"},"note":"张三拿到 RETURNING 的一行 → 抢到了。","tone":"good"},
+        {"actor":"c2","text":"被唤醒，<strong>拿新版本重新检查 WHERE</strong>，条件不成立，返回 0 行","note":"这是全课最关键的一条规则：<q>The search condition of the command (the WHERE clause) is re-evaluated to see if the updated version of the row still matches</q>。现在 status 已是 reviewing，条件挂掉，这一行被跳过。<strong>李四收到受影响行数 0 → 明确地知道自己没抢到。</strong>","tone":"good"}
+      ],
+      "verdict":{"tone":"good","title":"正确，而且是这道题的标准答案。",
+        "text":"一条语句同时完成了检查和行动，缝隙不存在。它的正确性不依赖任何显式锁，靠的是 PostgreSQL 在 <strong>READ COMMITTED</strong> 下的一条规则：后到的 UPDATE 等前一个事务结束后，会<strong>拿更新后的行版本重新求值 WHERE</strong>。<br>三个优点：<strong>①</strong> 只有一次数据库往返；<strong>②</strong> 不需要开显式事务，单语句自带原子性；<strong>③</strong> 结果用受影响行数表达，0 和 1 的语义干净利落，应用层一个 if 就够。<br><strong>那句 <code>AND status = approved</code> 有个正式名字：前置状态断言。</strong>把它说出来，比说「我加了个 where 条件」专业得多。"}
+    },
+    {
+      "id":"forupdate",
+      "label":"④ 悲观锁 FOR UPDATE",
+      "sql":"BEGIN;\n\nSELECT * FROM ticket\n WHERE id = 1001 AND status = &#39;approved&#39;\n   FOR UPDATE;          -- 锁住这一行，别人只能等\n\n-- ...应用层判断、可能还夹着用户的思考时间...\n\nUPDATE ticket SET claimed_by = @me, status = &#39;reviewing&#39;\n WHERE id = 1001;\n\nCOMMIT;",
+      "steps":[
+        {"actor":"c1","text":"BEGIN，SELECT ... FOR UPDATE 锁住 1001","note":"锁一直持有到 COMMIT 为止。"},
+        {"actor":"c2","text":"SELECT ... FOR UPDATE <strong>阻塞</strong>","note":"张三的事务不结束，李四就一直等。<strong>等多久取决于张三事务里还有多少活。</strong>","tone":"wait"},
+        {"actor":"c1","text":"UPDATE 并 COMMIT","set":{"claimed_by":"张三","status":"reviewing"},"note":"锁释放。"},
+        {"actor":"c2","text":"被唤醒，重新求值 WHERE，status 已变，<strong>查不到行</strong>","note":"应用层判断「没查到 → 没抢到」。结果正确。","tone":"good"}
+      ],
+      "verdict":{"tone":"warn","title":"结果是对的，但代价比写法 ③ 大。",
+        "text":"正确性没问题，问题在成本：<strong>①</strong> 两次往返、必须开显式事务；<strong>②</strong> 锁的持有时间等于整个事务的长度，一旦事务里夹进了远程调用或者用户的思考时间，就变成<strong>长事务</strong>，后面的人全部排队，连接池很快见底；<strong>③</strong> 多个行锁按不同顺序获取时会死锁。<br><strong>面试官问「为什么不用悲观锁」，要答的就是这三条。</strong>而且要补一句边界：<q>不是悲观锁不好，是这个场景不需要——当一次抢单的全部逻辑能压进一条语句时，条件更新更便宜。如果认领之后还要在同一个事务里读一堆别的表做校验，悲观锁反而更合适。</q>"}
+    },
+    {
+      "id":"skip",
+      "label":"⑤ SKIP LOCKED（派单场景）",
+      "sql":"-- 场景变了：不是抢指定的某一单，而是「给我下一单可做的」\nWITH picked AS (\n  SELECT id FROM ticket\n   WHERE status = &#39;approved&#39; AND claimed_by IS NULL\n   ORDER BY priority DESC, created_at\n   FOR UPDATE SKIP LOCKED      -- ← 锁不住就跳过，去看下一行\n   LIMIT 1\n)\nUPDATE ticket t\n   SET status = &#39;reviewing&#39;, claimed_by = @me, claimed_at = now()\n  FROM picked p WHERE t.id = p.id\nRETURNING t.id;",
+      "steps":[
+        {"actor":"c1","text":"扫到队首 1001，锁住它","note":"队列里还有 1002、1003……"},
+        {"actor":"c2","text":"扫到 1001 发现被锁，<strong>不等，直接跳过</strong>，锁住 1002","note":"这就是 SKIP LOCKED 的全部含义：<q>any selected rows that cannot be immediately locked are skipped</q>。","tone":"good"},
+        {"actor":"c1","text":"提交，拿到 1001","set":{"claimed_by":"张三","status":"reviewing"},"note":"","tone":"good"},
+        {"actor":"c2","text":"提交，拿到 1002","note":"<strong>两个人都拿到了活，谁也没等谁。</strong>吞吐是写法 ④ 的数倍。","tone":"good"}
+      ],
+      "verdict":{"tone":"good","title":"这是「取下一单」场景的最优解。",
+        "text":"注意它和写法 ③ 解决的<strong>不是同一个问题</strong>：③ 回答「<strong>这一单</strong>能不能归我」（用户在列表里点了具体某行），⑤ 回答「<strong>随便给我一单</strong>」（系统派活）。<br>PostgreSQL 文档对 SKIP LOCKED 的定性很直白：<q>Skipping locked rows provides an inconsistent view of the data, so this is not suitable for general purpose work, but can be used to avoid lock contention with multiple consumers accessing a queue-like table.</q>——<strong>「不适合通用查询，但适合多消费者的队列表」，抢单正是队列表。</strong><br>如果面试官追问「上千人同时抢怎么办」，<strong>这就是你的答案</strong>：把「抢指定单」改成「派下一单」，用 SKIP LOCKED，竞争就被摊开了。"}
+    }
+  ]
+}'></div>
+
+<div class="callout ext">
+  <span class="label">扩展 · 乐观锁（version 字段）算第六种吗</span>
+  <p>算，但在这道题里它<strong>不如写法 ③</strong>。乐观锁是 <code>UPDATE ... WHERE id = @id AND version = @v</code>，同样靠受影响行数判断成败——机制和条件更新完全一样，区别只在断言的是<strong>版本号</strong>还是<strong>业务状态</strong>。</p>
+  <p>断言业务状态更好，因为它<strong>表达的是意图</strong>：「我要抢的是一张还没人认领的单」。断言版本号只能表达「这行没被人动过」——如果别人改的是一个跟认领无关的字段（比如补了条备注），乐观锁会误判失败，让一次本该成功的抢单白白重试。</p>
+  <p><strong>话术：</strong><q>乐观锁和条件更新是同一个机制，都是靠 UPDATE 的受影响行数做并发控制。我倾向于断言业务状态而不是版本号，因为版本号会把无关的并发修改也算成冲突。version 字段我仍然会留着，用在编辑表单那种「防覆盖」的场景。</q></p>
+</div>
+
+<h2 id="s4">四、哪个任务被谁抢掉了</h2>
+
+<p>题库第四问。答案分三层，<strong>层层递进地说，比一句「查 claimed_by 字段」有分量得多</strong>：</p>
+
+<table>
+  <thead><tr><th>层</th><th>做法</th><th>回答了什么</th></tr></thead>
+  <tbody>
+    <tr><td><strong>当下</strong></td><td>主表的 <code>claimed_by</code> / <code>claimed_at</code></td><td>这单<strong>现在</strong>在谁手上</td></tr>
+    <tr><td><strong>历史</strong></td><td><code>ticket_transition</code> 里 <code>action = claim</code> 的所有行</td><td>它<strong>被谁抢过、抢过几次、中间被谁放弃过</strong>——绩效与申诉的依据</td></tr>
+    <tr><td><strong>约束</strong></td><td>部分唯一索引</td><td>让「同一时刻只能有一个有效认领」成为<strong>数据库层面的铁律</strong></td></tr>
+  </tbody>
+</table>
+
+<p>第三层直接复用 <a href="0001-composite-index-leftmost-prefix.html">Lesson 01 的部分唯一索引</a>。如果把认领单独建表（认领可以被释放、可以重复发生，适合独立成表）：</p>
+
+<pre><code>CREATE TABLE ticket_claim (
+  id          bigserial   PRIMARY KEY,
+  ticket_id   bigint      NOT NULL REFERENCES ticket(id),
+  user_id     bigint      NOT NULL,
+  claimed_at  timestamptz NOT NULL DEFAULT now(),
+  released_at timestamptz,                      -- NULL = 认领仍然有效
+  outcome     text                              -- finished / released / expired
+);
+
+-- 一张工单，同一时刻最多只能有一条「未释放」的认领
+CREATE UNIQUE INDEX uq_claim_active
+    ON ticket_claim (ticket_id)
+ WHERE released_at IS NULL;</code></pre>
+
+<div class="callout">
+  <span class="label">为什么要既有条件更新、又有唯一索引</span>
+  <p>这两者不是二选一，是<strong>两道防线</strong>。条件更新是<strong>正常路径</strong>的并发控制，它把成败干净地表达成受影响行数；唯一索引是<strong>兜底</strong>，防的是代码里某处漏写了 <code>WHERE status = ...</code>，或者哪天有人写了个补数据的脚本直接改表。</p>
+  <p><strong>原则：能表达成数据库约束的业务规则，就别只放在应用代码里。</strong>应用代码有很多条路径，数据库约束只有一道门。面试里说出这一句，是很典型的资深信号。</p>
+</div>
+
+<h3>抢到不干活怎么办</h3>
+
+<p>这是面试官<strong>最常追问的一刀</strong>，因为它暴露的是你有没有想过失败路径。张三抢到单子就去开会了、或者他的浏览器崩了——这单永远卡在 <code>reviewing</code>，谁也拿不到。</p>
+
+<pre><code>-- 定时任务，每分钟跑一次：把过期的认领放回池子
+UPDATE ticket
+   SET status = 'approved',
+       claimed_by = NULL, claimed_at = NULL, claim_expires_at = NULL
+ WHERE status = 'reviewing'
+   AND claim_expires_at &lt; now()
+RETURNING id;</code></pre>
+
+<p>这就是 <code>claim_expires_at</code> 字段存在的理由——<strong>认领是一份租约（lease），不是一份地契</strong>，到期不续就收回。前端在页面上开个心跳续期即可。</p>
+
+<div class="callout ext">
+  <span class="label">扩展 · 这和 Lesson 04 是同一个洞</span>
+  <p><a href="0004-microservices-what-actually-changes.html">Lesson 04</a> 讲过：动作执行了但确认丢了，调用方分不清。抢单这里是同一个形状——<strong>数据库里认领成功了，但响应没回到张三的浏览器</strong>。张三看到的是「抢单失败」，于是他去抢下一单；而 1001 号在数据库里已经挂在他名下，被锁死半小时。</p>
+  <p>租约机制正是这个洞的解药：<strong>无论哪一端出问题，超时都会把状态推回正常。</strong>面试里能把这两处点破为同一类问题，非常加分。</p>
+</div>
+
+<h2 id="s5">五、动手：把冲突真的跑出来</h2>
+
+<div class="callout">
+  <span class="label">为什么必须亲手跑</span>
+  <p>写法 ① 的 bug 你现在「知道」了，但那是<strong>流畅性</strong>——看着解释觉得显然。<strong>亲手让两个窗口打起来、亲眼看到两条 UPDATE 都返回 <code>UPDATE 1</code>，才会变成你三个月后还记得的东西。</strong>而且这段经历本身就是面试素材：说「我实际验证过」和说「书上说」，可信度完全不同。</p>
+</div>
+
+<p>开<strong>两个</strong>终端窗口，各自连上同一个库（下称窗口 A / 窗口 B）。</p>
+
+<p><strong>第 1 步 · 建表塞数据（任一窗口）</strong></p>
+<pre><code>CREATE TABLE ticket (
+  id bigint PRIMARY KEY,
+  status text NOT NULL,
+  claimed_by text,
+  claimed_at timestamptz
+);
+INSERT INTO ticket VALUES (1001, 'approved', NULL, NULL);</code></pre>
+
+<p><strong>第 2 步 · 重现丢失更新。</strong>严格按 A B A B 的顺序交替执行：</p>
+<pre><code>-- 窗口 A
+BEGIN;
+SELECT claimed_by FROM ticket WHERE id = 1001;   -- 读到 NULL
+
+-- 窗口 B
+BEGIN;
+SELECT claimed_by FROM ticket WHERE id = 1001;   -- 也读到 NULL
+
+-- 窗口 A
+UPDATE ticket SET claimed_by = 'A', status = 'reviewing' WHERE id = 1001;
+COMMIT;
+
+-- 窗口 B
+UPDATE ticket SET claimed_by = 'B' WHERE id = 1001;
+COMMIT;
+
+-- 任一窗口
+SELECT * FROM ticket WHERE id = 1001;</code></pre>
+<p><strong>要记录的：</strong>两条 UPDATE 各自返回了什么？最后 <code>claimed_by</code> 是谁？</p>
+
+<p><strong>第 3 步 · 复位，改用条件更新。</strong>先 <code>UPDATE ticket SET status='approved', claimed_by=NULL WHERE id=1001;</code>，然后：</p>
+<pre><code>-- 窗口 A（先不要 COMMIT）
+BEGIN;
+UPDATE ticket SET claimed_by = 'A', status = 'reviewing'
+ WHERE id = 1001 AND status = 'approved' AND claimed_by IS NULL;
+
+-- 窗口 B（这一句会卡住，这正是预期行为）
+BEGIN;
+UPDATE ticket SET claimed_by = 'B', status = 'reviewing'
+ WHERE id = 1001 AND status = 'approved' AND claimed_by IS NULL;
+
+-- 回到窗口 A
+COMMIT;
+
+-- 观察窗口 B：它会立刻解除阻塞。看它打印了什么，然后
+COMMIT;</code></pre>
+<p><strong>要记录的（本课的关键观察）：</strong>窗口 B 解除阻塞后打印的是 <code>UPDATE 1</code> 还是 <code>UPDATE 0</code>？<strong>这一个数字就是整节课的证据。</strong></p>
+
+<p><strong>第 4 步 · 看一眼锁。</strong>在第 3 步「窗口 B 卡住」的那一刻，开第三个窗口跑：</p>
+<pre><code>SELECT pid, state, wait_event_type, wait_event, left(query, 60) AS query
+  FROM pg_stat_activity WHERE state != 'idle';</code></pre>
+<p><strong>要记录的：</strong>阻塞那一行的 <code>wait_event_type</code> 是什么？（这是排查线上「接口突然全卡住」的标准手法，<strong>本身就是一段可以讲的经验</strong>。）</p>
+
+<p><strong>第 5 步 · 试试 SKIP LOCKED。</strong>再插几行 <code>INSERT INTO ticket VALUES (1002,'approved',NULL,NULL),(1003,'approved',NULL,NULL);</code>，然后两个窗口都跑（A 先跑但不提交）：</p>
+<pre><code>BEGIN;
+SELECT id FROM ticket
+ WHERE status = 'approved' AND claimed_by IS NULL
+ ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1;</code></pre>
+<p><strong>要记录的：</strong>A 拿到哪个 id？B 拿到哪个？B 卡住了吗？把 <code>SKIP LOCKED</code> 去掉再试一次，对比。</p>
+
+<p><strong>第 6 步 · 收尾</strong>：<code>DROP TABLE ticket;</code></p>
+
+<div class="callout">
+  <span class="label">交作业</span>
+  <p>把<strong>第 2、3、5 步的输出</strong>贴回来给我（尤其是第 3 步窗口 B 那个数字）。我会据此判断哪一块需要回炉——<strong>这一课我不问你「懂了没」，只看输出。</strong></p>
+  <p>手边没有 PostgreSQL？装一个只要一条命令：<code>docker run --rm -e POSTGRES_PASSWORD=x -p 5432:5432 postgres:16</code>，然后 <code>docker exec -it &lt;容器名&gt; psql -U postgres</code> 开两次即可。</p>
+</div>
+
+<h2 id="s6">六、权限那一问</h2>
+
+<p>题库第二问「每个用户的权限如何控制」。这一问要答出<strong>两个维度</strong>——只答第一个是及格，两个都答出来才是加分：</p>
+
+<table>
+  <thead><tr><th>维度</th><th>控制什么</th><th>怎么实现</th></tr></thead>
+  <tbody>
+    <tr><td><strong>功能权限</strong><br>能做什么动作</td><td>A 只能提交、B 只能审核、C 只能复核</td><td>RBAC：用户 → 角色 → 权限点。接口上用特性标注 <code>[Authorize(Policy = "ticket.approve")]</code></td></tr>
+    <tr><td><strong>数据权限</strong><br>能看到哪些行</td><td>B 只能审核<strong>自己部门</strong>的单；C 只能看到<strong>已审核通过</strong>的单</td><td>查询时强制注入过滤条件，由服务端从登录态推导，<strong>绝不接受前端传部门 id</strong></td></tr>
+  </tbody>
+</table>
+
+<p>再叠一层<strong>状态机权限</strong>，这是这道题特有的：<strong>动作是否允许，不只看角色，还看工单当前状态。</strong>C 有复核权限，但他不能复核一张 <code>submitted</code> 状态的单；他也不能复核一张 <code>claimed_by</code> 不是自己的单。</p>
+
+<p>而这一层<strong>不需要额外的代码</strong>——它已经在你的条件更新里了：</p>
+
+<pre><code>UPDATE ticket
+   SET status = 'done', reviewed_by = @me
+ WHERE id = @id
+   AND status = 'reviewing'
+   AND claimed_by = @me;      -- ← 这一行同时是并发控制和权限校验</code></pre>
+
+<div class="callout">
+  <span class="label">这一节的记忆点</span>
+  <p><strong>「前置状态断言」这一个机制，同时解决了三件事：并发抢单、状态机合法性、数据权限。</strong>面试里把这三者收束到同一行 SQL 上讲，是这道题最漂亮的收尾。</p>
+</div>
+
+<h2 id="s7">七、话术</h2>
+
+<div class="script">
+  <span class="label">话术 A · 对应题「设计流程和相关表」</span>
+  <p><strong>先反问再假设：</strong><q>我先确认两件事：复核员大概多少人同时在抢？抢到之后能不能放弃？我先按十几个人、可以放弃来设计。</q></p>
+  <p><strong>给骨架：</strong><q>核心是一张工单表加一张流转流水表。工单表存<strong>当前状态</strong>，一张单一行，状态字段走 draft → submitted → approved → reviewing → done 这条链，打回就退回 submitted。流水表<strong>只增不改</strong>，每次流转追加一行，记谁在什么时候把它从哪个状态推到哪个状态。</q></p>
+  <p><strong>说清为什么不拆三张表：</strong><q>我不会按提交、审核、复核建三张表——那样一次查询要连三次，而且回答不了「这单现在在谁手上」。审批流的本质是一张单在状态链上前进，不是三个独立的业务对象。</q></p>
+  <p><strong>加一句收尾：</strong><q>业务数据本身我会放 jsonb，因为不同业务线的工单字段不一样，主表只固定流程相关的列。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 B · 对应题「多位用户抢单，系统如何设计」（核心题）</span>
+  <p><strong>一句话点破本质：</strong><q>抢单的本质是一个 check-then-act：先查还没人认领，再写成我的。所有并发 bug 都长在这两步之间的缝里。所以我的做法是<strong>不要先查再改，让那一次改自己带上条件</strong>。</q></p>
+  <p><strong>给出 SQL 并解释为什么它对：</strong><q>就是一条 UPDATE：<code>set status = reviewing, claimed_by = 我 where id = ? and status = approved and claimed_by is null</code>。检查和行动在同一条语句里，抢到就返回受影响行数 1，被别人抢了就是 0，应用层一个 if 就够。它的正确性靠的是 PostgreSQL 在 READ COMMITTED 下的规则：后到的 UPDATE 会等前一个事务结束，<strong>然后拿更新后的行版本重新求值 WHERE</strong>，条件不成立就跳过这行。</q></p>
+  <p><strong>主动补失败路径（不等他问）：</strong><q>还要处理抢到不干活。我把认领设计成一份<strong>租约</strong>，加一个 <code>claim_expires_at</code>，定时任务把过期的放回池子。否则有人抢完就下班，那张单永远卡死。</q></p>
+  <p><strong>再补兜底：</strong><q>另外我会加一个部分唯一索引 <code>unique (ticket_id) where released_at is null</code>，保证一张单同时只能有一个有效认领。<strong>能表达成数据库约束的业务规则，我不会只放在应用代码里</strong>——代码有很多条路径，约束只有一道门。</q></p>
+  <p><strong>为什么这样答强：</strong>三段结构是<strong>机制 → 失败路径 → 兜底</strong>。绝大多数候选人只讲到第一段，主动讲后两段会立刻拉开差距。</p>
+</div>
+
+<div class="script">
+  <span class="label">话术 C · 对应追问「为什么不用悲观锁 / 上千人抢怎么办」</span>
+  <p><strong>不用悲观锁的三条理由：</strong><q><code>SELECT FOR UPDATE</code> 结果也是对的，但成本更大：要开显式事务、两次往返；锁的持有时间等于整个事务，一旦里面夹了远程调用或者用户思考时间就是长事务，后面全排队，连接池很快见底；多行按不同顺序加锁还可能死锁。<strong>这个场景一条语句就能表达完整的抢单逻辑，就不需要显式锁。</strong>反过来说，如果认领后还要在同一事务里读一堆别的表做校验，我会选悲观锁。</q></p>
+  <p><strong>高并发的答法（换问题形态）：</strong><q>上千人抢同一批单，热点会集中在队首那几行。这时候我会把交互从「抢指定的某一单」改成「给我下一单可做的」，用 <code>FOR UPDATE SKIP LOCKED</code>——锁不住就跳过去拿下一行，两个人同时来会拿到不同的单，谁也不用等谁。PostgreSQL 文档里明确说这个选项就是给<strong>队列表的多消费者</strong>用的。</q></p>
+  <p><strong>再加一层（如果还追问）：</strong><q>再往上就是预分配：按规则先把单分成若干池子，或者用 Redis 做一次预占再落库。但那要引入额外组件和一致性问题，<strong>我会先确认量级真的到了那个程度再上</strong>。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 D · 对应题「权限如何控制」「怎么确定被谁抢掉了」</span>
+  <p><strong>权限两个维度：</strong><q>功能权限走 RBAC，用户挂角色、角色挂权限点，接口上用 policy 标注。数据权限单独一层，比如 B 只能审自己部门的单——这个过滤条件<strong>一定由服务端从登录态推导，不接受前端传部门 id</strong>。再加一层状态机权限：有复核权限不代表能复核任意一张单，还得看它当前是不是 reviewing、是不是挂在我名下。<strong>而这一层不用额外写代码，它已经在抢单那条 UPDATE 的 where 里了。</strong></q></p>
+  <p><strong>谁抢掉了，分三层答：</strong><q>当下看主表的 <code>claimed_by</code>；历史看流水表里 action 是 claim 的记录，能查出被谁抢过、放弃过几次，绩效核算和申诉都要用它；约束靠部分唯一索引兜底。<strong>当前态放主表、历史放追加表</strong>，这个模式我在做分布式事务补偿的时候也是这么处理的。</q></p>
+</div>
+
+<h2 id="s8">八、检验一下</h2>
+
+<p><strong>先在心里说出理由再选。</strong></p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "「先 SELECT 判断没人抢、再 UPDATE 写入」这种写法，最危险的地方在于：",
+    "options": [
+      "并发高的时候数据库连接池会被迅速耗尽",
+      "两条更新都会成功且都返回受影响行数一",
+      "第二个人的更新会因为主键冲突直接报错",
+      "查询和更新之间的网络往返会明显变慢"
+    ],
+    "answer": 1,
+    "why": "这是<strong>丢失更新</strong>，而它之所以能活到生产环境，正是因为<strong>它不报错</strong>。两条 UPDATE 都是无条件的，都会成功，应用层拿到的都是「受影响行数 1」，两个人的界面上都显示抢单成功。没有异常、没有日志、没有告警，直到绩效对不上账才被发现。而且低并发下几乎不复现——两次点击差几十毫秒就相安无事。"
+  },
+  {
+    "q": "条件更新之所以能防住并发抢单，依据的是 PostgreSQL 的哪条规则：",
+    "options": [
+      "更新语句会自动把事务提升到可串行化级别",
+      "后到者等待之后会拿新行版本重新求值条件",
+      "写入前数据库会自动给整张表加上排他锁",
+      "同一行的并发更新会被合并成一次批量写入"
+    ],
+    "answer": 1,
+    "why": "文档原文：<q>The search condition of the command (the WHERE clause) is re-evaluated to see if the updated version of the row still matches the search condition.</q> 后到的 UPDATE 先等前一个事务结束，然后<strong>用更新后的行版本重新检查 WHERE</strong>，此时 status 已经变成 reviewing，条件挂掉，这行被跳过，返回 0。<strong>整个过程发生在默认的 READ COMMITTED 下，不需要提升隔离级别，也没有任何表级锁。</strong>"
+  },
+  {
+    "q": "在 C# 里用 lock 关键字保护抢单逻辑，问题在于：",
+    "options": [
+      "锁的作用域是进程而竞争资源是数据库的行",
+      "这个关键字在异步方法里根本没有办法使用",
+      "它会让抢单接口的响应时间上升一个数量级",
+      "垃圾回收器可能在持有锁期间回收掉该对象"
+    ],
+    "answer": 0,
+    "why": "<strong>锁的边界必须覆盖竞争的边界。</strong>lock / SemaphoreSlim 是进程内同步原语，只在一个进程里有效；而竞争发生在数据库的一行上，服务只要有第二个副本就完全失效——扩容当天破。正确做法是把控制放在数据库（条件更新或行锁），或者用 Redis 这类外部分布式锁。它顺带还毁掉吞吐：抢不同工单的请求也会在这台机器上排队。"
+  },
+  {
+    "q": "FOR UPDATE SKIP LOCKED 相比普通 FOR UPDATE，关键差别是：",
+    "options": [
+      "它会跳过检查从而完全省掉加锁的全部开销",
+      "遇到已被锁住的行不等待而是直接看下一行",
+      "它允许多个事务同时持有同一行的排他锁定",
+      "被跳过的那些行会在事务提交后自动重试掉"
+    ],
+    "answer": 1,
+    "why": "文档：<q>any selected rows that cannot be immediately locked are skipped</q>。它照常加锁，只是不排队。文档同时给了适用边界：<q>provides an inconsistent view of the data, so this is not suitable for general purpose work, but can be used to avoid lock contention with multiple consumers accessing a queue-like table</q>。<strong>所以它适合「派下一单」，不适合「抢指定的这一单」</strong>——后者跳过之后就无单可拿了，那正是条件更新的场合。"
+  },
+  {
+    "q": "工单表里 claim_expires_at 这个字段存在的理由是：",
+    "options": [
+      "记录复核工作预计需要消耗的标准工时时长",
+      "让认领成为可到期的租约以免工单被人卡死",
+      "供数据库据此自动清理掉过期的历史工单行",
+      "用于计算复核员绩效考核中的超时扣分项目"
+    ],
+    "answer": 1,
+    "why": "<strong>认领是租约不是地契。</strong>人会去开会、浏览器会崩、响应会在回程丢失（<a href=\"0004-microservices-what-actually-changes.html\">Lesson 04 的老问题</a>：动作执行了但确认没送达）。没有到期时间，这些单就永久卡在 reviewing。定时任务把过期认领放回池子，<strong>无论哪一端出问题，超时都能把状态推回正常</strong>。面试里主动讲这条失败路径，比讲对主流程更能拉开差距。"
+  },
+  {
+    "q": "已经用了条件更新，还要加部分唯一索引，理由是：",
+    "options": [
+      "唯一索引可以顺带加快按工单号查询的速度",
+      "业务规则能表达成数据库约束就别只写在代码",
+      "条件更新在高并发场景下有极小概率会失效",
+      "部分唯一索引比普通唯一索引占用空间更少"
+    ],
+    "answer": 1,
+    "why": "两者是两道防线而非二选一：条件更新是<strong>正常路径</strong>的并发控制，唯一索引是<strong>兜底</strong>——防的是某处漏写了 where 条件、或者有人拿脚本直接补数据。<strong>应用代码有很多条路径，数据库约束只有一道门。</strong>选项 C 是错的：条件更新的正确性由行锁与 WHERE 重新求值保证，不存在概率性失效，否则它就不能作为主方案。"
+  }
+]'></div>
+
+<h2 id="s9">九、下一课</h2>
+
+<p>这一课把三条旧线收束到了一起：<a href="0001-composite-index-leftmost-prefix.html">Lesson 01 的部分唯一索引</a>、<a href="0004-microservices-what-actually-changes.html">Lesson 04 的「执行了但确认丢了」</a>、<a href="0005-saga-and-choreography.html">Lesson 05 的语义锁与状态流水表</a>。题库第十五节那四问现在都有得答了。</p>
+
+<p><strong>下一课（Lesson 08）＝ .NET 核心第一课：锁的种类。</strong>接着这一课的第二种写法往下走——<code>lock</code> 为什么在这里错、它到底该用在哪；<code>lock</code> / <code>SemaphoreSlim</code> / <code>ReaderWriterLockSlim</code> 各自的场合；以及 <code>async</code> 方法里为什么不能用 <code>lock</code>。按<a href="../NOTES.md">既定的教学顺序</a>，先讲机制再讲选型。</p>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（只看一个的话，看这个）：</strong><br>
+  <a href="https://www.postgresql.org/docs/current/transaction-iso.html#XACT-READ-COMMITTED">PostgreSQL 文档 — 13.2.1 Read Committed Isolation Level</a>。只有几屏，但第三、四段就是本课写法 ③ 全部正确性的来源。<strong>那句 <q>The search condition ... is re-evaluated</q> 值得背下来。</strong><br>
+  想再深一层：<a href="https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE">SELECT — The Locking Clause</a>（<code>FOR UPDATE</code> / <code>NOWAIT</code> / <code>SKIP LOCKED</code> 的定义与适用边界）、<a href="https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-ROWS">13.3.2 Row-Level Locks</a>（四种行锁模式的相容矩阵）、<a href="https://www.2ndquadrant.com/en/blog/what-is-select-skip-locked-for-in-postgresql-9-5/">What is SKIP LOCKED for in PostgreSQL 9.5?</a>（作者是 PG 核心开发者，讲清了队列表这个用法的来历）。</p>
+
+  <p><strong>社区（获取智慧，不是知识）：</strong><a href="https://stackoverflow.com/questions/tagged/postgresql+concurrency">Stack Overflow 的 <code>postgresql</code> + <code>concurrency</code> 标签</a>，搜 <code>skip locked queue</code>——大量真实的任务队列方案讨论，包括各种翻车现场。</p>
+
+  <div class="nav-links">
+    <a href="0006-should-you-split-and-where.html">← Lesson 06：该不该拆</a>
+    <a href="0001-composite-index-leftmost-prefix.html">← Lesson 01：索引</a>
+    <a href="../reference/claim-patterns-cheatsheet.html">→ 速查表：并发抢单</a>
+    <a href="../reference/db-index-cheatsheet.html">→ 速查表：索引</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练，有任何不清楚的直接问我。</strong>这一课<strong>不问「懂了没」，只收输出</strong>：<a href="#s5">第五节</a>第 2、3、5 步的终端输出贴回来，尤其是<strong>第 3 步窗口 B 那个数字是 0 还是 1</strong>。<br>
+    还欠我一个 Lesson 06 的问题（它决定那节课话术 A 用哪个版本）：<strong>你们那几个系统改完之后，是各自独立上线，还是必须同一个窗口一起发？</strong>一句话就行。
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+<script src="../assets/race.js"></script>
+</body>
+</html>

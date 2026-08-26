@@ -242,8 +242,41 @@
   </tbody>
 </table>
 
+<h2>不可变更新与对象身份<span style="font-size:0.72rem;font-family:var(--mono);color:var(--ink-soft);letter-spacing:0.08em;">（第 6 课）</span></h2>
+
+<table>
+  <thead><tr><th style="width:8.5rem">C#</th><th style="width:9rem">对应物</th><th>&#9888; 裂缝</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>record</code> + <code>with</code> 表达式<br><code>person with { Age = 31 }</code></td>
+      <td>展开语法<br><code>{ ...person, age: 31 }</code></td>
+      <td>动作完全一样：<strong>不改原件，造个新的</strong>。裂缝在<strong>强制力</strong>：C# 由类型系统把关，想 mutate 都编译不过；JS 的对象/数组永远可变，<code>arr.push()</code> <strong>编译过、lint 不报、运行不报错</strong>。这条纪律 100% 靠自觉 —— 这正是面试要说出口的差异。</td>
+    </tr>
+    <tr>
+      <td><code>ImmutableList&lt;T&gt;</code><br><code>list.Add(x)</code> 返回新表</td>
+      <td><code>[...arr, x]</code><br><code>filter</code> / <code>map</code> / <code>slice</code></td>
+      <td>C# 里「返回新表」是<strong>方法签名写死的</strong>，你不可能拿错。JS 里 <code>push</code>（原地）和 <code>concat</code>（新表）长得一样无辜，<strong>得靠记</strong>。最阴的一对：<code>slice</code> 复制 / <code>splice</code> 原地改。</td>
+    </tr>
+    <tr>
+      <td><code>list.OrderBy(...)</code><br>返回新序列</td>
+      <td><code>arr.sort(...)</code><br><strong>原地排序</strong></td>
+      <td><strong>这里 C# 直觉会直接骗你。</strong>LINQ 全是惰性 + 返回新序列；<code>Array.prototype.sort</code> 和 <code>reverse</code> 都是<strong>原地改并返回同一个引用</strong>。对 state 数组排序必须 <code>[...arr].sort(...)</code>。</td>
+    </tr>
+    <tr>
+      <td>对象身份 = <strong>引用</strong><br>一个实例的字段属于那个实例</td>
+      <td>组件身份 = <strong>位置（或 <code>key</code>）</strong><br>state 存在 React 里</td>
+      <td><strong>整份对照表里差得最远的一条。</strong>React 里根本没有「组件实例」可抓（组件只是每次渲染被重新调用的函数）。React 靠<strong>渲染树中的位置</strong>把新旧两次渲染对上号；<code>key</code> 的作用是<strong>把 key 本身变成位置的一部分</strong>。<br>推论：用 index 当 key，删掉第一项后 React 认为「位置 0 没变」→ <strong>保留 state、只换 props</strong> → 标题对、数据错。</td>
+    </tr>
+    <tr>
+      <td>局部变量上随便改<br>（还没暴露给别人的对象）</td>
+      <td><strong>local mutation</strong><br><code>const next = [...a]; next.sort();</code></td>
+      <td>这条<strong>可以直接迁移</strong>：两边的判据都是「有没有别人持有这个引用」。官方原话 <em>“Mutating an object you've just created is okay because no other code references it yet.”</em> 所以规则不是「禁止 mutation」，是<strong>「禁止改已经在 state 里的那个」</strong>。</td>
+    </tr>
+  </tbody>
+</table>
+
 <div class="footer">
-  <p>相关：<a href="glossary.html">术语表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a> · <a href="../lessons/0005-useeffect-and-that-empty-array.html">第 5 课</a></p>
+  <p>相关：<a href="glossary.html">术语表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a> · <a href="../lessons/0005-useeffect-and-that-empty-array.html">第 5 课</a> · <a href="../lessons/0006-immutability-and-key.html">第 6 课</a></p>
   <div class="ask"><strong>觉得某个类比不对劲？</strong> 说出来 —— 你的 C# 直觉在哪里打滑，往往正是下一课该讲的地方。</div>
 </div>
 

@@ -263,8 +263,48 @@
   </tbody>
 </table>
 
+<h2>React 的身份与不可变更新</h2>
+
+<table>
+  <thead><tr><th style="width:11rem">术语</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Immutable update</strong><br>不可变更新</td>
+      <td>要改 state 里的对象/数组，<strong>造一个新的替换它</strong>，而不是原地改。因为 <code>Object.is</code> 比引用：<code>arr.push(x); setArr(arr)</code> 会被判「没变」而<strong>整个跳过重渲染</strong>。C# 参照物：<code>record</code> + <code>with</code>、<code>ImmutableList&lt;T&gt;</code> —— 区别是 C# 由类型系统强制，JS <strong>全靠自觉</strong>。<a href="https://react.dev/learn/updating-arrays-in-state">react.dev</a></td>
+    </tr>
+    <tr>
+      <td><strong>幽灵变更</strong><br>（本课程用语）</td>
+      <td>mutate 之后 React 跳过渲染，改动<strong>并没有丢失，只是潜伏</strong>在那个数组/对象里；等某个<em>不相干</em>的 state 变化触发渲染时<strong>一次性全部显现</strong>。真实症状是「点了没反应，后来一堆东西突然全变了」—— 比「界面不更新」难查得多。</td>
+    </tr>
+    <tr>
+      <td><strong>Local mutation</strong><br>局部变更</td>
+      <td>改<strong>自己刚造出来、还没交给任何人</strong>的对象，官方明确认可：<code>const next = [...items]; next.sort(f); setItems(next);</code> 完全合法。规则不是「禁止一切 mutation」，是「禁止改<em>已经在 state 里</em>的那个」。</td>
+    </tr>
+    <tr>
+      <td><strong>会 mutate 的数组方法</strong></td>
+      <td><strong>避免</strong>：<code>push</code> <code>unshift</code> <code>pop</code> <code>shift</code> <code>splice</code> <code>sort</code> <code>reverse</code>、<code>arr[i] = ...</code><br><strong>改用</strong>：<code>concat</code> <code>[...arr]</code> <code>filter</code> <code>slice</code> <code>map</code>，排序先复制。<br>两个陷阱：<strong><code>slice</code> 复制 / <code>splice</code> 原地改</strong>；<strong><code>sort</code> 是原地的</strong>（不像 C# 的 <code>OrderBy()</code>）。</td>
+    </tr>
+    <tr>
+      <td><strong>Render tree</strong><br>渲染树</td>
+      <td>组件在 UI 里的嵌套结构。关键事实：<strong>state 不住在组件里，住在 React 里，按组件在渲染树中的<em>位置</em>索引。</strong>同一位置 → state 保留；位置没了或换成别的组件 → state 丢弃。<a href="https://react.dev/learn/preserving-and-resetting-state">react.dev</a></td>
+    </tr>
+    <tr>
+      <td><strong><code>key</code></strong></td>
+      <td><strong>把 key 本身变成「位置」的一部分</strong>，用来告诉 React「这一个是谁」。三条规则：兄弟之间唯一；<strong>不能变</strong>（别在渲染时现造）；<code>map()</code> 里直接返回的 JSX <strong>必须</strong>有 key。反过来还能主动用：<strong>换 key = 强制重新挂载</strong>（<code>&lt;EditForm key={userId} /&gt;</code> 切换用户时自动清空表单）。<a href="https://react.dev/learn/rendering-lists">react.dev</a></td>
+    </tr>
+    <tr>
+      <td><strong>index 当 key</strong></td>
+      <td><strong>不是「性能问题」，是静默的数据错位。</strong>删掉第一项后，React 认为「位置 0」还是同一个组件 → <strong>保留 state、只换 props</strong> → 标题对、数据错。<strong>完全不写 key 时 React 用的就是 index</strong>，两者是同一个 bug。官方措辞：<em>“often leads to subtle and confusing bugs”</em>。</td>
+    </tr>
+    <tr>
+      <td><strong>jsx-key</strong><br><strong>no-array-index-key</strong></td>
+      <td>两条 lint 规则。漏写 key → <code>warning react(jsx-key)</code>（退出码仍是 0）；<strong><code>key={index}</code> 默认完全不报</strong>，要手动开 <code>react/no-array-index-key</code>。<strong>逐级失守：rules-of-hooks 是 <code>error</code> → exhaustive-deps 是 <code>warning</code> → index 当 key 默认不报。</strong></td>
+    </tr>
+  </tbody>
+</table>
+
 <div class="footer">
-  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a> · <a href="../lessons/0005-useeffect-and-that-empty-array.html">第 5 课</a></p>
+  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a> · <a href="../lessons/0005-useeffect-and-that-empty-array.html">第 5 课</a> · <a href="../lessons/0006-immutability-and-key.html">第 6 课</a></p>
   <div class="ask"><strong>有词条不清楚？</strong> 问我，我会把解释补进这份文档 —— 它会跟着课程一起长大。</div>
 </div>
 

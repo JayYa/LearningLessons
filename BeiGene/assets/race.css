@@ -1,0 +1,127 @@
+/* Styles for the race.js component. Load after lesson.css. */
+
+.race {
+  border: 1px solid var(--rule);
+  background: #fff;
+  padding: 1.1rem 1.3rem 1rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.rc-head { border-bottom: 1px solid var(--rule); padding-bottom: 0.5rem; margin-bottom: 0.7rem; }
+.rc-head .label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.rc-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.rc-tab {
+  font-family: var(--serif);
+  font-size: 0.83rem;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.22rem 0.75rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.rc-tab:hover { background: var(--code-bg); }
+.rc-tab.on { border-color: var(--ink); color: var(--ink); background: var(--code-bg); font-weight: 600; }
+
+.rc-sql {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  background: var(--code-bg);
+  border-left: 3px solid var(--rule);
+  padding: 0.6rem 0.85rem;
+  margin: 0 0 0.9rem;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.rc-state {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px dashed var(--rule);
+  margin-bottom: 0.9rem;
+}
+.rc-state-label {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-right: 0.3rem;
+}
+.rc-cell { font-family: var(--mono); font-size: 0.76rem; padding: 0.1rem 0.35rem; border-radius: 2px; }
+.rc-cell i { font-style: normal; color: var(--ink-soft); margin-right: 0.35rem; }
+.rc-cell.just-changed { background: #fdf3cf; }
+
+.rc-lanes, .rc-timeline { display: grid; gap: 0 0.7rem; }
+.rc-lane {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  text-align: center;
+  border-bottom: 1.5px solid var(--ink);
+  padding-bottom: 0.25rem;
+}
+
+.rc-timeline { list-style: none; margin: 0; padding: 0; }
+.rc-step-row {
+  border: 1px solid var(--rule);
+  border-left-width: 3px;
+  background: var(--paper);
+  padding: 0.45rem 0.6rem;
+  margin-top: 0.5rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+.rc-step-row.latest { box-shadow: 0 0 0 2px #fdf3cf; }
+.rc-step-row.good { border-left-color: var(--good); background: var(--good-soft); }
+.rc-step-row.bad  { border-left-color: var(--bad);  background: var(--bad-soft); }
+.rc-step-row.wait { border-left-color: #b7791f; background: #fdf7e7; }
+.rc-t { font-family: var(--mono); font-size: 0.66rem; color: var(--ink-soft); display: block; }
+.rc-text { display: block; }
+.rc-note { display: block; margin-top: 0.3rem; font-size: 0.8rem; color: var(--ink-soft); }
+
+.rc-verdict { display: none; }
+.rc-verdict.show {
+  display: block;
+  margin-top: 1rem;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  border-left: 3px solid var(--rule);
+  background: var(--code-bg);
+}
+.rc-verdict.show strong { display: block; margin-bottom: 0.2rem; }
+.rc-verdict.show.good { border-left-color: var(--good); background: var(--good-soft); }
+.rc-verdict.show.bad  { border-left-color: var(--bad);  background: var(--bad-soft); }
+.rc-verdict.show.warn { border-left-color: #b7791f; background: #fdf7e7; }
+
+.rc-controls { display: flex; gap: 0.6rem; margin-top: 0.9rem; }
+.rc-step, .rc-reset {
+  font-family: var(--serif);
+  font-size: 0.85rem;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.25rem 0.9rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+.rc-step:hover:not(:disabled), .rc-reset:hover:not(:disabled) { border-color: var(--ink-soft); background: var(--code-bg); }
+.rc-step:disabled, .rc-reset:disabled { cursor: default; opacity: 0.45; }
+
+@media print {
+  .rc-tabs, .rc-controls { display: none; }
+  .rc-verdict { display: block !important; }
+}

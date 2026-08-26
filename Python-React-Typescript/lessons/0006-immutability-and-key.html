@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 6 课 · 不可变更新与 key</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/widgets.css">
+<script src="../assets/widgets.js" defer></script>
+</head>
+<body>
+<main class="page">
+
+<p class="eyebrow">Lesson 0006 · 约 50 分钟</p>
+<h1>不可变更新与 <code>key</code></h1>
+<p class="subtitle"><code>Object.is</code> 已经咬了你两次。这一课它咬第三次 —— 但这次它不报错、不卡住、也不打爆后端，<strong>它只是安静地把你的改动藏起来，等一个你意想不到的时刻再全部倒出来</strong>。</p>
+
+<div class="block win">
+  <span class="label">本课的收获</span>
+  <p>两条规则，一个共同的根：<strong>state 里的对象和数组要当只读的用</strong>；<strong><code>key</code> 不是「给列表编个号」，是「告诉 React 这一个是谁」</strong>。做完之后你能解释四件事：为什么 <code>arr.push(x); setArr(arr)</code> 界面纹丝不动；为什么它<em>过一会儿又自己变了</em>；为什么用数组下标当 <code>key</code> 会造成<strong>静默的数据错位</strong>（不是「性能问题」）；以及怎么反过来<strong>用 <code>key</code> 主动重置一个组件的 state</strong>。</p>
+</div>
+
+<h2>一、第三次被同一颗牙咬</h2>
+
+<p>先把前两次摆出来，你会发现它们是同一件事：</p>
+
+<table>
+  <thead><tr><th style="width:8rem">出现在</th><th>症状</th><th style="width:9rem">根因</th></tr></thead>
+  <tbody>
+    <tr><td><a href="0005-useeffect-and-that-empty-array.html">第 5 课</a><br>依赖数组</td><td><code>[obj]</code> 每次都被判「变了」</td><td rowspan="3" style="vertical-align:middle;text-align:center"><strong><code>Object.is</code><br>比的是<em>引用</em>，<br>不是内容</strong></td></tr>
+    <tr><td><a href="0005-useeffect-and-that-empty-array.html">第 5 课</a><br>Effect 失控</td><td><code>setData(新对象)</code> 无限循环</td></tr>
+    <tr><td><strong>本课</strong><br>不可变更新</td><td><code>setArr(同一个数组)</code> <strong>什么都不发生</strong></td></tr>
+  </tbody>
+</table>
+
+<p>前两次是「本该相等却判成不等」，这一次反过来 —— <strong>「本该不等却判成相等」</strong>。你确实往数组里塞了新东西，但 React 拿到的还是<em>同一个数组对象</em>，于是它说：没变，不用重渲染。</p>
+
+<blockquote>
+“<strong>But without using the state setting function, React has no idea that object has changed. So React does not do anything in response.</strong> It's like trying to change the order after you've already eaten the meal.”
+<cite>—— <a href="https://react.dev/learn/updating-objects-in-state">react.dev · Updating Objects in State</a></cite>
+</blockquote>
+
+<p>官方给的规则很短：</p>
+
+<blockquote>
+“In other words, you should <strong>treat any JavaScript object that you put into state as read-only.</strong>”<br>
+“Arrays are mutable in JavaScript, but <strong>you should treat them as immutable when you store them in state.</strong> … you shouldn't reassign items inside an array like <code>arr[0] = 'bird'</code>, and you also shouldn't use methods that mutate the array, such as <code>push()</code> and <code>pop()</code>.”
+<cite>—— <a href="https://react.dev/learn/updating-arrays-in-state">react.dev · Updating Arrays in State</a></cite>
+</blockquote>
+
+<div class="block csharp">
+  <span class="label">C# 参照物：这个你其实早就会了</span>
+  <p>这就是 <strong><code>record</code> 与 <code>with</code> 表达式</strong>的世界观，也是 <strong><code>ImmutableList&lt;T&gt;</code></strong> 的世界观：想改，就造一个新的。</p>
+<pre><code><span class="cmt">// C#</span>
+var next = person with { Age = 31 };        <span class="cmt">// 新实例</span>
+var next = list.Add(item);                  <span class="cmt">// ImmutableList：返回新表，原表不动</span>
+
+<span class="cmt">// React 里一模一样的动作</span>
+setPerson({ ...person, age: 31 });
+setItems([...items, item]);</code></pre>
+  <p style="margin-bottom:0"><strong>差异在于强制力</strong>：C# 的 <code>record</code> 和 <code>ImmutableList</code> 由<em>类型系统</em>替你把关，你想 mutate 都编译不过。JS 的数组永远是可变的，<strong>没有任何东西拦你</strong> —— <code>arr.push()</code> 编译通过、lint 不报、运行不报错。这条纪律<strong>百分之百靠自觉</strong>。这正是面试官想听你说出口的那句差异。</p>
+</div>
+
+<h2>二、幽灵变更：它没丢，它在潜伏</h2>
+
+<p>大多数教程讲到「mutate 了界面不更新」就停了。<strong>但真实项目里的 bug 长得比这难看得多</strong>，因为那次 mutation <em>并没有被丢弃</em>。我实跑了一遍，数的是组件函数被调用的次数：</p>
+
+<table>
+  <thead><tr><th>动作</th><th style="width:7rem">渲染次数</th><th style="width:8rem">屏幕上</th></tr></thead>
+  <tbody>
+    <tr><td>初始：<code>state = ["a"]</code></td><td>—</td><td><code>a</code></td></tr>
+    <tr><td><code>arr.push("x"); setArr(arr)</code></td><td><strong>+0</strong></td><td><code>a</code> ← 没反应</td></tr>
+    <tr><td>再点一次<strong>无关的</strong>按钮（比如那个计数器）</td><td>+1</td><td><strong><code>a,x,x</code></strong> ← ？！</td></tr>
+  </tbody>
+</table>
+
+<p style="font-size:0.86rem;color:#666;">实测环境：React 19.2.8 + @testing-library/react + jsdom。第 2 步你会在真浏览器里复现它。</p>
+
+<div class="block trap">
+  <span class="label">看懂那个 <code>a,x,x</code></span>
+  <p>你点了两次「加一行」，两次都被 <code>Object.is</code> 判为「没变」而跳过渲染。但 <code>push</code> <strong>是真的执行了</strong> —— 数组里已经躺着两个 <code>x</code>，只是屏幕还停在旧的那一帧。</p>
+  <p style="margin-bottom:0">直到某个<strong>完全不相干</strong>的 state 变化触发了一次渲染，组件函数被重新调用，读到那个早就被改烂了的数组 —— <strong>积压的变更一次性全部倒出来。</strong><br>
+  所以 mutation 的真实症状不是「不更新」，是 <strong>「点了没反应，过一会儿一堆东西突然全变了」</strong>。这种 bug 复现困难、日志干净、责任人难找。<strong>能在面试里描述出这个形状的人，明显是真踩过的。</strong></p>
+</div>
+
+<h2>三、不可变更新速查</h2>
+
+<p>官方这张表建议直接背下来 —— 它是本课唯一需要死记的东西：</p>
+
+<table>
+  <thead><tr><th style="width:5rem">要做的事</th><th>避免（会 mutate）</th><th>改用（返回新数组）</th></tr></thead>
+  <tbody>
+    <tr><td><strong>增</strong></td><td><code>push</code>、<code>unshift</code></td><td><code>concat</code>、<code>[...arr, item]</code></td></tr>
+    <tr><td><strong>删</strong></td><td><code>pop</code>、<code>shift</code>、<code>splice</code></td><td><code>filter</code>、<code>slice</code></td></tr>
+    <tr><td><strong>改</strong></td><td><code>splice</code>、<code>arr[i] = ...</code></td><td><code>map</code></td></tr>
+    <tr><td><strong>排序</strong></td><td><code>reverse</code>、<code>sort</code></td><td><strong>先复制一份再排</strong></td></tr>
+  </tbody>
+</table>
+<p style="font-size:0.86rem;color:#666;margin-top:-0.6rem;">来源：<a href="https://react.dev/learn/updating-arrays-in-state">react.dev · Updating Arrays in State</a></p>
+
+<blockquote>
+“Unfortunately, <code>slice</code> and <code>splice</code> are named similarly but are very different: <strong><code>slice</code> lets you copy</strong> an array or a part of it. <strong><code>splice</code> mutates</strong> the array (to insert or delete items).”
+<cite>—— <a href="https://react.dev/learn/updating-arrays-in-state">react.dev · Updating Arrays in State</a></cite>
+</blockquote>
+
+<p><code>slice</code> / <code>splice</code> 这对是<strong>面试常见的一击</strong>：名字差一个字母，行为正好相反。<code>sort</code> 也值得单独记 —— C# 的 <code>list.OrderBy()</code> 返回新序列，<strong>JS 的 <code>arr.sort()</code> 是原地排序并返回同一个数组</strong>，直觉会骗你。</p>
+
+<div class="block win">
+  <span class="label">但是：刚造出来的东西随便改</span>
+  <blockquote style="margin-bottom:0.7rem">
+  “Mutation is only a problem when you change <em>existing</em> objects that are already in state. <strong>Mutating an object you've just created is okay because no other code references it yet.</strong> … This is called a ‘local mutation’. … Very convenient and completely okay!”
+  <cite>—— <a href="https://react.dev/learn/updating-objects-in-state">react.dev · Updating Objects in State</a></cite>
+  </blockquote>
+  <p style="margin-bottom:0">所以 <code>const next = [...items]; next.sort(...); setItems(next);</code> <strong>是完全合法的</strong>。规则不是「禁止一切 mutation」，是<strong>「禁止改已经在 state 里的那个对象」</strong>。说清这个边界，比背「React 要求不可变」高一档。</p>
+</div>
+
+<h2>四、<code>key</code>：state 其实不住在组件里</h2>
+
+<p>现在换一个话题 —— 你会发现它其实是同一个话题。</p>
+
+<p>先纠正一个几乎人人都有的默认假设。你大概以为组件的 state「存在组件里面」。不是：</p>
+
+<blockquote>
+“When you give a component state, you might think the state ‘lives’ inside the component. But <strong>the state is actually held inside React.</strong> React associates each piece of state it's holding with the correct component <strong>by where that component sits in the render tree</strong>.”<br>
+“<strong>React preserves a component's state for as long as it's being rendered at its position in the UI tree.</strong> If it gets removed, or a different component gets rendered at the same position, React discards its state.”
+<cite>—— <a href="https://react.dev/learn/preserving-and-resetting-state">react.dev · Preserving and Resetting State</a></cite>
+</blockquote>
+
+<p><strong>state 的身份证是「位置」，不是「组件实例」。</strong>这跟 C# 差得很远：C# 里对象的身份就是引用本身，一个 <code>Counter</code> 实例的字段当然属于那个实例。React 里没有「那个实例」这回事 —— 组件函数每次渲染都重新跑一遍（<a href="0004-what-is-react-state.html">第 4 课</a>），能把新旧两次对上号的，只有<strong>它在树里的位置</strong>。</p>
+
+<p>而 <code>key</code> 做的事，就是<strong>改写「位置」的定义</strong>：</p>
+
+<blockquote>
+“By default, React uses order within the parent (‘first counter’, ‘second counter’) to discern between components. But <strong>keys let you tell React that this is not just a <em>first</em> counter, or a <em>second</em> counter, but a specific counter</strong> — for example, <em>Taylor's</em> counter.”<br>
+“<strong>Specifying a <code>key</code> tells React to use the <code>key</code> itself as part of the position, instead of their order within the parent.</strong>”
+<cite>—— <a href="https://react.dev/learn/preserving-and-resetting-state">react.dev · Preserving and Resetting State</a></cite>
+</blockquote>
+
+<p>所以「<code>key</code> 是为了性能」这个说法<strong>本末倒置了</strong>。<code>key</code> 首先是<strong>身份</strong>；性能只是身份认对了之后的副产品。官方的比喻很好记：</p>
+
+<blockquote>
+“Imagine that files on your desktop didn't have names. Instead, you'd refer to them by their order — the first file, the second file, and so on. <strong>You could get used to it, but once you delete a file, it would get confusing.</strong>”
+<cite>—— <a href="https://react.dev/learn/rendering-lists">react.dev · Rendering Lists</a></cite>
+</blockquote>
+
+<h2>五、用下标当 <code>key</code> 到底会怎样</h2>
+
+<p>网上最常见的说法是「用 index 当 key 会有性能问题」。<strong>这话轻描淡写得离谱。</strong>我实测了一遍：三行列表，每行是一个带自己 state 的子组件（输入框里填了备注），然后删掉第一行。</p>
+
+<table>
+  <thead><tr><th style="width:9rem">key 怎么写</th><th>删掉「苹果」这一行之后，剩下两行的备注</th></tr></thead>
+  <tbody>
+    <tr><td><code>key={item.id}</code></td><td>香蕉 = <code>BBB</code>　橘子 = <code>CCC</code>　<strong>✅ 正确</strong></td></tr>
+    <tr><td><code>key={index}</code></td><td>香蕉 = <strong><code>AAA</code></strong>　橘子 = <strong><code>BBB</code></strong>　<strong>❌ 整体上移了一格</strong></td></tr>
+  </tbody>
+</table>
+
+<p><strong>「苹果」的备注跑到「香蕉」头上去了。</strong>不报错、不警告、控制台干干净净。如果这一列是「已勾选」「输入到一半的金额」「上传中的文件」，你就得到了一个<strong>会串数据的生产事故</strong>。</p>
+
+<div class="block trap">
+  <span class="label">为什么会串</span>
+  <p>删掉第一项后，原来的「香蕉」从 index 1 挪到了 index 0。如果 key 就是 index，React 看到的是：<strong>位置 0 上还是那个 key 为 <code>0</code> 的组件，没变嘛</strong> —— 于是它<strong>保留了位置 0 的 state</strong>，只是把 <code>label</code> 这个 prop 换成了「香蕉」。</p>
+  <p style="margin-bottom:0">于是：<strong>props 换了，state 没换。</strong>屏幕上就是「香蕉」的标题配「苹果」的备注 —— 和<a href="0005-useeffect-and-that-empty-array.html">第 5 课</a>那个竞态 bug（Bob 的标题配 Alice 的数据）是<strong>同一个形状的事故</strong>：<em>身份对不上号</em>。</p>
+</div>
+
+<blockquote>
+“You might be tempted to use an item's index in the array as its key. In fact, <strong>that's what React will use if you don't specify a <code>key</code> at all.</strong> But the order in which you render items will change over time if an item is inserted, deleted, or if the array gets reordered. <strong>Index as a key often leads to subtle and confusing bugs.</strong>”<br>
+“Similarly, <strong>do not generate keys on the fly, e.g. with <code>key={Math.random()}</code>.</strong> This will cause keys to never match up between renders, leading to all your components and DOM being recreated every time. Not only is this slow, but it will also <strong>lose any user input inside the list items.</strong>”
+<cite>—— <a href="https://react.dev/learn/rendering-lists">react.dev · Rendering Lists</a></cite>
+</blockquote>
+
+<p><strong>注意第一句里那个信息量很大的事实：不写 <code>key</code> ≡ 用 index 当 key。</strong>所以「漏写 key」和「用 index 当 key」是同一个 bug 的两种拼法。</p>
+
+<p>三条规则，官方原文：</p>
+
+<blockquote>
+“<strong>Keys must be unique among siblings.</strong> However, it's okay to use the same keys for JSX nodes in <em>different</em> arrays.”<br>
+“<strong>Keys must not change</strong> or that defeats their purpose! Don't generate them while rendering.”<br>
+“<strong>JSX elements directly inside a <code>map()</code> call always need keys!</strong>”
+<cite>—— <a href="https://react.dev/learn/rendering-lists">react.dev · Rendering Lists</a></cite>
+</blockquote>
+
+<p>那 id 从哪来？数据库主键最理想；纯前端造的数据用一个自增计数器或 <a href="https://developer.mozilla.org/en-US/docs/Web/API/Crypto/randomUUID"><code>crypto.randomUUID()</code></a>，<strong>在「创建这条数据」的那一刻生成一次并存进 state</strong> —— 不是在渲染时生成。</p>
+
+<h2>六、反过来用：<code>key</code> 是重置按钮</h2>
+
+<p>既然 <code>key</code> 决定身份，那么<strong>换一个 <code>key</code> 就等于「这是另一个组件了」</strong>，React 会丢掉旧 state、重新挂载。这不是黑魔法，是官方推荐的手法。实测：</p>
+
+<table>
+  <thead><tr><th>写法</th><th style="width:14rem">把 name 从 Alice 切到 Bob（此前已点了 2 次）</th></tr></thead>
+  <tbody>
+    <tr><td><code>&lt;Counter name={who} /&gt;</code></td><td><code>Bob:2</code> ← <strong>Bob 继承了 Alice 的计数</strong></td></tr>
+    <tr><td><code>&lt;Counter key={who} name={who} /&gt;</code></td><td><code>Bob:0</code> ← 干净的新组件</td></tr>
+  </tbody>
+</table>
+
+<p>典型用法：一个编辑表单，切换编辑对象时要清空用户输入到一半的内容 —— <code>&lt;EditForm key={userId} ... /&gt;</code> 一行搞定，不需要写一个 <code>useEffect</code> 去手动清空每个字段（<a href="https://react.dev/learn/you-might-not-need-an-effect#resetting-all-state-when-a-prop-changes">这正是「You Might Not Need an Effect」点名的场景之一</a>）。</p>
+
+<h2>七、动手</h2>
+
+<p>两个终端照旧开着。这一课<strong>全程在浏览器里做，盯着页面和 Console</strong>，FastAPI 那边不用管。只改 <code>App.tsx</code>。</p>
+
+<ol class="checklist" data-checklist="0006">
+
+<li>
+<span class="step-title">先搭一个能出事的列表</span>
+<p>在 <code>App.tsx</code> 里，<strong>组件函数外面</strong>加一个子组件和一个 id 计数器：</p>
+<pre><code>type Item = { id: number; label: string };
+
+let nextId = 3;                                   <span class="cmt">// 模块级，不是 state</span>
+
+function Row({ label }: { label: string }) {
+  const [note, setNote] = useState("");           <span class="cmt">// ← 每行有自己的 state</span>
+  return (
+    &lt;li&gt;
+      {label}：&lt;input value={note} onChange={(e) =&gt; setNote(e.target.value)} /&gt;
+    &lt;/li&gt;
+  );
+}</code></pre>
+<p>然后在 <code>App</code> 里加 state，并在按钮下面渲染列表 —— <strong>这一步故意不写 <code>key</code></strong>：</p>
+<pre><code>const [items, setItems] = useState&lt;Item[]&gt;([
+  { id: 0, label: "苹果" },
+  { id: 1, label: "香蕉" },
+  { id: 2, label: "橘子" },
+]);
+
+<span class="cmt">// JSX 里：</span>
+&lt;ul&gt;
+  {items.map((item) =&gt; &lt;Row label={item.label} /&gt;)}
+&lt;/ul&gt;</code></pre>
+<p>保存，看浏览器 Console：</p>
+<pre><code>Each child in a list should have a unique "key" prop.</code></pre>
+<p>再跑 <code>pnpm lint</code>：</p>
+<pre><code>warning react(jsx-key): Missing "key" prop for element in iterator.</code></pre>
+<p><strong>又是 warning，又是退出码 0。</strong>和上一课的 <code>exhaustive-deps</code> 一样 —— 记住这条线：<a href="0004-what-is-react-state.html">第 4 课</a>的 rules-of-hooks 是 <code>error</code>，第 5 课的 exhaustive-deps 是 <code>warning</code>，而第 5 步你会看到<strong>更狠的</strong>。</p>
+</li>
+
+<li>
+<span class="step-title">召唤幽灵：mutate 一次，再等它自己冒出来</span>
+<p>加一个按钮，<strong>用错误的方式</strong>加一行：</p>
+<pre><code>&lt;button onClick={() =&gt; {
+  items.push({ id: nextId++, label: "新条目 " + nextId });   <span class="cmt">// ← mutate</span>
+  setItems(items);                                          <span class="cmt">// ← 同一个引用</span>
+}}&gt;加一行（错误写法）&lt;/button&gt;</code></pre>
+<p>保存前先预测：</p>
+
+<div class="widget predict">
+  <p class="widget-kind">先预测 · 别偷看</p>
+  <p class="predict-prompt">点三下「加一行（错误写法）」，屏幕上什么都没发生。<strong>接着</strong>去点那个和列表毫无关系的 <code>count</code> 按钮一次 —— 屏幕会怎样？</p>
+  <div class="predict-answer" hidden>
+    <p><strong>三条「新条目」一次性全部出现。</strong><br>那三次 <code>push</code> 都真的执行了，数组里早就躺着六项 —— 只是 <code>Object.is</code> 判定引用没变，React 三次都跳过了重渲染。<code>count</code> 变化触发了一次真正的渲染，组件函数重新读那个<em>早已被改烂的</em>数组，<strong>积压的变更就全倒出来了</strong>。<br>如果你预测的是「永远不显示」—— 差之毫厘：<strong>mutation 不是丢失，是潜伏。</strong>这才是它在真实项目里难查的原因。</p>
+  </div>
+</div>
+<p>照做：点三下加一行（观察：毫无反应），再点一下 <code>count</code>。<strong>盯着那一刻。</strong></p>
+<p><em>这十秒和上一课「打爆后端」那十秒同等重要。区别是：那次很吵，这次悄无声息。</em></p>
+</li>
+
+<li>
+<span class="step-title">改成不可变更新</span>
+<p>把上一步那两行换成一行：</p>
+<pre><code>&lt;button onClick={() =&gt; {
+  setItems([...items, { id: nextId++, label: "新条目 " + nextId }]);
+}}&gt;加一行&lt;/button&gt;</code></pre>
+<p>现在每点一下立刻多一行。<strong>唯一的变化是「造了个新数组」。</strong></p>
+<p>顺手把 <code>key</code> 补上，Console 的警告消失：</p>
+<pre><code>{items.map((item) =&gt; &lt;Row key={item.id} label={item.label} /&gt;)}</code></pre>
+</li>
+
+<li>
+<span class="step-title">制造数据错位事故</span>
+<p>加一个删除按钮，删掉第一行（<strong>注意用 <code>slice</code> 而不是 <code>splice</code></strong>）：</p>
+<pre><code>&lt;button onClick={() =&gt; setItems(items.slice(1))}&gt;删掉第一行&lt;/button&gt;</code></pre>
+<p>现在做这个实验，<strong>顺序很重要</strong>：</p>
+<ol>
+  <li>把 <code>key={item.id}</code> 改成 <code>key={index}</code>（记得把 map 的参数改成 <code>(item, index)</code>）</li>
+  <li>刷新页面，在三个输入框里分别填 <code>AAA</code> / <code>BBB</code> / <code>CCC</code></li>
+  <li>点「删掉第一行」</li>
+</ol>
+<p>结果：<strong>香蕉那一行的备注变成了 <code>AAA</code></strong>，橘子变成 <code>BBB</code>。数据整体上移了一格 —— 而<strong>标题是对的</strong>。这就是最难查的那种 bug：一半对一半错。</p>
+<p>改回 <code>key={item.id}</code>，刷新后重复一遍：备注跟着各自的行走，正确。</p>
+</li>
+
+<li>
+<span class="step-title">让 lint 彻底失守</span>
+<p>再把 <code>key={index}</code> 那个有 bug 的版本改回来一次，跑 <code>pnpm lint</code>：</p>
+<pre><code><span class="cmt">（什么都没有）</span></code></pre>
+<p><strong>零警告。</strong>你刚亲眼看到数据错位，而工具链一声不吭 —— 因为默认规则集里没开这条。手动开一次看看：</p>
+<pre><code>pnpm exec oxlint -D react/no-array-index-key src</code></pre>
+<pre><code>error react(no-array-index-key): Usage of Array index in keys is not allowed</code></pre>
+<p>规则<strong>存在</strong>，只是默认不开。三课下来这条线索完整了 ——<br>
+<strong>第 4 课 <code>error</code>（拦得住）→ 第 5 课 <code>warning</code>（提醒你）→ 第 6 课默认<code>不报</code>（全靠你自己）</strong>。<br>把 <code>key</code> 改回 <code>item.id</code>，确认 <code>pnpm lint</code> 干净。</p>
+<p><em>面试价值：被问「你们怎么保证代码质量」时，能说出「lint 能拦什么、拦不住什么」，比罗列工具名有说服力得多。</em></p>
+</li>
+
+<li>
+<span class="step-title">反过来用 <code>key</code>：一行代码重置一个组件</span>
+<p>给 <code>App</code> 加一个「改名」按钮，整批替换 <code>label</code>，但 <strong>id 保持不变</strong>：</p>
+<pre><code>&lt;button onClick={() =&gt; setItems(items.map((it) =&gt; ({ ...it, label: it.label + "*" })))}&gt;
+  给每一行改名
+&lt;/button&gt;</code></pre>
+<p>先在输入框里填点东西，再点它：<strong>标题变了，备注还在</strong>（id 没变 = 身份没变 = state 保留）。这通常正是你想要的。</p>
+<p>现在把 <code>key</code> 改成 <code>key={item.label}</code>，刷新，重填，再点一次：<strong>所有备注被清空。</strong>label 变了 → key 变了 → React 认为这是全新的组件 → 旧 state 丢弃。</p>
+<p>把 <code>key</code> 改回 <code>item.id</code>。<strong>刚才那两次的差别，就是「什么算同一个东西」的定义权在你手上。</strong></p>
+<p>收尾：<code>pnpm lint</code> 与 <code>pnpm build</code> 零错误；页面上有 <code>Hello from Python</code>、计数按钮、三行可编辑列表。</p>
+<div class="block win">
+  <span class="label">你现在拥有的</span>
+  <p>你见过一次「改动潜伏、稍后集体爆发」，也见过一次「标题对、数据错」。两件事的根都是同一句话：<strong>React 靠<em>身份</em>判断「这还是不是原来那个」—— 对数据来说身份是<em>引用</em>，对组件来说身份是<em>位置（或 key）</em>。</strong></p>
+</div>
+</li>
+
+</ol>
+
+<h2>八、检验一下</h2>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 1 / 5</p>
+  <p class="quiz-q"><code>arr.push(x); setArr(arr)</code> 之后界面没反应，真正的后果是：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>改动潜伏在数组里，下次渲染时集体显现</button></li>
+    <li><button>改动被彻底丢弃，数组内容与渲染前完全一致</button></li>
+    <li><button>React 抛出运行时错误，提示不允许直接修改状态</button></li>
+    <li><button>页面延迟一小段时间后，会自动补上这次的更新</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p><code>push</code> <strong>真的执行了</strong>，数组已经变了；只是 <code>Object.is</code> 看到引用没变，React 跳过重渲染。等某个<strong>不相干</strong>的 state 变化触发渲染，积压的改动一次性全部出现（实测：连 push 两次后点别的按钮 → 屏幕从 <code>a</code> 直接跳到 <code>a,x,x</code>）。<br><strong>mutation 不是丢失，是潜伏</strong> —— 这才是它难查的原因。React 也不会为此报错：JS 没有任何机制拦得住你改数组。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 2 / 5</p>
+  <p class="quiz-q">下面哪一组<strong>全都是会 mutate 原数组</strong>的方法？</p>
+  <ul class="quiz-opts">
+    <li><button data-correct><code>push</code>　<code>splice</code>　<code>sort</code>　<code>reverse</code></button></li>
+    <li><button><code>concat</code>　<code>splice</code>　<code>sort</code>　<code>filter</code></button></li>
+    <li><button><code>push</code>　<code>slice</code>　<code>map</code>　<code>reverse</code></button></li>
+    <li><button><code>concat</code>　<code>slice</code>　<code>map</code>　<code>filter</code></button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>最后一组正好相反 —— <code>concat</code> / <code>slice</code> / <code>map</code> / <code>filter</code> <strong>全部返回新数组</strong>，是安全的那一批。<br>两个高频陷阱：<strong><code>slice</code> 复制、<code>splice</code> 原地改</strong>（名字只差一个字母）；<strong><code>sort</code> 和 <code>reverse</code> 是原地的</strong> —— 这一条特别容易被 C# 背景骗到，因为 <code>OrderBy()</code> 返回的是新序列。要排序就先 <code>[...arr]</code> 复制一份。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 3 / 5</p>
+  <p class="quiz-q">用数组下标当 <code>key</code>，删掉列表第一项之后会发生：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>各行的 state 整体错位，标题对而数据错</button></li>
+    <li><button>只是多做了一些无谓的重绘，纯粹的性能损耗</button></li>
+    <li><button>React 会打出重复 key 的警告，但行为仍然正确</button></li>
+    <li><button>整个列表被卸载重建，所有行的输入都被清空</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>实测：三行填了 <code>AAA</code>/<code>BBB</code>/<code>CCC</code>，删掉第一行后 <strong>香蕉=<code>AAA</code>，橘子=<code>BBB</code></strong>。<br>因为 key 是 index 时，「位置 0」在 React 眼里始终是同一个组件 —— 它<strong>保留 state，只换 props</strong>。于是标题是新的、state 是旧的。<br><strong>「只是性能问题」是流传最广的误解。</strong>官方的措辞是 “Index as a key often leads to <strong>subtle and confusing bugs</strong>”。另外要记住：<strong>完全不写 key，React 用的就是 index</strong> —— 两者是同一个 bug。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 4 / 5</p>
+  <p class="quiz-q">React 判断「这还是不是原来那个组件」，依据是：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>它在渲染树里的位置，以及你给的 <code>key</code></button></li>
+    <li><button>组件函数本身的引用，每个函数对应一个实例</button></li>
+    <li><button>传进去的 props 是否与上一次渲染保持一致</button></li>
+    <li><button>组件内部 state 的内容是否发生了实质的变化</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>官方原话：<strong>“the state is actually held inside React… by where that component sits in the render tree.”</strong> 而 <code>key</code> 的作用是 <strong>“use the key itself as part of the position”</strong> —— 它<em>改写位置的定义</em>。<br>这一条和 C# 差得最远：C# 里对象身份就是引用，React 里根本没有「组件实例」这个东西可抓（<a href="0004-what-is-react-state.html">第 4 课</a>：组件只是每次渲染被重新调用的函数）。<br>推论：<strong>同一位置、key 不变 → state 保留；key 变了 → 旧 state 丢弃、重新挂载。</strong>这就是「用 key 重置组件」的全部原理。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 5 / 5</p>
+  <p class="quiz-q">下面哪一种 mutation 是<strong>官方明确认可</strong>的？</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>修改自己刚刚复制出来、尚未交给任何人的新数组</button></li>
+    <li><button>修改 state 里的那个数组，只要紧接着调用 setState</button></li>
+    <li><button>修改 state 里的那个对象，只要改的是深层嵌套字段</button></li>
+    <li><button>修改 state 里的那个数组，只要该组件没有子组件</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>叫 <strong>local mutation</strong>：<strong>“Mutating an object you've just created is okay because no other code references it yet.”</strong> 所以 <code>const next = [...items]; next.sort(f); setItems(next);</code> 完全合法。<br>规则不是「禁止一切 mutation」，而是<strong>「禁止改已经在 state 里的那个对象」</strong>。<br>第二个选项是最常见的错误直觉：<code>setItems(items)</code> 传的还是<strong>同一个引用</strong>，<code>Object.is</code> 判相等 → 直接跳过重渲染，调不调 setState 都一样。</p>
+  </div>
+</div>
+
+<div class="widget recall">
+  <p class="widget-kind">回忆练习 · 出声说，别只在心里过</p>
+  <p class="recall-prompt">合上这一页，<strong>连着讲 60 秒</strong>：<br>（1）你点了三下「加一行」都没反应，然后点了个不相干的按钮，三行一起冒出来了 —— 完整解释这个过程；<br>（2）「index 当 key 只是性能问题」错在哪？用你第 4 步看到的现象讲；<br>（3）为什么 <code>&lt;Form key={userId} /&gt;</code> 能在切换用户时清空表单？</p>
+  <button class="recall-btn">先出声回答，再点开</button>
+  <div class="recall-answer" hidden>
+    <p><strong>(1)</strong> <code>push</code> 真的改了数组，但 <code>setItems(items)</code> 传的是同一个引用，<code>Object.is</code> 判「没变」→ React 跳过重渲染（这是第 5 课那条 bail-out 规则的第三次现身）。数组内容已经是新的，屏幕停在旧帧。<code>count</code> 变化触发真渲染时，组件函数读到那个早已被改烂的数组 → 积压的改动一次性显现。<strong>mutation 不是丢失，是潜伏。</strong></p>
+    <p><strong>(2)</strong> state 不住在组件里，住在 React 里，按<strong>位置</strong>索引。key 是 index 时，删掉第一项后「位置 0」在 React 眼里没变 → <strong>保留 state、只换 props</strong> → 标题是香蕉、备注还是苹果的。这不是重绘开销，是<strong>静默的数据错位</strong>，而且默认的 lint 完全不报。</p>
+    <p><strong>(3)</strong> key 参与构成「位置」。<code>userId</code> 变了 → key 变了 → React 认定这是<em>另一个</em>组件 → 卸载旧的（连同它全部 state）、挂载新的。所以不需要写 <code>useEffect</code> 去逐个字段清空 —— 那正是「You Might Not Need an Effect」点名的反模式。</p>
+  </div>
+</div>
+
+<h2>九、面试回答模板</h2>
+
+<div class="block interview">
+  <span class="label">如果面试官问：“为什么 React 要求不可变更新？” / “<code>key</code> 是干什么的？为什么不能用 index？”</span>
+  <p>“两个问题其实是一个：<strong>React 靠『身份』判断东西变没变，而不是靠内容。</strong><br>
+  对数据来说，身份就是<strong>引用</strong>。<code>Object.is</code> 是浅比较，所以 <code>arr.push(x)</code> 之后再 <code>setArr(arr)</code>，React 看到同一个引用，直接跳过重渲染。我踩过这个坑，<strong>它最坑的地方不是『不更新』</strong> —— 那次 push 是真的生效了，只是屏幕没跟上；等某个不相干的 state 一变，积压的改动会<strong>一次性全部冒出来</strong>。所以症状是『点了没反应，后来一堆东西突然全变了』，很难查。正确写法是 <code>[...arr, x]</code>；顺带一提 <code>slice</code> 是复制、<code>splice</code> 是原地改，<code>sort</code> 和 <code>reverse</code> 也是原地的，要先复制。不过 <strong>local mutation 是允许的</strong> —— 改自己刚复制出来、还没交给别人的对象完全没问题。<br>
+  对组件来说，身份是<strong>位置</strong>。state 其实不存在组件里，是 React 按组件在渲染树里的位置存着的；<code>key</code> 的作用是<strong>把 key 本身变成位置的一部分</strong>。所以用 index 当 key 不是『性能问题』这么轻 —— 删掉第一项之后，React 认为『位置 0』还是同一个组件，于是<strong>保留 state、只换 props</strong>，结果是标题对、数据错。我实测过：三行备注填 AAA/BBB/CCC，删掉第一行后备注整体上移一格，<strong>控制台一声不吭，默认 lint 也不报</strong>。<br>
+  反过来这一点还能主动用：<code>&lt;EditForm key={userId} /&gt;</code>，切换用户时表单自动重置，不用写 Effect 手动清字段。”</p>
+  <p style="margin-top:0.7rem;font-size:0.86rem;">三个分水岭句子：<strong>「mutation 不是丢失，是潜伏」</strong>、<strong>「保留 state、只换 props」</strong>、<strong>「key 可以反过来当重置按钮用」</strong>。第一句证明你真调试过，第二句说明你懂机制而不是背结论，第三句说明你会用它解决问题。</p>
+</div>
+
+<h2>十、去读原始资料</h2>
+
+<p><strong>本课首选阅读：</strong><a href="https://react.dev/learn/preserving-and-resetting-state">react.dev · Preserving and Resetting State</a>（约 20 分钟）。<strong>整个 React 文档里最被低估的一篇</strong>，交互式例子非常多，请务必亲手点那些沙盒。特别读 <em>Same component at the same position preserves state</em> 与 <em>Resetting state at the same position</em> 两小节。</p>
+
+<p><strong>紧接着读：</strong><a href="https://react.dev/learn/updating-arrays-in-state">react.dev · Updating Arrays in State</a>（约 15 分钟）。那张 mutate / 非 mutate 对照表值得截图存下来。同系列的 <a href="https://react.dev/learn/updating-objects-in-state">Updating Objects in State</a> 讲嵌套对象怎么展开更新，也很短。</p>
+
+<p><strong>如果还有余力：</strong><a href="https://react.dev/learn/rendering-lists">react.dev · Rendering Lists</a> 末尾的 <em>Rules of keys</em>；以及 <a href="https://react.dev/learn/preserving-and-resetting-state#challenges">Preserving and Resetting State 页面底部的挑战题</a> —— 它们比本课测验难，且每道都对应一个真实 bug。</p>
+
+<div class="footer">
+  <h2>相关文档</h2>
+  <ul>
+    <li><a href="../reference/glossary.html">术语表</a> —— 本课引入：immutable update、local mutation、<code>key</code>、render tree、reconciliation、jsx-key / no-array-index-key</li>
+    <li><a href="../reference/csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> —— 本课引入：<code>record</code> + <code>with</code> / <code>ImmutableList&lt;T&gt;</code> vs 展开语法；对象身份（引用 vs 位置）</li>
+    <li><a href="0001-two-processes-one-wire.html">第 1 课</a> · <a href="0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="0003-guard-the-boundary.html">第 3 课</a> · <a href="0004-what-is-react-state.html">第 4 课</a> · <a href="0005-useeffect-and-that-empty-array.html">第 5 课</a></li>
+    <li><a href="../RESOURCES.md">RESOURCES.md</a> · <a href="../MISSION.md">MISSION.md</a></li>
+  </ul>
+
+  <h2>下一课</h2>
+  <p><strong>第 7 课：把数据交上去 —— 表单、<code>POST</code> 与两侧的校验</strong> —— 到现在为止数据一直是单向流下来的。该反过来了：受控组件是什么、为什么 React 的 <code>&lt;input&gt;</code> 非要你写 <code>onChange</code>（第 1 步那个 <code>Row</code> 已经埋了伏笔）、一个 <code>POST</code> 请求怎么同时穿过 Zod 和 Pydantic 两道关（<a href="0003-guard-the-boundary.html">第 3 课</a>那两道关终于要一起工作了），以及「提交中 / 失败 / 成功」这三个状态该存在哪。</p>
+
+  <div class="ask">
+    <strong>我是你的老师，随时提问。</strong> 本课刻意压住没展开的：嵌套对象要改深层字段怎么办（<code>{...a, b: {...a.b, c: 1}}</code> 写到第三层就想吐了 —— Immer / <code>useImmer</code> 就是干这个的）？<code>useState</code> 什么时候该换成 <code>useReducer</code>？<code>React.memo</code> 和不可变更新是什么关系（<strong>面试里「React 性能优化」几乎必然连到这里</strong>）？<code>crypto.randomUUID()</code> 在 <code>http://</code> 下能不能用？—— 想跳过顺序直接问，也随时可以。
+  </div>
+</div>
+
+</main>
+</body>
+</html>
