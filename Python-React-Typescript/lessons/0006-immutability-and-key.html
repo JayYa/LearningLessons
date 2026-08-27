@@ -422,7 +422,7 @@ function Row({ label }: { label: string }) {
   </ul>
 
   <h2>下一课</h2>
-  <p><strong>第 7 课：把数据交上去 —— 表单、<code>POST</code> 与两侧的校验</strong> —— 到现在为止数据一直是单向流下来的。该反过来了：受控组件是什么、为什么 React 的 <code>&lt;input&gt;</code> 非要你写 <code>onChange</code>（第 1 步那个 <code>Row</code> 已经埋了伏笔）、一个 <code>POST</code> 请求怎么同时穿过 Zod 和 Pydantic 两道关（<a href="0003-guard-the-boundary.html">第 3 课</a>那两道关终于要一起工作了），以及「提交中 / 失败 / 成功」这三个状态该存在哪。</p>
+  <p><strong><a href="0007-forms-post-and-two-gates.html">第 7 课：把数据交上去 —— 表单、<code>POST</code> 与两侧的校验</a></strong> —— 到现在为止数据一直是单向流下来的。该反过来了：受控组件是什么、为什么 React 的 <code>&lt;input&gt;</code> 非要你写 <code>onChange</code>（第 1 步那个 <code>Row</code> 已经埋了伏笔）、一个 <code>POST</code> 请求怎么同时穿过 Zod 和 Pydantic 两道关（<a href="0003-guard-the-boundary.html">第 3 课</a>那两道关终于要一起工作了），以及「提交中 / 失败 / 成功」这三个状态该存在哪。</p>
 
   <div class="ask">
     <strong>我是你的老师，随时提问。</strong> 本课刻意压住没展开的：嵌套对象要改深层字段怎么办（<code>{...a, b: {...a.b, c: 1}}</code> 写到第三层就想吐了 —— Immer / <code>useImmer</code> 就是干这个的）？<code>useState</code> 什么时候该换成 <code>useReducer</code>？<code>React.memo</code> 和不可变更新是什么关系（<strong>面试里「React 性能优化」几乎必然连到这里</strong>）？<code>crypto.randomUUID()</code> 在 <code>http://</code> 下能不能用？—— 想跳过顺序直接问，也随时可以。

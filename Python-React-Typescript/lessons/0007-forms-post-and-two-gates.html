@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 7 课 · 表单、POST 与两侧的校验</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/widgets.css">
+<script src="../assets/widgets.js" defer></script>
+</head>
+<body>
+<main class="page">
+
+<p class="eyebrow">Lesson 0007 · 约 55 分钟</p>
+<h1>把数据交上去</h1>
+<p class="subtitle">前六课数据一直是<strong>单向流下来的</strong>：后端说什么，页面显示什么。这一课方向反过来 —— 而反向的这条路上藏着三个机关，它们都不报错，只是安静地骗你：<strong>打不出字的输入框</strong>、<strong>把整个页面冲掉的提交按钮</strong>、<strong>被服务器拒绝了却一声不吭的 <code>fetch</code></strong>。</p>
+
+<div class="block win">
+  <span class="label">本课的收获</span>
+  <p>做完之后，你手上会有一个真正能写入后端的表单，并且能解释四件事：<strong>为什么 React 的 <code>&lt;input&gt;</code> 非要你写 <code>onChange</code></strong>；<strong>为什么「提交中 / 失败 / 成功」不该用三个布尔值存</strong>；<strong>为什么 <code>fetch</code> 收到 422 不算失败</strong>；以及<strong>为什么前端已经校验过了，后端还得再校验一遍</strong>（第 <a href="0003-guard-the-boundary.html">3 课</a>那两道关，今天终于在同一条请求上一起工作）。</p>
+</div>
+
+<h2>一、受控组件：输入框的值，由 state 说了算</h2>
+
+<p>第 6 课那个 <code>Row</code> 里你已经写过一次，只是没点名：</p>
+
+<pre><code>&lt;input value={note} onChange={(e) =&gt; setNote(e.target.value)} /&gt;</code></pre>
+
+<p>这叫 <strong>controlled component（受控组件）</strong>。官方定义很直接：</p>
+
+<blockquote>
+“An input like <code>&lt;input /&gt;</code> is <em>uncontrolled</em>. … your JSX only specifies the initial value. It does not control what the value should be right now.”<br>
+“<strong>To render a <em>controlled</em> input, pass the <code>value</code> prop to it</strong> (or <code>checked</code> for checkboxes and radios). React will force the input to always have the <code>value</code> you passed.”<br>
+“<strong>Every controlled input needs an <code>onChange</code> event handler that synchronously updates its backing value.</strong>”
+<cite>—— <a href="https://react.dev/reference/react-dom/components/input">react.dev · <code>&lt;input&gt;</code></a></cite>
+</blockquote>
+
+<p>注意 <strong>force</strong> 这个词。React 不是「读一下输入框」，是<strong>每次渲染都把 <code>value</code> 按回去</strong>。所以只写 <code>value</code> 不写 <code>onChange</code> 的后果不是「值不同步」，而是：</p>
+
+<blockquote>
+“<strong>If you pass <code>value</code> without <code>onChange</code>, it will be impossible to type into the input.</strong>”
+<cite>—— <a href="https://react.dev/reference/react-dom/components/input">react.dev · <code>&lt;input&gt;</code></a></cite>
+</blockquote>
+
+<p><strong>键盘完全失灵。</strong>你敲的每一个字符，都在下一次渲染时被 React 用旧的 <code>value</code> 覆盖回去。第 2 步你会亲手体验这个「坏掉的输入框」。</p>
+
+<div class="block csharp">
+  <span class="label">C# 参照物：这是「单向绑定 + 手动回写」</span>
+  <p>WPF / WinForms 里你写 <code>{Binding Text, Mode=TwoWay}</code>，框架<strong>双向</strong>替你搬运：控件改了自动写回对象，对象改了自动刷新控件。</p>
+  <p style="margin-bottom:0">React <strong>没有双向绑定</strong>。它只有一个方向：state → UI。反方向那一段<strong>要你自己写</strong>，那就是 <code>onChange</code>。麻烦，但换来一个确定的好处：<strong>数据只有一个源头（single source of truth）</strong> —— 屏幕上显示什么，永远等于 state 里是什么，中间没有第二份真相。这也是为什么可以在 <code>onChange</code> 里顺手做大写转换、过滤非法字符：<strong>回写那一步在你手里。</strong></p>
+</div>
+
+<h2>二、提交按钮会把你的页面冲掉</h2>
+
+<p>HTML 表单诞生于 1995 年，它的默认行为比 React 老得多：</p>
+
+<blockquote>
+“<strong>By default, the browser will send the form data to the current URL and refresh the page.</strong> You can override that behavior by calling <code>e.preventDefault()</code>.”
+<cite>—— <a href="https://react.dev/reference/react-dom/components/input">react.dev · <code>&lt;input&gt;</code></a></cite>
+</blockquote>
+
+<p>「refresh the page」在单页应用里意味着<strong>核弹级后果</strong>：整个 JS 运行时重来，<em>所有</em> state 归零 —— 不只是这个表单，连你第 6 课那三行备注、那个计数器，全没了。第 3 步你会亲眼看一次。</p>
+
+<h2>三、三个状态，不要用三个布尔值</h2>
+
+<p>一次提交至少有四种可见状态。官方把它们列成了清单：</p>
+
+<blockquote>
+“<strong>Empty</strong>: Form has a disabled ‘Submit’ button. / <strong>Typing</strong>: Form has an enabled ‘Submit’ button. / <strong>Submitting</strong>: Form is completely disabled. Spinner is shown. / <strong>Success</strong>: ‘Thank you’ message is shown instead of a form. / <strong>Error</strong>: Same as Typing state, but with an extra error message.”
+<cite>—— <a href="https://react.dev/learn/reacting-to-input-with-state">react.dev · Reacting to Input with State</a></cite>
+</blockquote>
+
+<p>新手的第一直觉是 <code>const [isSubmitting, setIsSubmitting] = useState(false)</code>，再加一个 <code>isSuccess</code>，再加一个 <code>errorMessage</code>。官方直接点名了这个做法：</p>
+
+<blockquote>
+“While this code works, it <strong>leaves the door open for ‘impossible’ states.</strong> For example, if you forget to call <code>setIsSent</code> and <code>setIsSending</code> together, you may end up in a situation where <strong>both <code>isSending</code> and <code>isSent</code> are <code>true</code></strong> at the same time.”<br>
+“<strong>Avoid contradictions in state.</strong> When the state is structured in a way that several pieces of state may contradict and ‘disagree’ with each other, you leave room for mistakes.”
+<cite>—— <a href="https://react.dev/learn/choosing-the-state-structure">react.dev · Choosing the State Structure</a></cite>
+</blockquote>
+
+<p>两个布尔值有 4 种组合，其中 1 种非法；再加一个就是 8 种组合、5 种非法。正确做法是<strong>让非法状态根本无法被表示</strong>：</p>
+
+<pre><code>type Status =
+  | { kind: "idle" }
+  | { kind: "submitting" }
+  | { kind: "error"; message: string }
+  | { kind: "success"; note: Note };</code></pre>
+
+<div class="block csharp">
+  <span class="label">C# 参照物：这次是 TypeScript <em>赢了</em></span>
+  <p>这叫 <strong>discriminated union（可辨识联合）</strong>，靠 <code>kind</code> 这个字面量字段区分分支。写 <code>if (status.kind === "error")</code> 之后 TS 会<strong>自动收窄类型</strong>：这一分支里 <code>status.message</code> 存在且是 <code>string</code>；而在 <code>idle</code> 分支里访问 <code>.message</code> <strong>直接编译报错</strong> —— 这正是第 <a href="0002-typescript-is-not-csharp.html">2 课</a>那套结构化类型 + 收窄的兑现。</p>
+  <p style="margin-bottom:0"><strong>C# 到今天都没有真正的联合类型。</strong>要表达同一件事，你得写抽象基类 + 若干子类 + <code>switch</code> 模式匹配，或者上 <code>OneOf&lt;T1,T2&gt;</code> 这类第三方库。<strong>「TS 有什么是 C# 没有的」是很好答的一道面试题 —— 答联合类型 + 字面量类型，比答别的都实在。</strong></p>
+</div>
+
+<h2>四、<code>fetch</code> 不认为 422 是失败</h2>
+
+<p>这是本课第一个反直觉点，而且它<strong>与 React 无关</strong> —— 是 Web 平台本身的设计：</p>
+
+<blockquote>
+“A <code>fetch()</code> promise only rejects when the request fails, for example, because of a badly-formed request URL or a network error. <strong>A <code>fetch()</code> promise <em>does not</em> reject if the server responds with HTTP status codes that indicate errors (<code>404</code>, <code>504</code>, etc.).</strong> Instead, a <code>then()</code> handler must check the <code>Response.ok</code> and/or <code>Response.status</code> properties.”
+<cite>—— <a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch">MDN · <code>fetch()</code></a></cite>
+</blockquote>
+
+<p>实测（Node 24 打向本课的 FastAPI 后端，故意提交空标题）：</p>
+
+<pre><code>throw? no. ok = false status = 422
+json = {"detail":[{"type":"string_too_short","loc":["body","title"], … }]}</code></pre>
+
+<p>把插头拔掉（换成一个连不上的端口）才会真的抛：</p>
+
+<pre><code>network error DOES throw: TypeError | fetch failed</code></pre>
+
+<div class="block trap">
+  <span class="label">如果你不查 <code>res.ok</code> 会怎样</span>
+  <p><strong>后果不是崩溃，是一句莫名其妙的错误提示。</strong>你会兴高采烈地 <code>await res.json()</code> —— 拿到的是 FastAPI 的 <strong>422 错误体</strong>；然后交给 Zod 的 <code>Note</code> schema 一 parse，它当然不通过，于是屏幕上写着「<strong>响应格式不对</strong>」。</p>
+  <p style="margin-bottom:0">而真相是格式一点问题都没有 —— <strong>是你的数据被拒绝了</strong>。整整两层误导，全都源于漏了一行 <code>if (!res.ok)</code>。</p>
+</div>
+
+<div class="block csharp">
+  <span class="label">C# 参照物：这个你早就会了</span>
+<pre><code><span class="cmt">// C#：SendAsync 收到 404/500 同样不抛</span>
+var res = await http.PostAsJsonAsync(url, dto);
+res.EnsureSuccessStatusCode();   <span class="cmt">// ← 你得自己叫它抛</span>
+
+<span class="cmt">// JS：一模一样的设计，只是没人替你写 EnsureSuccessStatusCode</span>
+if (!res.ok) { <span class="cmt">/* 自己处理 */</span> }</code></pre>
+  <p style="margin-bottom:0"><code>res.ok</code> 就是 <code>IsSuccessStatusCode</code>（状态码落在 200–299）。<strong>面试里能顺口把这两个对上，比背 MDN 更能说明你真的理解了「HTTP 层面成功」与「业务层面成功」是两件事。</strong></p>
+</div>
+
+<h2>五、两道关，终于一起工作</h2>
+
+<p>第 3 课你分别造了两道校验关：前端的 Zod、后端的 Pydantic。当时它们各管各的。今天同一份数据要连着穿过两道，问题就来了：<strong>既然前端已经拦住了空标题，后端为什么还要拦一次？</strong></p>
+
+<div class="block trap">
+  <span class="label">因为前端的校验<strong>不是安全措施</strong></span>
+  <p>第 6 步你会亲手绕过它 —— 一条 <code>curl</code> 命令就够了。浏览器里的代码<strong>全部在用户手上</strong>：改 JS、改请求、干脆不用浏览器，随便哪一种都能让你的 Zod 形同虚设。</p>
+  <p style="margin-bottom:0">所以分工是：<strong>前端校验负责<em>体验</em>（即时反馈，不用等一个来回），后端校验负责<em>信任</em>（它是唯一真正的关卡）</strong>。写在浏览器里的规则<strong>永远只是建议</strong>。这是本课最值钱的一句话，也是安全类面试题的标准答法。</p>
+</div>
+
+<p>后端这一侧，FastAPI 几乎不用你动手：</p>
+
+<blockquote>
+“With just that Python type declaration, <strong>FastAPI</strong> will: Read the body of the request as JSON. Convert the corresponding types (if needed). Validate the data. <strong>If the data is invalid, it will return a nice and clear error, indicating exactly where and what was the incorrect data.</strong>”
+<cite>—— <a href="https://fastapi.tiangolo.com/tutorial/body/">FastAPI · Request Body</a></cite>
+</blockquote>
+
+<p>实测那个 “nice and clear error”（提交 <code>{"title":""}</code>，且缺 <code>body</code>）：</p>
+
+<pre><code>HTTP/1.1 <strong>422 Unprocessable Content</strong>
+
+{"detail":[
+  {"type":"string_too_short","loc":["body","title"],
+   "msg":"String should have at least 1 character","input":""},
+  {"type":"missing","loc":["body","body"],
+   "msg":"Field required","input":{"title":""}}
+]}</code></pre>
+
+<p><code>loc</code> 里的第一个 <code>"body"</code> 指<strong>请求体</strong>（相对的还有 <code>"query"</code>、<code>"path"</code>），第二个才是字段名。<strong>这个结构化错误体是可以直接喂给前端逐字段显示的</strong> —— 本课先不做，但面试聊到「表单错误怎么展示」时，说得出「后端返回结构化的 <code>loc</code> + <code>msg</code>，前端按字段名摊到各个输入框下面」就够了。</p>
+
+<div class="block win">
+  <span class="label">顺手记一条：Zod 的 schema 不只是校验，它还<strong>改数据</strong></span>
+  <p><code>z.string().trim().min(1)</code> 里的 <code>.trim()</code> 是一个 <em>transform</em>，<strong>先执行，再校验</strong>。实测：输入 <code>"   "</code>（三个空格）会被判不通过。</p>
+  <p style="margin-bottom:0">所以 <code>safeParse</code> 成功之后，该用的是 <strong><code>parsed.data</code>（首尾空格已去掉的新对象）</strong>，而不是原始 state。<strong>「Zod 是 parser，不是 validator」</strong> —— 进去 <code>unknown</code>，出来是<em>干净且有类型</em>的数据。这跟 C# 的 FluentValidation（只回答是/否，不改数据）分野明显。</p>
+</div>
+
+<h2>六、看不见的第三个请求</h2>
+
+<p>这一课你的浏览器会<strong>悄悄多发一个请求</strong>，而 uvicorn 的日志会把它抓个正着：</p>
+
+<blockquote>
+“For ‘preflighted’ requests <strong>the browser first sends an HTTP request using the <code>OPTIONS</code> method</strong> to the resource on the other origin, in order to determine if the actual request is safe to send.”
+<cite>—— <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS">MDN · CORS</a></cite>
+</blockquote>
+
+<p>触发条件里最关键的一条：「简单请求」只允许三种 <code>Content-Type</code> —— <code>application/x-www-form-urlencoded</code>、<code>multipart/form-data</code>、<code>text/plain</code>。<strong><code>application/json</code> 不在其中</strong>，也就是说<strong>几乎每一个现代 API 的 POST 都会被预检</strong>。实测日志：</p>
+
+<pre><code>INFO: 127.0.0.1:9296 - "<strong>OPTIONS</strong> /api/notes HTTP/1.1" 200 OK   <span class="cmt">← 你没写过这个请求</span>
+INFO: 127.0.0.1:9297 - "POST /api/notes HTTP/1.1" 200 OK</code></pre>
+
+<p>第 1 课那个 <code>CORSMiddleware</code> 就是在这里第二次救你 —— 它替你回答了这个 <code>OPTIONS</code>。<strong>「为什么我 GET 好好的，一改成 POST 就跨域报错」是极高频的实战问题</strong>，答案通常就是：预检没被正确响应。</p>
+
+<h2>七、动手</h2>
+
+<p>两个终端照旧：后端 <code>uvicorn</code>（<strong>这一课要一直盯着它的日志</strong>），前端 <code>pnpm dev</code>。再开第三个终端跑 <code>curl</code>。</p>
+
+<ol class="checklist" data-checklist="0007">
+
+<li>
+<span class="step-title">后端：开一个能写入的端点</span>
+<p><code>backend/main.py</code>，加两个模型和两个路由（<code>Field</code> 记得从 <code>pydantic</code> 导入）：</p>
+<pre><code>from pydantic import BaseModel, <strong>Field</strong>
+
+class NoteCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=50)
+    body: str = Field(min_length=1)
+
+class Note(BaseModel):
+    id: int
+    title: str
+    body: str
+
+notes: list[Note] = []          <span class="cmt"># 内存里存着就行，重启即丢</span>
+
+@app.get("/api/notes")
+def list_notes() -&gt; list[Note]:
+    return notes
+
+@app.post("/api/notes")
+def create_note(payload: NoteCreate) -&gt; Note:
+    note = Note(id=len(notes), title=payload.title, body=payload.body)
+    notes.append(note)
+    return note</code></pre>
+<p><strong>先不碰前端</strong>，用 <code>curl</code> 验两发：</p>
+<pre><code>curl.exe -X POST http://127.0.0.1:8000/api/notes -H "Content-Type: application/json" -d "{\"title\":\"a\",\"body\":\"b\"}"
+<span class="cmt">→ {"id":0,"title":"a","body":"b"}</span>
+
+curl.exe -i -X POST http://127.0.0.1:8000/api/notes -H "Content-Type: application/json" -d "{\"title\":\"\"}"
+<span class="cmt">→ HTTP/1.1 422 Unprocessable Content</span>
+<span class="cmt">→ {"detail":[{"type":"string_too_short","loc":["body","title"], …</span></code></pre>
+<p style="font-size:0.86rem;color:#666;">PowerShell 里 <code>curl</code> 是 <code>Invoke-WebRequest</code> 的别名，<strong>要写 <code>curl.exe</code> 才是真的 curl</strong>；引号转义按上面的 Windows 写法。</p>
+<p><strong>注意这个顺序：后端先于前端可用。</strong>这本身就是个值得说出口的工作方式 —— API 能用 curl 验通，前端出问题时你才知道该怪谁。</p>
+</li>
+
+<li>
+<span class="step-title">造一个打不出字的输入框</span>
+<p>在 <code>App</code> 里加 state 和一个<strong>故意残缺</strong>的表单：</p>
+<pre><code>const [title, setTitle] = useState("");
+const [body, setBody] = useState("");
+
+<span class="cmt">// JSX：</span>
+&lt;form&gt;
+  &lt;input name="title" value={title} /&gt;          <span class="cmt">← 只有 value，没有 onChange</span>
+  &lt;input name="body" value={body} /&gt;
+  &lt;button type="submit"&gt;提交&lt;/button&gt;
+&lt;/form&gt;</code></pre>
+<p>保存，<strong>往输入框里使劲敲字</strong>。Console 里：</p>
+<pre><code>You provided a `value` prop to a form field without an `onChange` handler.
+This will render a read-only field. If the field should be mutable use
+`defaultValue`. Otherwise, set either `onChange` or `readOnly`.</code></pre>
+<p>然后把 <code>onChange</code> 补上，两个都补：</p>
+<pre><code>&lt;input name="title" value={title} onChange={(e) =&gt; setTitle(e.target.value)} /&gt;</code></pre>
+<p><em>顺手做个小实验：把它改成 <code>setTitle(e.target.value.toUpperCase())</code>，输入框会强制大写。</em><strong>这就是「force」的字面意思 —— 屏幕上显示的从来不是你敲的，而是 state 里的。</strong>看完改回来。</p>
+</li>
+
+<li>
+<span class="step-title">先预测，再按下提交</span>
+<p>表单现在能打字了，但 <code>&lt;form&gt;</code> 上还没有 <code>onSubmit</code>。</p>
+<div class="widget predict">
+  <p class="widget-kind">先预测 · 别偷看</p>
+  <p class="predict-prompt">在两个框里填上字，点「提交」。<strong>没有 <code>onSubmit</code>、也没有 <code>preventDefault</code></strong> —— 屏幕上会发生什么？地址栏呢？那三行备注和计数器呢？</p>
+  <div class="predict-answer" hidden>
+    <p><strong>整页刷新。</strong>地址栏变成 <code>http://localhost:5173/?title=你填的&amp;body=你填的</code> —— 浏览器<strong>把表单数据拼进 URL、GET 提交给了当前地址</strong>（1995 年就定下的默认行为，用的正是 <code>name</code> 属性）。<br>后果是<strong>整个 JS 运行时重来</strong>：第 6 课那三行备注清空、计数器归零、<code>Hello from Python</code> 重新请求了一遍。<strong>一个按钮，把全应用的 state 冲掉了。</strong><br>如果你预测的是「什么都不发生」—— 这正是它阴险的地方：它不报错，它<em>成功地</em>做了一件你根本不想要的事。</p>
+  </div>
+</div>
+<p>照做，<strong>盯住地址栏那一刻</strong>。这是本课最便宜的一次教训。</p>
+</li>
+
+<li>
+<span class="step-title">接管提交：三态 union + 第一道关</span>
+<p>先在 <code>api.ts</code> 里加 schema 和 <code>postNote</code>（<strong>请求、响应各一个 schema</strong>）：</p>
+<pre><code>export const Note = z.object({ id: z.number(), title: z.string(), body: z.string() });
+export type Note = z.infer&lt;typeof Note&gt;;
+
+export const NoteCreate = z.object({
+  title: z.string().trim().min(1, "标题不能为空").max(50, "标题最多 50 字"),
+  body: z.string().trim().min(1, "内容不能为空"),
+});
+export type NoteCreate = z.infer&lt;typeof NoteCreate&gt;;
+
+export async function postNote(input: NoteCreate) {
+  const res = await fetch("http://127.0.0.1:8000/api/notes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  <strong>if (!res.ok) return { ok: false as const, message: `服务器拒绝了：HTTP ${res.status}` };</strong>
+  const json: unknown = await res.json();
+  const parsed = Note.safeParse(json);
+  if (!parsed.success) return { ok: false as const, message: "响应格式不对：" + z.prettifyError(parsed.error) };
+  return { ok: true as const, note: parsed.data };
+}</code></pre>
+<p style="font-size:0.86rem;color:#666;"><code>false as const</code> 让类型是字面量 <code>false</code> 而不是 <code>boolean</code>；有了它，<code>if (result.ok)</code> 之后 TS 才能收窄出 <code>note</code>。<strong>这就是你刚在第三节读到的 discriminated union，只是判别字段叫 <code>ok</code>。</strong></p>
+<p>然后在 <code>App.tsx</code> 里：</p>
+<pre><code>import { <strong>type FormEvent</strong>, useEffect, useState } from "react";
+import { NoteCreate, postNote, type Note } from "./api";
+
+type Status =
+  | { kind: "idle" } | { kind: "submitting" }
+  | { kind: "error"; message: string } | { kind: "success"; note: Note };
+
+const [status, setStatus] = useState&lt;Status&gt;({ kind: "idle" });
+
+async function handleSubmit(e: FormEvent&lt;HTMLFormElement&gt;) {
+  <strong>e.preventDefault();</strong>
+  const parsed = NoteCreate.safeParse({ title, body });     <span class="cmt">// 第一道关：Zod</span>
+  if (!parsed.success) {
+    setStatus({ kind: "error", message: z.prettifyError(parsed.error) });
+    return;
+  }
+  setStatus({ kind: "submitting" });
+  const result = await postNote(<strong>parsed.data</strong>);              <span class="cmt">// ← 用 parsed.data，不是 title/body</span>
+  if (result.ok) {
+    setStatus({ kind: "success", note: result.note });
+    setTitle(""); setBody("");                             <span class="cmt">// 受控组件清空 = 把 state 清空</span>
+  } else {
+    setStatus({ kind: "error", message: result.message });
+  }
+}</code></pre>
+<p>JSX 改成 <code>&lt;form onSubmit={handleSubmit}&gt;</code>，并加上状态显示：</p>
+<pre><code>&lt;button type="submit" disabled={status.kind === "submitting"}&gt;
+  {status.kind === "submitting" ? "提交中…" : "提交"}
+&lt;/button&gt;
+{status.kind === "error" &amp;&amp; &lt;pre style={{ color: "crimson" }}&gt;{status.message}&lt;/pre&gt;}
+{status.kind === "success" &amp;&amp; &lt;p&gt;已保存 #{status.note.id}：{status.note.title}&lt;/p&gt;}</code></pre>
+<p><strong>试三遍</strong>：① 两个框都留空直接提交 → 红字两行（<code>✖ 标题不能为空 → at title</code>），<strong>而且 uvicorn 日志一条请求都没有</strong> —— 被前端拦下，根本没出门。② 标题只填三个空格 → 照样拦（<code>.trim()</code> 先跑）。③ 正常填写 → 成功，输入框自动清空。</p>
+<p>顺手体验一次收窄：把 <code>{status.kind === "error" &amp;&amp; …}</code> 的条件删掉，直接写 <code>{status.message}</code>，看 TS 报什么。看完改回来。</p>
+</li>
+
+<li>
+<span class="step-title">抓住那个你没写过的 <code>OPTIONS</code></span>
+<p>清空 uvicorn 终端，提交<strong>一次</strong>，数一数日志有几行：</p>
+<pre><code>INFO: … "<strong>OPTIONS</strong> /api/notes HTTP/1.1" 200 OK
+INFO: … "POST /api/notes HTTP/1.1" 200 OK</code></pre>
+<p><strong>两条。</strong>再打开 DevTools 的 Network 面板重做一次，同一件事的另一个视角。<em>为什么 GET <code>/api/hello</code> 没有这一条？因为它没有 <code>Content-Type: application/json</code>，属于「简单请求」。</em></p>
+</li>
+
+<li>
+<span class="step-title">绕过你自己的前端</span>
+<p>前端的 Zod 限制标题最多 50 字。<strong>现在无视它</strong>：</p>
+<pre><code>curl.exe -i -X POST http://127.0.0.1:8000/api/notes -H "Content-Type: application/json" -d "{\"title\":\"<span class="cmt">（粘 60 个字符）</span>\",\"body\":\"x\"}"
+<span class="cmt">→ HTTP/1.1 422 Unprocessable Content   ← 第二道关拦住了</span></code></pre>
+<p>然后把后端的 <code>Field(min_length=1, max_length=50)</code> <strong>临时删掉</strong>，改成光秃秃的 <code>title: str</code>，再跑一次同样的 curl：<strong>200，脏数据落库</strong>（<code>curl.exe http://127.0.0.1:8000/api/notes</code> 能看到它躺在那儿）。</p>
+<p>把 <code>Field(…)</code> 加回去。<strong>刚才这 60 秒，就是「前端校验不是安全措施」的全部证据。</strong></p>
+<p><em>顺带注意一件事：同一条规则你写了两遍（Zod 一遍、Pydantic 一遍），而且它们会各自漂移。这是真实的工程痛点 —— 主流解法是从后端的 OpenAPI schema 自动生成前端类型/校验。想看怎么做，随时问我。</em></p>
+</li>
+
+<li>
+<span class="step-title">加餐：被 CORS 拒绝的请求，其实已经写进去了</span>
+<p>把后端的 <code>allow_origins</code> 改成一个错的地址：</p>
+<pre><code>allow_origins=["http://localhost:9999"],</code></pre>
+<p>回到页面提交一条。前端显示失败，Console 里是 CORS 报错 —— <code>fetch</code> 抛出 <code>TypeError: Failed to fetch</code>。<strong>注意这次是真的抛了</strong>：它属于「请求失败」，不是「服务器返回了错误码」。</p>
+<p><strong>现在去终端查一下服务器里到底有什么：</strong></p>
+<pre><code>curl.exe http://127.0.0.1:8000/api/notes</code></pre>
+<p><strong>那条笔记好端端地躺在里面。</strong>我用 curl 带错误 <code>Origin</code> 实测过同一件事：服务器<strong>照常执行并返回 200</strong>，只是响应里少了 <code>access-control-allow-origin</code> 这个头，于是<strong>浏览器</strong>拒绝把结果交给你的 JS。</p>
+<div class="block trap">
+  <span class="label">这条推论值一道面试题</span>
+  <p style="margin-bottom:0"><strong>CORS 是浏览器执行的，不是服务器执行的。</strong>它保护的是「用户的浏览器不被别的网站利用」，<strong>它从来不是服务器端的访问控制</strong> —— curl、Postman、任何后端程序都完全不受它约束。所以「我加了 CORS 白名单所以接口是安全的」是<strong>错的</strong>；真正的门禁是认证授权。</p>
+</div>
+<p>把 <code>allow_origins</code> 改回 <code>["http://localhost:5173"]</code>。收尾：<code>pnpm lint</code> 与 <code>pnpm build</code> 零错误。</p>
+<div class="block win">
+  <span class="label">你现在拥有的</span>
+  <p style="margin-bottom:0">一条<strong>完整的双向链路</strong>：受控输入 → Zod（体验关）→ JSON over HTTP（外加一次预检）→ Pydantic（信任关）→ 后端内存 → 带类型的响应 → Zod 再校验 → 回到 state → 渲染。<strong>这条链路就是「一个网站是怎么工作的」这道面试题的全部内容</strong>，而且每一环你都亲手断过一次。</p>
+</div>
+</li>
+
+</ol>
+
+<h2>八、检验一下</h2>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 1 / 5</p>
+  <p class="quiz-q"><code>&lt;input value={x} /&gt;</code> 但没写 <code>onChange</code>，实际后果是：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>能显示但完全打不进字，键盘输入被立刻覆盖</button></li>
+    <li><button>能正常打字，只是 state 不会跟着一起更新掉</button></li>
+    <li><button>React 直接抛出错误，该组件整棵子树渲染失败</button></li>
+    <li><button>输入框正常工作，但提交时拿到的会是空字符串</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>官方原话：<strong>“If you pass <code>value</code> without <code>onChange</code>, it will be impossible to type into the input.”</strong> 因为 React 会 <strong>force</strong> 输入框始终等于你传进去的 <code>value</code>，你敲的字符在下一次渲染就被按回原样。<br>Console 里会有 <code>You provided a value prop to a form field without an onChange handler.</code> —— <strong>但只是 warning，不是错误。</strong><br>一句话记住：<strong>屏幕上显示的永远是 state，不是你敲的东西。</strong>这就是受控组件的定义。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 2 / 5</p>
+  <p class="quiz-q"><code>fetch</code> 拿到 HTTP 422 之后，代码里会发生什么？</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>Promise 正常兑现，要自己查 <code>res.ok</code> 才知道</button></li>
+    <li><button>Promise 被拒绝，可以直接用 catch 捕获这个错误</button></li>
+    <li><button>Promise 正常兑现，但响应体会是一个空的对象</button></li>
+    <li><button>Promise 被拒绝，且错误信息里带着服务器的原始响应</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>MDN：<strong>“A <code>fetch()</code> promise <em>does not</em> reject if the server responds with HTTP status codes that indicate errors (404, 504, etc.).”</strong> 只有<strong>请求本身失败</strong>（网络断了、URL 非法、被 CORS 拦下）才 reject。<br>实测：422 → <code>ok = false, status = 422</code>，无异常；换成连不上的端口 → <code>TypeError: fetch failed</code>。<br>C# 对照：<code>HttpClient</code> 也不抛，要自己叫 <code>EnsureSuccessStatusCode()</code>；<code>res.ok</code> ≡ <code>IsSuccessStatusCode</code>。<br>漏掉 <code>if (!res.ok)</code> 的典型症状：屏幕上显示「响应格式不对」，而真相是<strong>数据被拒了</strong>。</p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 3 / 5</p>
+  <p class="quiz-q">用 <code>isSubmitting</code> / <code>isError</code> / <code>isSuccess</code> 三个布尔值存提交状态，主要问题是：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>八种组合里有五种非法，类型系统拦不住矛盾</button></li>
+    <li><button>三次调用会触发三次渲染，造成不必要的性能损耗</button></li>
+    <li><button>布尔值无法携带错误消息，必须再加一个字符串字段</button></li>
+    <li><button>多个状态更新不会被合并，中间会闪过错误的画面</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>官方点名了这个写法：<strong>“it leaves the door open for ‘impossible’ states… both <code>isSending</code> and <code>isSent</code> are <code>true</code> at the same time.”</strong> 原则叫 <strong>“Avoid contradictions in state.”</strong><br>换成 <strong>discriminated union</strong>（<code>{ kind: "error"; message: string }</code> 那一套）之后，非法状态<strong>根本表示不出来</strong>，而且 <code>message</code> 只在 error 分支存在 —— 类型收窄替你把关。<br>第四个选项说反了：React 会 batch（第 <a href="0004-what-is-react-state.html">4 课</a>）。<strong>问题从来不是性能，是正确性。</strong></p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 4 / 5</p>
+  <p class="quiz-q">前端已经用 Zod 校验过了，后端仍必须校验，根本原因是：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>浏览器里的代码在用户手上，绕过它只需一条命令</button></li>
+    <li><button>两个语言的校验规则不同，需要后端做最终的兜底</button></li>
+    <li><button>浏览器可能因为网络问题把校验结果丢在了半路上</button></li>
+    <li><button>Zod 只能校验类型，无法表达长度与范围之类的约束</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>你在第 6 步亲手做过：一条 <code>curl</code> 就绕过了整个前端。<strong>凡是运行在用户机器上的规则，都只是建议。</strong><br>正确的分工说法：<strong>前端校验为了体验（即时反馈，省一个来回），后端校验为了信任（唯一真正的关卡）</strong>。<br>Zod 当然能表达长度约束（<code>.min()</code> / <code>.max()</code>）—— 它甚至还能<em>改数据</em>（<code>.trim()</code> 是 transform，先跑再校验，所以要用 <code>parsed.data</code>）。<strong>Zod 是 parser，不是 validator。</strong></p>
+  </div>
+</div>
+
+<div class="widget quiz">
+  <p class="widget-kind">测验 5 / 5</p>
+  <p class="quiz-q">跨域 POST 被浏览器以 CORS 报错拦下时，服务器那边：</p>
+  <ul class="quiz-opts">
+    <li><button data-correct>很可能已经执行完并写入了数据，只是你看不到</button></li>
+    <li><button>完全没有收到请求，浏览器在发出之前就取消了</button></li>
+    <li><button>收到了请求但框架会自动回滚，不会产生副作用</button></li>
+    <li><button>只收到预检请求，真正的那一条不会被发送出去</button></li>
+  </ul>
+  <div class="quiz-explain" hidden>
+    <p>实测：带错误 <code>Origin</code> 的 POST，服务器<strong>照常执行、照常返回 200</strong>，笔记真的进了列表；只是响应缺了 <code>access-control-allow-origin</code>，于是<strong>浏览器</strong>不把结果交给 JS（MDN 明说：“specifics about the error <em>are not available to JavaScript</em>”）。<br>推论 —— <strong>CORS 是浏览器执行的，不是服务器的访问控制。</strong>curl / Postman / 任何后端程序都不受约束。「加了 CORS 白名单所以接口安全」是错的，真正的门禁是认证授权。<br>第四个选项是个像样的干扰项：预检<strong>失败</strong>时确实不会发出真请求；但这里预检是<em>成功</em>的（<code>allow_methods=["*"]</code>），被拒的是真请求的响应。</p>
+  </div>
+</div>
+
+<div class="widget recall">
+  <p class="widget-kind">回忆练习 · 出声说，别只在心里过</p>
+  <p class="recall-prompt">合上这一页，<strong>连着讲 60 秒</strong>：<br>（1）从你在输入框里敲下一个字符，到这条笔记存进后端，<strong>数据一共变了几次形态、经过几道关</strong>？<br>（2）为什么 <code>onSubmit</code> 里第一行就得写 <code>e.preventDefault()</code>？<br>（3）「我配了 CORS 白名单，所以这个接口是安全的」—— 反驳它。</p>
+  <button class="recall-btn">先出声回答，再点开</button>
+  <div class="recall-answer" hidden>
+    <p><strong>(1)</strong> 敲键盘 → <code>onChange</code> 把 <code>e.target.value</code> 写进 state（受控：屏幕显示的一直是 state）→ 提交时 <code>NoteCreate.safeParse</code>（<strong>第一道关，顺便 trim</strong>，产出 <code>parsed.data</code>）→ <code>JSON.stringify</code> 成文本 → HTTP 请求（<strong>先来一次 <code>OPTIONS</code> 预检</strong>，因为 <code>application/json</code> 不是简单请求）→ FastAPI 把 body 解析成 <code>NoteCreate</code>（<strong>第二道关</strong>，不合法直接 422 且函数体不执行）→ 存入 → 返回 <code>Note</code>（FastAPI 按返回类型校验并剥掉多余字段，第 <a href="0003-guard-the-boundary.html">3 课</a>实测过）→ 前端查 <code>res.ok</code> → Zod 再 parse 一次响应 → 进 state → 渲染。</p>
+    <p><strong>(2)</strong> 因为 <code>&lt;form&gt;</code> 的默认行为是<strong>把数据拼进 URL、GET 提交给当前地址并刷新整页</strong>。在 SPA 里这等于把整个 JS 运行时和<em>全部</em> state 清零 —— 不只是这个表单。它不报错，它「成功地」做了一件你根本不想要的事。</p>
+    <p><strong>(3)</strong> CORS 由<strong>浏览器</strong>执行。服务器该干的活照样干完（实测：带错 Origin 的 POST 返回 200，数据真的写进去了），只是响应少了个头，浏览器不把结果给 JS。curl、Postman、任何服务端程序都完全不受它约束。<strong>CORS 保护的是用户的浏览器，不是你的接口。</strong>接口的门禁是认证授权。</p>
+  </div>
+</div>
+
+<h2>九、面试回答模板</h2>
+
+<div class="block interview">
+  <span class="label">如果面试官问：“说说 React 里表单怎么做？” / “前端校验过了，后端还要校验吗？”</span>
+  <p>“我一般用<strong>受控组件</strong>：<code>value</code> 绑 state，<code>onChange</code> 里回写。React 没有双向绑定，反向那一段要自己写 —— 代价是啰嗦，好处是<strong>只有一个数据源</strong>，屏幕上显示的永远等于 state。<strong>只写 <code>value</code> 不写 <code>onChange</code> 的话，输入框会直接打不进字</strong>，因为 React 每次渲染都把 <code>value</code> 强制按回去。<br>
+  提交我会注意三点。<strong>第一，<code>onSubmit</code> 里先 <code>e.preventDefault()</code></strong>，否则浏览器会按老规矩把表单 GET 提交给当前 URL 并刷新整页，SPA 的全部 state 直接清零。<strong>第二，状态不用几个布尔值存</strong>，用一个 discriminated union：<code>idle | submitting | error | success</code>，这样 <code>isSubmitting</code> 和 <code>isSuccess</code> 同时为 true 这种非法组合<strong>根本表示不出来</strong>，而且错误消息只在 error 分支上存在，类型收窄帮我兜底 —— 顺带一提这也是 TS 比 C# 强的地方，C# 至今没有真正的联合类型。<strong>第三，<code>fetch</code> 收到 422 是不抛异常的</strong>，必须查 <code>res.ok</code>，跟 C# 的 <code>EnsureSuccessStatusCode</code> 是一回事。我踩过这个坑，症状很有迷惑性：漏了这行，422 的错误体会被当成正常响应拿去校验，屏幕上报『响应格式不对』，而真相是数据被拒了。<br>
+  校验两边都要做，但目的不同：<strong>前端为了体验，后端为了信任。</strong>前端那道关一条 curl 就绕过去了 —— 凡是跑在用户机器上的规则都只是建议。后端我用 FastAPI，Pydantic 模型直接当请求体类型，不合法自动 422 并给出结构化的 <code>loc</code> + <code>msg</code>，函数体根本不执行。两边规则重复是真实痛点，成熟做法是从 OpenAPI schema 生成前端类型。<br>
+  还有个容易被忽略的细节：<strong><code>Content-Type: application/json</code> 不是简单请求，每个 POST 之前浏览器都会先发一条 <code>OPTIONS</code> 预检</strong>。『GET 好好的、一改 POST 就跨域失败』基本都是预检没被正确响应。而且 <strong>CORS 是浏览器执行的，不是访问控制</strong> —— 我实测过带错 Origin 的 POST，服务器照样执行并写入了数据，只是响应被浏览器扣下了。”</p>
+  <p style="margin-top:0.7rem;font-size:0.86rem;">四个分水岭句子：<strong>「屏幕上显示的永远是 state，不是你敲的东西」</strong>、<strong>「前端为了体验，后端为了信任」</strong>、<strong>「422 不是失败，网络断了才是失败」</strong>、<strong>「CORS 保护的是浏览器，不是你的接口」</strong>。最后一句尤其少见 —— 大多数候选人只会说「跨域要配 CORS」。</p>
+</div>
+
+<h2>十、去读原始资料</h2>
+
+<p><strong>本课首选阅读：</strong><a href="https://react.dev/learn/reacting-to-input-with-state">react.dev · Reacting to Input with State</a>（约 20 分钟）。<strong>它教的是一套可复制的方法</strong>：把界面的所有视觉状态<em>先列出来</em>，再找出触发状态变化的输入，再用 state 表示它们 —— 而不是一边写一边加布尔标志。读完顺手做页面底部的挑战题。</p>
+
+<p><strong>紧接着读：</strong><a href="https://react.dev/learn/choosing-the-state-structure">react.dev · Choosing the State Structure</a> 的前两节（Group related state / Avoid contradictions in state）。那五条原则是 React 代码审查里最常被引用的一段。</p>
+
+<p><strong>查阅用：</strong><a href="https://react.dev/reference/react-dom/components/input">react.dev · <code>&lt;input&gt;</code> 参考页</a>（受控组件的权威定义与全部坑）；<a href="https://fastapi.tiangolo.com/tutorial/body/">FastAPI · Request Body</a>；<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS#preflighted_requests">MDN · CORS 预检请求</a>。</p>
+
+<div class="footer">
+  <h2>相关文档</h2>
+  <ul>
+    <li><a href="../reference/glossary.html">术语表</a> —— 本课引入：controlled / uncontrolled component、discriminated union、preflight request、simple request、422、<code>res.ok</code></li>
+    <li><a href="../reference/csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> —— 本课引入：双向绑定 vs 受控组件、<code>EnsureSuccessStatusCode</code> vs <code>res.ok</code>、联合类型 vs 类层次</li>
+    <li><a href="0001-two-processes-one-wire.html">第 1 课</a> · <a href="0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="0003-guard-the-boundary.html">第 3 课</a> · <a href="0004-what-is-react-state.html">第 4 课</a> · <a href="0005-useeffect-and-that-empty-array.html">第 5 课</a> · <a href="0006-immutability-and-key.html">第 6 课</a></li>
+    <li><a href="../RESOURCES.md">RESOURCES.md</a> · <a href="../MISSION.md">MISSION.md</a></li>
+  </ul>
+
+  <h2>下一课</h2>
+  <p><strong>第 8 课：state 该住在哪里 —— 提升状态、传回调、拆组件</strong> —— 你的 <code>App.tsx</code> 现在有点胖了：消息、计数、列表、表单四件事挤在一个函数里。该谈组件划分了：什么时候把 state 往上提（lifting state up）、什么时候该往下沉、prop drilling 到几层才算问题、以及「<strong>把数据传下去</strong>」和「<strong>把回调传下去</strong>」为什么是同一件事的两半。这也是 Mantine 组件库该进场的时候了。</p>
+
+  <div class="ask">
+    <strong>我是你的老师，随时提问。</strong> 本课刻意压住没展开的：把后端 422 的 <code>detail</code> 摊到各个输入框下面该怎么写？React 19 新的 <code>&lt;form action={fn}&gt;</code> 和 <code>useActionState</code> 是什么、什么时候该用（<strong>这是当下的热门面试题</strong>）？表单一多是不是该上 React Hook Form？<code>PUT</code> / <code>PATCH</code> / <code>DELETE</code> 怎么配、幂等是什么意思？从 OpenAPI 自动生成前端类型具体怎么做？—— 想跳过顺序直接问，也随时可以。
+  </div>
+</div>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 08 · lock 到底锁住了什么</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/race.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 08 · .NET 核心 · BeiGene 面试备战 · 动手课</p>
+  <h1>lock 到底锁住了什么<br><span style="font-size:0.62em;color:var(--ink-soft);">以及为什么你不能在它里面 await</span></h1>
+  <p class="standfirst">上一课你亲手拿到了那个 <code>UPDATE 0</code>——那是数据库的行锁在替你排队。这一课把镜头拉回进程内部：C# 的 <code>lock</code> 展开成了什么、它凭什么挡住第二个线程、为什么它在抢单那题里是错的，以及一个几乎所有人都答不好的追问——<strong>为什么 <code>await</code> 不能写在 <code>lock</code> 里面</strong>。<strong>还是动手课，交付物是一个数字。</strong></p>
+</header>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>约 35 分钟，其中 10 分钟在跑代码。<strong>第三节的赛跑模拟请按顺序点，每点「下一步」之前先猜</strong>——五种写法里有两种是错的，而第四种的错法是这一课的正题。<a href="#s5">第五节</a>跑完把那个数字报给我，一行字就够，这一课就算收了。</p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">先分清两种锁</a> <span class="depth">— 承接 Lesson 07</span></li>
+    <li><a href="#s2">lock 展开成了什么</a> <span class="depth">— Monitor.Enter / Exit</span></li>
+    <li><a href="#s3">五种写法赛跑</a> <span class="depth">— 先猜再点</span></li>
+    <li><a href="#s4">await 为什么进不去</a> <span class="depth">— 线程亲和性</span></li>
+    <li><a href="#s5">动手：跑出少掉的那个数</a> <span class="depth">— 一个文件，三分钟</span></li>
+    <li><a href="#s6">选型：哪个场合用哪个</a> <span class="depth">— 一屏表</span></li>
+    <li><a href="#s7">话术</a> <span class="depth">— 三段</span></li>
+    <li><a href="#s8">检验一下</a> <span class="depth">— 6 题</span></li>
+    <li><a href="#s9">下一课</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、先分清两种锁</h2>
+
+<p><a href="0007-claiming-a-ticket.html#s3">Lesson 07 的写法 ②</a> 已经埋了这个坑：用 C# 的 <code>lock</code> 保护抢单逻辑，扩容当天就破。现在把这句话说完整——<strong>那两种「锁」根本不是同一个物种</strong>：</p>
+
+<table>
+  <thead><tr><th></th><th>C# 的 <code>lock</code></th><th>数据库行锁</th></tr></thead>
+  <tbody>
+    <tr><td><strong>保护的边界</strong></td><td>一个<strong>进程</strong>里的一<strong>段代码</strong></td><td>一台数据库里的一<strong>行数据</strong></td></tr>
+    <tr><td><strong>谁在排队</strong></td><td>本进程的线程</td><td>所有连上来的会话，跨机器</td></tr>
+    <tr><td><strong>加了第二个副本</strong></td><td><strong>完全失效</strong></td><td>照常有效</td></tr>
+    <tr><td><strong>成本</strong></td><td>无竞争时几十纳秒</td><td>一次网络往返</td></tr>
+  </tbody>
+</table>
+
+<p><code>lock</code> 保护的是<strong>代码</strong>，不是<strong>数据</strong>。它的承诺只有一句：「这段代码，本进程内同一时刻只有一个线程在跑。」<strong>数据是否安全，取决于这段代码是不是访问那份数据的唯一入口。</strong>抢单那题里它不是——别的机器上还有九个副本，每个都有自己的一把锁。</p>
+
+<div class="callout">
+  <span class="label">这一节的面试价值</span>
+  <p>被问「.NET 有哪些锁」时，<strong>先说这句话再开始列举</strong>：<q>先分两层：进程内的同步原语，和跨进程的分布式锁。选哪个不取决于代码长什么样，取决于<strong>竞争的资源在哪一层</strong>。</q>——绝大多数候选人一上来就背 <code>lock</code> / <code>Mutex</code> / <code>Semaphore</code> 的清单，这一句会立刻把你和他们分开。</p>
+</div>
+
+<h2 id="s2">二、lock 展开成了什么</h2>
+
+<p><code>lock</code> 不是一个运行时机制，它是<strong>语法糖</strong>。编译器把它展开成 <code>Monitor</code> 的一对调用（<a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/statements/lock">C# 语言参考原文</a>：<q>the <code>lock</code> statement is precisely equivalent to</q>）：</p>
+
+<pre><code>lock (x)
+{
+    // 你的代码
+}
+
+// ↓ 编译器实际生成的，一字不差：
+
+object __lockObj = x;
+bool __lockWasTaken = false;
+try
+{
+    System.Threading.Monitor.Enter(__lockObj, ref __lockWasTaken);
+    // 你的代码
+}
+finally
+{
+    if (__lockWasTaken) System.Threading.Monitor.Exit(__lockObj);
+}</code></pre>
+
+<p>三件事从这段展开里直接读得出来，<strong>而它们正是面试要你说的</strong>：</p>
+
+<ul>
+  <li><strong>异常安全是白拿的。</strong>释放在 <code>finally</code> 里，body 抛异常锁也会还回去。这也是「为什么不自己写 <code>Monitor.Enter</code>」的答案——自己写就得自己保证这个 <code>finally</code>。</li>
+  <li><strong>锁挂在那个对象上，不挂在代码上。</strong>两段完全不相干的代码只要 <code>lock</code> 同一个对象，就会互相排队；同一段代码 <code>lock</code> 了两个不同对象，就<strong>一点保护都没有</strong>。</li>
+  <li><strong>它是可重入的。</strong>文档：<q>the thread that holds the lock can acquire and release the lock multiple times</q>。同一个线程递归进入不会把自己锁死——<strong>记住这条，第四节会用它来对比。</strong></li>
+</ul>
+
+<h3>锁对象该选谁</h3>
+
+<p>微软文档明确点名了三个<strong>不要</strong>拿来当锁对象的东西，理由都是同一个：<strong>它们是公开的，外面的代码也能锁它</strong>。</p>
+
+<table>
+  <thead><tr><th>别锁</th><th>为什么</th></tr></thead>
+  <tbody>
+    <tr><td><code>this</code></td><td><q>callers might also lock <code>this</code></q>——调用方拿到你的实例也能 <code>lock</code> 它，你控制不了</td></tr>
+    <tr><td><code>typeof(Foo)</code></td><td><code>Type</code> 实例全进程唯一，任何人用 <code>typeof</code> 或反射都能拿到同一个</td></tr>
+    <tr><td>字符串字面量</td><td>字符串会被<strong>驻留（interned）</strong>——你锁的 <code>"lock"</code> 和别人锁的 <code>"lock"</code> 是同一个对象</td></tr>
+  </tbody>
+</table>
+
+<p>正确做法：<strong>一个私有的、只读的、专用的锁对象</strong>，一份被保护的数据配一把：</p>
+
+<pre><code>private readonly object _balanceGate = new();   // .NET 8 及以前
+
+private readonly System.Threading.Lock _balanceGate = new();  // .NET 9 / C# 13 起</code></pre>
+
+<div class="callout ext">
+  <span class="label">扩展 · .NET 9 的 System.Threading.Lock</span>
+  <p>C# 13 起，如果 <code>x</code> 的静态类型是 <code>System.Threading.Lock</code>，<code>lock (x)</code> 就<strong>不再展开成 Monitor</strong>，而是：</p>
+  <pre><code>using (x.EnterScope()) { /* 你的代码 */ }</code></pre>
+  <p><code>EnterScope()</code> 返回一个带 <code>Dispose()</code> 的 <code>ref struct</code>，<code>using</code> 保证释放。文档的建议是 <q>lock a dedicated object instance of the <code>System.Threading.Lock</code> type for best performance</q>。</p>
+  <p><strong>面试增量：</strong><q>.NET 9 加了一个专用的 <code>Lock</code> 类型，比锁 <code>object</code> 快，因为它不用走对象头上的同步块那条老路。而且如果你不小心把它转成 <code>object</code> 再锁，编译器会警告——因为那样就悄悄退回 Monitor 了。</q>——这句话能证明你在跟版本，而不是停在 .NET Framework。</p>
+</div>
+
+<h2 id="s3">三、五种写法赛跑</h2>
+
+<p>场景换成最小的那个：<strong>两个线程各给同一个字段加一次</strong>。这和 <a href="0007-claiming-a-ticket.html#s5">Lesson 07 第 2 步你亲手跑出来的丢失更新是同一个形状</a>，只是从数据库那一层搬到了内存里。</p>
+
+<div class="callout">
+  <span class="label">这一课唯一必须记死的一句</span>
+  <p><strong><code>lock</code> 认的是线程，不是任务——所以 <code>await</code> 一进去，它就守不住了。</strong></p>
+</div>
+
+<p><strong>每次点「下一步」之前先猜</strong>。写法 ④ 是这一课的正题，别跳过。</p>
+
+<div class="race" data-race='{
+  "label": "赛跑模拟 · 两个线程同时执行 _count++",
+  "actors": [{"id":"t1","label":"线程 T1"},{"id":"t2","label":"线程 T2"}],
+  "state": [
+    {"key":"count","label":"_count","init":"0"},
+    {"key":"holder","label":"锁的状态","init":"—"}
+  ],
+  "strategies": [
+    {
+      "id":"naive",
+      "label":"① 裸 _count++（最常见的错）",
+      "sql":"private int _count;\n\npublic void Add()\n{\n    _count++;      // 看起来是一步\n}\n\n// 但它编译成三步：\n//   1. 把 _count 读进寄存器\n//   2. 寄存器 + 1\n//   3. 写回 _count",
+      "steps":[
+        {"actor":"t1","text":"读 _count 到寄存器，得到 0","note":"T1 的寄存器里现在是 0。"},
+        {"actor":"t2","text":"读 _count 到寄存器，也得到 0","note":"T1 还没写回来。<strong>缝隙就在读和写之间</strong>——和上一课那两条 SELECT 一模一样。","tone":"bad"},
+        {"actor":"t1","text":"寄存器 +1，写回 _count = 1","set":{"count":"1"},"note":"T1 完成了自己的那一次加。"},
+        {"actor":"t2","text":"寄存器 +1，写回 _count = 1","set":{"count":"1"},"note":"T2 也完成了。但它写回的是 <strong>基于旧值算出来的 1</strong>。<strong>加了两次，结果是 1。</strong>","tone":"bad"}
+      ],
+      "verdict":{"tone":"bad","title":"++ 不是原子操作。",
+        "text":"<code>_count++</code> 在 IL 里是<strong>读—改—写三条指令</strong>，线程可以在任意两条之间被切走。两个线程各加一次，结果可能是 2，也可能是 1。<br><strong>和上一课的丢失更新是同一个 bug 的两个化身</strong>：那边是 SELECT 和 UPDATE 之间的缝，这边是读寄存器和写回之间的缝。<strong>凡是「读出来—算一下—写回去」，中间就有缝。</strong><br>它同样<strong>不报错</strong>，同样在低并发下几乎不复现——你在第五节会亲手把它逼出来。"}
+    },
+    {
+      "id":"lock",
+      "label":"② lock（正确）",
+      "sql":"private readonly object _gate = new();\nprivate int _count;\n\npublic void Add()\n{\n    lock (_gate)\n    {\n        _count++;\n    }\n}",
+      "steps":[
+        {"actor":"t1","text":"Monitor.Enter(_gate) 成功，进入","set":{"holder":"记在 T1 名下"},"note":"锁现在挂在 T1 名下。"},
+        {"actor":"t2","text":"Monitor.Enter(_gate) <strong>阻塞</strong>","note":"文档：<q>Any other thread is blocked from acquiring the lock and waits until the lock is released</q>。T2 的线程在这里被挂起，什么也干不了。","tone":"wait"},
+        {"actor":"t1","text":"_count 变 1，finally 里 Monitor.Exit","set":{"count":"1","holder":"—"},"note":"释放在 finally 里，就算 body 抛异常也会还。","tone":"good"},
+        {"actor":"t2","text":"被唤醒，进入，读到 1，写回 2","set":{"count":"2","holder":"记在 T2 名下"},"note":"T2 读到的是 <strong>T1 写完之后</strong>的值。缝隙消失。","tone":"good"}
+      ],
+      "verdict":{"tone":"good","title":"正确。但要注意它正确的理由。",
+        "text":"不是因为 <code>lock</code> 保护了 <code>_count</code> 这个<strong>字段</strong>——它保护的是那<strong>段代码</strong>。<code>_count</code> 之所以安全，是因为<strong>所有</strong>访问它的地方都进了同一把锁。<br><strong>如果别处还有一行 <code>_count++</code> 没被 lock 包起来，这把锁就白加了。</strong>面试里这是个漂亮的补充：<q>锁保护的是代码路径不是数据，所以我会把被保护的字段设成 private，让这把锁成为唯一入口。</q>"}
+    },
+    {
+      "id":"interlocked",
+      "label":"③ Interlocked（更快，但适用面窄）",
+      "sql":"private int _count;\n\npublic void Add()\n{\n    Interlocked.Increment(ref _count);\n}\n\n// 没有锁，没有阻塞，一条 CPU 指令搞定",
+      "steps":[
+        {"actor":"t1","text":"发起原子自增","note":"CPU 层面把读—改—写压成一条不可分割的指令。"},
+        {"actor":"t2","text":"同时发起原子自增","note":"<strong>没有阻塞</strong>，硬件保证两次自增不会互相覆盖。","tone":"good"},
+        {"actor":"t1","text":"完成，_count = 1","set":{"count":"1"},"tone":"good"},
+        {"actor":"t2","text":"完成，_count = 2","set":{"count":"2"},"note":"两个线程谁也没等谁，结果仍然正确。","tone":"good"}
+      ],
+      "verdict":{"tone":"good","title":"对，而且比 lock 快一个数量级——但它只会做几件事。",
+        "text":"<code>Interlocked</code> 提供的是 <code>Increment</code> / <code>Decrement</code> / <code>Exchange</code> / <code>CompareExchange</code> / <code>Add</code> 这几样，<strong>作用对象是单个变量</strong>。<br><strong>边界很硬：一旦你要原子地改两个字段，或者要先判断一个复合条件再改，Interlocked 就用不了了，那是 lock 的地盘。</strong><br>面试话术：<q>计数器、开关、序号这类单变量场景我用 <code>Interlocked</code>，它是无锁的；只要涉及两个以上字段要一起保持一致，我就上 <code>lock</code>。</q>"}
+    },
+    {
+      "id":"awaitlock",
+      "label":"④ lock 里 await（这一课的正题）",
+      "sql":"lock (_gate)\n{\n    await _db.SaveAsync();   // ← 编译不过\n    _count++;\n}\n\n// 于是有人手写 Monitor 绕过编译器：\nMonitor.Enter(_gate);\nawait _db.SaveAsync();\n_count++;\nMonitor.Exit(_gate);         // ← 编译过了，运行时炸",
+      "steps":[
+        {"actor":"t1","text":"Monitor.Enter 成功，<strong>锁记在 T1 名下</strong>","set":{"holder":"记在 T1 名下"},"note":"Monitor 是<strong>线程亲和</strong>的：它记住的是「哪个线程进来了」。"},
+        {"actor":"t1","text":"执行到 await，<strong>T1 被交还给线程池去干别的活</strong>","set":{"holder":"仍记在 T1 名下（未释放）"},"note":"注意：<strong>锁没有释放</strong>，它还挂在 T1 名下。而 T1 已经跑去处理别的请求了——<strong>它可能正好要进同一把锁</strong>。","tone":"bad"},
+        {"actor":"t2","text":"异步操作完成，续接被排到 <strong>T2</strong> 上继续跑","note":"await 之后接着跑的代码，<strong>不保证还在原来那个线程上</strong>。这是 async/await 的基本事实，不是意外。","tone":"bad"},
+        {"actor":"t2","text":"T2 执行 Monitor.Exit(_gate) → <strong>SynchronizationLockException</strong>","set":{"holder":"永远卡在 T1 名下"},"note":"T2 从来没进过这把锁，它没资格出。<strong>锁再也还不回来，之后所有人全部死等。</strong>","tone":"bad"}
+      ],
+      "verdict":{"tone":"bad","title":"这就是为什么编译器直接禁止 await 写在 lock 里。",
+        "text":"文档一句话：<q>You cannot use the <code>await</code> expression in the body of a <code>lock</code> statement.</q><strong>这不是编译器保守，是它在替你挡一颗雷。</strong><br>根因是 <strong>Monitor 的线程亲和性</strong>：谁进的谁出。而 <code>await</code> 的整个存在意义就是<strong>把线程还回去</strong>，续接跑在哪个线程上由线程池说了算。两者的假设直接冲突。<br>顺带看第二步那个更阴的后果：<strong>T1 是带着锁跑去处理别的请求的</strong>。如果那条路径也要进这把锁，它会立刻拿到（因为可重入认的就是线程），于是<strong>两份互不相关的业务同时进了临界区</strong>——锁形同虚设，而且不报任何错。<br><strong>面试里被问「为什么 lock 里不能 await」，答「因为 Monitor 认线程，await 会换线程」就够了。能再补上可重入那一层，是资深信号。</strong>"}
+    },
+    {
+      "id":"semaphore",
+      "label":"⑤ SemaphoreSlim（async 场景的正解）",
+      "sql":"private readonly SemaphoreSlim _gate = new(1, 1);\n\nawait _gate.WaitAsync();\ntry\n{\n    await _db.SaveAsync();\n    _count++;\n}\nfinally\n{\n    _gate.Release();     // 必须在 finally 里\n}",
+      "steps":[
+        {"actor":"t1","text":"WaitAsync 成功，<strong>名额从 1 减到 0</strong>","set":{"holder":"剩余名额 0"},"note":"注意状态栏：它记的是<strong>一个数</strong>，不是哪个线程。"},
+        {"actor":"t2","text":"WaitAsync 发现没名额了，<strong>异步等待</strong>","note":"关键区别：T2 的<strong>线程被还给线程池了</strong>，不是阻塞在那里空耗。这正是 async 的意义。","tone":"wait"},
+        {"actor":"t1","text":"await 完成后续接落到 <strong>T3</strong> 上，_count = 1，finally 里 Release","set":{"count":"1","holder":"剩余名额 1"},"note":"<strong>换了线程，照样能 Release</strong>——因为信号量根本不关心是谁在还。","tone":"good"},
+        {"actor":"t2","text":"被唤醒，进入，_count = 2","set":{"count":"2","holder":"剩余名额 0"},"note":"结果正确，而且等待期间没有占着线程。","tone":"good"}
+      ],
+      "verdict":{"tone":"good","title":"正确。但它换来了两个新负担。",
+        "text":"<code>SemaphoreSlim(1, 1)</code> 就是一扇「最多放一个人进」的门，它<strong>只是一个计数器</strong>——不记录持有者，所以换了线程也能还。这正是它能配合 <code>await</code> 的原因。<br><strong>代价一：它不可重入。</strong><code>lock</code> 允许同一线程递归进入，信号量不允许——同一条逻辑链上进两次，第二次会等第一次释放，而第一次要等它返回：<strong>自己把自己锁死</strong>。<br><strong>代价二：忘了 Release 就是永久泄漏。</strong><code>lock</code> 的释放由编译器放进 <code>finally</code>，信号量得你自己写。<strong>没有 try/finally 的 <code>WaitAsync</code> 是定时炸弹：body 里抛一次异常，这把锁就再也回不来了。</strong><br>话术：<q>异步代码里我用 <code>SemaphoreSlim(1,1)</code> 加 <code>WaitAsync</code>，Release 一定放在 finally。要注意它不可重入，行为和 lock 不一样。</q>"}
+    }
+  ]
+}'></div>
+
+<h2 id="s4">四、await 为什么进不去</h2>
+
+<p>把写法 ④ ⑤ 的对比压成一张表——<strong>这是这一课最值钱的五行</strong>：</p>
+
+<table>
+  <thead><tr><th></th><th><code>lock</code> / <code>Monitor</code></th><th><code>SemaphoreSlim</code></th></tr></thead>
+  <tbody>
+    <tr><td><strong>它记住的是</strong></td><td><strong>哪个线程</strong>进来了</td><td><strong>还剩几个名额</strong></td></tr>
+    <tr><td><strong>能否跨 await</strong></td><td>不能（编译器直接拦）</td><td>能</td></tr>
+    <tr><td><strong>等待时的线程</strong></td><td>阻塞，占着不放</td><td><code>WaitAsync</code> 把线程还回去</td></tr>
+    <tr><td><strong>可重入</strong></td><td>可以</td><td><strong>不可以</strong>，重入即自锁</td></tr>
+    <tr><td><strong>释放</strong></td><td>编译器生成 <code>finally</code></td><td><strong>你自己写 <code>finally</code></strong></td></tr>
+  </tbody>
+</table>
+
+<p>一句话贯穿全表：<strong>Monitor 是「记名」的，信号量是「记数」的。</strong>记名的东西过不了 <code>await</code>，因为 <code>await</code> 之后名字就变了。</p>
+
+<div class="callout ext">
+  <span class="label">扩展 · 同一条线索的另一个出口：为什么不该用 .Result / .Wait()</span>
+  <p>既然 <code>await</code> 的意义是<strong>把线程还给线程池</strong>，那么在异步链路里写 <code>SomethingAsync().Result</code> 或 <code>.Wait()</code> 就是<strong>把这件事反着做一遍</strong>：线程被阻塞在那里干等，什么活也不接。</p>
+  <p>在有<strong>同步上下文</strong>的环境里（经典 ASP.NET、WinForms、WPF），它会直接死锁：续接需要回到那个被你阻塞住的上下文，而上下文正在等续接。ASP.NET Core 没有同步上下文，不会死锁，<strong>但每次都会吃掉一个线程</strong>——压力上来就是线程池饥饿，表现为「接口莫名其妙全都变慢」，而且慢的往往不是出问题的那个接口。</p>
+  <p><strong>规则很短：async 一路到底（async all the way），中间不要有 <code>.Result</code> / <code>.Wait()</code>。</strong>参考 <a href="https://blog.stephencleary.com/2012/07/dont-block-on-async-code.html">Stephen Cleary — Don't Block on Async Code</a>。这条线索会在 Lesson 09 展开。</p>
+</div>
+
+<h2 id="s5">五、动手：跑出少掉的那个数</h2>
+
+<div class="callout">
+  <span class="label">为什么必须亲手跑</span>
+  <p>上一课你已经验证过：<strong>看解释和亲手跑出来，是两种记忆。</strong>这次要逼出来的东西更难得——<code>_count++</code> 的丢失更新在低并发下几乎不复现，所以它才能在生产环境里活好几年。<strong>这三分钟会给你一个具体的数字，那个数字就是你面试时说「我实际验证过」的凭据。</strong></p>
+</div>
+
+<p>随便找个空目录：</p>
+
+<pre><code>dotnet new console -o lockdemo
+cd lockdemo</code></pre>
+
+<p>把 <code>Program.cs</code> 整个替换成：</p>
+
+<pre><code>using System.Diagnostics;
+
+const int Threads = 8;
+const int PerThread = 200_000;
+const int Expected = Threads * PerThread;
+
+// ① 裸 ++
+int naive = 0;
+var t1 = Run(() =&gt; naive++);
+Console.WriteLine($"① 裸 ++       : {naive,10:N0}   应为 {Expected:N0}，少了 {Expected - naive:N0}   {t1} ms");
+
+// ② lock
+int locked = 0;
+var gate = new object();
+var t2 = Run(() =&gt; { lock (gate) { locked++; } });
+Console.WriteLine($"② lock        : {locked,10:N0}   {t2} ms");
+
+// ③ Interlocked
+int atomic = 0;
+var t3 = Run(() =&gt; Interlocked.Increment(ref atomic));
+Console.WriteLine($"③ Interlocked : {atomic,10:N0}   {t3} ms");
+
+static long Run(Action body)
+{
+    var sw = Stopwatch.StartNew();
+    var tasks = new Task[Threads];
+    for (int i = 0; i &lt; Threads; i++)
+        tasks[i] = Task.Run(() =&gt; { for (int j = 0; j &lt; PerThread; j++) body(); });
+    Task.WaitAll(tasks);
+    return sw.ElapsedMilliseconds;
+}</code></pre>
+
+<p>然后 <code>dotnet run</code>。<strong>先猜，再看</strong>：① 会少掉多少？③ 会比 ② 快多少？</p>
+
+<div class="callout">
+  <span class="label">要记录的三件事</span>
+  <ol>
+    <li><strong>① 裸 ++ 得到的数字是多少？</strong>（这是这一课的交付物）</li>
+    <li><strong>再跑三次，① 每次一样吗？</strong>——不一样。<strong>这正是它可怕的地方：不可复现的 bug，测试抓不住。</strong></li>
+    <li><strong>② 和 ③ 的耗时差多少倍？</strong>——这是你说「Interlocked 更快」时能给出的具体数量级。</li>
+  </ol>
+</div>
+
+<h3>加做一分钟：亲眼看编译器拦你</h3>
+
+<p>在 <code>Program.cs</code> 末尾加这么一段，然后 <code>dotnet build</code>：</p>
+
+<pre><code>async Task Broken()
+{
+    lock (gate)
+    {
+        await Task.Delay(1);   // ← 编译器会在这里报错
+    }
+}</code></pre>
+
+<p><strong>要记录的：报错的编号和那句话是什么？</strong>记住它——面试里能报出编译器错误号，说明你真的撞过这堵墙。看完记得删掉这段，否则项目编译不过。</p>
+
+<div class="callout">
+  <span class="label">交作业</span>
+  <p>报回来<strong>一行就够</strong>：<strong>① 的那个数字</strong>，还有 <strong>② 和 ③ 的耗时</strong>。上一课你三次都只给了数字，很好——这一课照旧，<strong>我不问你懂了没，只看数字。</strong></p>
+</div>
+
+<h2 id="s6">六、选型：哪个场合用哪个</h2>
+
+<p>机制讲完了，现在才轮到选型。<strong>面试里被问「.NET 有哪些锁」，按这张表从上往下说，并且每一行都带上「什么时候不用它」</strong>——只会列举的人很多，能说出边界的人很少：</p>
+
+<table>
+  <thead><tr><th>工具</th><th>用在</th><th>不要用在</th></tr></thead>
+  <tbody>
+    <tr><td><code>Interlocked</code></td><td>单个变量的自增、交换、CAS</td><td>要同时保持两个字段一致时</td></tr>
+    <tr><td><code>lock</code><br><span style="font-size:0.85em;color:var(--ink-soft)">= Monitor</span></td><td><strong>默认选它。</strong>同步代码里的短临界区</td><td>body 里有 <code>await</code>；临界区里有 I/O 或远程调用</td></tr>
+    <tr><td><code>SemaphoreSlim</code></td><td>异步临界区（<code>WaitAsync</code>）；把并发度限制成 N</td><td>需要可重入时；没把握写好 <code>finally</code> 时</td></tr>
+    <tr><td><code>ReaderWriterLockSlim</code></td><td>读远多于写，<strong>且单次持有时间不算短</strong>的共享缓存</td><td>临界区只有几纳秒时——它自身开销比 <code>lock</code> 大，得不偿失</td></tr>
+    <tr><td><code>ConcurrentDictionary</code> 等</td><td>能用现成并发集合就别自己加锁</td><td>需要跨多个 key 保持原子性时</td></tr>
+    <tr><td><code>Mutex</code></td><td><strong>跨进程</strong>（同一台机器），如「只允许一个实例运行」</td><td>进程内同步——它比 <code>lock</code> 慢几十倍</td></tr>
+    <tr><td>Redis / 数据库</td><td><strong>跨机器</strong>。多副本部署下的唯一选择</td><td>单机就能解决的问题</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="label">这一节的记忆点</span>
+  <p><strong>选锁只有一个判据：竞争的资源在哪一层，锁就加在哪一层。</strong>变量 → <code>Interlocked</code>；进程内的对象 → <code>lock</code>；机器上的资源 → <code>Mutex</code>；数据库里的行 → <a href="0007-claiming-a-ticket.html#s3">条件更新或行锁</a>；多副本共享的状态 → 分布式锁。</p>
+  <p>把这句话和 <a href="0007-claiming-a-ticket.html">Lesson 07</a> 串起来讲，就是一个完整闭环：<q>抢单那个场景，竞争的资源是数据库里的一行，所以我把控制放在那条 UPDATE 的 where 里，而不是在 C# 里加 lock——加了也没用，我们是多副本部署。</q></p>
+</div>
+
+<h2 id="s7">七、话术</h2>
+
+<div class="script">
+  <span class="label">话术 A · 对应题「.net 锁的使用及种类」</span>
+  <p><strong>先给判据，别急着列清单：</strong><q>我一般先分两层看：进程内的同步原语，和跨进程、跨机器的分布式锁。选哪个不看代码长什么样，<strong>看竞争的资源在哪一层</strong>。</q></p>
+  <p><strong>再列，每个都带边界：</strong><q>进程内，单个变量的自增或交换用 <code>Interlocked</code>，无锁、最快；一般的临界区用 <code>lock</code>，它就是 <code>Monitor.Enter</code> 加 <code>try/finally</code> 的语法糖；异步代码里用 <code>SemaphoreSlim</code> 配 <code>WaitAsync</code>，因为 <code>lock</code> 里不能 <code>await</code>；读多写少而且持有时间不短的可以考虑 <code>ReaderWriterLockSlim</code>，但临界区很短的时候它反而比 <code>lock</code> 慢。跨进程是 <code>Mutex</code>，跨机器就得上 Redis 或者数据库。</q></p>
+  <p><strong>收一句：</strong><q>不过实践里我第一反应是<strong>能不能不加锁</strong>——换成并发集合，或者把状态收到数据库那一层用条件更新解决，通常比加锁更省心。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 B · 对应追问「为什么 lock 里不能 await」（这是拉开差距的一问）</span>
+  <p><strong>直接给根因：</strong><q>因为 <code>lock</code> 展开成 <code>Monitor.Enter</code> / <code>Exit</code>，而 <strong>Monitor 是线程亲和的——谁进的谁出</strong>。<code>await</code> 恰恰会把线程还给线程池，续接可能落到另一个线程上，那个线程去 <code>Exit</code> 会抛 <code>SynchronizationLockException</code>。所以编译器干脆禁止了。</q></p>
+  <p><strong>补更阴的那一层：</strong><q>还有个更隐蔽的问题：<code>await</code> 的时候<strong>锁并没有释放</strong>，但那个线程已经被还回去处理别的请求了。如果那条路径也要进同一把锁，因为 Monitor 可重入、认的就是线程，它会直接拿到——<strong>两份不相干的业务同时进了临界区，而且不报任何错。</strong></q></p>
+  <p><strong>给解法：</strong><q>异步场景我用 <code>SemaphoreSlim(1,1)</code>，它只是个计数器、不记持有者，所以能跨 <code>await</code>。但要注意两点：它<strong>不可重入</strong>，还有 <code>Release</code> 必须放在 <code>finally</code>，否则 body 抛一次异常这把锁就永远回不来了。</q></p>
+  <p><strong>为什么这样答强：</strong>大多数人只能答到「编译器不让」。<strong>能说出「线程亲和」四个字就已经进前 20%；能补上可重入那一层，面试官会知道你踩过。</strong></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 C · 对应追问「你项目里怎么用的 / 踩过什么坑」</span>
+  <p><strong>用上一课那件真事：</strong><q>印象最深的一次是并发场景选错了锁的层级。业务是多个人抢同一批任务，第一版在 C# 里加了一把 <code>lock</code>——单实例测试完全正常，扩到两个副本之后立刻出问题，两个人抢到同一单。<strong>原因是锁的作用域是进程，而竞争的资源是数据库的一行</strong>，两台机器上的两把锁互不相识。</q></p>
+  <p><strong>给修法：</strong><q>后来把控制下沉到数据库：一条 <code>UPDATE ... WHERE status = approved AND claimed_by IS NULL</code>，靠受影响行数判断谁抢到。<strong>这件事之后我的习惯就是先问竞争资源在哪一层，再决定锁加在哪一层</strong>，而不是顺手在代码里加。</q></p>
+  <p><strong>为什么这样答强：</strong>它是一个完整的<strong>「翻车 → 定位 → 修复 → 沉淀原则」闭环</strong>，而且横跨 .NET 和数据库两个板块。<a href="0007-claiming-a-ticket.html#s5">上一课你已经亲手把这两种情形都跑出来过了</a>——这段是你能讲的真实经历，不是背的。</p>
+</div>
+
+<h2 id="s8">八、检验一下</h2>
+
+<p><strong>先在心里说出理由再选。</strong></p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "C# 的 lock 语句，编译器实际把它展开成了：",
+    "options": [
+      "对被保护的那个字段加上一个内存屏障指令",
+      "Monitor 的进出调用外面套一个 try-finally",
+      "把整段方法体提交到一个专用的串行队列上",
+      "运行时向操作系统申请一个命名的内核互斥量"
+    ],
+    "answer": 1,
+    "why": "文档给的等价形式一字不差：<code>Monitor.Enter(__lockObj, ref __lockWasTaken)</code> 放在 <code>try</code> 里，<code>finally</code> 里 <code>if (__lockWasTaken) Monitor.Exit(__lockObj)</code>。<strong>两个推论要能顺口说出来</strong>：① 异常安全是编译器白送的，所以别自己写 Monitor；② 锁挂在<strong>那个对象</strong>上而不是代码上——lock 不同对象等于没锁，lock 同一个对象的两段无关代码会互相排队。选项 D 描述的是 <code>Mutex</code>，那是跨进程的内核对象。"
+  },
+  {
+    "q": "await 不允许出现在 lock 的语句块里，根本原因是：",
+    "options": [
+      "异步方法的状态机无法保存局部变量的引用",
+      "Monitor 认线程而 await 之后可能换了线程",
+      "编译器无法确定异步操作到底会持续多久",
+      "垃圾回收器可能在等待期间移动那个锁对象"
+    ],
+    "answer": 1,
+    "why": "<strong>Monitor 是线程亲和的：谁 Enter 谁 Exit。</strong>而 await 的整个意义就是把线程还给线程池，续接落在哪个线程上由线程池决定。换了线程去 Exit 会抛 <code>SynchronizationLockException</code>，所以编译器直接拦下（<q>You cannot use the await expression in the body of a lock statement</q>）。<br><strong>还有更阴的一层：</strong>await 期间锁<strong>没有释放</strong>，而那个线程已经跑去处理别的请求了；因为 Monitor 可重入且认的就是线程，那条路径会直接拿到锁——<strong>两份业务同时进临界区，且不报错</strong>。"
+  },
+  {
+    "q": "把 lock 换成 SemaphoreSlim 之后，最需要额外当心的是：",
+    "options": [
+      "它在竞争激烈的时候会退化成自旋消耗大量 CPU",
+      "它不可重入且释放要靠你自己写在 finally 里",
+      "它只能限制并发数为一而不能设置成其他数值",
+      "它必须配合取消令牌使用否则等待永远不会超时"
+    ],
+    "answer": 1,
+    "why": "两个负担都来自同一件事：<strong>它只是个计数器，不记录持有者</strong>。不记持有者才能跨 await 释放（优点），但也因此<strong>不可重入</strong>——同一条逻辑链上进两次会自己锁死自己，而 <code>lock</code> 在这种情况下是放行的。另外 <code>lock</code> 的 <code>finally</code> 是编译器生成的，<code>SemaphoreSlim</code> 的 <code>Release()</code> 得你自己写；漏了 try/finally，body 抛一次异常这把锁就永久泄漏。选项 C 错：<code>new SemaphoreSlim(n, n)</code> 正是把并发度限制成 n 的标准用法。"
+  },
+  {
+    "q": "关于锁对象的选择，下面哪个说法是对的：",
+    "options": [
+      "锁字符串字面量最省内存因为它们会被驻留复用",
+      "应当用私有只读的专用对象一份数据配一把锁",
+      "锁 this 最直观因为它天然对应这个实例的状态",
+      "锁 typeof 当前类可以保证全进程范围内的唯一"
+    ],
+    "answer": 1,
+    "why": "文档点名的三个反例——<code>this</code>、<code>Type</code> 实例、字符串字面量——<strong>坏在同一个地方：它们是公开的，外部代码也能锁到同一个对象</strong>，于是你控制不了谁在跟你争，容易死锁或无谓争用。字符串驻留正是坑本身而不是优点：你锁的字面量和别人锁的同一个字面量是同一个引用。<strong>.NET 9 / C# 13 起最佳选择是专用的 <code>System.Threading.Lock</code> 类型</strong>，它不走对象头同步块，性能更好。"
+  },
+  {
+    "q": "在多副本部署的服务里保护「同一张工单只能被一人抢到」，应该：",
+    "options": [
+      "用静态的 lock 对象确保临界区在全局唯一存在",
+      "把控制下沉到数据库或用外部的分布式锁组件",
+      "改用 ReaderWriterLockSlim 因为读多写少更高效",
+      "用 Mutex 替代 lock 因为它的作用域比 lock 更大"
+    ],
+    "answer": 1,
+    "why": "<strong>判据只有一条：竞争的资源在哪一层，锁就加在哪一层。</strong>竞争的是数据库里的一行，那就用<a href=\"0007-claiming-a-ticket.html#s3\">条件更新</a>或行锁，或者上 Redis 分布式锁。选项 A 是最诱人的错误：<code>static</code> 扩大的是<strong>进程内</strong>的作用域，多副本下每个进程仍有自己那一份静态字段。选项 D 也不行——<code>Mutex</code> 只跨到<strong>同一台机器</strong>的多个进程，跨不了机器。"
+  },
+  {
+    "q": "Interlocked.Increment 相比 lock 的关键限制是：",
+    "options": [
+      "它在竞争激烈的时候反而会比加锁的方案慢得多",
+      "它一次只能原子地操作单独的一个变量而已",
+      "它要求被操作的字段必须声明成 volatile 类型",
+      "它在三十二位平台上对长整型无法保证原子性"
+    ],
+    "answer": 1,
+    "why": "<code>Interlocked</code> 靠 CPU 指令把读—改—写压成一步，<strong>快，但作用域只有单个变量</strong>：Increment / Decrement / Exchange / CompareExchange / Add。<strong>一旦需要「两个字段一起保持一致」或者「先判断一个复合条件再改」，它就无能为力，那是 lock 的地盘。</strong>面试里这样划界：<q>计数器、开关、序号用 Interlocked；涉及两个以上字段的不变式就上 lock。</q>"
+  }
+]'></div>
+
+<h2 id="s9">九、下一课</h2>
+
+<p>这一课把 <a href="0007-claiming-a-ticket.html#s3">Lesson 07 写法 ②</a> 埋的坑填平了，并且给了你一个横跨 .NET 与数据库的完整故事（话术 C）。题库那一问「.net 锁的使用及种类」现在有得答了。</p>
+
+<p><strong>下一课（Lesson 09）＝ async/await 到底做了什么。</strong>这一课有两处都指向同一个盲区：<code>await</code> 之后为什么会换线程、<code>.Result</code> 为什么会死锁。答案在<strong>编译器生成的状态机</strong>里。按<a href="../NOTES.md">既定顺序</a>，还是先讲机制：一个 async 方法被拆成了什么、<code>await</code> 那一行到底发生了什么、<code>ConfigureAwait(false)</code> 在关掉哪个开关。</p>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（只看一个的话，看这个）：</strong><br>
+  <a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/statements/lock">Microsoft Learn — The lock statement</a>。只有几屏，但本课第二节的展开式、三个「别锁什么」、以及那句 <q>You cannot use the await expression in the body of a lock statement</q> 全部出自这里。<strong>把那段展开式默写一遍，第二节就白拿了。</strong><br>
+  想再深一层：<a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.monitor">Monitor 类</a>（线程亲和性与可重入的官方表述）、<a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.semaphoreslim">SemaphoreSlim</a>（<code>WaitAsync</code> 与 <code>Release</code> 的契约）、<a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.interlocked">Interlocked</a>（它到底提供哪几个操作）、<a href="https://blog.stephencleary.com/2012/07/dont-block-on-async-code.html">Stephen Cleary — Don't Block on Async Code</a>（<code>.Result</code> 死锁的经典解释，作者是 <em>Concurrency in C# Cookbook</em> 的作者）。</p>
+
+  <p><strong>社区（获取智慧，不是知识）：</strong><a href="https://stackoverflow.com/questions/tagged/c%23+async-await+locking">Stack Overflow 的 <code>c#</code> + <code>async-await</code> + <code>locking</code> 标签</a>，搜 <code>async lock reentrancy</code>——大量真实的「我以为我加了锁」翻车现场。</p>
+
+  <div class="nav-links">
+    <a href="0007-claiming-a-ticket.html">← Lesson 07：抢单</a>
+    <a href="0004-microservices-what-actually-changes.html">← Lesson 04：微服务</a>
+    <a href="../reference/dotnet-locks-cheatsheet.html">→ 速查表：.NET 锁</a>
+    <a href="../reference/claim-patterns-cheatsheet.html">→ 速查表：并发抢单</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练，有任何不清楚的直接问我。</strong>这一课同样<strong>只收数字</strong>：<a href="#s5">第五节</a>跑完报三样——<strong>① 裸 ++ 得到多少、② 和 ③ 各多少毫秒</strong>。加做那一分钟的话，再报一个<strong>编译器错误号</strong>。<br>
+    上一课那三个数字你全报对了。顺带说一句：你第 5 步拿到的是 <strong>1002 / 1003</strong> 而不是 1001 / 1002，那是因为 1001 还停在第 3 步留下的 <code>reviewing</code> 状态，被 <code>WHERE status = approved</code> 过滤掉了。<strong>你等于顺手多验证了一件事：已被认领的单在派单查询里是隐形的。</strong>
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+<script src="../assets/race.js"></script>
+</body>
+</html>

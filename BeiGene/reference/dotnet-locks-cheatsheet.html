@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查表 · .NET 锁的种类</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Reference · .NET 并发 / 锁 / async · BeiGene 面试备战</p>
+  <h1>.NET 锁的种类<br>＋ 为什么 lock 里不能 await</h1>
+  <p class="standfirst">压缩自 <a href="../lessons/0008-dotnet-locks.html">Lesson 08</a>。面试前 10 分钟只看这一页。</p>
+</header>
+
+<h2>0 · 一句话判据</h2>
+
+<p><strong>竞争的资源在哪一层，锁就加在哪一层。</strong>选锁不看代码长什么样，看竞争边界在哪里。</p>
+
+<pre><code>单个变量        → Interlocked
+进程内的对象    → lock            （异步链路里换 SemaphoreSlim）
+本机多个进程    → Mutex
+数据库里的一行  → 条件更新 / 行锁   ← Lesson 07
+多副本共享状态  → Redis / 数据库分布式锁</code></pre>
+
+<h2>1 · 选型表（每一行都带「不要用在」）</h2>
+
+<table>
+  <thead><tr><th>工具</th><th>用在</th><th>不要用在</th></tr></thead>
+  <tbody>
+    <tr><td><code>Interlocked</code></td><td>单变量自增 / 交换 / CAS，无锁最快</td><td>要同时保持两个字段一致时</td></tr>
+    <tr><td><code>lock</code> = Monitor</td><td><strong>默认选它</strong>，同步代码的短临界区</td><td>body 里有 <code>await</code>；临界区里有 I/O 或远程调用</td></tr>
+    <tr><td><code>SemaphoreSlim</code></td><td>异步临界区 <code>WaitAsync</code>；并发度限 N</td><td>需要可重入时；漏写 <code>finally</code> 时</td></tr>
+    <tr><td><code>ReaderWriterLockSlim</code></td><td>读远多于写<strong>且持有时间不算短</strong></td><td>临界区只有几纳秒时，它比 <code>lock</code> 还慢</td></tr>
+    <tr><td>并发集合</td><td>能用现成的就别自己加锁</td><td>要跨多个 key 保持原子性时</td></tr>
+    <tr><td><code>Mutex</code></td><td><strong>跨进程</strong>：只允许一个实例运行</td><td>进程内同步，比 <code>lock</code> 慢几十倍</td></tr>
+    <tr><td>Redis / DB</td><td><strong>跨机器</strong>，多副本部署的唯一选择</td><td>单机就能解决的问题</td></tr>
+  </tbody>
+</table>
+
+<h2>2 · lock 展开成什么（背下来）</h2>
+
+<pre><code>lock (x) { /* body */ }
+
+// ↓ 编译器生成，一字不差
+
+object __lockObj = x;
+bool __lockWasTaken = false;
+try
+{
+    System.Threading.Monitor.Enter(__lockObj, ref __lockWasTaken);
+    /* body */
+}
+finally
+{
+    if (__lockWasTaken) System.Threading.Monitor.Exit(__lockObj);
+}</code></pre>
+
+<p>三个推论：<strong>①</strong> 异常安全是编译器白送的 → 别自己写 Monitor。<strong>②</strong> 锁挂在<strong>对象</strong>上不挂在代码上 → lock 不同对象＝没锁。<strong>③</strong> <strong>可重入</strong>，同线程递归进入不会自锁。</p>
+
+<p><strong>.NET 9 / C# 13 起：</strong>若 <code>x</code> 是 <code>System.Threading.Lock</code> 类型，则等价于 <code>using (x.EnterScope()) { }</code>，性能更好。</p>
+
+<h2>3 · 锁对象：三个别锁</h2>
+
+<table>
+  <thead><tr><th>别锁</th><th>为什么</th></tr></thead>
+  <tbody>
+    <tr><td><code>this</code></td><td>调用方也能锁它</td></tr>
+    <tr><td><code>typeof(T)</code></td><td><code>Type</code> 实例全进程唯一，谁都拿得到</td></tr>
+    <tr><td>字符串字面量</td><td>会被<strong>驻留</strong>，你和别人锁的是同一个引用</td></tr>
+  </tbody>
+</table>
+
+<p>正解：<code>private readonly object _gate = new();</code>（.NET 9 起用 <code>System.Threading.Lock</code>）。<strong>一份数据一把锁。</strong></p>
+
+<h2>4 · 为什么 lock 里不能 await（高频追问）</h2>
+
+<p><strong>根因一句话：Monitor 认线程，await 会换线程。</strong></p>
+
+<table>
+  <thead><tr><th></th><th><code>lock</code> / Monitor</th><th><code>SemaphoreSlim</code></th></tr></thead>
+  <tbody>
+    <tr><td>记住的是</td><td><strong>哪个线程</strong>进来了</td><td><strong>还剩几个名额</strong></td></tr>
+    <tr><td>跨 await</td><td>不能（编译器拦）</td><td>能</td></tr>
+    <tr><td>等待时</td><td>阻塞，占着线程</td><td><code>WaitAsync</code> 把线程还回去</td></tr>
+    <tr><td>可重入</td><td>可以</td><td><strong>不可以</strong>，重入即自锁</td></tr>
+    <tr><td>释放</td><td>编译器生成 <code>finally</code></td><td><strong>你自己写 <code>finally</code></strong></td></tr>
+  </tbody>
+</table>
+
+<p><strong>手写 Monitor 绕过编译器的后果：</strong>await 后续接落到别的线程 → 那个线程 <code>Monitor.Exit</code> → <code>SynchronizationLockException</code>，锁永久卡死。</p>
+
+<p><strong>更阴的一层（说出来＝资深信号）：</strong>await 期间<strong>锁没释放</strong>，而原线程已被还给线程池去处理别的请求；那条路径要进同一把锁时因<strong>可重入</strong>直接放行 → <strong>两份不相干的业务同时进临界区，且不报错</strong>。</p>
+
+<pre><code>private readonly SemaphoreSlim _gate = new(1, 1);
+
+await _gate.WaitAsync();
+try   { await _db.SaveAsync(); _count++; }
+finally { _gate.Release(); }        // 漏了这行 = 永久泄漏</code></pre>
+
+<h2>5 · 三段话术骨架</h2>
+
+<table>
+  <thead><tr><th>被问</th><th>怎么起头</th></tr></thead>
+  <tbody>
+    <tr><td>锁的种类</td><td>「先分两层：进程内同步原语，和跨进程/跨机器的分布式锁。<strong>选哪个看竞争资源在哪一层</strong>」→ 逐个列举并带边界 → 收「第一反应是能不能不加锁」</td></tr>
+    <tr><td>为什么不能 await</td><td>「Monitor 线程亲和，谁进谁出；await 会换线程」→ 补可重入那层 → 给 <code>SemaphoreSlim(1,1)</code> 及其两个代价</td></tr>
+    <tr><td>踩过什么坑</td><td>抢单加 <code>lock</code>，单实例正常、扩到两副本就破 → 下沉到数据库条件更新 → <strong>沉淀出「先问竞争资源在哪一层」</strong></td></tr>
+  </tbody>
+</table>
+
+<h2>6 · 相关</h2>
+
+<p><a href="../lessons/0008-dotnet-locks.html">Lesson 08</a>（本页来源） · <a href="../lessons/0007-claiming-a-ticket.html">Lesson 07：抢单</a> · <a href="claim-patterns-cheatsheet.html">速查表：并发抢单</a></p>
+
+<p><strong>一手源：</strong><a href="https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/statements/lock">MS Learn — The lock statement</a>（展开式、三个别锁、await 禁令全出自这里） · <a href="https://blog.stephencleary.com/2012/07/dont-block-on-async-code.html">Stephen Cleary — Don't Block on Async Code</a></p>
+
+</body>
+</html>

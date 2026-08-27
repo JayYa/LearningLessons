@@ -303,8 +303,68 @@
   </tbody>
 </table>
 
+<h2>表单、提交与跨域</h2>
+
+<table>
+  <thead><tr><th style="width:11rem">术语</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Controlled component</strong><br>受控组件</td>
+      <td><code>&lt;input value={x} onChange={...} /&gt;</code>：值由 state 决定，React <strong>每次渲染都把 <code>value</code> 强制按回去</strong>。<strong>只写 <code>value</code> 不写 <code>onChange</code> → 输入框打不进字</strong>（Console 有 warning，但不是错误）。一句话：<strong>屏幕上显示的永远是 state，不是你敲的东西。</strong><a href="https://react.dev/reference/react-dom/components/input">react.dev</a></td>
+    </tr>
+    <tr>
+      <td><strong>Uncontrolled component</strong><br>非受控组件</td>
+      <td>只给 <code>defaultValue</code>（或什么都不给），值由 DOM 自己保管，React 不管。适合不需要随输入实时反应的简单表单。<strong>一个输入框要么受控要么非受控，中途别换</strong>（换了 React 会警告 <em>“changing an uncontrolled input to be controlled”</em>）。</td>
+    </tr>
+    <tr>
+      <td><strong>Single source of truth</strong></td>
+      <td>React 没有双向绑定（对照 WPF 的 <code>Mode=TwoWay</code>）。数据只有一个方向：state → UI；反向那一段由 <code>onChange</code> 手写。代价是啰嗦，收益是<strong>中间没有第二份真相</strong>。</td>
+    </tr>
+    <tr>
+      <td><strong><code>e.preventDefault()</code></strong></td>
+      <td><code>&lt;form&gt;</code> 的默认行为是<strong>把数据拼进 URL、GET 提交给当前地址并刷新整页</strong>（1995 年的老规矩）。在 SPA 里 = <strong>整个 JS 运行时重来、全部 state 清零</strong>。所以 <code>onSubmit</code> 第一行就写它。</td>
+    </tr>
+    <tr>
+      <td><strong>Discriminated union</strong><br>可辨识联合</td>
+      <td>用一个字面量字段（<code>kind</code> / <code>ok</code> / <code>success</code>）区分分支的联合类型：<code>{kind:"error";message:string} | {kind:"idle"}</code>。<code>if</code> 判断后 TS <strong>自动收窄</strong>，非法组合<strong>根本表示不出来</strong>。<strong>C# 至今没有真正的联合类型</strong>（要写类层次 + 模式匹配，或 <code>OneOf&lt;&gt;</code>）—— 这是「TS 有什么 C# 没有」的标准答案。</td>
+    </tr>
+    <tr>
+      <td><strong>Avoid contradictions in state</strong></td>
+      <td>官方五条 state 结构原则之一。三个布尔值 = 8 种组合、5 种非法（<code>isSubmitting</code> 与 <code>isSuccess</code> 同时为 true）。改用一个 <code>status</code> union。<strong>问题不是性能，是正确性。</strong><a href="https://react.dev/learn/choosing-the-state-structure">react.dev</a></td>
+    </tr>
+    <tr>
+      <td><strong><code>res.ok</code></strong></td>
+      <td>状态码是否落在 200–299。<strong><code>fetch</code> 收到 404 / 422 / 500 <em>不会</em> reject</strong>，只有请求本身失败（网络错误、URL 非法、被 CORS 拦下）才抛 <code>TypeError</code>。<strong>C# 对照：<code>IsSuccessStatusCode</code> / <code>EnsureSuccessStatusCode()</code></strong>，设计完全一致。<a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch">MDN</a></td>
+    </tr>
+    <tr>
+      <td><strong>422 Unprocessable Content</strong></td>
+      <td>FastAPI/Pydantic 校验失败的固定状态码（<strong>不是 400</strong>）。响应体是结构化的：<code>{"detail":[{"type":..,"loc":["body","title"],"msg":..}]}</code>，<code>loc</code> 首项是 <code>body</code>/<code>query</code>/<code>path</code>，次项是字段名 —— <strong>可直接摊到各输入框下面显示</strong>。校验不过时<strong>函数体根本不执行</strong>。</td>
+    </tr>
+    <tr>
+      <td><strong>Simple request</strong><br>简单请求</td>
+      <td>不触发预检的跨域请求。条件苛刻：方法只能是 GET/HEAD/POST，且 <code>Content-Type</code> 只能是 <code>application/x-www-form-urlencoded</code>、<code>multipart/form-data</code>、<code>text/plain</code>。<strong><code>application/json</code> 不在其中。</strong></td>
+    </tr>
+    <tr>
+      <td><strong>Preflight request</strong><br>预检请求</td>
+      <td>浏览器在真请求之前<strong>自动先发一条 <code>OPTIONS</code></strong>，问服务器「这个跨域请求能发吗」。所以<strong>几乎每个 JSON POST 都是两条请求</strong>（uvicorn 日志能看到）。<strong>「GET 好好的，一改 POST 就跨域失败」= 预检没被正确响应。</strong><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS#preflighted_requests">MDN</a></td>
+    </tr>
+    <tr>
+      <td><strong>CORS 是浏览器执行的</strong></td>
+      <td>实测：带错误 <code>Origin</code> 的 POST，<strong>服务器照常执行、照常写入、照常返回 200</strong>，只是响应缺了 <code>access-control-allow-origin</code>，浏览器不把结果交给 JS。<strong>CORS 保护的是用户的浏览器，不是你的接口</strong> —— curl / Postman / 任何后端程序都不受约束。接口的门禁是认证授权。</td>
+    </tr>
+    <tr>
+      <td><strong>前端校验 vs 后端校验</strong></td>
+      <td><strong>前端为了体验</strong>（即时反馈，省一个来回）；<strong>后端为了信任</strong>（唯一真正的关卡）。一条 curl 就能绕过前端 —— <strong>凡是跑在用户机器上的规则都只是建议。</strong>代价是同一规则写两遍且会漂移，成熟解法是从 OpenAPI schema 生成前端类型。</td>
+    </tr>
+    <tr>
+      <td><strong>Parse, don't validate</strong></td>
+      <td>Zod 的 <code>.trim()</code> 等是 <em>transform</em>：<strong>先改数据，再校验</strong>。所以 <code>safeParse</code> 成功后要用 <strong><code>parsed.data</code></strong>，不是原始输入。<strong>Zod 是 parser 不是 validator</strong>：进去 <code>unknown</code>，出来是干净且有类型的数据 —— 对照 FluentValidation 只回答是/否。</td>
+    </tr>
+  </tbody>
+</table>
+
 <div class="footer">
-  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a> · <a href="../lessons/0005-useeffect-and-that-empty-array.html">第 5 课</a> · <a href="../lessons/0006-immutability-and-key.html">第 6 课</a></p>
+  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a> · <a href="../lessons/0005-useeffect-and-that-empty-array.html">第 5 课</a> · <a href="../lessons/0006-immutability-and-key.html">第 6 课</a> · <a href="../lessons/0007-forms-post-and-two-gates.html">第 7 课</a></p>
   <div class="ask"><strong>有词条不清楚？</strong> 问我，我会把解释补进这份文档 —— 它会跟着课程一起长大。</div>
 </div>
 
