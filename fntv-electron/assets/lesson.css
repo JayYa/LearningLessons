@@ -1,0 +1,159 @@
+/* fntv-electron 教学工作区 · 共享样式
+   设计目标：屏幕可读、打印友好、中英混排舒适。 */
+
+:root {
+  --ink:      #14110d;
+  --ink-soft: #5b5347;
+  --rule:     #d8d0c2;
+  --paper:    #fffef9;
+  --accent:   #7a2e12;   /* 赭红：标题与强调 */
+  --code-bg:  #f4f1e8;
+  --ok:       #1f6b3a;
+  --warn:     #8a5a00;
+  --warn-bg:  #fdf6e3;
+  --measure:  56rem;
+}
+
+html { font-size: 17px; }
+
+body {
+  margin: 0 auto;
+  padding: 4rem 2rem 7rem;
+  max-width: var(--measure);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+               "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC", serif;
+  line-height: 1.7;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- 标题层级 ---------- */
+.eyebrow {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: .72rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 .6rem;
+}
+h1 {
+  font-size: 2rem;
+  line-height: 1.25;
+  font-weight: 600;
+  margin: 0 0 .4rem;
+  color: var(--accent);
+}
+.subtitle {
+  font-size: 1.05rem;
+  color: var(--ink-soft);
+  font-style: italic;
+  margin: 0 0 2.5rem;
+}
+h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 3rem 0 .8rem;
+  padding-bottom: .3rem;
+  border-bottom: 1px solid var(--rule);
+}
+h3 { font-size: 1.02rem; font-weight: 600; margin: 2rem 0 .5rem; }
+
+p, li { hyphens: auto; }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+/* ---------- 代码 ---------- */
+code, kbd {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: .86em;
+  background: var(--code-bg);
+  padding: .12em .35em;
+  border-radius: 3px;
+}
+pre {
+  background: var(--code-bg);
+  border-left: 3px solid var(--rule);
+  padding: .9rem 1.1rem;
+  overflow-x: auto;
+  font-size: .82rem;
+  line-height: 1.55;
+  border-radius: 0 4px 4px 0;
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+
+/* ---------- 表格 ---------- */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: .88rem;
+  margin: 1.2rem 0;
+}
+th, td {
+  text-align: left;
+  padding: .5rem .6rem;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+th {
+  font-size: .72rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  border-bottom: 1.5px solid var(--ink-soft);
+}
+
+/* ---------- 提示块 ---------- */
+.callout {
+  border-left: 3px solid var(--warn);
+  background: var(--warn-bg);
+  padding: .8rem 1.1rem;
+  margin: 1.5rem 0;
+  font-size: .93rem;
+}
+.callout strong { color: var(--warn); }
+
+.aside {
+  border-left: 3px solid var(--rule);
+  padding: .3rem 1.1rem;
+  margin: 1.5rem 0;
+  font-size: .9rem;
+  color: var(--ink-soft);
+}
+
+/* ---------- 任务清单 ---------- */
+.task {
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 1.1rem 1.3rem;
+  margin: 1.3rem 0;
+  background: #fff;
+}
+.task h3 { margin-top: 0; }
+.task-label {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: .7rem;
+  letter-spacing: .12em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+/* ---------- 页脚 ---------- */
+footer {
+  margin-top: 4.5rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--rule);
+  font-size: .85rem;
+  color: var(--ink-soft);
+}
+footer h3 { margin-top: 1.4rem; }
+
+/* ---------- 打印 ---------- */
+@media print {
+  html { font-size: 11pt; }
+  body { padding: 0; max-width: none; background: #fff; }
+  .quiz-check, .quiz-reset { display: none; }
+  .quiz-explain { display: block !important; }
+  a::after { content: " (" attr(href) ")"; font-size: .75em; color: #666; }
+  a[href^="#"]::after { content: ""; }
+  pre, .task, .callout { break-inside: avoid; }
+}

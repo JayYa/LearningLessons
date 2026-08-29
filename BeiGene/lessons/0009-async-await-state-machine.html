@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 09 · await 那一行到底发生了什么</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/race.css">
+<link rel="stylesheet" href="../assets/binsort.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 09 · .NET 核心 · BeiGene 面试备战 · 动手课</p>
+  <h1>await 那一行到底发生了什么<br><span style="font-size:0.62em;color:var(--ink-soft);">编译器把你的方法拆成了一台状态机</span></h1>
+  <p class="standfirst">上一课留了两个没答完的问题：<code>await</code> 之后<strong>为什么会换线程</strong>，<code>.Result</code> <strong>为什么会死锁</strong>。两个答案是同一个——编译器把 <code>async</code> 方法拆成了一台状态机，<code>await</code> 那一行既不是等待、也不是新线程，而是<strong>一次登记加一次返回</strong>。这一课把这台机器打开看，然后你亲手把它的类名和字段打印出来。<strong>还是动手课，交付物是三样能一行报出来的东西。</strong></p>
+</header>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>约 35 分钟，其中 10 分钟在跑代码。<a href="#s3">第三节的赛跑</a>请按顺序点、每步之前先猜——五种写法里有三种是生产事故的原型。<a href="#s5">第五节</a>跑完报三样东西给我，一行就够，这一课就算收了。</p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">先破一个错觉</a> <span class="depth">— async 不等于多线程</span></li>
+    <li><a href="#s2">编译器拆出了什么</a> <span class="depth">— 状态机三件套</span></li>
+    <li><a href="#s3">五种写法赛跑</a> <span class="depth">— 先猜再点</span></li>
+    <li><a href="#s4">上下文与 ConfigureAwait</a> <span class="depth">— 死锁的开关</span></li>
+    <li><a href="#s5">动手：把状态机打印出来</a> <span class="depth">— 一个文件，三分钟</span></li>
+    <li><a href="#s6">归类练习</a> <span class="depth">— 真异步还是假异步</span></li>
+    <li><a href="#s7">话术</a> <span class="depth">— 三段</span></li>
+    <li><a href="#s8">检验一下</a> <span class="depth">— 6 题</span></li>
+    <li><a href="#s9">下一课</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、先破一个错觉</h2>
+
+<p>面试里问「你对异步的理解」，最常见的错答是<strong>把异步等同于多线程</strong>：<q>异步就是开一个线程去干活，主线程接着往下走。</q>这句话对 <code>Task.Run</code> 成立，对 <code>await httpClient.GetAsync(...)</code> <strong>完全不成立</strong>。</p>
+
+<div class="callout">
+  <span class="label">这一课唯一必须记死的一句</span>
+  <p><strong><code>await</code> 不创建线程——它把方法剩下的部分登记成一个回调，然后把线程还回去。</strong></p>
+</div>
+
+<p>一次网络请求发出去之后，等待的那 200 毫秒里，<strong>你的进程里没有任何线程在为它工作</strong>。数据在网线上飞，网卡收完会给操作系统一个中断，操作系统通过 <strong>IO 完成端口</strong>通知运行时，运行时这才从线程池抓一个线程来跑「剩下的那半个方法」。Stephen Cleary 用一整篇文章讲这件事，标题就是结论：<a href="https://blog.stephencleary.com/2013/11/there-is-no-thread.html">There Is No Thread</a>。</p>
+
+<table>
+  <thead><tr><th></th><th><code>Task.Run(...)</code></th><th><code>await SomethingAsync()</code></th></tr></thead>
+  <tbody>
+    <tr><td><strong>干的是</strong></td><td><strong>CPU 活</strong>（算东西）</td><td><strong>IO 活</strong>（网络 / 磁盘 / 数据库）</td></tr>
+    <tr><td><strong>等待期间</strong></td><td>确实<strong>占着</strong>一个线程池线程</td><td><strong>一个线程都不占</strong></td></tr>
+    <tr><td><strong>目的</strong></td><td>把活挪走，别卡住 UI</td><td><strong>提高吞吐</strong>——同样的线程数接更多请求</td></tr>
+    <tr><td><strong>用错的后果</strong></td><td>在服务端滥用 = 平白多一次线程切换</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<p><strong>这张表是话术 A 的骨架。</strong>服务端的 <code>async</code> 从来不是为了「更快」——单个请求用了 <code>async</code> 反而略慢（多了状态机的开销）。它换来的是：<strong>等 IO 的时候线程被还回去接别的请求</strong>，所以同样一台机器能扛更多并发。</p>
+
+<h2 id="s2">二、编译器拆出了什么</h2>
+
+<p>和上一课的 <code>lock</code> 一样，<code>async</code> / <code>await</code> <strong>不是运行时机制，是编译期改写</strong>。编译器把你的方法拆成一个<strong>状态机</strong>（<a href="https://devblogs.microsoft.com/dotnet/how-async-await-really-works/">Stephen Toub — How Async/Await Really Works in C#</a>：<q>The compiler has generated a struct named <code>&lt;CopyStreamToStreamAsync&gt;d__0</code></q>）。</p>
+
+<pre><code>public async Task WorkAsync()
+{
+    var s = "hello";
+    await Task.Delay(1);
+    Console.WriteLine(s.Length);
+}</code></pre>
+
+<p>编译之后，这个方法体<strong>消失了</strong>。剩下的是三样东西：</p>
+
+<table>
+  <thead><tr><th>生成物</th><th>是什么</th><th>为什么需要它</th></tr></thead>
+  <tbody>
+    <tr><td><code>&lt;WorkAsync&gt;d__0</code></td><td>一个 <code>struct</code>，实现 <code>IAsyncStateMachine</code></td><td>装下「跑到哪了」和所有<strong>跨越 await 的局部变量</strong></td></tr>
+    <tr><td><code>MoveNext()</code></td><td>你原来的方法体，被切成若干段的 <code>switch</code></td><td>每次被唤醒就从上次的段落接着跑</td></tr>
+    <tr><td><code>AsyncTaskMethodBuilder</code></td><td>建造器</td><td>负责<strong>造出并最终完成</strong>你返回的那个 <code>Task</code></td></tr>
+  </tbody>
+</table>
+
+<p>三个字段名你在<a href="#s5">第五节会亲手打印出来</a>，它们把整个机制暴露得很彻底：</p>
+
+<ul>
+  <li><code>&lt;&gt;1__state</code> —— <strong>一个 int，就是「跑到第几段了」</strong>。<code>-1</code> 表示正在跑，<code>0</code> 表示停在第一个 await 上。</li>
+  <li><code>&lt;s&gt;5__1</code> —— 你那个局部变量 <code>s</code>。<strong>它从栈上搬到了状态机里</strong>，因为方法要返回、栈帧要销毁，而 await 之后还得用它。</li>
+  <li><code>&lt;&gt;u__1</code> —— 一个 <code>TaskAwaiter</code>。<strong>await 的对象不是 Task，是 Task 上的 awaiter。</strong></li>
+</ul>
+
+<h3>await 那一行，逐字翻译</h3>
+
+<p><code>await x</code> 展开成的伪代码只有四步——<strong>把这四步说出来，「你对异步的理解」这道题就答完了</strong>：</p>
+
+<pre><code>var awaiter = x.GetAwaiter();
+
+if (awaiter.IsCompleted)          <span class="cm">// ① 已经完成了？（缓存命中、同步返回）</span>
+{
+    result = awaiter.GetResult(); <span class="cm">// ② 那就一步不停，继续往下跑</span>
+}
+else
+{
+    <span class="cm">// ③ 把 state 存成「我停在这」，把 MoveNext 登记成完成时的回调，</span>
+    <span class="cm">//    然后 return —— 线程立刻回到调用方，最终回到线程池</span>
+    awaiter.OnCompleted(MoveNext);
+    return;
+    <span class="cm">// ④ IO 完成后，线程池里某个线程再次调用 MoveNext，从这里接着跑</span>
+}</code></pre>
+
+<div class="callout">
+  <span class="label">上一课那两个问题，到这里全解了</span>
+  <p><strong>为什么 await 之后会换线程？</strong>因为第 ③ 步 <code>return</code> 之后原线程就走了，第 ④ 步是<strong>另一个线程</strong>调进来的。<a href="0008-dotnet-locks.html#s4">Monitor 认线程，所以它跨不过这一行</a>。</p>
+  <p><strong>为什么 IsCompleted 那条快路径重要？</strong>因为 <code>async</code> 方法<strong>大多数情况下根本不会挂起</strong>（缓存命中、内存流、已完成的 Task），走的是第 ② 步，一次分配都没有。这也是 <code>ValueTask</code> 存在的理由。</p>
+</div>
+
+<div class="callout ext">
+  <span class="label">扩展 · 为什么状态机是 struct</span>
+  <p>生成的是 <code>struct</code> 而不是 <code>class</code>，正是为了配合上面那条<strong>快路径</strong>：只要方法从头跑到尾没挂起过，状态机就一直待在栈上，<strong>零堆分配</strong>。只有真的要挂起时，运行时才把它搬到堆上（因为栈帧马上要没了）。</p>
+  <p><strong>面试增量：</strong><q>状态机是 struct，同步完成的路径上不会有堆分配；只有真正挂起才会搬到堆上。所以高频小方法我会考虑返回 <code>ValueTask</code>，把最后那个 Task 的分配也省掉——但 <code>ValueTask</code> 只能 await 一次，不能存起来反复用。</q></p>
+</div>
+
+<h2 id="s3">三、五种写法赛跑</h2>
+
+<p>场景：一个 ASP.NET 接口，里面要调一次外部 HTTP。<strong>每次点「下一步」之前先猜</strong>——③ ④ ⑤ 都是真实的生产事故形态。</p>
+
+<div class="race" data-race='{
+  "label": "赛跑模拟 · 一个请求进来，线程去哪了",
+  "actors": [{"id":"req","label":"请求线程"},{"id":"io","label":"操作系统 / 网卡"}],
+  "state": [
+    {"key":"holder","label":"这个线程在干嘛","init":"空闲"},
+    {"key":"pool","label":"被占住的线程数","init":"0"}
+  ],
+  "strategies": [
+    {
+      "id":"sync",
+      "label":"① 全同步（老代码的样子）",
+      "sql":"public string Get()\n{\n    var r = _http.GetStringAsync(url).GetAwaiter().GetResult();\n    return r;   // 整整 200ms，这个线程什么也没干\n}",
+      "steps":[
+        {"actor":"req","text":"发起 HTTP 请求","set":{"holder":"发请求","pool":"1"},"note":"线程池分配了一个线程给这个请求。"},
+        {"actor":"req","text":"阻塞，等 200ms","set":{"holder":"<strong>干等</strong>"},"note":"这 200 毫秒里，这个线程<strong>占着不放，一条指令都没执行</strong>。","tone":"bad"},
+        {"actor":"io","text":"网卡收到响应","note":"数据回来了。注意：<strong>刚才那 200ms 里，真正在工作的是网卡和操作系统，不是任何线程。</strong>"},
+        {"actor":"req","text":"线程被唤醒，返回结果","set":{"holder":"空闲","pool":"0"},"note":"结果是对的。代价是<strong>一个请求锁死一个线程 200ms</strong>。","tone":"wait"}
+      ],
+      "verdict":{"tone":"wait","title":"结果正确，但吞吐被线程数卡死。",
+        "text":".NET 线程池的线程<strong>不是无限的</strong>，而且超过最小值之后<strong>注入速度很慢</strong>（大约每秒一到两个）。<br>算一笔账：每个请求占住线程 200ms，线程池稳定在 100 个线程，那么这台机器的吞吐上限就是 <strong>100 ÷ 0.2 = 500 QPS</strong>——<strong>和你的 CPU 有多快毫无关系，纯粹被线程数卡住。</strong><br><strong>这就是服务端为什么要 async</strong>：不是为了让单个请求变快（它其实略慢），而是为了<strong>把这个上限拆掉</strong>。"}
+    },
+    {
+      "id":"async",
+      "label":"② async/await（正确）",
+      "sql":"public async Task&amp;lt;string&amp;gt; GetAsync()\n{\n    var r = await _http.GetStringAsync(url);\n    return r;\n}",
+      "steps":[
+        {"actor":"req","text":"跑到 await，发起 HTTP 请求","set":{"holder":"发请求","pool":"1"},"note":"和 ① 一样，先把请求发出去。"},
+        {"actor":"req","text":"IsCompleted 是 false → 登记 MoveNext 为回调，<strong>return</strong>","set":{"holder":"空闲","pool":"<strong>0</strong>"},"note":"注意状态栏：<strong>占用回到 0</strong>。线程被还给线程池，立刻去接下一个请求了。<strong>这就是 async 的全部意义。</strong>","tone":"good"},
+        {"actor":"io","text":"200ms 后网卡收到响应，通知运行时","note":"这 200ms 里<strong>进程内零线程</strong>为它工作。<q>There is no thread.</q>"},
+        {"actor":"req","text":"线程池抓一个<strong>新线程</strong>调 MoveNext，从 await 后面接着跑","set":{"holder":"续接","pool":"1"},"note":"<strong>很可能不是原来那个线程了</strong>——这正是 <a href=\"0008-dotnet-locks.html#s4\">lock 里不能 await</a> 的原因。","tone":"good"}
+      ],
+      "verdict":{"tone":"good","title":"正确。而且要能说清它省下的是什么。",
+        "text":"省下的<strong>不是时间，是线程</strong>。同一个请求耗时几乎一样（甚至因为状态机开销略慢），但等待的 200ms 里那个线程<strong>去接别的请求了</strong>。<br>吞吐上限从「线程数 ÷ 单请求耗时」变成了「CPU 和下游能扛多少」。<br><strong>面试话术：</strong><q>服务端用 async 不是为了单请求更快，是为了同样的线程数接更多请求——等 IO 的时候线程是还回去的。</q>"}
+    },
+    {
+      "id":"deadlock",
+      "label":"③ .Result（经典 ASP.NET / WPF）→ 死锁",
+      "sql":"public string Get()\n{\n    // 有人为了不改调用方，在同步方法里这样调异步\n    return GetAsync().Result;\n}",
+      "steps":[
+        {"actor":"req","text":"进入 <code>.Result</code>，<strong>阻塞</strong>当前线程","set":{"holder":"<strong>阻塞等待</strong>","pool":"1"},"note":"关键点：这是<strong>带着同步上下文的那个线程</strong>（经典 ASP.NET 的请求上下文 / UI 线程）。"},
+        {"actor":"req","text":"内部的 await 执行前，<strong>捕获了当前同步上下文</strong>","note":"await 默认会捕获 <code>SynchronizationContext</code>，承诺<strong>续接要回到这个上下文上跑</strong>。"},
+        {"actor":"io","text":"200ms 后 IO 完成，续接被排进那个上下文的队列","note":"排进去了，但要等上下文空出来才能跑。","tone":"wait"},
+        {"actor":"req","text":"上下文正被 <code>.Result</code> 占着 → <strong>永久死锁</strong>","set":{"holder":"<strong>死锁</strong>"},"note":"<strong>续接在等上下文，上下文在等续接。</strong>谁也不放手，这个请求永远不返回。","tone":"bad"}
+      ],
+      "verdict":{"tone":"bad","title":"经典的 sync-over-async 死锁。",
+        "text":"成因是一个<strong>闭环</strong>：<strong>①</strong> await 承诺续接回到原上下文；<strong>②</strong> 原上下文<strong>同时只允许一个线程</strong>；<strong>③</strong> 那唯一的位置正被 <code>.Result</code> 阻塞占着。<br>三个条件缺一不可——所以<strong>去掉任何一个都能解开</strong>：内部写 <code>ConfigureAwait(false)</code>（破 ①），或者调用方改成 <code>await</code>（破 ③）。<strong>但正解是后者。</strong><br>参考 <a href=\"https://blog.stephencleary.com/2012/07/dont-block-on-async-code.html\">Stephen Cleary — Dont Block on Async Code</a>。"}
+    },
+    {
+      "id":"starvation",
+      "label":"④ .Result（ASP.NET Core）→ 不死锁，但更阴",
+      "sql":"// ASP.NET Core 没有同步上下文，所以不死锁。\n// 于是这种写法在测试环境完全正常，压测才暴露。\nreturn GetAsync().Result;",
+      "steps":[
+        {"actor":"req","text":"<code>.Result</code> 阻塞线程池线程 A","set":{"holder":"阻塞","pool":"1"},"note":"没有同步上下文，续接可以落在<strong>任意</strong>线程上，所以不会死锁。"},
+        {"actor":"req","text":"续接需要<strong>另一个</strong>线程池线程 B 来跑","set":{"pool":"<strong>2</strong>"},"note":"看清楚：<strong>一个请求现在吃掉了两个线程</strong>——一个躺着阻塞，一个干活。","tone":"bad"},
+        {"actor":"io","text":"并发上到几百，线程池被阻塞的线程占满","set":{"pool":"<strong>全满</strong>"},"note":"线程池的注入速度大约<strong>每秒一到两个</strong>，追不上。","tone":"bad"},
+        {"actor":"req","text":"新请求排队等线程 → <strong>全站变慢</strong>","set":{"holder":"<strong>饥饿</strong>"},"note":"最坑的一点：<strong>慢的不只是这个接口，是所有接口</strong>——因为线程池是全进程共用的。","tone":"bad"}
+      ],
+      "verdict":{"tone":"bad","title":"线程池饥饿。它比死锁更难查，因为它不报错。",
+        "text":"David Fowler 的原话：<q>Using <code>Task.Result</code> or <code>Task.Wait</code> to block waiting on an asynchronous operation to complete is <strong>MUCH</strong> worse than calling a truly synchronous API to block.</q>（<a href=\"https://github.com/davidfowl/AspNetCoreDiagnosticScenarios/blob/master/AsyncGuidance.md\">AsyncGuidance</a>）<br><strong>为什么比纯同步还糟？</strong>纯同步阻塞只吃一个线程；<code>.Result</code> 吃两个——阻塞的那个，加上跑续接的那个。<br><strong>症状画像（面试里说出来很值钱）：</strong>接口响应时间整体飙高、CPU 却很低、线程数缓慢上涨。<strong>CPU 低 + 全站慢 = 先怀疑线程池饥饿。</strong><br>你会在<a href=\"#s5\">第五节亲手把这个耗时差跑出来</a>。"}
+    },
+    {
+      "id":"asyncvoid",
+      "label":"⑤ async void → 异常没人接",
+      "sql":"public void Handle()\n{\n    try { FireAndForget(); }\n    catch (Exception ex) { _log.Error(ex); }   // 抓不到\n}\n\nasync void FireAndForget()\n{\n    await _http.PostAsync(url, body);   // 这里抛异常\n}",
+      "steps":[
+        {"actor":"req","text":"调用 <code>FireAndForget()</code>，跑到 await 就 return","set":{"holder":"继续往下"},"note":"<code>async void</code> <strong>没有返回值可以给你 await</strong>，调用方拿不到任何句柄。"},
+        {"actor":"req","text":"try/catch <strong>正常结束</strong>，因为方法确实已经返回了","note":"catch 块是在<strong>方法返回时</strong>判定的，那时还没出错。","tone":"bad"},
+        {"actor":"io","text":"200ms 后 HTTP 失败，续接里抛出异常","note":"这个异常发生在<strong>另一个线程</strong>上，早已离开那个 try 块。","tone":"bad"},
+        {"actor":"req","text":"异常无处可去 → <strong>直接掀掉进程</strong>","set":{"holder":"<strong>进程崩溃</strong>","pool":"—"},"note":"<code>async Task</code> 的异常会存进 Task 里等你 await；<code>async void</code> <strong>没有 Task 可存</strong>，只能往上抛到线程池，成为未处理异常。","tone":"bad"}
+      ],
+      "verdict":{"tone":"bad","title":"async void 只有一个合法用途：事件处理器。",
+        "text":"David Fowler：<q>Async void methods will crash the process if an exception is thrown.</q> 以及 <q>The use of async void in ASP.NET Core applications is <strong>ALWAYS</strong> bad.</q><br><strong>唯一的例外是 UI 事件处理器</strong>（<code>button_Click</code>），因为事件的签名就是 <code>void</code>，没得选——那里必须自己在方法内部 try/catch 兜住。<br><strong>特别小心一个坑：</strong><code>list.ForEach(async x =&amp;gt; await F(x))</code> 里那个 lambda 被推断成 <code>async void</code>，<strong>整段代码不会等任何一个任务完成</strong>。正确写法是 <code>await Task.WhenAll(list.Select(F))</code>。"}
+    }
+  ]
+}'></div>
+
+<h2 id="s4">四、上下文与 ConfigureAwait</h2>
+
+<p>写法 ③ 死在「续接要回到原上下文」这条承诺上。这条承诺由谁做的？——<strong>由 <code>await</code> 默认做的</strong>。</p>
+
+<p>Stephen Toub 的 <a href="https://devblogs.microsoft.com/dotnet/configureawait-faq/">ConfigureAwait FAQ</a> 描述了 await 挂起前的动作：<q>it first checks whether there is a <code>SynchronizationContext</code> set, and if there is not, whether there is a non-default <code>TaskScheduler</code> in play.</q> 捕到什么，续接就回到什么上面跑。</p>
+
+<p><code>ConfigureAwait(false)</code> 做的事只有一句：<q>even if there is a current context or scheduler to call back to, it pretends as if there is not.</q>——<strong>假装没有上下文，续接就地在线程池上跑。</strong></p>
+
+<table>
+  <thead><tr><th>环境</th><th>有同步上下文吗</th><th><code>.Result</code> 的后果</th></tr></thead>
+  <tbody>
+    <tr><td>经典 ASP.NET（Framework）</td><td>有，且<strong>同时只放一个线程</strong></td><td><strong>死锁</strong></td></tr>
+    <tr><td>WinForms / WPF</td><td>有，绑定 UI 线程</td><td><strong>死锁</strong></td></tr>
+    <tr><td><strong>ASP.NET Core</strong></td><td><strong>没有</strong>（<q>ASP.NET Core does not</q>）</td><td>不死锁，但<strong>线程池饥饿</strong></td></tr>
+    <tr><td>控制台 / 后台服务</td><td>没有</td><td>不死锁，浪费线程</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="label">该不该写 ConfigureAwait(false)</span>
+  <p>官方指引就两句（<a href="https://devblogs.microsoft.com/dotnet/configureawait-faq/">ConfigureAwait FAQ</a>）：</p>
+  <ul>
+    <li><q>if you are writing general-purpose library code, use <code>ConfigureAwait(false)</code></q>——<strong>类库里写</strong>，因为你不知道调用方在什么环境里。</li>
+    <li><q>if you are writing app-level code, <em>do not</em> use <code>ConfigureAwait(false)</code></q>——<strong>应用代码里不写</strong>。</li>
+  </ul>
+  <p><strong>而且它不是死锁的解药。</strong>它只是让类库在被别人用错时不至于炸。<strong>真正的解药是 async 一路到底</strong>：<q>Once you go async, all of your callers <strong>SHOULD</strong> be async.</q></p>
+</div>
+
+<h2 id="s5">五、动手：把状态机打印出来</h2>
+
+<div class="callout">
+  <span class="label">为什么必须亲手跑</span>
+  <p>「编译器生成了一台状态机」这句话，读过的人很多，<strong>见过那个类名的人很少</strong>。三分钟之后你会拥有三样东西：await 前后两个不同的线程号、状态机的<strong>真实类名和字段清单</strong>、以及阻塞版比异步版慢几倍的具体数字。<strong>面试里说得出 <code>&lt;WorkAsync&gt;d__0</code> 这个名字，等级立刻不一样。</strong></p>
+</div>
+
+<pre><code>dotnet new console -o asyncdemo
+cd asyncdemo</code></pre>
+
+<p>把 <code>Program.cs</code> 整个替换成：</p>
+
+<pre><code>using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+
+<span class="cm">// ① await 前后，还是同一个线程吗？</span>
+Console.WriteLine($"① await 之前 : 线程 {Environment.CurrentManagedThreadId}");
+await Task.Delay(100);
+Console.WriteLine($"① await 之后 : 线程 {Environment.CurrentManagedThreadId}");
+
+<span class="cm">// ② 编译器到底生成了什么？</span>
+var method = typeof(Demo).GetMethod(nameof(Demo.WorkAsync))!;
+var sm = method.GetCustomAttribute&lt;AsyncStateMachineAttribute&gt;()!.StateMachineType;
+Console.WriteLine($"\n② 状态机类型 : {sm.Name}");
+foreach (var f in sm.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+    Console.WriteLine($"     字段 : {f.FieldType.Name,-28} {f.Name}");
+
+<span class="cm">// ③ 阻塞 vs 不阻塞</span>
+Console.WriteLine($"\n   SetMinThreads: {ThreadPool.SetMinThreads(4, 4)}");
+const int N = 100;
+
+var sw = Stopwatch.StartNew();
+Task.WaitAll(Enumerable.Range(0, N).Select(_ =&gt; Task.Run(() =&gt; IoAsync().Wait())).ToArray());
+Console.WriteLine($"③ 阻塞版(.Wait) : {sw.ElapsedMilliseconds,6} ms");
+
+sw.Restart();
+await Task.WhenAll(Enumerable.Range(0, N).Select(_ =&gt; IoAsync()));
+Console.WriteLine($"③ 异步版(await) : {sw.ElapsedMilliseconds,6} ms");
+
+static async Task IoAsync() =&gt; await Task.Delay(500);
+
+class Demo
+{
+    public async Task WorkAsync()
+    {
+        var s = "hello";
+        await Task.Delay(1);
+        Console.WriteLine(s.Length);
+    }
+}</code></pre>
+
+<p>然后 <code>dotnet run</code>。<strong>先猜，再看</strong>：① 两个线程号会一样吗？③ 一百个各睡 500ms 的任务，两种写法各要多久？</p>
+
+<div class="callout">
+  <span class="label">要记录的三件事</span>
+  <ol>
+    <li><strong>① 的两个线程号分别是多少？</strong>（不一样 —— 这就是 <code>lock</code> 跨不过 <code>await</code> 的现场证据）</li>
+    <li><strong>② 打印出的状态机类名，字段一共几个？</strong>对着<a href="#s2">第二节</a>逐个认：哪个是 state、哪个是你的局部变量 <code>s</code>、哪个是 awaiter。</li>
+    <li><strong>③ 阻塞版是异步版的几倍？</strong>——异步版应该贴着 500ms（<strong>一百个任务几乎同时在等，因为等待不占线程</strong>）；阻塞版取决于线程池往里塞线程的速度。<strong>这个倍数就是你说「sync-over-async 会拖垮吞吐」时的实测依据。</strong></li>
+  </ol>
+</div>
+
+<h3>加做一分钟：看 async void 掀桌子</h3>
+
+<p>把上面 <code>class Demo</code> <strong>之前</strong>的位置加进这段，再 <code>dotnet run</code>：</p>
+
+<pre><code>try { Boom(); }
+catch (Exception) { Console.WriteLine("catch 抓到了"); }
+await Task.Delay(1000);
+Console.WriteLine("还活着吗？");
+
+static async void Boom()
+{
+    await Task.Delay(10);
+    throw new InvalidOperationException("爆了");
+}</code></pre>
+
+<p><strong>要记录的：那句「catch 抓到了」印出来了吗？「还活着吗？」印出来了吗？</strong>——两个都不会。<strong>亲眼看一次进程被掀掉，比读十遍「async void 危险」有用。</strong>看完记得删掉这段。</p>
+
+<div class="callout">
+  <span class="label">交作业</span>
+  <p>报回来<strong>一行就够</strong>：<strong>① 的两个线程号</strong>、<strong>② 的状态机类名</strong>、<strong>③ 的两个耗时</strong>。上一课你只报了「已完成」——<strong>那三个数字我还没拿到</strong>，方便的话一起补给我，尤其是<strong>裸 <code>++</code> 少掉的那个数</strong>。<strong>我不问你懂了没，只看数字。</strong></p>
+</div>
+
+<h2 id="s6">六、归类练习：真异步还是假异步</h2>
+
+<p><strong>判据只有一个：等待的那段时间里，有没有线程被占着。</strong>占着就是假异步。</p>
+
+<div class="binsort" data-binsort='{
+  "label": "归类练习 · 这段代码真的省下线程了吗",
+  "bins": [{"id":"real","label":"真异步（不占线程）","tone":"good"},
+           {"id":"fake","label":"假异步（照样占着）","tone":"bad"}],
+  "items": [
+    {"text":"await _db.Users.ToListAsync() 查一次数据库","bin":"real",
+     "why":"网络往返期间进程里没有线程为它工作，操作系统完成后才回调。<strong>这是 async 的标准用途。</strong>"},
+    {"text":"await Task.Run(() =&amp;gt; 算十万次哈希) 完成","bin":"fake",
+     "why":"CPU 活必须有线程真的在跑。<code>Task.Run</code> 只是<strong>把它挪到线程池线程上</strong>，线程一个没省。服务端这样做只是多一次上下文切换。"},
+    {"text":"var r = GetDataAsync().Result 取出结果","bin":"fake",
+     "why":"<strong>sync-over-async，最糟的一种</strong>：阻塞一个线程，续接还要再吃一个。比直接调同步 API 更差。"},
+    {"text":"await File.ReadAllTextAsync(path) 读文件","bin":"real",
+     "why":"磁盘 IO 由操作系统的完成端口驱动。注意文件流要以异步方式打开，否则会退化成后台线程去读。"},
+    {"text":"await Task.Delay(1000) 等待一整秒","bin":"real",
+     "why":"<code>Task.Delay</code> 挂的是一个<strong>计时器</strong>，不占线程。<code>Thread.Sleep(1000)</code> 才是真的把线程按在那里睡。"},
+    {"text":"Task.WaitAll(tasks) 等所有任务完成","bin":"fake",
+     "why":"<code>WaitAll</code> 是<strong>阻塞</strong>版本，当前线程干等。异步版是 <code>await Task.WhenAll(tasks)</code>——<strong>Wait 阻塞，When 不阻塞</strong>，一个字母的差别。"}
+  ]
+}'></div>
+
+<h2 id="s7">七、话术</h2>
+
+<div class="script">
+  <span class="label">话术 A · 对应题「对异步的理解 async await task」</span>
+  <p><strong>先破错觉（这一句就分出高下）：</strong><q>先说个容易混的：<strong>异步不等于多线程</strong>。<code>await</code> 一次数据库查询的时候，进程里其实<strong>没有任何线程</strong>在等它——线程被还给线程池去接别的请求了，IO 完成之后运行时再抓一个线程从断点继续。</q></p>
+  <p><strong>再给机制：</strong><q><code>async</code>/<code>await</code> 是<strong>编译期改写</strong>，编译器把方法拆成一台状态机：一个 <code>int</code> 记跑到第几段，跨越 <code>await</code> 的局部变量从栈搬进状态机字段，<code>await</code> 那一行展开成「拿 awaiter → 判断 <code>IsCompleted</code> → 没完成就把 <code>MoveNext</code> 登记成回调然后 return」。<code>Task</code> 是这套东西的<strong>句柄</strong>——代表一个「将来会有结果」的操作，结果和异常都存在它里面。</q></p>
+  <p><strong>收在服务端价值上：</strong><q>所以服务端用 async <strong>不是为了单个请求更快</strong>，单请求其实略慢；是为了<strong>把吞吐从线程数的限制里解放出来</strong>。全同步的服务，吞吐上限就是线程数除以单请求耗时，跟 CPU 多快没关系。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 B · 对应追问「为什么不能用 .Result / async void」</span>
+  <p><strong>分两种环境讲，别只讲死锁：</strong><q><code>.Result</code> 有两种翻法。在经典 ASP.NET 或 WPF 里会<strong>直接死锁</strong>：await 默认捕获同步上下文、承诺续接回到那里跑，而那个上下文只允许一个线程，位置正被 <code>.Result</code> 阻塞占着——续接等上下文，上下文等续接。</q></p>
+  <p><q>在 ASP.NET Core 里<strong>没有同步上下文，不死锁，但更难查</strong>：一个请求会吃掉两个线程，一个躺着阻塞、一个跑续接。压力上来就是<strong>线程池饥饿</strong>，症状是<strong>全站接口都慢、CPU 却很低</strong>，而且慢的不一定是出问题那个接口。</q></p>
+  <p><strong>async void 单独点一句：</strong><q><code>async void</code> 更要避开：它<strong>没有 Task 可以承载异常</strong>，出错会直接变成未处理异常掀掉进程，调用方的 try/catch 根本抓不到。除了 UI 事件处理器没得选，其它一律 <code>async Task</code>。</q></p>
+  <p><strong>给原则：</strong><q>规则很短——<strong>async 一路到底</strong>，中间不要有 <code>.Result</code> / <code>.Wait()</code>。类库里加 <code>ConfigureAwait(false)</code>，但那是防御，不是解药。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 C · 对应「你排查过什么性能问题」</span>
+  <p><strong>症状画像最值钱，先给它：</strong><q>有一类问题的画像很好认：<strong>接口整体变慢、CPU 却很低、线程数缓慢上涨</strong>。CPU 低说明不是算力瓶颈，那大概率是线程池饥饿——某处在异步链路里用了 <code>.Result</code> 或 <code>.Wait()</code>，把线程池线程阻塞住了。</q></p>
+  <p><strong>给定位手段：</strong><q>定位我会看线程池的排队情况和线程数走势，配合 dump 看有多少线程卡在等待上。修法是把那条链路一路改成 <code>async</code>，而不是把线程池的最小线程数调大——<strong>调大只是把问题推后</strong>。</q></p>
+  <p><strong>为什么这样答强：</strong>它给的是<strong>一个可复用的诊断规则</strong>（CPU 低 + 全站慢 = 先查线程池），而不是一次孤立的经历。<a href="0008-dotnet-locks.html#s7">和上一课的话术 C 同形</a>：<strong>症状 → 判据 → 修法 → 沉淀原则</strong>。</p>
+</div>
+
+<h2 id="s8">八、检验一下</h2>
+
+<p><strong>先在心里说出理由再选。</strong></p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "await 一次数据库查询，等待的那两百毫秒里：",
+    "options": [
+      "有一个线程池线程在后台轮询这个操作是否完成",
+      "进程里没有任何线程为这次操作工作",
+      "运行时会新建一个专用线程来持有这次连接",
+      "原来那个线程降低优先级后继续留在原地等待"
+    ],
+    "answer": 1,
+    "why": "<strong>There is no thread.</strong> await 挂起时线程被还给线程池去接别的活，等待完全由操作系统和硬件驱动（网卡中断 → IO 完成端口 → 通知运行时）。运行时这才抓一个线程调 <code>MoveNext</code> 继续跑。<br><strong>这条是「异步不等于多线程」的全部依据</strong>，也是服务端 async 能提高吞吐的原因：吞吐不再被线程数卡死。反例是 <code>Task.Run</code> 里的 CPU 计算——那种确实要占一个线程。"
+  },
+  {
+    "q": "编译器为一个 async 方法生成的状态机里，那个 int 字段存的是：",
+    "options": [
+      "这个异步操作已经被重试过的具体次数",
+      "方法当前执行到了哪一个挂起点的编号",
+      "等待完成后应当回到的那个线程的编号",
+      "该状态机对象在托管堆上的引用计数值"
+    ],
+    "answer": 1,
+    "why": "<code>&lt;&gt;1__state</code> 就是「跑到第几段了」：<code>-1</code> 表示正在执行，<code>0</code>、<code>1</code>… 对应停在第几个 await 上。<code>MoveNext</code> 靠它 <code>switch</code> 到正确的段落继续。<br>另外两类字段同样要认得：<strong>跨越 await 的局部变量</strong>（<code>&lt;s&gt;5__1</code>，从栈搬进来的，因为方法要返回、栈帧会销毁）和 <strong>awaiter</strong>（<code>&lt;&gt;u__1</code>）。<strong>你在第五节亲手打印过它们。</strong>"
+  },
+  {
+    "q": "经典 ASP.NET 里 GetAsync().Result 会死锁，直接原因是：",
+    "options": [
+      "任务的结果尚未就绪时读取会抛出超时异常",
+      "续接要回原上下文而它被阻塞的调用方占着",
+      "线程池在高负载下拒绝再分配新的工作线程",
+      "垃圾回收在等待期间挂起了所有的托管线程"
+    ],
+    "answer": 1,
+    "why": "闭环由三件事构成：<strong>①</strong> await 默认捕获 <code>SynchronizationContext</code>，承诺续接回那里跑；<strong>②</strong> 那个上下文<strong>同时只允许一个线程</strong>；<strong>③</strong> 唯一的位置正被 <code>.Result</code> 阻塞占住。续接等上下文，上下文等续接。<br><strong>三个条件缺一不可</strong>——所以 <code>ConfigureAwait(false)</code>（破 ①）和把调用方改成 <code>await</code>（破 ③）都能解开，<strong>但正解是后者</strong>。ASP.NET Core 没有同步上下文，条件 ① 不成立，所以它不死锁——换成线程池饥饿。"
+  },
+  {
+    "q": "ASP.NET Core 里用 .Result 不会死锁，真正的代价是：",
+    "options": [
+      "异步操作抛出的异常会被包装成聚合异常类型",
+      "一个请求吃掉两个线程最终导致线程池饥饿",
+      "捕获的执行上下文丢失导致日志范围无法传递",
+      "任务的续接会被排到优先级更低的后台队列上"
+    ],
+    "answer": 1,
+    "why": "一个躺着阻塞、一个跑续接——<strong>一个请求两个线程</strong>。线程池超过最小值后注入速度约每秒一到两个，追不上并发，于是新请求排队。<br><strong>症状画像要背下来：全站接口都慢、CPU 却很低、线程数缓慢上涨</strong>，而且慢的往往不是出问题的那个接口（线程池全进程共用）。David Fowler 的说法是它 <q>MUCH worse than calling a truly synchronous API</q>——<strong>比纯同步阻塞还糟，因为纯同步只吃一个线程</strong>。选项 A 说的是 <code>.Result</code> 的次要缺点（包成 <code>AggregateException</code>），不是主要代价。"
+  },
+  {
+    "q": "关于 async void，下面哪个说法是对的：",
+    "options": [
+      "它适合用在不关心结果的即发即忘后台任务上",
+      "它抛出的异常调用方无法捕获且会掀掉进程",
+      "它比 async Task 少一次分配所以性能会更好",
+      "它在编译时不会生成状态机因为没有返回值"
+    ],
+    "answer": 1,
+    "why": "<code>async Task</code> 的异常被<strong>存进那个 Task</strong>，等你 await 时重新抛出；<code>async void</code> <strong>没有 Task 可存</strong>，异常只能直接抛到线程池，成为未处理异常。调用方的 try/catch 抓不到——方法在第一个 await 处就已经返回了，异常发生在之后、在另一个线程上。<br><strong>唯一合法用途是 UI 事件处理器</strong>（签名被 <code>void</code> 定死），那里必须在方法内部自己 try/catch。<strong>即发即忘要用 <code>async Task</code> 并显式处理异常</strong>，绝不是 <code>async void</code>。隐蔽的坑：<code>ForEach(async x =&gt; ...)</code> 里的 lambda 会被推断成 async void。"
+  },
+  {
+    "q": "关于 ConfigureAwait(false)，官方给出的指引是：",
+    "options": [
+      "所有代码都该加上它因为它总是能提高性能表现",
+      "通用类库里加应用层代码里不加它不是死锁解药",
+      "只在会发生死锁的那几个具体调用点上补加即可",
+      "ASP.NET Core 项目里必须全局启用它才算最佳实践"
+    ],
+    "answer": 1,
+    "why": "原文两句：<q>if you are writing general-purpose library code, use <code>ConfigureAwait(false)</code></q>；<q>if you are writing app-level code, <em>do not</em> use <code>ConfigureAwait(false)</code></q>。类库不知道调用方在什么环境里，所以要防御；应用代码往往<strong>需要</strong>那个上下文（UI 线程、请求上下文）。<br><strong>关键认知：它是防御不是解药。</strong>真正的修法是 <q>Once you go async, all of your callers <strong>SHOULD</strong> be async</q>——<strong>async 一路到底</strong>。选项 D 错：ASP.NET Core 本来就没有同步上下文，加了几乎没有收益。"
+  }
+]'></div>
+
+<h2 id="s9">九、下一课</h2>
+
+<p>.NET 核心板块已经拿下两块：<a href="0008-dotnet-locks.html">锁</a>与异步。两课在<a href="0008-dotnet-locks.html#s4">「Monitor 认线程 / await 换线程」</a>这一点上是同一个知识的两面——被问到任何一边，你都能顺势讲出另一边，这在面试里是很强的信号。</p>
+
+<p><strong>下一课（Lesson 10）＝ DI 生命周期与中间件管道。</strong>题库里「如何自定义中间件」「中间件的底层逻辑」两问直接命中，而且「<code>Scoped</code> 服务被注入进 <code>Singleton</code>」这个经典事故，正好接着这一课的「跨请求持有状态」往下讲。按<a href="../NOTES.md">既定顺序</a>，还是先讲机制：一个请求穿过管道时到底发生了什么、<code>Use</code> 与 <code>Run</code> 差在哪、三种生命周期的边界各在哪。</p>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（只看一个的话，看这个）：</strong><br>
+  <a href="https://devblogs.microsoft.com/dotnet/how-async-await-really-works/">Stephen Toub — How Async/Await Really Works in C#</a>。作者是 .NET 运行时性能负责人，这篇把状态机从 IL 层一路拆开。<strong>很长，但只看前三分之一（到状态机字段那节）就够覆盖本课第二节。</strong><br>
+  想再深一层：<a href="https://blog.stephencleary.com/2013/11/there-is-no-thread.html">Stephen Cleary — There Is No Thread</a>（本课第一节的出处，五分钟读完，<strong>面试前一晚重读它</strong>）、<a href="https://devblogs.microsoft.com/dotnet/configureawait-faq/">Stephen Toub — ConfigureAwait FAQ</a>（上下文捕获的权威问答）、<a href="https://github.com/davidfowl/AspNetCoreDiagnosticScenarios/blob/master/AsyncGuidance.md">David Fowler — Async Guidance</a>（ASP.NET Core 团队的实战清单，<strong>全是反例，最像面试追问</strong>）、<a href="https://learn.microsoft.com/en-us/dotnet/csharp/asynchronous-programming/task-asynchronous-programming-model">Microsoft Learn — TAP 模型</a>。</p>
+
+  <p><strong>社区（获取智慧，不是知识）：</strong><a href="https://stackoverflow.com/questions/tagged/c%23+async-await">Stack Overflow 的 <code>c#</code> + <code>async-await</code> 标签</a>，搜 <code>thread pool starvation</code>——大量「CPU 很低但接口全慢」的真实现场，症状描述和排查过程比任何教程都接近面试追问。</p>
+
+  <div class="nav-links">
+    <a href="0008-dotnet-locks.html">← Lesson 08：锁</a>
+    <a href="0007-claiming-a-ticket.html">← Lesson 07：抢单</a>
+    <a href="../reference/async-cheatsheet.html">→ 速查表：async/await</a>
+    <a href="../reference/dotnet-locks-cheatsheet.html">→ 速查表：.NET 锁</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练，有任何不清楚的直接问我。</strong>这一课<strong>只收三样</strong>：<a href="#s5">第五节</a>跑完报回 <strong>① 的两个线程号、② 的状态机类名、③ 的两个耗时</strong>。<br>
+    另外，<strong>Lesson 08 的三个数字还欠着</strong>——尤其是<strong>裸 <code>++</code> 少掉的那个数</strong>。那个数字是你面试时说「我实际验证过」的凭据，顺手补给我就行。
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+<script src="../assets/race.js"></script>
+<script src="../assets/binsort.js"></script>
+</body>
+</html>

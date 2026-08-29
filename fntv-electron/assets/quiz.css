@@ -1,0 +1,83 @@
+/* 可复用测验组件样式 · 配合 assets/quiz.js */
+
+.quiz {
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 1.1rem 1.3rem;
+  margin: 1.3rem 0;
+  background: #fff;
+}
+.quiz-q { margin: 0 0 .9rem; font-weight: 600; }
+.quiz-q .qnum {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: .74rem;
+  color: var(--ink-soft);
+  margin-right: .5rem;
+}
+.quiz-opts { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+.quiz-opt {
+  font: inherit;
+  font-size: .9rem;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  padding: .45rem .9rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.quiz-opt:hover:not(:disabled) { background: var(--code-bg); }
+.quiz-opt:disabled { cursor: default; opacity: .55; }
+.quiz-opt.correct {
+  border-color: var(--ok);
+  background: #eaf5ee;
+  color: var(--ok);
+  opacity: 1;
+  font-weight: 600;
+}
+.quiz-opt.wrong {
+  border-color: #a3301a;
+  background: #faecea;
+  color: #a3301a;
+  opacity: 1;
+  text-decoration: line-through;
+}
+
+.quiz-explain {
+  display: none;
+  margin-top: .9rem;
+  padding-top: .8rem;
+  border-top: 1px dashed var(--rule);
+  font-size: .89rem;
+  color: var(--ink-soft);
+}
+.quiz-explain.show { display: block; }
+.quiz-explain code { font-size: .85em; }
+
+.quiz-score {
+  position: sticky;
+  bottom: 0;
+  margin-top: 2rem;
+  padding: .7rem 1rem;
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: .82rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.quiz-reset {
+  font: inherit;
+  font-size: .78rem;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: .25rem .7rem;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+.quiz-reset:hover { background: #fff; }

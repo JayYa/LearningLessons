@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>参考 · fntv-electron 仓库地图</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<style>
+  .proc { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .78rem;
+          padding: .1rem .4rem; border-radius: 3px; white-space: nowrap; }
+  .p-main    { background: #e7eefa; color: #1c3d6e; }
+  .p-preload { background: #f6eafa; color: #5a2170; }
+  .p-rend    { background: #eaf5ee; color: #1f6b3a; }
+  .p-go      { background: #fdf0e3; color: #8a5a00; }
+  .path { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .82rem; }
+</style>
+</head>
+<body>
+
+<p class="eyebrow">参考文档 · Reference</p>
+<h1>fntv-electron 仓库地图</h1>
+<p class="subtitle">v2.6.2（commit <code>bb30d12</code>）· 全仓约 12,800 行 · 速查用</p>
+
+<div class="callout">
+<strong>一句话架构：</strong>这个 app <em>不自带前端</em>。它开一个 Electron 窗口去加载
+<strong>飞牛的远程 Web UI</strong>，再用 preload 脚本往那个页面里<strong>注入</strong>按钮和行为；
+真正的重活（调 API、拉起 mpv、同步进度）全在<strong>主进程</strong>。
+</div>
+
+<h2>进程归属速查</h2>
+<table>
+<thead><tr><th>目录</th><th>进程</th><th>职责</th></tr></thead>
+<tbody>
+<tr><td class="path">src/main/</td><td><span class="proc p-main">main</span></td><td>应用入口、窗口、托盘、IPC handler、生命周期</td></tr>
+<tr><td class="path">src/modules/</td><td><span class="proc p-main">main</span></td><td>被主进程 import 的业务模块（API、配置、播放器、日志）</td></tr>
+<tr><td class="path">src/preload/</td><td><span class="proc p-preload">preload</span></td><td>注入远程页面的桥接层，能同时碰 Node 和 DOM</td></tr>
+<tr><td class="path">resource/login/</td><td><span class="proc p-rend">renderer</span></td><td>唯一的本地页面（登录页），走 <code>file:</code> 协议</td></tr>
+<tr><td class="path">src/modules/proxy/</td><td><span class="proc p-go">Go</span></td><td>独立编译的 sidecar 进程，非 TypeScript</td></tr>
+</tbody>
+</table>
+
+<div class="aside">
+判定口诀：能 <code>import { app, BrowserWindow } from 'electron'</code> 的是<strong>主进程</strong>；
+能同时用 <code>fs</code> 和 <code>document</code> 的是 <strong>preload</strong>；
+只能用 <code>document</code>、连 <code>require</code> 都没有的是 <strong>renderer</strong>。
+</div>
+
+<h2>关键文件（按行数）</h2>
+<table>
+<thead><tr><th>文件</th><th>行</th><th>做什么</th></tr></thead>
+<tbody>
+<tr><td class="path">modules/fn_api/types.ts</td><td>757</td><td>飞牛服务端接口的类型定义。<strong>事实上的 API 文档</strong></td></tr>
+<tr><td class="path">main/handlers/plugins/fnid_login.ts</td><td>694</td><td>FN ID 远程登录流程</td></tr>
+<tr><td class="path">modules/players/impl/mpv.ts</td><td>492</td><td>唯一的播放器实现，<strong>写新适配时的范本</strong></td></tr>
+<tr><td class="path">modules/fn_api/api.ts</td><td>457</td><td><code>ApiService</code>：所有服务端调用的出口</td></tr>
+<tr><td class="path">main/handlers/plugins/media.ts</td><td>448</td><td>播放编排 + <strong>进度同步的中枢</strong></td></tr>
+<tr><td class="path">modules/fn_config/config.ts</td><td>409</td><td>用户配置读写</td></tr>
+<tr><td class="path">main/main.ts</td><td>265</td><td>启动顺序、证书、退出行为</td></tr>
+</tbody>
+</table>
+
+<h2>路径 A：新增一个播放器</h2>
+<p><code>src/modules/players/</code> 是一个标准的 <strong>Abstract Factory + Registry</strong>。
+只有 4 个文件，加一个播放器要动 3 处：</p>
+
+<pre><code>players/
+├── types.ts    ← ① enum PlayerType 里加一项
+│                 （BasePlayer 抽象类也在这，定义你要实现什么）
+├── factory.ts    PlayerFactory：registry 查表建实例，无需改动
+├── index.ts    ← ③ export 你的新类（否则不会被加载/注册）
+└── impl/
+    └── mpv.ts  ← ② 照它写 impl/yours.ts
+                   文件末尾 PlayerFactory.registerPlayer(...) 是注册动作</code></pre>
+
+<p><strong><code>BasePlayer</code> 要求你实现的全部内容</strong>（只有 3 个方法）：</p>
+<pre><code>abstract playList(infos: PlayItem[], pos: number, args?: string[]): Promise&lt;boolean&gt;;
+abstract stop(): void;
+abstract isPlaying(): boolean;</code></pre>
+
+<p>基类已经白送你的：<code>getStatus()</code>、<code>emitEvent()</code>、
+<code>updateGlobalStatus()</code>、<code>getFnApi()</code>。</p>
+
+<div class="callout">
+<strong>已知的硬编码点：</strong><code>media.ts:380</code> 写死了
+<code>createPlayer(PlayerType.MPV, playConfig)</code>。
+新播放器要真正可用，必须让这里能选类型 —— 这本身就是一个值得提的 PR。
+</div>
+
+<h2>路径 B：播放进度同步链路</h2>
+<pre><code>mpv 进程
+   │  轮询 time-pos / duration
+   ▼
+impl/mpv.ts:405   emitEvent(EventType.PROGRESS, progressData)
+   │              impl/mpv.ts:424   emitEvent(EventType.EXIT, event)
+   ▼  config.onEvent 回调
+media.ts:128      case EventType.PROGRESS:
+media.ts:171      case EventType.EXIT:
+   │
+   ▼
+modules/fn_api/api.ts   ApiService → 飞牛服务器</code></pre>
+
+<p><strong><code>PlayStatusData</code></strong> —— 全链路传递的载荷：</p>
+<pre><code>{ itemGuid: string; ts: number; duration: number; percentage: number }</code></pre>
+
+<div class="callout">
+<strong>线索：</strong><code>media.ts:136</code> 和 <code>:187</code> 各有一行被注释掉的
+<code>// if (…percentage > 90)</code>。这几乎肯定是「看完自动标记已看」的半成品。
+你说想做的「某集播放完成状态同步」，起点就在这两行。
+</div>
+
+<h2>动手前必读的项目规约</h2>
+<table>
+<thead><tr><th>文件</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td class="path">.trellis/spec/shared/git-conventions.md</td><td>commit / 分支 / PR 格式</td></tr>
+<tr><td class="path">.trellis/spec/shared/typescript.md</td><td>TS 写法约定</td></tr>
+<tr><td class="path">.trellis/spec/backend/*.md</td><td>主进程侧：错误处理、日志、类型安全</td></tr>
+<tr><td class="path">tests/*.test.cjs</td><td>14 个 node:test 用例，是「什么值得测」的样本</td></tr>
+</tbody>
+</table>
+
+<div class="callout">
+<strong>两个陷阱。</strong>
+① <code>.trellis/spec/</code> 里混着大量 Trellis 模板残留 ——
+<code>database.md</code>、<code>pagination.md</code>、<code>react-pitfalls.md</code>：
+本项目<strong>既没有数据库也没有 React</strong>，别照搬。
+② <code>git-conventions.md</code> 让你跑 <code>npm run typecheck</code> 和
+<code>npm run lint</code>，但 <code>package.json</code> 里<strong>没有这两个脚本</strong>。
+实际可用的只有 <code>npm run compile</code> 和 <code>npm test</code>。
+</div>
+
+<h2>常用命令</h2>
+<table>
+<thead><tr><th>命令</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td class="path">npm run compile</td><td>只跑 <code>tsc</code>，产物进 <code>dest/</code></td></tr>
+<tr><td class="path">npx electron .</td><td>启动 app（读 <code>dest/main/main.js</code>）</td></tr>
+<tr><td class="path">npm test</td><td>compile + 跑 <code>tests/*.test.cjs</code></td></tr>
+<tr><td class="path">npm run watch</td><td><code>tsc --watch</code>，改完自动编译</td></tr>
+<tr><td class="path">npm start</td><td>⚠️ 会先 <code>go build</code> 代理，<strong>没装 Go 会失败</strong></td></tr>
+</tbody>
+</table>
+
+<footer>
+<p>相关：<a href="../lessons/0001-electron-process-model.html">第 1 课 · Electron 进程模型</a>
+· <a href="../MISSION.md">Mission</a>
+· <a href="../RESOURCES.md">Resources</a></p>
+<p>本文档随理解加深而更新。发现与代码不符之处，直接告诉我，我来订正。</p>
+</footer>
+
+</body>
+</html>

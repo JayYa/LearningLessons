@@ -363,8 +363,52 @@
   </tbody>
 </table>
 
+<h2>组件结构与 state 归属</h2>
+
+<table>
+  <thead><tr><th style="width:11rem">术语</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Lifting state up</strong><br>状态提升</td>
+      <td>两个组件必须一起变化时，<strong>把 state 从它们身上删掉，移到最近的共同父级，再通过 props 传下去</strong>。官方三步法：① 删掉子组件的 state ② 父级先传写死的数据跑通 ③ 再把 state 加到父级、连同事件处理函数一起传下。<a href="https://react.dev/learn/sharing-state-between-components">react.dev</a></td>
+    </tr>
+    <tr>
+      <td><strong>Single source of truth</strong><br>唯一真相来源</td>
+      <td><strong>不是「所有 state 放一处」</strong>，而是「<em>每一份</em> state 有一个明确的属主组件」。共享数据<strong>提升，不复制</strong>。<strong>关键词是「最近的共同父级」，不是最高的</strong> —— 提太高的代价是重渲染范围变大、中间层被迫转发、组件不可复用，而且<strong>不报错</strong>。</td>
+    </tr>
+    <tr>
+      <td><strong>Controlled / uncontrolled component</strong><br>（<em>组件</em>层面）</td>
+      <td>关键信息由 <strong>props 驱动 = controlled</strong>；由<strong>自身 state 驱动 = uncontrolled</strong>。<strong>与第 7 课 <code>&lt;input&gt;</code> 的用法是同一个词的两个尺度</strong>，核心问题相同：真相在自己肚子里还是别人手上。<strong>uncontrolled 不是坏事</strong>（配置少、好用），代价是难以协调。判定：只有一个组件关心 → 放低；两个以上必须一起变 → 提升。</td>
+    </tr>
+    <tr>
+      <td><strong>回调 prop</strong><br>callback prop</td>
+      <td>把函数当 prop 传下去，子组件出事时调用它 —— <strong>数据向下，事件向上</strong>，这就是单向数据流的全部。<strong>命名约定：prop 叫 <code>onXxx</code>，实现它的函数叫 <code>handleXxx</code>。</strong>C# 对照是 <code>Action&lt;T&gt;</code>（<strong>不是 <code>event</code></strong>：无多播、无订阅解绑），Blazor 的 <code>EventCallback&lt;T&gt;</code> 更接近。</td>
+    </tr>
+    <tr>
+      <td><strong>不要嵌套组件定义</strong><br>（本课核心陷阱）</td>
+      <td>官方：<strong>“Never define a component inside another component!”</strong> 内嵌的 <code>function</code> <strong>每次渲染都是新的函数对象</strong> → 同一位置换了不同<em>类型</em> → React <strong>卸载整棵子树重新挂载</strong>：下面所有 state 清零、真实 DOM 被销毁重建、<strong>焦点与滚动位置丢失</strong>。实测 <code>mounts=2</code>、输入框清空、<code>document.activeElement</code> 变了。<strong>完全不报错</strong>；oxlint 报 <code>react(static-components)</code> 但只是 warning。<a href="https://react.dev/learn/preserving-and-resetting-state">react.dev</a></td>
+    </tr>
+    <tr>
+      <td><strong>Prop drilling</strong></td>
+      <td>数据要穿过许多<strong>并不使用它</strong>的中间层。官方态度：<strong>不要条件反射上 context</strong>。先试 ① 老实传 props（「十几层传十几个 prop 并不反常，好处是数据流显式可见」）② <strong>抽组件、用 <code>children</code> 传 JSX</strong> —— <strong>prop drilling 常常是组件切错了的症状，不是层数问题</strong>。</td>
+    </tr>
+    <tr>
+      <td><strong><code>children</code></strong></td>
+      <td>写在开闭标签之间的 JSX，通过 <code>props.children</code> 拿到。没有任何特殊之处，就是一个 prop。<strong>C# 对照：Blazor 的 <code>RenderFragment ChildContent</code>。</strong>把中间层改成接 <code>children</code>，转发链会直接消失。</td>
+    </tr>
+    <tr>
+      <td><strong>Context</strong></td>
+      <td>让一个组件把值提供给<strong>它下面整棵树</strong>，中间层不经手。<strong>官方明确警告易被滥用</strong>，是最后手段。合理用例：<strong>主题、当前账号、路由</strong>。<strong>C# 对照：依赖注入容器。裂缝：DI 按类型全局解析，context 按<em>组件树位置</em>解析</strong>（不同分支可提供不同值）。实例：<code>MantineProvider</code> 就是 <code>createContext</code>，拿掉它组件<strong>直接抛异常</strong>（<code>MantineProvider was not found in component tree</code>），不是掉样式。</td>
+    </tr>
+    <tr>
+      <td><strong>Tree shaking</strong><br>摇树优化</td>
+      <td>打包器靠 <strong>ES module 的静态可分析性</strong>删掉没被 import 的代码。<strong>对整包 CSS 无效</strong> —— 实测加 Mantine：JS <code>193→269 kB</code>（+76，被摇过），CSS <code>4.1→231 kB</code>（+227，<code>styles.css</code> 全进来了；gzip 后仅 33.8 kB，因重复度高）。<strong>「引入组件库的代价」是很实在的面试题，讲得出这个不对称就赢了。</strong></td>
+    </tr>
+  </tbody>
+</table>
+
 <div class="footer">
-  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a> · <a href="../lessons/0005-useeffect-and-that-empty-array.html">第 5 课</a> · <a href="../lessons/0006-immutability-and-key.html">第 6 课</a> · <a href="../lessons/0007-forms-post-and-two-gates.html">第 7 课</a></p>
+  <p>相关：<a href="csharp-rosetta.html">C# ↔ Python/TypeScript 对照表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a> · <a href="../lessons/0005-useeffect-and-that-empty-array.html">第 5 课</a> · <a href="../lessons/0006-immutability-and-key.html">第 6 课</a> · <a href="../lessons/0007-forms-post-and-two-gates.html">第 7 课</a> · <a href="../lessons/0008-where-does-state-live.html">第 8 课</a></p>
   <div class="ask"><strong>有词条不清楚？</strong> 问我，我会把解释补进这份文档 —— 它会跟着课程一起长大。</div>
 </div>
 

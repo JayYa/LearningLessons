@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 1 课 · Electron 的进程模型，落在 fntv-electron 上</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<style>
+  .path { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .82rem; }
+  .win { background: #eaf5ee; border-left: 3px solid var(--ok); padding: .8rem 1.1rem;
+         margin: 1.5rem 0; font-size: .93rem; }
+  .win strong { color: var(--ok); }
+</style>
+</head>
+<body>
+
+<p class="eyebrow">第 1 课 · Lesson 01</p>
+<h1>Electron 的进程模型</h1>
+<p class="subtitle">——— 不是抽象讲解，而是落在 fntv-electron 这 12,800 行代码上</p>
+
+<div class="win">
+<strong>这一课的战果：</strong>app 在你机器上跑起来；并且拿到仓库里<em>任何一个文件</em>，
+你都能立刻说出它跑在哪个进程里。这是后面做「新增播放器」和「进度同步」的地基 ——
+因为这两件事<strong>都发生在主进程</strong>，而你需要先知道那是哪儿。
+</div>
+
+<h2>一、必须先知道的那点知识</h2>
+
+<p>Electron 把一个桌面 app 拆成多个进程。官方定义里有三个角色和你有关
+（<a href="https://www.electronjs.org/docs/latest/tutorial/process-model">Electron 官方文档 · Process Model</a>）：</p>
+
+<table>
+<thead><tr><th>角色</th><th>它是什么</th><th>能碰到什么</th></tr></thead>
+<tbody>
+<tr>
+  <td><strong>main</strong><br>主进程</td>
+  <td>「应用的入口」，跑在一个 <strong>Node.js 环境</strong>里。全 app 只有一个。
+      开窗口、管生命周期、调系统 API。</td>
+  <td>Node、文件系统、子进程、Electron 全部 API<br><em>但碰不到网页的 DOM</em></td>
+</tr>
+<tr>
+  <td><strong>renderer</strong><br>渲染进程</td>
+  <td>「负责渲染网页内容」。每个窗口一个，本质就是个浏览器标签页。</td>
+  <td>DOM、浏览器 API<br><em>默认拿不到 Node</em></td>
+</tr>
+<tr>
+  <td><strong>preload</strong><br>预加载脚本</td>
+  <td>「在渲染进程的网页内容开始加载<em>之前</em>执行」的脚本。<strong>唯一同时站在两边的角色。</strong></td>
+  <td>Node <strong>和</strong> DOM 都能碰</td>
+</tr>
+</tbody>
+</table>
+
+<p>为什么要这么拆？因为渲染进程里跑的是<strong>不完全可信的网页</strong>。
+如果网页能直接调 <code>fs.unlink()</code>，一个 XSS 就等于本机删文件。
+所以 Electron 默认把网页关在浏览器沙箱里，只留 preload 一个受控的口子
+（<a href="https://www.electronjs.org/docs/latest/tutorial/context-isolation">Context Isolation</a>）。</p>
+
+<h2>二、这个仓库的反常识之处</h2>
+
+<p>大多数 Electron 教程里，你自己写界面，所以 renderer 代码最多。
+<strong>fntv-electron 反过来——它几乎没有渲染进程代码。</strong></p>
+
+<p>证据在 <span class="path">src/main/common/mainwin.ts</span>，窗口的配置：</p>
+
+<pre><code>webPreferences: {
+    partition: 'persist:fntv',
+    preload: path.join(__dirname, '../../preload/index.js'),   // ← 注入的桥
+    nodeIntegration: false,      // ← 页面拿不到 Node
+    contextIsolation: true,      // ← 页面与 preload 隔离
+    sandbox: false,
+}</code></pre>
+
+<p>这个窗口加载的是<strong>飞牛服务器上的 Web UI</strong>——界面不是这个项目写的。
+项目做的是：用 <span class="path">src/preload/</span> 里的脚本，往那个别人的页面上
+<strong>注入</strong>自己的标题栏、播放按钮；然后把「真正想干的事」通过 IPC 甩给主进程去做。</p>
+
+<p>所以仓库的重心长这样：</p>
+
+<table>
+<thead><tr><th>目录</th><th>进程</th><th>它在干嘛</th></tr></thead>
+<tbody>
+<tr><td class="path">src/main/</td><td>主进程</td><td>入口、窗口、托盘、IPC handler</td></tr>
+<tr><td class="path">src/modules/</td><td>主进程</td><td>被主进程 import 的业务模块（API / 播放器 / 配置）</td></tr>
+<tr><td class="path">src/preload/</td><td>预加载</td><td>往远程页面注入按钮、桥接 IPC</td></tr>
+<tr><td class="path">resource/login/</td><td>渲染进程</td><td>唯一的本地页面：登录页</td></tr>
+</tbody>
+</table>
+
+<div class="aside">
+<strong>判定口诀</strong>（记这个，比记目录名有用）：<br>
+能 <code>import { app, BrowserWindow }</code> 的 → <strong>主进程</strong><br>
+能同时用 <code>fs</code> 和 <code>document</code> 的 → <strong>预加载</strong><br>
+只能用 <code>document</code> 的 → <strong>渲染进程</strong>
+</div>
+
+<h2>三、任务 A：让它跑起来</h2>
+
+<div class="task">
+<p class="task-label">动手 · 约 5 分钟</p>
+<h3>在 <span class="path">repo/</span> 目录下依次执行</h3>
+
+<pre><code>cd repo
+npm install
+npm run compile
+npx electron .</code></pre>
+
+<p>应该弹出一个窗口，让你填 fnOS 地址或登录。<strong>能看到窗口 = 任务完成</strong>，
+先别急着深入用它。</p>
+</div>
+
+<div class="callout">
+<strong>不要用 <code>npm start</code>。</strong>
+它会先执行 <code>build:proxy:win</code>，那一步要调用 <code>go build</code> 编译
+<span class="path">src/modules/proxy/</span> 里的 Go 代理——而<strong>你机器上没装 Go</strong>，会直接报错。<br><br>
+<code>npm run compile</code> + <code>npx electron .</code> 是绕开它的等价路径：
+只编译 TypeScript，然后启动。代理是个独立的 sidecar 进程，主流程不依赖它也能起窗口。
+（想要完整功能时再装 Go 不迟——那属于 <a href="../MISSION.md">Mission</a> 里暂时划到范围外的部分。）
+</div>
+
+<h3>顺手做一个观察</h3>
+<p>app 起来后，看你的终端。<span class="path">src/main/main.ts</span> 开头有这么几行：</p>
+<pre><code>log.info('=== 飞牛影视启动 ===');
+log.info('应用版本:', app.getVersion());
+log.info('Electron版本:', process.versions.electron);</code></pre>
+<p>这些日志<strong>只会出现在终端里，不会出现在窗口的 DevTools 里</strong>。
+为什么？因为 <code>main.ts</code> 跑在主进程——它根本不在浏览器里。
+这个现象比任何解释都更能让你记住：两个进程是真的分开的。</p>
+
+<h2>四、任务 B：归位练习</h2>
+
+<p>下面每一题都是仓库里的<strong>真实文件</strong>。别翻代码，凭刚才的口诀判断——
+答错比查对更有价值，错误会告诉你哪条界线还没建立。</p>
+
+<div class="quiz" data-answer="a">
+  <p class="quiz-q"><span class="path">src/main/handlers/plugins/media.ts</span>——播放编排逻辑</p>
+  <div class="quiz-opts">
+    <button class="quiz-opt" data-opt="a">主进程</button>
+    <button class="quiz-opt" data-opt="b">预加载</button>
+    <button class="quiz-opt" data-opt="c">渲染进程</button>
+  </div>
+  <div class="quiz-explain">
+    <strong>主进程。</strong>它在 <code>src/main/</code> 下，负责接 IPC 请求、拉起播放器。
+    这个文件是你 Mission 里「进度同步」的中枢，第 3 课会精读它。
+  </div>
+</div>
+
+<div class="quiz" data-answer="b">
+  <p class="quiz-q"><span class="path">src/preload/plugins/titlebar.ts</span>——自定义标题栏</p>
+  <div class="quiz-opts">
+    <button class="quiz-opt" data-opt="a">主进程</button>
+    <button class="quiz-opt" data-opt="b">预加载</button>
+    <button class="quiz-opt" data-opt="c">渲染进程</button>
+  </div>
+  <div class="quiz-explain">
+    <strong>预加载。</strong>它要操作远程页面的 DOM 把标题栏画上去（需要 <code>document</code>），
+    又要通过 <code>ipcRenderer</code> 告诉主进程「最小化窗口」（需要 Node 侧能力）。
+    两边都要——这正是 preload 存在的理由。
+  </div>
+</div>
+
+<div class="quiz" data-answer="a">
+  <p class="quiz-q"><span class="path">src/modules/players/impl/mpv.ts</span>——拉起 mpv 播放器</p>
+  <div class="quiz-opts">
+    <button class="quiz-opt" data-opt="a">主进程</button>
+    <button class="quiz-opt" data-opt="b">预加载</button>
+    <button class="quiz-opt" data-opt="c">渲染进程</button>
+  </div>
+  <div class="quiz-explain">
+    <strong>主进程。</strong>这题是陷阱：它不在 <code>src/main/</code> 下，而在
+    <code>src/modules/</code>。<strong>决定进程归属的不是目录名，而是谁 import 它。</strong>
+    <code>media.ts</code>（主进程）import 了它，所以它跑在主进程。<br>
+    而且它要 <code>spawn</code> 一个 mpv 子进程——只有主进程干得了这事。
+    这个文件是你 Mission 里「新增播放器」要照抄的范本。
+  </div>
+</div>
+
+<div class="quiz" data-answer="c">
+  <p class="quiz-q"><span class="path">resource/login/</span> 里页面自己的脚本</p>
+  <div class="quiz-opts">
+    <button class="quiz-opt" data-opt="a">主进程</button>
+    <button class="quiz-opt" data-opt="b">预加载</button>
+    <button class="quiz-opt" data-opt="c">渲染进程</button>
+  </div>
+  <div class="quiz-explain">
+    <strong>渲染进程。</strong>全仓库几乎唯一的 renderer 代码。它连
+    <code>require</code> 都没有——只能用 preload 通过
+    <code>contextBridge.exposeInMainWorld</code> 递给它的那几个方法。
+    去 <code>src/preload/index.ts</code> 看 <code>SEND_CHANNELS</code> 白名单，
+    那就是这个页面被允许做的<em>全部</em>事情。
+  </div>
+</div>
+
+<div class="quiz" data-answer="a">
+  <p class="quiz-q">为什么这个项目的渲染进程代码这么少？</p>
+  <div class="quiz-opts">
+    <button class="quiz-opt" data-opt="a">界面由远程服务器提供</button>
+    <button class="quiz-opt" data-opt="b">界面用原生控件来绘制</button>
+    <button class="quiz-opt" data-opt="c">界面全部塞进主进程里</button>
+  </div>
+  <div class="quiz-explain">
+    <strong>界面由远程服务器提供。</strong>窗口加载的是飞牛 NAS 上的 Web UI，
+    不是本项目写的页面。所以「改 UI」在这个项目里意味着<strong>写注入脚本</strong>
+    （<code>src/preload/plugins/</code>），而不是写组件。
+  </div>
+</div>
+
+<div class="quiz" data-answer="b">
+  <p class="quiz-q"><code>nodeIntegration:false</code> + <code>contextIsolation:true</code> 的后果是</p>
+  <div class="quiz-opts">
+    <button class="quiz-opt" data-opt="a">远程页面可以直接使用 Node 能力</button>
+    <button class="quiz-opt" data-opt="b">远程页面无法直接使用 Node 能力</button>
+    <button class="quiz-opt" data-opt="c">远程页面无法直接使用 DOM 能力</button>
+  </div>
+  <div class="quiz-explain">
+    <strong>无法直接使用 Node。</strong>这是 Electron 的安全基线
+    （<a href="https://www.electronjs.org/docs/latest/tutorial/security">Security Checklist</a>）。
+    加载的是<em>别人服务器</em>上的页面，一旦它能调 <code>fs</code>，风险不可控。<br>
+    实际影响：你以后想给页面加任何新能力，<strong>都必须走
+    「preload 白名单 → IPC → 主进程 handler」这条路</strong>，没有捷径。
+    第 2 课就练这条路。
+  </div>
+</div>
+
+<div class="quiz-score"></div>
+
+<h2>五、读一份原始资料</h2>
+<p>本课唯一指定阅读——<strong>只读这一篇，不要发散</strong>：</p>
+<p><a href="https://www.electronjs.org/docs/latest/tutorial/process-model"><strong>Electron 官方文档 · Process Model</strong></a></p>
+<p>约 10 分钟。读的时候带着一个问题：
+<em>「文中的 preload 例子，对应我们仓库里的哪个文件？」</em>
+（答案：<span class="path">src/preload/index.ts</span>——而且我们这个复杂得多，它还会自动扫描
+<code>plugins/</code> 目录把插件全 require 进来。）</p>
+
+<h2>六、下一课预告</h2>
+<p>第 2 课：<strong>亲手走通一次 IPC 往返</strong>。
+你会在 preload 白名单里加一个 channel、在主进程写一个 handler，
+让远程页面能问主进程要一个它自己拿不到的东西。
+走通这条路，你就具备了给这个项目<em>加任何功能</em>的基本形状。</p>
+
+<footer>
+<p><strong>随时打断我。</strong>我是你的老师——跑不起来、报错看不懂、
+某句话觉得可疑、或者想直接跳到「新增播放器」那部分，都直接说。
+课程节奏是为你调的，不是固定的。</p>
+
+<h3>相关</h3>
+<p>
+参考 · <a href="../reference/architecture-map.html">fntv-electron 仓库地图</a><br>
+<a href="../MISSION.md">Mission</a> ·
+<a href="../RESOURCES.md">Resources</a>
+</p>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

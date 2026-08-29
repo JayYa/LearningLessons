@@ -1,8 +1,17 @@
 # 📘 Learning Lessons
 
-本仓库收录五门独立课程，其中三门围绕 .NET 技术栈展开：`Morden .NET` 沿 C# 8 到 15 的每一次语法升级梳理语言演进，`DotNET Platform` 下沉到 SDK 项目系统、CoreCLR 运行时、GC、依赖注入与配置体系，两者互为语言层与平台层的对照；`BeiGene` 是一份面试向的综合专题，从联合索引与索引失效讲到排序与 Top-K 算法，再到微服务拆分、Saga 与服务边界。`Python-React-Typescript` 从 C# 背景出发，以前后端两个进程如何联通为切入点，配合语言对照表跨入 Python 与 TypeScript 生态。`Build an Agent` 独立成篇，讲 AI Agent 的工具调用、记忆管理、任务编排与多智能体协作。各课程按需选读，共享同一方法论——从表层 API 下沉到底层机制。
+本仓库收录六门独立课程，其中三门围绕 .NET 技术栈展开：`Morden .NET` 沿 C# 8 到 15 的每一次语法升级梳理语言演进，`DotNET Platform` 下沉到 SDK 项目系统、CoreCLR 运行时、GC、依赖注入与配置体系，两者互为语言层与平台层的对照；`BeiGene` 是一份面试向的综合专题，从联合索引与索引失效讲到排序与 Top-K 算法，再到微服务拆分、Saga、并发抢单与 async/await 状态机。`Python-React-Typescript` 从 C# 背景出发，以前后端两个进程如何联通为切入点，配合语言对照表跨入 Python 与 TypeScript 生态；`fntv-electron` 则落在一个具体仓库上，从进程模型讲起。`Build an Agent` 独立成篇，讲 AI Agent 的工具调用、记忆管理、任务编排与多智能体协作。各课程按需选读，共享同一方法论——从表层 API 下沉到底层机制。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
+
+## fntv-electron
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [第 1 课 · Electron 的进程模型，落在 fntv-electron 上](https://JayYa.github.io/LearningLessons/fntv-electron/lessons/0001-electron-process-model.html) | 以 fntv-electron 仓库为实例，讲清主进程、渲染进程与预加载脚本各自的职责与通信边界 |
+
+**参考资料：**
+- [参考 · fntv-electron 仓库地图](https://JayYa.github.io/LearningLessons/fntv-electron/reference/architecture-map.html) — fntv-electron 目录结构与关键模块的导航地图
 
 ## Python-React-Typescript
 
@@ -15,10 +24,11 @@
 | 5 | [第 5 课 · useEffect 与那个空数组](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0005-useeffect-and-that-empty-array.html) | 讲透 useEffect 的执行时机与依赖数组，说清那个空数组到底意味着什么、又会埋下哪些坑 |
 | 6 | [第 6 课 · 不可变更新与 key](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0006-immutability-and-key.html) | 讲清为什么 React 里要不可变地更新状态，以及列表 key 该怎么选才不会渲染错位 |
 | 7 | [第 7 课 · 表单、POST 与两侧的校验](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0007-forms-post-and-two-gates.html) | 从受控表单到 POST 提交走通一次写入链路，说明前端与后端两道校验各自该拦什么 |
+| 8 | [第 8 课 · state 该住在哪里](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0008-where-does-state-live.html) | 讨论状态该安放在组件树的哪一层：何时提升、何时下沉，以及哪些数据根本不该进 state |
 
 **参考资料：**
 - [参考 · C# ↔ Python / TypeScript 对照表](https://JayYa.github.io/LearningLessons/Python-React-Typescript/reference/csharp-rosetta.html) — 以 C# 为锚点对照 Python 与 TypeScript 的语法与惯用法
-- [参考 · 术语表](https://JayYa.github.io/LearningLessons/Python-React-Typescript/reference/glossary.html) — Python / React / TypeScript 生态核心术语速查
+- [参考 · 术语表](https://JayYa.github.io/LearningLessons/Python-React-Typescript/reference/glossary.html) — 前后端协作与 React 生态常用术语速查
 
 ## BeiGene
 
@@ -32,9 +42,11 @@
 | 6 | [Lesson 06 · 该不该拆，边界划在哪——以及那个会议的含义](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0006-should-you-split-and-where.html) | 讨论微服务该不该拆、边界如何划分，把服务切分决策还原成组织与业务职责的问题 |
 | 7 | [Lesson 07 · 抢单——把「查一下再改」压成一句话](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0007-claiming-a-ticket.html) | 用抢单场景讲并发下的先查后改竞态，把两步操作压成一条带条件的原子更新 |
 | 8 | [Lesson 08 · lock 到底锁住了什么](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0008-dotnet-locks.html) | 讲清 C# 中 lock 究竟锁住了什么对象、保护的是哪段临界区，以及它管不到的进程外并发 |
+| 9 | [Lesson 09 · await 那一行到底发生了什么](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0009-async-await-state-machine.html) | 拆开编译器为 async 方法生成的状态机，说清 await 那一行的挂起、续延与线程归属 |
 
 **参考资料：**
 - [速查表 · 排序、选择、Top-K 与外部排序（C#）](https://JayYa.github.io/LearningLessons/BeiGene/reference/algo-cheatsheet.html) — 排序、选择、Top-K 与外部排序算法速查
+- [速查表 · async / await 状态机](https://JayYa.github.io/LearningLessons/BeiGene/reference/async-cheatsheet.html) — async/await 状态机结构、续延调度与常见陷阱速查
 - [速查表 · 并发抢单与审批流](https://JayYa.github.io/LearningLessons/BeiGene/reference/claim-patterns-cheatsheet.html) — 并发抢单的原子更新写法与审批流状态流转速查
 - [Reference · 索引与 SQL 优化速查表](https://JayYa.github.io/LearningLessons/BeiGene/reference/db-index-cheatsheet.html) — 数据库索引设计与 SQL 优化常用手法速查
 - [速查表 · .NET 锁的种类](https://JayYa.github.io/LearningLessons/BeiGene/reference/dotnet-locks-cheatsheet.html) — lock、Monitor、SemaphoreSlim 等 .NET 各类锁的适用场景与取舍速查

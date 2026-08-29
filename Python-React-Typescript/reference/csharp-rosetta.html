@@ -313,8 +313,46 @@
   </tbody>
 </table>
 
+<h2>组件划分与状态归属<span style="font-size:0.72rem;font-family:var(--mono);color:var(--ink-soft);letter-spacing:0.08em;">（第 8 课）</span></h2>
+
+<table>
+  <thead><tr><th style="width:8.5rem">C#</th><th style="width:9rem">对应物</th><th>&#9888; 裂缝</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>event EventHandler</code><br>子控件通知父级</td>
+      <td>回调 prop<br><code>onCreated: (n: Note) =&gt; void</code></td>
+      <td><strong>更准确的对应物是 <code>Action&lt;T&gt;</code>，不是 <code>event</code></strong>：React 里没有多播、没有 <code>+=</code>/<code>-=</code>、没有解绑，就是每次渲染传一个新函数下去。<strong>Blazor 的 <code>EventCallback&lt;T&gt;</code> 最贴近。</strong>命名约定要记牢：prop 叫 <code>onXxx</code>，实现叫 <code>handleXxx</code>。</td>
+    </tr>
+    <tr>
+      <td>Blazor <code>RenderFragment ChildContent</code></td>
+      <td><code>props.children</code></td>
+      <td>几乎可以直接迁移：都是「把一段待渲染的内容当参数传进去」。裂缝只在语法糖 —— <code>&lt;Card&gt;里面这些&lt;/Card&gt;</code> 就是 <code>children</code>，没有任何特殊机制。<strong>它是官方给 prop drilling 开的第二个药方</strong>：中间层改成接 <code>children</code>，转发链直接消失。</td>
+    </tr>
+    <tr>
+      <td>ASP.NET Core 依赖注入容器<br><code>services.AddSingleton&lt;T&gt;</code></td>
+      <td>context<br><code>createContext</code> + provider</td>
+      <td>动机相同（上面注册一次，下面任意深度取用，中间层不知情），<strong>两条裂缝</strong>：① DI 是<strong>全应用一份、按类型解析</strong>，context 是<strong>按组件树位置解析</strong>，同一 context 在不同分支可提供不同值。② <strong>态度相反</strong> —— 在 C# 里隐式依赖是常态，React 官方却把 context 列为<strong>最后手段</strong>（先传 props、先试 <code>children</code>），因为它让「谁用了这份数据」变得不可见。</td>
+    </tr>
+    <tr>
+      <td>类实例的字段随实例走<br>把类定义写在方法里（本地函数）无害</td>
+      <td><strong>绝不能在组件里定义组件</strong></td>
+      <td><strong>C# 直觉在这里会害死你。</strong>本地函数在 C# 里是无害的作用域技巧；在 React 里，内嵌的组件 <code>function</code> <strong>每次渲染都是新的函数对象</strong>，而 React 靠<strong>位置 + 类型</strong>认身份 → 同位置换了类型 → <strong>整棵子树卸载重建</strong>：state 清零、DOM 节点被替换、<strong>焦点与滚动位置丢失</strong>。实测 <code>mounts=2</code>、输入框清空、焦点丢失。<strong>不报错</strong>，lint 只给 warning。</td>
+    </tr>
+    <tr>
+      <td>字段该放哪一层类<br>（靠设计经验判断）</td>
+      <td>lifting state up<br>「最近的共同父级」</td>
+      <td>这条<strong>有可执行的规则</strong>，不靠感觉：<strong>数一数几个组件必须一起看到这份数据</strong> —— 一个就放低（uncontrolled，省配置），两个以上就提到<strong>最近</strong>的共同父级（不是最高）。裂缝在于 C# 没有的成本项：<strong>state 放得越高，重渲染范围越大</strong>。且「提太高」<strong>不报错</strong>，所以比「放太低」更常见。</td>
+    </tr>
+    <tr>
+      <td>引 NuGet 包<br>体积基本不进用户端</td>
+      <td>引组件库<br>（Mantine 实测）</td>
+      <td><strong>前端多一项 C# 后端不用操心的成本：产物体积。</strong>实测 JS <code>193→269 kB</code>（+76），CSS <code>4.1→231 kB</code>（+227）。不对称的原因：<strong>JS 走 ESM 可 tree-shake，整包 <code>styles.css</code> 一旦 import 就全都进来</strong>（gzip 后 33.8 kB，重复度高压得动）。</td>
+    </tr>
+  </tbody>
+</table>
+
 <div class="footer">
-  <p>相关：<a href="glossary.html">术语表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a> · <a href="../lessons/0005-useeffect-and-that-empty-array.html">第 5 课</a> · <a href="../lessons/0006-immutability-and-key.html">第 6 课</a> · <a href="../lessons/0007-forms-post-and-two-gates.html">第 7 课</a></p>
+  <p>相关：<a href="glossary.html">术语表</a> · <a href="../lessons/0001-two-processes-one-wire.html">第 1 课</a> · <a href="../lessons/0002-typescript-is-not-csharp.html">第 2 课</a> · <a href="../lessons/0003-guard-the-boundary.html">第 3 课</a> · <a href="../lessons/0004-what-is-react-state.html">第 4 课</a> · <a href="../lessons/0005-useeffect-and-that-empty-array.html">第 5 课</a> · <a href="../lessons/0006-immutability-and-key.html">第 6 课</a> · <a href="../lessons/0007-forms-post-and-two-gates.html">第 7 课</a> · <a href="../lessons/0008-where-does-state-live.html">第 8 课</a></p>
   <div class="ask"><strong>觉得某个类比不对劲？</strong> 说出来 —— 你的 C# 直觉在哪里打滑，往往正是下一课该讲的地方。</div>
 </div>
 

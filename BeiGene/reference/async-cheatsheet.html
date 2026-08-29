@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查表 · async / await 状态机</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Reference · .NET 异步 / 状态机 / 线程池 · BeiGene 面试备战</p>
+  <h1>async / await<br>＋ 为什么 .Result 会要命</h1>
+  <p class="standfirst">压缩自 <a href="../lessons/0009-async-await-state-machine.html">Lesson 09</a>。面试前 10 分钟只看这一页。</p>
+</header>
+
+<h2>0 · 一句话判据</h2>
+
+<p><strong><code>await</code> 不创建线程——它把方法剩下的部分登记成一个回调，然后把线程还回去。</strong></p>
+
+<pre><code>异步 ≠ 多线程
+  await IO      → 等待期间进程内零线程     （省线程，提吞吐）
+  Task.Run CPU  → 等待期间实打实占一个线程 （挪走活，不省线程）
+
+服务端用 async 不是为了单请求更快（其实略慢），
+而是为了把「吞吐 = 线程数 ÷ 单请求耗时」这个上限拆掉。</code></pre>
+
+<h2>1 · 编译器生成了什么</h2>
+
+<table>
+  <thead><tr><th>生成物</th><th>作用</th></tr></thead>
+  <tbody>
+    <tr><td><code>&lt;WorkAsync&gt;d__0</code></td><td><code>struct</code>，实现 <code>IAsyncStateMachine</code>。<strong>是 struct 才能让不挂起的路径零堆分配</strong></td></tr>
+    <tr><td><code>MoveNext()</code></td><td>原方法体被切成若干段的 <code>switch</code>，每次唤醒接着跑</td></tr>
+    <tr><td><code>AsyncTaskMethodBuilder</code></td><td>造出并最终完成你返回的那个 <code>Task</code></td></tr>
+  </tbody>
+</table>
+
+<pre><code>字段清单（反射打出来就是这四五个）：
+  &lt;&gt;1__state       int      跑到第几段（-1 = 正在跑，0 = 停在第一个 await）
+  &lt;&gt;t__builder     builder  负责完成返回的 Task
+  &lt;&gt;4__this        Demo     实例方法才有
+  &lt;s&gt;5__1          你的局部变量  ← 跨越 await，所以从栈搬进状态机
+  &lt;&gt;u__1           TaskAwaiter   await 的是 awaiter，不是 Task</code></pre>
+
+<h2>2 · await 那一行 = 四步（背下来）</h2>
+
+<pre><code>var awaiter = x.GetAwaiter();
+if (awaiter.IsCompleted)          // ① 已完成？（缓存命中 / 同步返回）
+    result = awaiter.GetResult(); // ② 一步不停继续跑，零分配
+else
+{
+    awaiter.OnCompleted(MoveNext);// ③ 存 state，登记回调
+    return;                       //    线程立刻还给线程池
+    // ④ IO 完成后，另一个线程再次调 MoveNext，从这里接着跑
+}</code></pre>
+
+<p><strong>第 ③④ 步就是「await 之后换线程」的全部解释</strong>，也是 <a href="../lessons/0008-dotnet-locks.html#s4">Monitor 跨不过 await</a> 的根因（Monitor 认线程，谁进的谁出）。</p>
+
+<h2>3 · .Result / .Wait() 的两种死法</h2>
+
+<table>
+  <thead><tr><th>环境</th><th>同步上下文</th><th>后果</th></tr></thead>
+  <tbody>
+    <tr><td>经典 ASP.NET / WPF / WinForms</td><td>有，且同时只放一个线程</td><td><strong>死锁</strong>：续接等上下文，上下文等续接</td></tr>
+    <tr><td><strong>ASP.NET Core</strong> / 控制台</td><td><strong>没有</strong></td><td>不死锁，但<strong>一个请求吃两个线程</strong> → 线程池饥饿</td></tr>
+  </tbody>
+</table>
+
+<pre><code>死锁三条件（缺一不可，去掉任一条都能解开）：
+  ① await 默认捕获同步上下文，承诺续接回去跑
+  ② 该上下文同时只允许一个线程
+  ③ 唯一的位置正被 .Result 阻塞占着
+正解是破 ③（调用方改 await），不是破 ①（ConfigureAwait）。</code></pre>
+
+<div class="callout">
+  <span class="label">线程池饥饿的症状画像（面试里直接背这三条）</span>
+  <p><strong>① 接口整体变慢 ② CPU 却很低 ③ 线程数缓慢上涨。</strong><br>
+  <strong>CPU 低 + 全站慢 = 先查线程池。</strong>慢的往往不是出问题的那个接口——线程池是全进程共用的。<br>
+  修法是把链路一路改 <code>async</code>，<strong>不是调大最小线程数</strong>（那只是把问题推后）。</p>
+</div>
+
+<h2>4 · 硬规则</h2>
+
+<table>
+  <thead><tr><th>规则</th><th>为什么</th></tr></thead>
+  <tbody>
+    <tr><td><strong>async 一路到底</strong>，中间不要 <code>.Result</code> / <code>.Wait()</code></td><td><q>Once you go async, all of your callers SHOULD be async</q>——半异步比全同步还糟</td></tr>
+    <tr><td><strong>不写 <code>async void</code></strong>（UI 事件处理器除外）</td><td>没有 Task 承载异常 → 未处理异常 → <strong>掀掉进程</strong>，调用方 catch 不到</td></tr>
+    <tr><td>类库写 <code>ConfigureAwait(false)</code>，应用代码不写</td><td>类库不知道调用方环境；应用代码常常<strong>需要</strong>那个上下文</td></tr>
+    <tr><td><code>await Task.WhenAll(...)</code>，不用 <code>Task.WaitAll</code></td><td><strong>Wait 阻塞，When 不阻塞</strong>——一个字母的差别</td></tr>
+    <tr><td><code>CancellationToken</code> 一路透传</td><td><q>Cancellation is cooperative in .NET</q>，断一环就失效</td></tr>
+    <tr><td>高频且常同步完成的方法可用 <code>ValueTask</code></td><td>省掉 Task 分配；但<strong>只能 await 一次</strong>，不能存起来复用</td></tr>
+  </tbody>
+</table>
+
+<h2>5 · 真异步 vs 假异步（判据：等待时占不占线程）</h2>
+
+<table>
+  <thead><tr><th>真异步</th><th>假异步</th></tr></thead>
+  <tbody>
+    <tr><td><code>await db.ToListAsync()</code></td><td><code>GetDataAsync().Result</code>（吃两个线程）</td></tr>
+    <tr><td><code>await File.ReadAllTextAsync()</code></td><td><code>await Task.Run(CPU 计算)</code>（活没省，只是挪了）</td></tr>
+    <tr><td><code>await Task.Delay(n)</code>（计时器）</td><td><code>Thread.Sleep(n)</code>（线程被按住睡）</td></tr>
+    <tr><td><code>await Task.WhenAll(...)</code></td><td><code>Task.WaitAll(...)</code></td></tr>
+    <tr><td>—</td><td><code>list.ForEach(async x =&gt; ...)</code> → lambda 是 <code>async void</code>，<strong>一个都不等</strong></td></tr>
+  </tbody>
+</table>
+
+<h2>6 · 三段话术骨架</h2>
+
+<table>
+  <thead><tr><th>题</th><th>骨架</th></tr></thead>
+  <tbody>
+    <tr><td>对异步的理解</td><td>破错觉（异步≠多线程，There is no thread）→ 机制（编译期改写成状态机，await 四步）→ 价值（拆掉线程数的吞吐上限）</td></tr>
+    <tr><td>为什么不能 <code>.Result</code></td><td>经典 ASP.NET 死锁三条件 → ASP.NET Core 线程池饥饿 → <code>async void</code> 掀进程 → 规则「async 一路到底」</td></tr>
+    <tr><td>排查过什么性能问题</td><td>症状画像（CPU 低 + 全站慢 + 线程涨）→ 判据 → 修法 → 沉淀原则</td></tr>
+  </tbody>
+</table>
+
+<footer class="footer">
+  <h2>出处</h2>
+  <p><a href="https://devblogs.microsoft.com/dotnet/how-async-await-really-works/">Stephen Toub — How Async/Await Really Works in C#</a>（状态机） ·
+  <a href="https://blog.stephencleary.com/2013/11/there-is-no-thread.html">Stephen Cleary — There Is No Thread</a>（第 0 节） ·
+  <a href="https://devblogs.microsoft.com/dotnet/configureawait-faq/">ConfigureAwait FAQ</a>（上下文捕获） ·
+  <a href="https://github.com/davidfowl/AspNetCoreDiagnosticScenarios/blob/master/AsyncGuidance.md">David Fowler — Async Guidance</a>（硬规则）。</p>
+  <div class="nav-links">
+    <a href="../lessons/0009-async-await-state-machine.html">← Lesson 09</a>
+    <a href="dotnet-locks-cheatsheet.html">→ 速查表：.NET 锁</a>
+    <a href="claim-patterns-cheatsheet.html">→ 速查表：并发抢单</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+</footer>
+
+</body>
+</html>
