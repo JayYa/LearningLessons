@@ -1,0 +1,76 @@
+/* Styles for assets/quiz.js widgets. Load after lesson.css. */
+
+.quiz, .recall, .typein {
+  max-width: 38rem;
+  margin: 1.6rem 0;
+  padding: 1rem 1.2rem;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+}
+.quiz .q, .recall .q, .typein .q { margin: 0 0 .8rem; font-weight: 600; }
+
+.quiz button[data-opt] {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-bottom: .45rem;
+  padding: .5rem .75rem;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: .82rem;
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--ink);
+}
+.quiz button[data-opt]:hover:not(:disabled) { border-color: var(--accent); }
+.quiz button[data-opt]:disabled { cursor: default; opacity: .95; }
+.quiz button.correct { background: #e3f2e8; border-color: var(--good); }
+.quiz button.wrong   { background: #fbe9e2; border-color: var(--warn); }
+
+.quiz .why {
+  margin: .8rem 0 0;
+  padding-top: .7rem;
+  border-top: 1px dashed var(--rule);
+  font-size: .89rem;
+  color: var(--ink-soft);
+}
+
+button.reveal {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: .78rem;
+  padding: .4rem .8rem;
+  background: var(--ink);
+  color: var(--paper);
+  border: none; border-radius: 4px; cursor: pointer;
+}
+button.reveal:hover { background: var(--accent); }
+
+.recall .a {
+  margin-top: .6rem; padding: .7rem .9rem;
+  background: var(--code-bg); border-radius: 4px;
+  font-size: .9rem;
+}
+.recall .a code { background: #fff; }
+
+.typein-row { display: flex; gap: .5rem; }
+.typein input {
+  flex: 1;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: .82rem;
+  padding: .45rem .6rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--code-bg);
+  color: var(--ink);
+}
+.typein input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.typein .fb { margin: .6rem 0 0; font-size: .88rem; min-height: 1.2em; }
+.typein .fb.ok { color: var(--good); }
+.typein .fb.no { color: var(--warn); }
+
+@media print {
+  .quiz .why, .recall .a { display: block !important; }
+  button.reveal, .typein-row { display: none !important; }
+}

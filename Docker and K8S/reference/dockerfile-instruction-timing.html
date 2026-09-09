@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查：Dockerfile 指令 —— 构建期还是运行期？</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<header class="masthead">
+  <p class="eyebrow">Reference · Dockerfile Timing</p>
+  <h1>Dockerfile 指令：<br>构建期还是运行期？</h1>
+  <p class="subtitle">写 Dockerfile 时最该反复回看的一张表。判断一条指令有没有效果，先问它在哪个时刻起作用。</p>
+</header>
+
+<h2>两个时刻</h2>
+<table class="defs">
+  <tr><th>时刻</th><th>触发命令</th><th>发生了什么</th></tr>
+  <tr><td><strong>构建期</strong> build</td><td><code>docker build</code></td><td>Dockerfile 被逐行执行，每步的结果固化成 layer，最终产出一个只读 image。<strong>结束后 Dockerfile 就与这个 image 无关了。</strong></td></tr>
+  <tr><td><strong>运行期</strong> run</td><td><code>docker run</code></td><td>基于 image 创建 container，加一层可写层，执行 <code>ENTRYPOINT</code> + <code>CMD</code>。Dockerfile 的其他指令<strong>不会</strong>在此时重新执行。</td></tr>
+</table>
+
+<h2>指令对照表</h2>
+<table class="defs">
+  <tr><th>指令</th><th>构建期</th><th>运行期</th><th>要点</th></tr>
+  <tr><td><code>FROM</code></td><td>✅ 拉取基础镜像</td><td>—</td><td>决定起点层</td></tr>
+  <tr><td><code>RUN</code></td><td>✅ 真的执行命令</td><td>—</td><td>结果被固化进层；改了也要重 build 才生效</td></tr>
+  <tr><td><code>COPY</code> / <code>ADD</code></td><td>✅ 从 build context 复制</td><td>—</td><td>只能读 context 内的文件，<code>COPY ../x</code> 必失败</td></tr>
+  <tr><td><code>WORKDIR</code></td><td>✅ 影响后续指令</td><td>✅ 容器启动目录</td><td>两个时刻都作数</td></tr>
+  <tr><td><code>ARG</code></td><td>✅ 构建变量</td><td>❌ 容器里不存在</td><td><code>--build-arg</code> 传入；<strong>不要用来传密码</strong>，会留在构建历史里</td></tr>
+  <tr><td><code>ENV</code></td><td>✅ 后续指令可见</td><td>✅ 进程环境变量</td><td>run 时可用 <code>-e</code> 覆盖 —— 配置第三方镜像的主力手段</td></tr>
+  <tr><td><code>USER</code></td><td>✅ 影响后续 RUN</td><td>✅ 容器默认用户</td><td></td></tr>
+  <tr><td><code>EXPOSE</code></td><td>⚪ 只写元数据</td><td>⚪ 只写元数据</td><td><strong>不开放任何端口。</strong>真正打通靠 <code>docker run -p</code></td></tr>
+  <tr><td><code>LABEL</code></td><td>⚪ 只写元数据</td><td>⚪ 只写元数据</td><td><code>docker inspect</code> 可读</td></tr>
+  <tr><td><code>VOLUME</code></td><td>⚪ 只写元数据</td><td>✅ 启动时自动建匿名卷</td><td>声明"这个路径的数据不该留在容器层"</td></tr>
+  <tr><td><code>ENTRYPOINT</code></td><td>⚪ 只写元数据</td><td>✅ 容器主进程</td><td>"这个镜像是什么程序"</td></tr>
+  <tr><td><code>CMD</code></td><td>⚪ 只写元数据</td><td>✅ 默认参数 / 默认命令</td><td>"默认怎么跑"；<code>docker run 镜像 &lt;命令&gt;</code> 会覆盖它</td></tr>
+</table>
+
+<div class="note">
+  <p><strong>✅ 真的做事　⚪ 只是写进 image 的元数据　❌ 不存在</strong></p>
+</div>
+
+<h2>三条推论</h2>
+<ol>
+  <li><strong>改 Dockerfile / 源码 ⇒ 必须重新 <code>build</code>。</strong>重启容器没用。</li>
+  <li><strong>改运行方式（端口、环境变量、挂载）⇒ 不用重新 build</strong>，改 <code>docker run</code> 参数即可。这就是为什么第三方镜像可以不重新构建就改配置。</li>
+  <li><strong>层缓存只在构建期存在。</strong>Docker 从上到下比对，遇到第一个变化的指令，那一行<em>及其之后所有行</em>的缓存全部失效 —— 所以「变化频率低的指令写在前面」。</li>
+</ol>
+
+<h2>build context 速记</h2>
+<pre><code>docker build -t 名字:标签 -f Dockerfile路径 <span class="k">上下文路径</span></code></pre>
+<ul>
+  <li>末尾那个路径（通常是 <code>.</code>）= <strong>build context</strong>，整个目录会被打包送给构建引擎。</li>
+  <li>context 太大 ⇒ 每次 build 都慢。用 <code>.dockerignore</code> 排除 <code>bin/ obj/ .git/ node_modules/</code> 等。</li>
+  <li>看 build 输出里的 <code>transferring context: … B</code> 就知道送了多少。</li>
+</ul>
+
+<div class="footer">
+  <p>相关：<a href="GLOSSARY.html">术语表</a> ·
+  <a href="../lessons/0002-build-time-vs-run-time.html">第 2 课：构建期与运行期</a> ·
+  <a href="https://docs.docker.com/reference/dockerfile/">Dockerfile 官方参考 ↗</a></p>
+</div>
+</body>
+</html>

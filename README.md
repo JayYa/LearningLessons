@@ -1,17 +1,19 @@
 # 📘 Learning Lessons
 
-本仓库收录六门独立课程，其中三门围绕 .NET 技术栈展开：`Morden .NET` 沿 C# 8 到 15 的每一次语法升级梳理语言演进，`DotNET Platform` 下沉到 SDK 项目系统、CoreCLR 运行时、GC、依赖注入与配置体系，两者互为语言层与平台层的对照；`BeiGene` 是一份面试向的综合专题，从联合索引与索引失效讲到排序与 Top-K 算法，再到微服务拆分、Saga、并发抢单与 async/await 状态机。`Python-React-Typescript` 从 C# 背景出发，以前后端两个进程如何联通为切入点，配合语言对照表跨入 Python 与 TypeScript 生态；`fntv-electron` 则落在一个具体仓库上，从进程模型讲起。`Build an Agent` 独立成篇，讲 AI Agent 的工具调用、记忆管理、任务编排与多智能体协作。各课程按需选读，共享同一方法论——从表层 API 下沉到底层机制。
+本仓库收录六门独立课程，其中三门围绕 .NET 技术栈展开：`Morden .NET` 沿 C# 8 到 15 的每一次语法升级梳理语言演进，`DotNET Platform` 下沉到 SDK 项目系统、CoreCLR 运行时、GC、依赖注入与配置体系，两者互为语言层与平台层的对照；`BeiGene` 是一份面试向的综合专题，从联合索引与索引失效讲到排序与 Top-K 算法，再到微服务拆分、Saga、并发抢单与 async/await 状态机。`Python-React-Typescript` 从 C# 背景出发，以前后端两个进程如何联通为切入点，配合语言对照表跨入 Python 与 TypeScript 生态；`Docker and K8S` 从构建第一个镜像入手，把「构建期」与「运行期」这条最容易混淆的界线讲透。`Build an Agent` 独立成篇，讲 AI Agent 的工具调用、记忆管理、任务编排与多智能体协作。各课程按需选读，共享同一方法论——从表层 API 下沉到底层机制。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
-## fntv-electron
+## Docker and K8S
 
 | # | 课程 | 描述 |
 |---|------|------|
-| 1 | [第 1 课 · Electron 的进程模型，落在 fntv-electron 上](https://JayYa.github.io/LearningLessons/fntv-electron/lessons/0001-electron-process-model.html) | 以 fntv-electron 仓库为实例，讲清主进程、渲染进程与预加载脚本各自的职责与通信边界 |
+| 1 | [第 1 课：构建你的第一个镜像](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0001-build-your-first-image.html) | 从一个 Dockerfile 出发，走完镜像构建到容器运行的完整链路 |
+| 2 | [第 2 课：构建期与运行期](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0002-build-time-vs-run-time.html) | 分清哪些指令在 build 时执行、哪些留到容器启动才生效 |
 
 **参考资料：**
-- [参考 · fntv-electron 仓库地图](https://JayYa.github.io/LearningLessons/fntv-electron/reference/architecture-map.html) — fntv-electron 目录结构与关键模块的导航地图
+- [术语表 · Docker & Kubernetes](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/GLOSSARY.html) — 容器与编排领域的核心名词速查
+- [速查：Dockerfile 指令 —— 构建期还是运行期？](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/dockerfile-instruction-timing.html) — 逐条列出各 Dockerfile 指令的生效时机
 
 ## Python-React-Typescript
 

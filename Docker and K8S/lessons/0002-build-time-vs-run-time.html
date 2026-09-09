@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 2 课：构建期与运行期</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/diagram.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="eyebrow">Lesson 02 · 主线 A：构建</p>
+  <h1>构建期与运行期</h1>
+  <p class="subtitle">Docker 里几乎所有"我明明配了却没生效"的困惑，根源都是搞混了这两个时刻。</p>
+</header>
+
+<p class="lede">
+  上一课你答错的两题 —— <code>build</code> 末尾的 <code>.</code>、以及 <code>EXPOSE</code> 不加 <code>-p</code> —— 共享同一个根因：
+  <strong>没有时间轴模型</strong>。这节课把这条断层补上。它是后面多阶段构建、层缓存、改第三方镜像配置的共同前提。
+</p>
+
+<h2>一、两个时刻，一条铁律</h2>
+
+<div class="timeline">
+  <div class="phase">
+    <h4>docker build</h4>
+    <p class="when">构建期 · 只发生一次</p>
+    <ul>
+      <li><code>FROM</code> 拉基础镜像</li>
+      <li><code>RUN</code> <strong>真的执行</strong>命令</li>
+      <li><code>COPY</code> 从 build context 复制文件</li>
+      <li><code>ARG</code> 构建变量生效</li>
+      <li>每步结果固化成 <code>layer</code></li>
+    </ul>
+  </div>
+  <div class="arrow">→</div>
+  <div class="phase run">
+    <h4>docker run</h4>
+    <p class="when">运行期 · 每次启动都发生</p>
+    <ul>
+      <li>基于 image 加一层可写层</li>
+      <li>执行 <code>ENTRYPOINT</code> + <code>CMD</code></li>
+      <li><code>-e</code> 注入环境变量</li>
+      <li><code>-p</code> 建立端口映射</li>
+      <li><code>-v</code> 挂载卷</li>
+    </ul>
+  </div>
+</div>
+
+<div class="note">
+  <p><strong>铁律：</strong>构建期结束的那一刻，image 就被<strong>冻结</strong>了。
+  运行期<em>不会</em>回头重新执行 <code>RUN</code> / <code>COPY</code>，Dockerfile 此时已经跟这个 image 没有关系了。</p>
+</div>
+
+<p>
+  这条铁律解释了你上一课的两个错误：<code>.</code>（build context）是<strong>构建期</strong>的输入，run 时早就不存在了；
+  <code>EXPOSE</code> 则两个时刻都不做事，它只是写进 image 的一行<strong>元数据</strong>，
+  相当于镜像作者留的一张便条：「我打算监听这个端口」。便条不会替你打通网络。
+</p>
+
+<h2>二、动手证明它</h2>
+
+<p>与其记结论，不如亲手做出可观察的证据。整个实验基于 <code>alpine</code>（约 8 MB），几秒钟跑完。</p>
+
+<ol class="steps">
+
+<li>
+<p><strong>建目录，写一个刻意暴露时间差的 Dockerfile。</strong></p>
+<pre><code>mkdir $HOME\timing-lab
+cd $HOME\timing-lab
+
+@'
+<span class="k">FROM</span> alpine:3
+<span class="k">ARG</span> BUILD_NOTE=unset
+<span class="k">ENV</span> RUN_NOTE=unset
+<span class="k">RUN</span> echo "frozen-in-image: BUILD_NOTE=$BUILD_NOTE" &gt; /frozen.txt
+<span class="k">EXPOSE</span> 9999
+<span class="k">CMD</span> echo "at-run-time: RUN_NOTE=$RUN_NOTE" &amp;&amp; cat /frozen.txt
+'@ | Set-Content -Encoding utf8 Dockerfile</code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  这里刻意全用英文：容器内是 Alpine 的极简环境，中文输出容易受终端编码影响，
+  会让实验结论被无关噪音干扰。<strong>做实验时，减少变量。</strong>
+</p>
+</li>
+
+<li>
+<p><strong>构建，并注意看 <code>RUN</code> 那一步的输出。</strong></p>
+<pre><code>docker build -t timing:1.0 --build-arg BUILD_NOTE=first-build .</code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  <code>RUN</code> 在<em>这一刻</em>真的跑了 <code>echo</code>，把结果写进 <code>/frozen.txt</code>，然后这一层被封存。
+</p>
+</li>
+
+<li>
+<p><strong>运行它。</strong></p>
+<pre><code>docker run --rm timing:1.0</code></pre>
+<p>你会看到两行：<code>RUN_NOTE=unset</code>，和 <code>BUILD_NOTE=first-build</code>。
+<code>--rm</code> 表示容器退出后自动删除，做实验时很省事。</p>
+</li>
+
+<li>
+<p><strong>试着在运行期改这两个变量。</strong>一个能改，一个改不动 —— 这就是全部要点。</p>
+<pre><code><span class="c"># ENV 是运行期变量：能改 ✅</span>
+docker run --rm -e RUN_NOTE=changed-at-run timing:1.0
+
+<span class="c"># BUILD_NOTE 是 ARG：容器里根本不存在，改不动 ❌</span>
+docker run --rm -e BUILD_NOTE=i-want-to-change timing:1.0</code></pre>
+<div class="win">
+  <p>第二条命令里 <code>/frozen.txt</code> 依然是 <code>first-build</code>。你刚刚亲手证明了：
+  构建期写进去的东西，运行期<strong>无论如何都改不了</strong>，只能重新 build。</p>
+</div>
+</li>
+
+<li>
+<p><strong>验证 EXPOSE 的真面目。</strong></p>
+<pre><code>docker run -d --name t timing:1.0 sleep 120
+
+<span class="c"># 实际的端口映射：空的</span>
+docker port t
+
+<span class="c"># 元数据里却确实有 9999</span>
+docker inspect --format "{{.Config.ExposedPorts}}" t
+
+docker rm -f t</code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  顺带一提：<code>docker run 镜像 sleep 120</code> 里的 <code>sleep 120</code> <strong>覆盖了 CMD</strong>。
+  CMD 只是"默认命令"，命令行给了就以命令行为准。
+</p>
+</li>
+
+</ol>
+
+<h2>三、那个 <code>.</code> 到底送出去了什么</h2>
+
+<p>build context 不是抽象概念，它有实实在在的体积。做个实验：</p>
+
+<pre><code><span class="c"># 造一个 50 MB 的大文件，放进目录</span>
+$f = [IO.File]::Create("$PWD\big.bin"); $f.SetLength(50MB); $f.Close()
+
+<span class="c"># 重新构建，盯住输出里的 transferring context</span>
+docker build -t timing:1.1 .</code></pre>
+
+<p>输出里会出现类似 <code>=&gt; transferring context: 52.43MB</code> 的一行。
+<strong>Dockerfile 里根本没有 <code>COPY big.bin</code>，它却还是被送走了</strong> —— 因为送的是整个目录，不是被引用的文件。</p>
+
+<pre><code><span class="c"># 排除掉它</span>
+"big.bin" | Set-Content -Encoding utf8 .dockerignore
+
+docker build -t timing:1.2 .</code></pre>
+
+<p><code>transferring context</code> 应该掉到几百字节。这就是 <code>.dockerignore</code> 的全部作用，
+也是为什么 .NET 项目一定要忽略 <code>bin/</code>、<code>obj/</code>、<code>.git/</code> —— 它们又大又对构建无用。</p>
+
+<div class="warn">
+  <p>同理，<code>COPY ../shared/config.json .</code> <strong>永远失败</strong>，
+  报 <code>forbidden path outside the build context</code>。因为 <code>..</code> 不在你交出去的那个目录里。
+  解决办法是把 context 提到上层：<code>docker build -f app/Dockerfile .</code>
+  （<code>-f</code> 指定 Dockerfile 位置，末尾的 <code>.</code> 才是 context）。</p>
+</div>
+
+<h2>四、检索练习</h2>
+
+<p style="font-size:.93rem;color:var(--ink-soft)">前两题是上一课错题的重考，换了问法。先凭记忆答，别翻上面。</p>
+
+<div class="quiz" data-answer="A">
+  <p class="q">1. 镜像的 Dockerfile 里有 <code>EXPOSE 8080</code>。你跑 <code>docker run -d 镜像</code> 后执行 <code>docker port 容器</code>，看到什么？</p>
+  <button data-opt="A">空输出，没有任何端口映射建立起来</button>
+  <button data-opt="B">显示八零八零已映射到宿主机同端口</button>
+  <button data-opt="C">报错说明必须先行声明端口映射规则</button>
+  <button data-opt="D">显示随机分配给宿主机的一个高端口</button>
+  <p class="why"><code>EXPOSE</code> 只写元数据，两个时刻都不建立映射。元数据能用 <code>docker inspect</code> 看到，但 <code>docker port</code> 显示的是<strong>真实映射</strong>，所以是空的。</p>
+</div>
+
+<div class="quiz" data-answer="C">
+  <p class="q">2. 你的目录里有个 2 GB 的 <code>data.zip</code>，Dockerfile 里完全没提它。<code>docker build .</code> 会怎样？</p>
+  <button data-opt="A">照常很快，未引用的文件会被自动跳过</button>
+  <button data-opt="B">构建失败，提示上下文体积超出了限制</button>
+  <button data-opt="C">明显变慢，整个目录都要传给构建引擎</button>
+  <button data-opt="D">照常很快，但最终镜像增大两个 GB</button>
+  <p class="why">context 是<strong>整个目录</strong>，与是否被 <code>COPY</code> 无关。它不会进最终镜像，但每次 build 都要传输一遍。这正是 <code>.dockerignore</code> 存在的理由。</p>
+</div>
+
+<div class="quiz" data-answer="D">
+  <p class="q">3. Dockerfile 里写了 <code>ARG TOKEN</code>。容器跑起来后进去执行 <code>echo $TOKEN</code>，结果是？</p>
+  <button data-opt="A">输出构建时通过参数传入的那个值</button>
+  <button data-opt="B">输出该指令中写明的那个默认取值</button>
+  <button data-opt="C">报错提示这个变量尚未完成初始化</button>
+  <button data-opt="D">输出空行，变量在容器里并不存在</button>
+  <p class="why"><code>ARG</code> <strong>只活在构建期</strong>，不会进入容器环境。想让容器里有这个变量，得用 <code>ENV</code>，或者 <code>docker run -e</code> 注入。（另：<code>ARG</code> 传密码不安全，它留在构建历史里。）</p>
+</div>
+
+<div class="quiz" data-answer="B">
+  <p class="q">4. 下面哪一件事<strong>必须</strong>重新 <code>docker build</code> 才能生效？</p>
+  <button data-opt="A">把容器对外暴露的端口从八零改成八八</button>
+  <button data-opt="B">把镜像里预装的某个依赖包升到新版本</button>
+  <button data-opt="C">把数据库连接串这个环境变量换成新值</button>
+  <button data-opt="D">把宿主机上的一个配置文件挂载进容器</button>
+  <p class="why">装依赖是 <code>RUN</code>，属于构建期，被冻结在层里。其余三项都是<strong>运行期</strong>参数（<code>-p</code> / <code>-e</code> / <code>-v</code>），改命令行即可 —— 这也正是你能不重新构建就修改第三方镜像配置的原因。</p>
+</div>
+
+<div class="typein" data-answer="docker build -t app:1.0 --build-arg VERSION=2 .|docker build --build-arg VERSION=2 -t app:1.0 .|docker build --build-arg VERSION=2 --tag app:1.0 .|docker build --tag app:1.0 --build-arg VERSION=2 ." data-hint="需要三样东西：-t 打标签、--build-arg 传构建参数、末尾的上下文路径。">
+  <p class="q">5. 写出完整命令：在当前目录构建 <code>app:1.0</code>，并把构建参数 <code>VERSION</code> 设为 <code>2</code>。</p>
+</div>
+
+<div class="recall">
+  <p class="q">6. 不看表格，说出至少 3 条<strong>只在构建期</strong>起作用的指令，和 2 条<strong>只在运行期</strong>起作用的。</p>
+  <div class="a">
+    <p><strong>只在构建期：</strong><code>FROM</code>、<code>RUN</code>、<code>COPY</code> / <code>ADD</code>、<code>ARG</code></p>
+    <p><strong>只在运行期：</strong><code>CMD</code>、<code>ENTRYPOINT</code>（它们在构建期只被写成元数据，不执行）</p>
+    <p><strong>两边都作用：</strong><code>ENV</code>、<code>WORKDIR</code>、<code>USER</code>　<strong>哪边都不做事：</strong><code>EXPOSE</code>、<code>LABEL</code></p>
+    <p>完整对照见<a href="../reference/dockerfile-instruction-timing.html">指令时机速查表</a>。</p>
+  </div>
+</div>
+
+<h2 id="next">五、下一步</h2>
+
+<p><strong>本课的一手资料</strong>：</p>
+<blockquote>
+  <a href="https://docs.docker.com/build/concepts/context/">Docker Docs — Build context</a><br>
+  官方对 context 的完整说明，包括 <code>.dockerignore</code> 语法、以及直接从 Git URL 构建。约 8 分钟。
+  <br>配套速查：<a href="https://docs.docker.com/reference/dockerfile/">Dockerfile reference</a>（每条指令的权威语义）。
+</blockquote>
+
+<p>新增速查表：<a href="../reference/dockerfile-instruction-timing.html">Dockerfile 指令 —— 构建期还是运行期？</a>（建议打印出来，写 Dockerfile 时放手边）</p>
+
+<p>清理实验：</p>
+<pre><code>cd $HOME
+docker rmi timing:1.0 timing:1.1 timing:1.2
+Remove-Item -Recurse -Force $HOME\timing-lab</code></pre>
+
+<p><strong>第 3 课预告：</strong>把这条时间轴用起来 —— .NET 的<strong>多阶段构建</strong>。
+用 SDK 镜像在构建期编译，只把产物交给 aspnet runtime 镜像运行，镜像从近 1 GB 降到 100 MB 出头。
+它的全部原理就是今天这条时间轴。请先在后台预拉镜像（比较大，早拉早省事）：</p>
+<pre><code>docker pull mcr.microsoft.com/dotnet/sdk:9.0
+docker pull mcr.microsoft.com/dotnet/aspnet:9.0</code></pre>
+
+<div class="ask">
+  <strong>随时问我。</strong>特别是：如果某个实验的输出和课文说的不一样，<em>务必</em>把原始输出贴给我。
+  那种时候要么是你的环境有特殊情况，要么是我讲漏了 —— 两种都值得当场弄清楚。
+</div>
+
+<div class="footer">
+  <p>课程：Docker &amp; Kubernetes · 第 2 课 ｜
+  上一课：<a href="0001-build-your-first-image.html">构建你的第一个镜像</a> ｜
+  <a href="../reference/GLOSSARY.html">术语表</a> ·
+  <a href="../reference/dockerfile-instruction-timing.html">指令时机速查</a></p>
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,154 @@
+/* Shared stylesheet for the Docker & Kubernetes course.
+   Tufte-inspired: generous margins, serif body, sidenotes, restrained colour. */
+
+:root {
+  --ink: #1a1a18;
+  --ink-soft: #55524c;
+  --paper: #fffdf8;
+  --rule: #ded9cd;
+  --accent: #1d63ed;        /* Docker blue */
+  --accent-k8s: #326ce5;    /* Kubernetes blue */
+  --warn: #a8420a;
+  --good: #1d6b3f;
+  --code-bg: #f4f1e8;
+  --measure: 38rem;
+}
+
+* { box-sizing: border-box; }
+
+html { font-size: 17px; }
+
+body {
+  margin: 0 auto;
+  padding: 3rem 1.5rem 8rem;
+  max-width: 60rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+               "Source Han Serif SC", "Noto Serif SC", "Songti SC", SimSun,
+               "Microsoft YaHei", serif;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Masthead ---------- */
+
+.masthead {
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 1rem;
+  margin-bottom: 2.5rem;
+}
+.eyebrow {
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+  font-size: .72rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 .6rem;
+}
+h1 { font-size: 2.3rem; line-height: 1.15; margin: 0 0 .5rem; font-weight: 600; }
+.subtitle { font-style: italic; color: var(--ink-soft); margin: 0; max-width: var(--measure); }
+
+/* ---------- Text ---------- */
+
+h2 {
+  font-size: 1.45rem; font-weight: 600; margin: 3rem 0 .8rem;
+  padding-bottom: .3rem; border-bottom: 1px solid var(--rule);
+  max-width: var(--measure);
+}
+h3 { font-size: 1.1rem; margin: 2rem 0 .5rem; max-width: var(--measure); }
+p, ul, ol, blockquote { max-width: var(--measure); }
+li { margin-bottom: .35rem; }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+.lede { font-size: 1.12rem; }
+
+strong { font-weight: 600; }
+
+/* ---------- Code ---------- */
+
+code, kbd, pre {
+  /* CJK fallbacks matter on Windows: Consolas has no Chinese glyphs, so
+     comments inside code blocks would render as tofu without these. */
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas,
+               "Microsoft YaHei Mono", "Microsoft YaHei", monospace;
+}
+code { background: var(--code-bg); padding: .1em .35em; border-radius: 3px; font-size: .86em; }
+pre {
+  background: var(--code-bg);
+  border-left: 3px solid var(--accent);
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  font-size: .82rem;
+  line-height: 1.55;
+  max-width: 48rem;
+  border-radius: 0 4px 4px 0;
+}
+pre code { background: none; padding: 0; font-size: 1em; }
+pre .c { color: #7a7568; }        /* comment */
+pre .k { color: #1d63ed; font-weight: 600; } /* keyword / instruction */
+
+/* ---------- Callouts ---------- */
+
+.note, .warn, .win {
+  max-width: var(--measure);
+  padding: .85rem 1.1rem;
+  margin: 1.5rem 0;
+  border-radius: 4px;
+  font-size: .93rem;
+}
+.note { background: #f2f5fb; border-left: 3px solid var(--accent); }
+.warn { background: #fbf1ea; border-left: 3px solid var(--warn); }
+.win  { background: #eef6f0; border-left: 3px solid var(--good); }
+.note p:last-child, .warn p:last-child, .win p:last-child { margin-bottom: 0; }
+.note p:first-child, .warn p:first-child, .win p:first-child { margin-top: 0; }
+
+/* ---------- Definition table ---------- */
+
+table.defs { border-collapse: collapse; margin: 1.5rem 0; font-size: .92rem; width: 100%; max-width: 48rem; }
+table.defs th, table.defs td { text-align: left; padding: .55rem .7rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.defs th { font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; }
+table.defs td:first-child { white-space: nowrap; }
+
+/* ---------- Steps ---------- */
+
+ol.steps { counter-reset: step; list-style: none; padding-left: 0; max-width: 48rem; }
+ol.steps > li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 2.6rem;
+  margin-bottom: 1.8rem;
+}
+ol.steps > li::before {
+  content: counter(step);
+  position: absolute; left: 0; top: .05rem;
+  width: 1.8rem; height: 1.8rem; line-height: 1.8rem;
+  text-align: center;
+  background: var(--ink); color: var(--paper);
+  border-radius: 50%;
+  font-family: ui-monospace, Consolas, monospace; font-size: .8rem;
+}
+
+/* ---------- Footer / nav ---------- */
+
+.footer {
+  margin-top: 4rem; padding-top: 1.2rem;
+  border-top: 1px solid var(--rule);
+  font-size: .9rem; color: var(--ink-soft);
+  max-width: 48rem;
+}
+.footer h2 { border: none; font-size: 1.05rem; margin-top: 1.5rem; }
+.ask {
+  background: #fff8e6; border: 1px dashed #d9b877;
+  padding: .9rem 1.1rem; border-radius: 4px; margin: 2rem 0;
+  max-width: var(--measure); font-size: .93rem;
+}
+
+/* ---------- Print ---------- */
+
+@media print {
+  body { padding: 0; max-width: none; background: #fff; }
+  .quiz-check, .ask { break-inside: avoid; }
+  a { color: #000; }
+  a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .7em; color: #666; }
+}

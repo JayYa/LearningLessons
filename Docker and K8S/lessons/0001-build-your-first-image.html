@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 1 课：构建你的第一个镜像</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="eyebrow">Lesson 01 · Docker &amp; Kubernetes</p>
+  <h1>构建你的第一个镜像</h1>
+  <p class="subtitle">用 5 条命令，把一个文件变成一个能在任何装了 Docker 的机器上运行的 image。</p>
+</header>
+
+<p class="lede">
+  这节课只做一件事：让你亲手完成 <strong>Dockerfile → image → container</strong> 这条链路。
+  它是后面所有内容的地基 —— 推镜像到仓库、跑别人的镜像、部署到 K8s，全都建立在这三个词的关系上。
+</p>
+
+<h2>一、三个词，一个心智模型</h2>
+
+<p>初学 Docker 最大的混乱来自把 image 和 container 混为一谈。它们的关系是：</p>
+
+<table class="defs">
+  <tr><th>概念</th><th>是什么</th><th>类比</th></tr>
+  <tr><td><code>Dockerfile</code></td><td>一份文本配方，写明怎么造</td><td>菜谱</td></tr>
+  <tr><td><code>image</code></td><td>造好的<strong>只读</strong>模板，可分发</td><td>做好的预制菜（可复制无数份）</td></tr>
+  <tr><td><code>container</code></td><td>image 的一次<strong>运行</strong>，带可写层</td><td>端上桌正在吃的那一盘</td></tr>
+</table>
+
+<div class="note">
+  <p><strong>关键推论：</strong>改 Dockerfile 不会改变已有的 image，必须重新 <code>build</code>；
+  删掉 container 不会删掉 image。一个 image 可以同时跑出 100 个 container，互不干扰。</p>
+</div>
+
+<p>
+  image 由一层层 <code>layer</code> 叠成，Dockerfile 里大部分指令各产生一层。层可以被缓存、被多个 image 共享 ——
+  这就是为什么第二次 build 通常快得多。层的顺序会直接决定构建速度，这是<a href="#next">下一课</a>的主题。
+  （概念详解见 <a href="https://docs.docker.com/get-started/docker-concepts/building-images/">Docker 官方 Building images</a>）
+</p>
+
+<h2>二、动手：把一个网页装进镜像</h2>
+
+<p>
+  这个例子刻意不依赖任何语言工具链 —— 你机器上只要有 Docker Desktop 就能跑通。
+  打开 <strong>PowerShell</strong>，逐步执行：
+</p>
+
+<ol class="steps">
+
+<li>
+<p><strong>建一个目录，作为 build context。</strong></p>
+<pre><code>mkdir $HOME\hello-docker
+cd $HOME\hello-docker</code></pre>
+</li>
+
+<li>
+<p><strong>写一个要放进镜像的文件。</strong></p>
+<pre><code>@'
+&lt;!DOCTYPE html&gt;
+&lt;html lang="zh-CN"&gt;
+&lt;head&gt;&lt;meta charset="utf-8"&gt;&lt;title&gt;Hello&lt;/title&gt;&lt;/head&gt;
+&lt;body&gt;
+&lt;h1&gt;Hello from inside a container&lt;/h1&gt;
+&lt;p&gt;这个页面来自我自己构建的 image。&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+'@ | Set-Content -Encoding utf8 index.html</code></pre>
+<div class="warn">
+  <p><strong>为什么一定要写 <code>&lt;meta charset="utf-8"&gt;</code>？</strong>
+  文件本身是 UTF-8，但 nginx 默认以 <code>Content-Type: text/html</code> 返回，<em>不带</em> charset 声明。
+  浏览器只好靠猜，在中文 Windows 上常常猜成 GBK —— 中文就变成乱码。
+  这是一个典型的<strong>「容器里的服务怎么配置」</strong>问题：真正的修法有两条，
+  改内容（加 meta 标签，就是这里做的），或改服务配置（在 nginx.conf 里设 <code>charset utf-8;</code>）。
+  后者要往镜像里挂配置文件，正是<a href="#next">主线 B</a> 后面要教的。</p>
+</div>
+</li>
+
+<li>
+<p><strong>写 Dockerfile。</strong>注意文件名就叫 <code>Dockerfile</code>，没有扩展名。</p>
+<pre><code>@'
+<span class="k">FROM</span> nginx:alpine
+<span class="k">COPY</span> index.html /usr/share/nginx/html/index.html
+<span class="k">EXPOSE</span> 80
+'@ | Set-Content -Encoding utf8 Dockerfile</code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  三行分别是：<code>FROM</code> 选一个已经装好 nginx 的<a href="https://docs.docker.com/build/building/base-images/">基础镜像</a>；
+  <code>COPY</code> 把本地文件复制进镜像里 nginx 默认的网站目录；
+  <code>EXPOSE</code> <em>仅仅是声明</em>「这个镜像打算监听 80 端口」，它不会真的开放端口 —— 开放端口是 <code>docker run -p</code> 的事。
+</p>
+</li>
+
+<li>
+<p><strong>构建 image。</strong></p>
+<pre><code>docker build -t hello-docker:1.0 .</code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  <code>-t</code> 给 image 打 tag（名字:版本）。<strong>末尾那个 <code>.</code> 不是句号</strong>，
+  它是 build context：当前目录会被整体发给构建引擎，<code>COPY</code> 只能取到这里面的文件。
+</p>
+<p>确认它存在：</p>
+<pre><code>docker images hello-docker</code></pre>
+</li>
+
+<li>
+<p><strong>运行成 container。</strong></p>
+<pre><code>docker run -d -p 8080:80 --name web hello-docker:1.0</code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  <code>-d</code> 后台运行；<code>-p 8080:80</code> 把 Windows 的 8080 映射到容器的 80；<code>--name</code> 起个好记的名字。
+</p>
+<p>浏览器打开 <a href="http://localhost:8080">http://localhost:8080</a>。</p>
+</li>
+
+</ol>
+
+<div class="win">
+  <p><strong>✓ 你的第一个小胜利。</strong>页面出来了，说明你已经完成了完整链路：写配方 → 造镜像 → 跑容器 → 从宿主机访问到它。
+  这个 <code>hello-docker:1.0</code> 现在是一个可以推到 Docker Hub、被任何人一条命令跑起来的制品。</p>
+</div>
+
+<h3>顺手做三件事（收尾也是技能）</h3>
+
+<pre><code><span class="c"># 看正在跑的容器</span>
+docker ps
+
+<span class="c"># 看容器日志（排查问题的第一步，永远是它）</span>
+docker logs web
+
+<span class="c"># 停掉并删除容器 —— 注意 image 还在</span>
+docker rm -f web
+docker images hello-docker</code></pre>
+
+<div class="warn">
+  <p><strong>验证一下上面那句话。</strong>删完容器后再跑一次 <code>docker images hello-docker</code>，
+  image 仍然列在那里。这就是 image 与 container 生命周期分离的直接证据。</p>
+</div>
+
+<h2>三、检索练习</h2>
+
+<p style="font-size:.93rem;color:var(--ink-soft)">
+  别翻回上面找答案 —— 先从记忆里取。取不出来才是学习真正发生的地方。
+</p>
+
+<div class="quiz" data-answer="C">
+  <p class="q">1. 你改了 <code>index.html</code>，然后直接 <code>docker run</code> 之前那个 image。页面会变吗？</p>
+  <button data-opt="A">会变，因为文件已经被容器实时读取</button>
+  <button data-opt="B">会变，只要重启容器就能同步过来</button>
+  <button data-opt="C">不会变，必须先重新构建这个镜像</button>
+  <button data-opt="D">不会变，除非删掉镜像再重新拉取</button>
+  <p class="why">image 是构建那一刻的只读快照。<code>COPY</code> 发生在 build 期间，不是 run 期间。改了源文件就要 <code>docker build</code> 一次。</p>
+</div>
+
+<div class="quiz" data-answer="B">
+  <p class="q">2. <code>docker build -t app:1.0 .</code> 末尾的 <code>.</code> 是什么？</p>
+  <button data-opt="A">表示构建结束的语句终止符号</button>
+  <button data-opt="B">build context，会被发送给构建引擎</button>
+  <button data-opt="C">告诉引擎把镜像输出到当前目录</button>
+  <button data-opt="D">代表使用默认的构建参数与缓存</button>
+  <p class="why">它是 build context 路径。<code>COPY</code> / <code>ADD</code> 只能引用 context 内的文件 —— 这也是 <code>COPY ../foo</code> 一定失败的原因。</p>
+</div>
+
+<div class="quiz" data-answer="D">
+  <p class="q">3. Dockerfile 里写了 <code>EXPOSE 80</code>，但 <code>docker run</code> 时没加 <code>-p</code>。结果是？</p>
+  <button data-opt="A">端口自动映射到宿主机的同一个端口</button>
+  <button data-opt="B">构建会失败并提示缺少端口的映射</button>
+  <button data-opt="C">容器无法启动，因为端口未被占用</button>
+  <button data-opt="D">容器正常跑，但宿主机访问不到它</button>
+  <p class="why"><code>EXPOSE</code> 只是写给人和工具看的文档性声明。真正打通网络的是 <code>-p 主机端口:容器端口</code>。</p>
+</div>
+
+<div class="typein" data-answer="docker build -t myapp:2.0 .|docker build --tag myapp:2.0 ." data-hint="格式：docker build -t 名字:版本 上下文路径">
+  <p class="q">4. 写出完整命令：在当前目录构建一个 tag 为 <code>myapp:2.0</code> 的镜像。</p>
+</div>
+
+<div class="recall">
+  <p class="q">5. 用自己的话说：image 和 container 的关系是什么？先在心里说完整一句，再展开对照。</p>
+  <div class="a">
+    image 是<strong>只读模板</strong>，container 是它的<strong>运行实例</strong>（image 加了一层可写层跑起来）。
+    一个 image 可以起任意多个 container；删 container 不影响 image；改 Dockerfile 必须重新 build 才影响 image。
+    对应关系类似 class 与 instance、安装包与进程。
+  </div>
+</div>
+
+<h2 id="next">四、下一步</h2>
+
+<p><strong>建议精读的一手资料</strong>（本课最值得读的一篇）：</p>
+<blockquote>
+  <a href="https://docs.docker.com/get-started/docker-concepts/building-images/">Docker Docs — Docker concepts: Building images</a><br>
+  官方概念页，配有短视频，把 image / layer / 缓存讲得比任何二手教程都准确。约 10 分钟。
+</blockquote>
+
+<p>随手可查：<a href="../reference/GLOSSARY.html">术语表</a>。</p>
+
+<p>下一课预告：<strong>层与缓存</strong> —— 为什么 <code>COPY . .</code> 放错位置会让每次改一行代码都要重装一遍依赖，
+以及怎么用 <code>.dockerignore</code> 和顺序调整把 build 从 90 秒压到 3 秒。那节课会用<em>你自己的技术栈</em>来做。</p>
+
+<div class="ask">
+  <strong>随时问我。</strong>命令报错、输出看不懂、某句话觉得别扭 —— 直接把原文贴给我。
+  我是你的老师，卡住了不要自己硬扛，那只会把错误的心智模型固化下来。
+</div>
+
+<div class="footer">
+  <p>课程：Docker &amp; Kubernetes · 第 1 课 ｜ <a href="../MISSION.md">Mission</a> · <a href="../RESOURCES.md">Resources</a> · <a href="../reference/GLOSSARY.html">Glossary</a></p>
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

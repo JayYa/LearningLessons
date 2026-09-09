@@ -1,0 +1,47 @@
+/* Reusable diagram components. Load after lesson.css.
+   Currently provides: .timeline (two-or-more phase horizontal timeline). */
+
+.timeline {
+  display: flex;
+  gap: 1rem;
+  margin: 2rem 0;
+  max-width: 48rem;
+  flex-wrap: wrap;
+}
+
+.phase {
+  flex: 1 1 16rem;
+  border: 1px solid var(--rule);
+  border-top: 4px solid var(--accent);
+  border-radius: 4px;
+  padding: .9rem 1.1rem;
+  background: #fff;
+}
+.phase.run { border-top-color: var(--good); }
+.phase.never { border-top-color: var(--ink-soft); background: var(--code-bg); }
+
+.phase h4 {
+  margin: 0 0 .15rem;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: .82rem;
+  letter-spacing: .04em;
+}
+.phase .when {
+  margin: 0 0 .7rem;
+  font-size: .78rem;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+.phase ul { margin: 0; padding-left: 1.1rem; font-size: .88rem; }
+.phase li { margin-bottom: .3rem; }
+.phase code { font-size: .8em; }
+
+/* arrow between phases on wide screens */
+.timeline .arrow {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: 1.4rem;
+  color: var(--ink-soft);
+}
+
+@media print { .timeline { break-inside: avoid; } }

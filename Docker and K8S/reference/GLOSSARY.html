@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>术语表 · Docker &amp; Kubernetes</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<header class="masthead">
+  <p class="eyebrow">Reference · Glossary</p>
+  <h1>术语表</h1>
+  <p class="subtitle">课程中所有术语的唯一权威定义。每节课都遵循这里的措辞。术语一律保留英文原词。</p>
+</header>
+
+<h2>Docker</h2>
+<table class="defs">
+  <tr><th>术语</th><th>定义</th></tr>
+  <tr><td><code>Dockerfile</code></td><td>一个纯文本<strong>配方</strong>，一行一条指令，描述如何造出一个 image。它本身不是 image。<a href="https://docs.docker.com/reference/dockerfile/">↗ 官方参考</a></td></tr>
+  <tr><td><code>image</code>（镜像）</td><td>只读的<strong>模板</strong>：文件系统快照 + 启动时该跑什么命令的元数据。类比：程序的安装包 / 类（class）。</td></tr>
+  <tr><td><code>container</code>（容器）</td><td>image 的一个<strong>运行实例</strong>，带一层可写层。类比：进程 / 对象（instance）。一个 image 可以起很多 container。</td></tr>
+  <tr><td><code>layer</code>（层）</td><td>Dockerfile 中大多数指令各产生一层文件系统增量。层可缓存、可跨 image 共享 —— 这是构建快慢的关键。</td></tr>
+  <tr><td><code>base image</code></td><td><code>FROM</code> 指定的起点 image，例如 <code>nginx:alpine</code>。<a href="https://docs.docker.com/build/building/base-images/">↗</a></td></tr>
+  <tr><td><code>tag</code>（标签）</td><td>image 的人类可读名字，格式 <code>name:version</code>，如 <code>myapp:1.0</code>。省略版本时默认 <code>:latest</code>（这只是个普通标签，不代表"最新"）。</td></tr>
+  <tr><td><code>registry</code>（仓库）</td><td>存放和分发 image 的服务器，如 Docker Hub、GHCR、私有 Harbor。<code>push</code> 上传、<code>pull</code> 下载。</td></tr>
+  <tr><td><code>build context</code></td><td><code>docker build</code> 末尾那个路径（常见是 <code>.</code>）。这个目录会被打包发给构建引擎；<code>COPY</code> 只能取到 context 里的文件。</td></tr>
+  <tr><td><code>port mapping</code></td><td><code>-p 主机端口:容器端口</code>。容器有自己的网络命名空间，不映射就无法从 Windows 侧访问。</td></tr>
+  <tr><td><code>volume</code>（卷）</td><td>容器外的持久化存储。容器删掉数据就没了，除非放在 volume 或 bind mount 里。</td></tr>
+</table>
+
+<h2>Kubernetes</h2>
+<table class="defs">
+  <tr><th>术语</th><th>定义</th></tr>
+  <tr><td><code>Pod</code></td><td>K8s 里最小的可调度单元：一个或多个共享网络与存储的 container。你不直接管 Pod，由控制器管。</td></tr>
+  <tr><td><code>Deployment</code></td><td>声明"我要 N 个这样的 Pod 一直跑着"的控制器，负责创建、伸缩、滚动更新和回滚。<a href="https://kubernetes.io/docs/concepts/workloads/controllers/deployment/">↗</a></td></tr>
+  <tr><td><code>Service</code></td><td>给一组会变动的 Pod 提供一个稳定的访问入口（固定名字 + 虚拟 IP）。</td></tr>
+  <tr><td><code>kubectl</code></td><td>与集群通信的命令行工具。<a href="https://kubernetes.io/docs/reference/kubectl/quick-reference/">↗ 速查表</a></td></tr>
+  <tr><td><code>manifest</code></td><td>描述期望状态的 YAML 文件。<code>kubectl apply -f</code> 提交给集群。</td></tr>
+  <tr><td>声明式（declarative）</td><td>K8s 的核心心智模型：你描述<strong>想要的最终状态</strong>，控制器不断把现实拉向它。而不是下达一步步的命令。</td></tr>
+</table>
+
+<div class="ask">
+  <strong>不确定某个词？</strong> 直接问我。术语理解偏差是后面所有困惑的源头，尽早问最划算。
+</div>
+
+<div class="footer">
+  <p>返回 <a href="../lessons/0001-build-your-first-image.html">第 1 课：构建你的第一个镜像</a></p>
+</div>
+</body>
+</html>
