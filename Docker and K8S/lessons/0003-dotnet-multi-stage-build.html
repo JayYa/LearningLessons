@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 3 课：.NET 多阶段构建</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/diagram.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="eyebrow">Lesson 03 · 主线 A：构建</p>
+  <h1>.NET 多阶段构建</h1>
+  <p class="subtitle">编译需要 SDK，运行只需要 runtime。把两个时刻拆到两个镜像里，体积从 1.24 GB 降到 329 MB。</p>
+</header>
+
+<p class="lede">
+  上一课你亲手证明了：<code>RUN</code> 在构建期执行完就被冻结，运行期只需要它留下的<em>产物</em>。
+  那问题来了 —— 编译 .NET 用的整套 SDK（1.24 GB），运行期<strong>一个字节都用不上</strong>，为什么要留在镜像里？
+  多阶段构建就是把它扔掉的办法，而且它顺手解决了另一件事：<strong>改一行代码，不用重新 restore 依赖</strong>。
+</p>
+
+<h2>一、原理：两个 FROM，一次 COPY --from</h2>
+
+<div class="timeline">
+  <div class="phase">
+    <h4>阶段 build</h4>
+    <p class="when">FROM sdk:9.0 · 构建期用完即弃</p>
+    <ul>
+      <li><code>COPY *.csproj</code> + <code>dotnet restore</code></li>
+      <li><code>COPY . .</code></li>
+      <li><code>dotnet publish -o /app</code></li>
+      <li>产物落在 <code>/app</code></li>
+    </ul>
+  </div>
+  <div class="arrow">→<br><small>COPY --from=build</small></div>
+  <div class="phase run">
+    <h4>最终镜像</h4>
+    <p class="when">FROM aspnet:9.0 · 只有它会被 push / run</p>
+    <ul>
+      <li><code>COPY --from=build /app .</code></li>
+      <li><code>ENTRYPOINT dotnet HelloApi.dll</code></li>
+      <li>没有 SDK、没有源码、没有 obj/</li>
+    </ul>
+  </div>
+</div>
+
+<p>
+  一个 Dockerfile 里可以有多个 <code>FROM</code>，每个开启一个<strong>阶段（stage）</strong>。
+  <code>FROM ... AS build</code> 给阶段起名；<code>COPY --from=build 源 目标</code> 从那个阶段的文件系统里拿文件。
+  最终产出的镜像<strong>只包含最后一个阶段</strong>的层 —— 前面阶段的一切都不会进去。
+</p>
+
+<div class="note">
+  <p><strong>.NET 镜像家族：</strong><code>sdk</code>（编译+运行，1.24 GB）⊃ <code>aspnet</code>（跑 Web，329 MB）⊃ <code>runtime</code>（跑控制台，更小）。
+  构建期用最大的，运行期用刚好够的。详见
+  <a href="https://learn.microsoft.com/en-us/dotnet/core/docker/introduction">Introduction to Docker for .NET</a>。</p>
+</div>
+
+<h2>二、动手：先做胖的，再做瘦的</h2>
+
+<p>先看到问题，再解决问题。整个实验约 3 分钟（两个基础镜像你已预拉）。</p>
+
+<ol class="steps">
+
+<li>
+<p><strong>在课程目录的 <code>demo</code> 下生成一个最小 Web API。</strong></p>
+<pre><code>mkdir demo\hello-api
+cd demo\hello-api
+
+dotnet new web -n HelloApi -o . --no-restore
+<span class="c"># 本机 SDK 是 .NET 10，把目标框架改成 9.0，对齐已拉的镜像</span>
+(Get-Content HelloApi.csproj) -replace 'net10.0','net9.0' | Set-Content -Encoding utf8 HelloApi.csproj
+
+<span class="c"># .NET 项目必备的忽略文件（回想上一课：COPY . 会把整个目录送过去）</span>
+"bin/`nobj/" | Set-Content -Encoding utf8 .dockerignore</code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  <code>Program.cs</code> 只有一句 <code>app.MapGet("/", () =&gt; "Hello World!")</code>。本机 dotnet 只负责生成模板，编译全在容器里做。
+</p>
+</li>
+
+<li>
+<p><strong>胖版本：单阶段，直接用 SDK 镜像跑。</strong></p>
+<pre><code>@'
+<span class="k">FROM</span> mcr.microsoft.com/dotnet/sdk:9.0
+<span class="k">WORKDIR</span> /src
+<span class="k">COPY</span> . .
+<span class="k">RUN</span> dotnet publish -c Release -o /app
+<span class="k">CMD</span> ["dotnet", "/app/HelloApi.dll"]
+'@ | Set-Content -Encoding utf8 Dockerfile.fat
+
+docker build -f Dockerfile.fat -t hello-api:fat .
+docker images hello-api</code></pre>
+<p>约 <strong>1.24 GB</strong>。能跑，但里面装着整套编译器、NuGet 缓存和你的源码。</p>
+</li>
+
+<li>
+<p><strong>瘦版本：多阶段。</strong>注意 <code>ARG</code> 在这里的用法 —— 它只在 build 阶段有意义。</p>
+<pre><code>@'
+<span class="c"># ---- 阶段 1：构建 ----</span>
+<span class="k">FROM</span> mcr.microsoft.com/dotnet/sdk:9.0 <span class="k">AS</span> build
+<span class="k">ARG</span> BUILD_CONFIGURATION=Release
+<span class="k">WORKDIR</span> /src
+<span class="k">COPY</span> HelloApi.csproj .
+<span class="k">RUN</span> dotnet restore
+<span class="k">COPY</span> . .
+<span class="k">RUN</span> dotnet publish -c $BUILD_CONFIGURATION -o /app --no-restore
+
+<span class="c"># ---- 阶段 2：运行 ----</span>
+<span class="k">FROM</span> mcr.microsoft.com/dotnet/aspnet:9.0
+<span class="k">WORKDIR</span> /app
+<span class="k">COPY</span> --from=build /app .
+<span class="k">EXPOSE</span> 8080
+<span class="k">ENTRYPOINT</span> ["dotnet", "HelloApi.dll"]
+'@ | Set-Content -Encoding utf8 Dockerfile
+
+docker build -t hello-api:1.0 .
+docker images hello-api</code></pre>
+<div class="win">
+  <p><strong>329 MB</strong>，和 <code>aspnet:9.0</code> 基础镜像几乎一样大 —— 你的应用本身只有 1 MB 左右。
+  1.24 GB 的 SDK 阶段干完活就被丢掉了。</p>
+</div>
+</li>
+
+<li>
+<p><strong>跑起来。</strong>.NET 8+ 容器内默认监听 <strong>8080</strong>，不是 80。</p>
+<pre><code>docker run -d --rm --name hello -p 8080:8080 hello-api:1.0
+curl http://localhost:8080
+<span class="c"># → Hello World!</span></code></pre>
+</li>
+
+<li>
+<p><strong>证明缓存分层有用。</strong>改一行代码，重新 build，盯住每一步是 <code>CACHED</code> 还是真的跑。</p>
+<pre><code>(Get-Content Program.cs) -replace 'Hello World!','Hello from a container!' | Set-Content -Encoding utf8 Program.cs
+
+docker build -t hello-api:1.1 .</code></pre>
+<p>你会看到：</p>
+<pre><code>[build 3/6] COPY HelloApi.csproj .     <span class="c">CACHED</span>
+[build 4/6] RUN dotnet restore          <span class="c">CACHED   ← 依赖没变，跳过</span>
+[build 5/6] COPY . .                    <span class="c">DONE     ← 从这里开始失效</span>
+[build 6/6] RUN dotnet publish ...      <span class="c">DONE 3.9s</span></code></pre>
+<p>
+  这就是为什么要<strong>先 COPY csproj 单独 restore，再 COPY 全部源码</strong>：
+  层缓存的规则是「某一层的输入变了，它<em>和它之后的所有层</em>全部重建」。
+  csproj 很少变，源码天天变 —— 把少变的放前面，多变的放后面，restore 那几十秒就省下来了。
+</p>
+<pre><code>docker rm -f hello
+docker run -d --rm --name hello -p 8080:8080 hello-api:1.1
+curl http://localhost:8080
+<span class="c"># → Hello from a container!</span>
+docker rm -f hello</code></pre>
+</li>
+
+<li>
+<p><strong>上一课的 ARG，这次真的用上。</strong>用 <code>--build-arg</code> 切成 Debug 编译：</p>
+<pre><code>docker build --build-arg BUILD_CONFIGURATION=Debug -t hello-api:debug .
+
+<span class="c"># 验证：容器里有没有 BUILD_CONFIGURATION 这个变量？</span>
+docker run --rm --entrypoint sh hello-api:debug -c 'echo "[$BUILD_CONFIGURATION]"'</code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  输出 <code>[]</code>。<code>ARG</code> 影响了 publish 的参数（构建期），但容器里查无此人（运行期）——
+  和上一课 <code>frozen.txt</code> 的实验是同一件事。<code>--entrypoint sh</code> 用来临时替换掉 <code>ENTRYPOINT</code>，
+  是钻进任何镜像里看一眼的常用手法。
+</p>
+</li>
+
+</ol>
+
+<h2>三、检索练习</h2>
+
+<p style="font-size:.93rem;color:var(--ink-soft)">第 3、4 题是上一课 ARG 错题的重考。先凭记忆答。</p>
+
+<div class="quiz" data-answer="C">
+  <p class="q">1. 多阶段 Dockerfile 有 <code>FROM sdk AS build</code> 和 <code>FROM aspnet</code> 两个阶段。最终 <code>docker build -t x .</code> 产出的镜像包含什么？</p>
+  <button data-opt="A">两个阶段的全部层叠加在一起的内容</button>
+  <button data-opt="B">两个阶段各自产出一个独立的镜像</button>
+  <button data-opt="C">只有最后一个阶段的层及其复制内容</button>
+  <button data-opt="D">只有第一个阶段的层及其编译产物</button>
+  <p class="why">最终镜像 = 最后一个阶段。前面的阶段只是"临时车间"，除了被 <code>COPY --from</code> 显式拿走的文件，其余全部丢弃。</p>
+</div>
+
+<div class="quiz" data-answer="B">
+  <p class="q">2. 下面两种写法，改一行 <code>.cs</code> 后重新 build，哪种能跳过 <code>dotnet restore</code>？<br>
+  甲：<code>COPY . .</code> → <code>RUN dotnet restore</code> → <code>RUN dotnet publish</code><br>
+  乙：<code>COPY *.csproj .</code> → <code>RUN dotnet restore</code> → <code>COPY . .</code> → <code>RUN dotnet publish</code></p>
+  <button data-opt="A">甲能跳过，乙不能跳过</button>
+  <button data-opt="B">乙能跳过，甲不能跳过</button>
+  <button data-opt="C">两种写法都能够跳过</button>
+  <button data-opt="D">两种写法都不能跳过</button>
+  <p class="why">甲的 <code>COPY . .</code> 输入变了（.cs 改了），它之后的 restore 也一并失效。乙的 restore 只依赖 csproj 那一层，csproj 没变就命中缓存。</p>
+</div>
+
+<div class="quiz" data-answer="D">
+  <p class="q">3. build 阶段写了 <code>ARG BUILD_CONFIGURATION=Release</code>。跑起最终容器后执行 <code>echo $BUILD_CONFIGURATION</code>，输出？</p>
+  <button data-opt="A">输出 Release，因为默认值会一直保留</button>
+  <button data-opt="B">输出 Debug，因为运行期会自动切换</button>
+  <button data-opt="C">报错，因为最终阶段无法访问此变量</button>
+  <button data-opt="D">空行，因为构建变量不进入容器环境</button>
+  <p class="why"><code>ARG</code> 只活在构建期，而且<strong>只活在声明它的那个阶段</strong>（跨阶段还要重新声明）。要让容器里有，用 <code>ENV</code>。</p>
+</div>
+
+<div class="typein" data-answer="docker build -t api:2.0 --build-arg BUILD_CONFIGURATION=Debug .|docker build --build-arg BUILD_CONFIGURATION=Debug -t api:2.0 .|docker build --tag api:2.0 --build-arg BUILD_CONFIGURATION=Debug .|docker build --build-arg BUILD_CONFIGURATION=Debug --tag api:2.0 ." data-hint="三样东西：-t 标签、--build-arg 名=值、末尾 context。">
+  <p class="q">4. 写出完整命令：在当前目录构建 <code>api:2.0</code>，构建参数 <code>BUILD_CONFIGURATION</code> 设为 <code>Debug</code>。</p>
+</div>
+
+<div class="quiz" data-answer="A">
+  <p class="q">5. 你的 .NET 9 应用容器跑起来了，<code>docker run -p 80:80 myapi</code>，但浏览器访问 <code>localhost</code> 拒绝连接。最可能的原因？</p>
+  <button data-opt="A">应用在容器内监听的是八零八零端口</button>
+  <button data-opt="B">镜像里少写了一行暴露端口的指令</button>
+  <button data-opt="C">应用需要以管理员身份才能绑定端口</button>
+  <button data-opt="D">运行时镜像默认不允许任何入站连接</button>
+  <p class="why">.NET 8 起容器内默认监听 <strong>8080</strong>。<code>-p 80:80</code> 把宿主机 80 映射到容器 80，但容器 80 上没人。应写 <code>-p 80:8080</code>，或用 <code>-e ASPNETCORE_HTTP_PORTS=80</code> 改监听端口（下一课的主题）。</p>
+</div>
+
+<div class="recall">
+  <p class="q">6. 不看上面，默写多阶段 .NET Dockerfile 的骨架：两个 FROM 各用什么镜像、中间哪一行把产物搬过去、csproj 为什么要单独 COPY。</p>
+  <div class="a">
+    <pre><code>FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+COPY *.csproj .
+RUN dotnet restore
+COPY . .
+RUN dotnet publish -c Release -o /app --no-restore
+
+FROM mcr.microsoft.com/dotnet/aspnet:9.0
+WORKDIR /app
+COPY --from=build /app .
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "HelloApi.dll"]</code></pre>
+    <p>csproj 单独 COPY：让 restore 层只依赖依赖清单，源码改动不会让它失效。完整注释版见<a href="../reference/dotnet-multistage-dockerfile.html">.NET 多阶段 Dockerfile 模板</a>。</p>
+  </div>
+</div>
+
+<h2 id="next">四、下一步</h2>
+
+<p><strong>本课的一手资料</strong>：</p>
+<blockquote>
+  <a href="https://docs.docker.com/build/building/multi-stage/">Docker Docs — Multi-stage builds</a><br>
+  官方对多阶段的完整说明：命名阶段、<code>--target</code> 只构建到某个阶段、从外部镜像 <code>COPY --from</code>。约 6 分钟。
+  <br>.NET 官方示例：<a href="https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/docker/building-net-docker-images">Run an ASP.NET Core app in Docker containers</a>。
+</blockquote>
+
+<p>新增速查：<a href="../reference/dotnet-multistage-dockerfile.html">.NET 多阶段 Dockerfile 模板（逐行注释）</a> —— 以后新项目直接抄。</p>
+
+<p>清理（保留 <code>demo\hello-api</code> 目录和 <code>hello-api:1.1</code>，下一课还要用）：</p>
+<pre><code>docker rm -f hello
+docker rmi hello-api:fat hello-api:debug
+cd ..\..</code></pre>
+
+<p><strong>第 4 课预告：</strong>切到主线 B —— <strong>不改镜像，只改配置</strong>。
+用 <code>-e</code> 改 <code>hello-api</code> 的监听端口和环境、用 <code>-v</code> 把宿主机的 <code>appsettings.json</code> 挂进去覆盖配置，
+然后把同一套手法用到第三方镜像 <code>postgres</code> 上。请预拉：</p>
+<pre><code>docker pull postgres:17-alpine</code></pre>
+
+<div class="ask">
+  <strong>随时问我。</strong>上一课你靠贴原始输出抓出了课文的两处错误 —— 保持这个习惯。
+  这一课的所有命令我已在同款环境（Windows 11 + Docker Desktop + .NET 10 SDK）跑通过一遍，体积数字是实测值。
+</div>
+
+<div class="footer">
+  <p>课程：Docker &amp; Kubernetes · 第 3 课 ｜
+  上一课：<a href="0002-build-time-vs-run-time.html">构建期与运行期</a> ｜
+  <a href="../reference/GLOSSARY.html">术语表</a> ·
+  <a href="../reference/dockerfile-instruction-timing.html">指令时机速查</a> ·
+  <a href="../reference/dotnet-multistage-dockerfile.html">多阶段模板</a></p>
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

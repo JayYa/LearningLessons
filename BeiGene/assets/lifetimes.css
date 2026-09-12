@@ -1,0 +1,101 @@
+/* Styles for the lifetimes.js component. Load after lesson.css. */
+
+.lifetimes {
+  border: 1px solid var(--rule);
+  background: #fff;
+  padding: 1.1rem 1.3rem 1rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.lt-head { border-bottom: 1px solid var(--rule); padding-bottom: 0.5rem; margin-bottom: 0.7rem; }
+.lt-head .label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.lt-reg { font-size: 0.86rem; margin: 0 0 0.6rem; }
+.lt-reg td, .lt-reg th { padding: 0.3rem 0.6rem; }
+.lt-deps { color: var(--ink-soft); }
+.lt-sel, .lt-fixed {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.12rem 0.4rem;
+  background: #fff;
+  color: var(--ink);
+}
+.lt-fixed { color: var(--ink-soft); border-style: dashed; }
+
+.lt-opts { font-size: 0.82rem; color: var(--ink-soft); margin-bottom: 0.6rem; }
+.lt-validate input { margin-right: 0.3rem; }
+
+.lt-controls { display: flex; gap: 0.6rem; margin: 0.4rem 0 0.9rem; }
+.lt-controls button {
+  font-family: var(--serif);
+  font-size: 0.88rem;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: #fff;
+  border-radius: 3px;
+  padding: 0.35rem 0.95rem;
+  cursor: pointer;
+}
+.lt-controls .lt-reset { background: none; color: var(--ink); }
+
+.lt-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.8rem; }
+.lt-col { border: 1px solid var(--rule); padding: 0.6rem 0.75rem; background: var(--paper); }
+.lt-col-head { font-weight: 600; font-size: 0.9rem; border-bottom: 1px solid var(--rule); padding-bottom: 0.3rem; margin-bottom: 0.4rem; }
+.lt-col-head span { font-weight: 400; color: var(--ink-soft); font-size: 0.78rem; margin-left: 0.4rem; }
+.lt-col-foot { font-size: 0.76rem; color: var(--ink-soft); border-top: 1px dashed var(--rule); margin-top: 0.5rem; padding-top: 0.35rem; }
+
+.lt-tree { list-style: none; margin: 0; padding: 0; }
+.lt-node { font-size: 0.84rem; line-height: 1.7; }
+.lt-node.captive { background: var(--bad-soft); }
+.lt-lt {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  padding: 0.05rem 0.3rem;
+  color: #fff;
+}
+.lt-lt.singleton { background: #5a3d8a; }
+.lt-lt.scoped    { background: #1c5f6b; }
+.lt-lt.transient { background: #8a6d1c; }
+.lt-inst { font-family: var(--mono); font-size: 0.82rem; color: var(--accent); }
+.lt-tag {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0 0.3rem;
+  margin-left: 0.2rem;
+}
+.lt-tag.same { border-color: #5a3d8a; color: #5a3d8a; }
+.lt-tag.bad  { border-color: var(--bad);  color: var(--bad); background: #fff; }
+.lt-tag.warn { border-color: #b8860b;     color: #8a6d1c; }
+
+.lt-exc {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  background: var(--bad-soft);
+  border-left: 3px solid var(--bad);
+  padding: 0.5rem 0.7rem;
+  line-height: 1.5;
+}
+
+.lt-verdict { display: none; margin-top: 0.9rem; padding: 0.7rem 0.9rem; font-size: 0.9rem; border-left: 3px solid var(--rule); }
+.lt-verdict.show { display: block; }
+.lt-verdict strong { display: inline; }
+.lt-verdict.good { border-left-color: var(--good); background: var(--good-soft); }
+.lt-verdict.bad  { border-left-color: var(--bad);  background: var(--bad-soft); }
+.lt-verdict.wait { border-left-color: #b8860b;     background: #fbf6e6; }
+
+@media print {
+  .lt-controls, .lt-opts { display: none; }
+}

@@ -1,6 +1,6 @@
 # 📘 Learning Lessons
 
-本仓库收录六门独立课程，其中三门围绕 .NET 技术栈展开：`Morden .NET` 沿 C# 8 到 15 的每一次语法升级梳理语言演进，`DotNET Platform` 下沉到 SDK 项目系统、CoreCLR 运行时、GC、依赖注入与配置体系，两者互为语言层与平台层的对照；`BeiGene` 是一份面试向的综合专题，从联合索引与索引失效讲到排序与 Top-K 算法，再到微服务拆分、Saga、并发抢单与 async/await 状态机。`Python-React-Typescript` 从 C# 背景出发，以前后端两个进程如何联通为切入点，配合语言对照表跨入 Python 与 TypeScript 生态；`Docker and K8S` 从构建第一个镜像入手，把「构建期」与「运行期」这条最容易混淆的界线讲透。`Build an Agent` 独立成篇，讲 AI Agent 的工具调用、记忆管理、任务编排与多智能体协作。各课程按需选读，共享同一方法论——从表层 API 下沉到底层机制。
+本仓库收录五门独立课程，其中三门围绕 .NET 技术栈展开：`Morden .NET` 沿 C# 8 到 15 的每一次语法升级梳理语言演进，`DotNET Platform` 下沉到 SDK 项目系统、CoreCLR 运行时、GC、依赖注入与配置体系，两者互为语言层与平台层的对照；`BeiGene` 是一份面试向的综合专题，从联合索引与索引失效讲到排序与 Top-K 算法，再到微服务拆分、Saga、并发抢单、async/await 状态机与中间件管道。`Docker and K8S` 从构建第一个镜像入手，把「构建期」与「运行期」这条最容易混淆的界线讲透，并落到 .NET 多阶段构建的实战模板。`Build an Agent` 独立成篇，讲 AI Agent 的工具调用、记忆管理、任务编排与多智能体协作。各课程按需选读，共享同一方法论——从表层 API 下沉到底层机制。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
@@ -10,27 +10,13 @@
 |---|------|------|
 | 1 | [第 1 课：构建你的第一个镜像](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0001-build-your-first-image.html) | 从一个 Dockerfile 出发，走完镜像构建到容器运行的完整链路 |
 | 2 | [第 2 课：构建期与运行期](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0002-build-time-vs-run-time.html) | 分清哪些指令在 build 时执行、哪些留到容器启动才生效 |
+| 3 | [第 3 课：.NET 多阶段构建](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0003-dotnet-multi-stage-build.html) | 用 SDK 镜像编译、用 runtime 镜像运行，把 .NET 应用的构建与部署拆成多阶段以压缩最终镜像 |
 
 **参考资料：**
 - [术语表 · Docker & Kubernetes](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/GLOSSARY.html) — 容器与编排领域的核心名词速查
 - [速查：Dockerfile 指令 —— 构建期还是运行期？](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/dockerfile-instruction-timing.html) — 逐条列出各 Dockerfile 指令的生效时机
+- [速查：.NET 多阶段 Dockerfile 模板](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/dotnet-multistage-dockerfile.html) — 可直接套用的 .NET 多阶段 Dockerfile 模板与逐行说明
 
-## Python-React-Typescript
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [第 1 课 · 两个进程，一根线](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0001-two-processes-one-wire.html) | 建立前后端两个进程通过 HTTP 联通的心智模型，从零跑通调用链并解决 CORS 这堵墙 |
-| 2 | [第 2 课 · TypeScript 不是 C#](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0002-typescript-is-not-csharp.html) | 从 C# 类型系统的心智出发，辨析 TypeScript 结构化类型与鸭子类型带来的本质差异 |
-| 3 | [第 3 课 · 在边界上立一道检查](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0003-guard-the-boundary.html) | 讲解如何在前后端边界上做数据校验，用运行时检查守住类型系统覆盖不到的地方 |
-| 4 | [第 4 课 · React 的状态到底是什么](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0004-what-is-react-state.html) | 讲清 React 状态的本质：它不是变量而是一次重新渲染的触发器，以及何时该把数据放进状态 |
-| 5 | [第 5 课 · useEffect 与那个空数组](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0005-useeffect-and-that-empty-array.html) | 讲透 useEffect 的执行时机与依赖数组，说清那个空数组到底意味着什么、又会埋下哪些坑 |
-| 6 | [第 6 课 · 不可变更新与 key](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0006-immutability-and-key.html) | 讲清为什么 React 里要不可变地更新状态，以及列表 key 该怎么选才不会渲染错位 |
-| 7 | [第 7 课 · 表单、POST 与两侧的校验](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0007-forms-post-and-two-gates.html) | 从受控表单到 POST 提交走通一次写入链路，说明前端与后端两道校验各自该拦什么 |
-| 8 | [第 8 课 · state 该住在哪里](https://JayYa.github.io/LearningLessons/Python-React-Typescript/lessons/0008-where-does-state-live.html) | 讨论状态该安放在组件树的哪一层：何时提升、何时下沉，以及哪些数据根本不该进 state |
-
-**参考资料：**
-- [参考 · C# ↔ Python / TypeScript 对照表](https://JayYa.github.io/LearningLessons/Python-React-Typescript/reference/csharp-rosetta.html) — 以 C# 为锚点对照 Python 与 TypeScript 的语法与惯用法
-- [参考 · 术语表](https://JayYa.github.io/LearningLessons/Python-React-Typescript/reference/glossary.html) — 前后端协作与 React 生态常用术语速查
 
 ## BeiGene
 
@@ -45,12 +31,14 @@
 | 7 | [Lesson 07 · 抢单——把「查一下再改」压成一句话](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0007-claiming-a-ticket.html) | 用抢单场景讲并发下的先查后改竞态，把两步操作压成一条带条件的原子更新 |
 | 8 | [Lesson 08 · lock 到底锁住了什么](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0008-dotnet-locks.html) | 讲清 C# 中 lock 究竟锁住了什么对象、保护的是哪段临界区，以及它管不到的进程外并发 |
 | 9 | [Lesson 09 · await 那一行到底发生了什么](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0009-async-await-state-machine.html) | 拆开编译器为 async 方法生成的状态机，说清 await 那一行的挂起、续延与线程归属 |
+| 10 | [Lesson 10 · 一个请求穿过管道时到底发生了什么](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0010-middleware-pipeline-and-di-lifetimes.html) | 跟随一次 HTTP 请求穿过 ASP.NET Core 中间件管道，串起 DI 的 Transient、Scoped、Singleton 三种生命周期 |
 
 **参考资料：**
 - [速查表 · 排序、选择、Top-K 与外部排序（C#）](https://JayYa.github.io/LearningLessons/BeiGene/reference/algo-cheatsheet.html) — 排序、选择、Top-K 与外部排序算法速查
 - [速查表 · async / await 状态机](https://JayYa.github.io/LearningLessons/BeiGene/reference/async-cheatsheet.html) — async/await 状态机结构、续延调度与常见陷阱速查
 - [速查表 · 并发抢单与审批流](https://JayYa.github.io/LearningLessons/BeiGene/reference/claim-patterns-cheatsheet.html) — 并发抢单的原子更新写法与审批流状态流转速查
 - [Reference · 索引与 SQL 优化速查表](https://JayYa.github.io/LearningLessons/BeiGene/reference/db-index-cheatsheet.html) — 数据库索引设计与 SQL 优化常用手法速查
+- [速查表 · 中间件管道与 DI 生命周期](https://JayYa.github.io/LearningLessons/BeiGene/reference/di-middleware-cheatsheet.html) — 中间件注册顺序、短路规则与 DI 三种生命周期的行为对照速查
 - [速查表 · .NET 锁的种类](https://JayYa.github.io/LearningLessons/BeiGene/reference/dotnet-locks-cheatsheet.html) — lock、Monitor、SemaphoreSlim 等 .NET 各类锁的适用场景与取舍速查
 - [速查表 · 微服务](https://JayYa.github.io/LearningLessons/BeiGene/reference/microservices-cheatsheet.html) — 微服务架构下延迟、失败、序列化与一致性四类新增开销速查
 

@@ -1,0 +1,119 @@
+/* Styles for the pipeline.js component. Load after lesson.css. */
+
+.pipeline {
+  border: 1px solid var(--rule);
+  background: #fff;
+  padding: 1.1rem 1.3rem 1rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.pl-head { border-bottom: 1px solid var(--rule); padding-bottom: 0.5rem; margin-bottom: 0.7rem; }
+.pl-head .label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.pl-fold {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  background: var(--code-bg);
+  border-left: 3px solid var(--rule);
+  padding: 0.55rem 0.85rem;
+  margin: 0 0 0.9rem;
+  white-space: pre-wrap;
+}
+.pl-fold .cm { color: #6b7d6b; }
+
+/* Russian doll */
+.pl-doll { font-size: 0.86rem; }
+.pl-box {
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  background: rgba(138, 28, 28, calc(0.025 * (var(--depth) + 1)));
+  padding: 0.45rem 0.6rem 0.45rem 0.7rem;
+  margin: 0.25rem 0;
+}
+.pl-box.terminal { border-left-color: var(--good); }
+.pl-box-head { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; }
+.pl-idx {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: #fff;
+  background: var(--ink-soft);
+  border-radius: 50%;
+  width: 1.3rem; height: 1.3rem;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pl-name { font-family: var(--mono); font-size: 0.8rem; font-weight: 600; }
+.pl-mode, .pl-mode-fixed {
+  margin-left: auto;
+  font-family: var(--serif);
+  font-size: 0.78rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.12rem 0.4rem;
+  background: #fff;
+  color: var(--ink);
+}
+.pl-mode-fixed { color: var(--ink-soft); border-style: dashed; }
+.pl-before, .pl-after {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+  padding: 0.15rem 0 0.15rem 1.9rem;
+}
+.pl-inner { margin-left: 1.2rem; }
+.pl-404 {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  border: 1px dashed var(--rule);
+  padding: 0.3rem 0.6rem;
+  margin: 0.25rem 0;
+}
+
+.pl-controls { display: flex; gap: 0.6rem; margin: 0.9rem 0 0.6rem; }
+.pl-controls button {
+  font-family: var(--serif);
+  font-size: 0.88rem;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: #fff;
+  border-radius: 3px;
+  padding: 0.35rem 0.95rem;
+  cursor: pointer;
+}
+.pl-controls .pl-reset { background: none; color: var(--ink); }
+
+/* Trace */
+.pl-trace { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.pl-trace:empty { border-top: none; }
+.pl-line {
+  font-size: 0.84rem;
+  line-height: 1.45;
+  padding: 0.22rem 0.6rem;
+  border-bottom: 1px solid #efece6;
+  font-family: var(--serif);
+}
+.pl-line b { font-family: var(--mono); font-size: 0.78rem; }
+.pl-line code { font-size: 0.76rem; }
+.pl-line.good { background: var(--good-soft); }
+.pl-line.bad  { background: var(--bad-soft); }
+.pl-line.wait { background: #fbf6e6; }
+.pl-line s { opacity: 0.55; }
+
+.pl-verdict { display: none; margin-top: 0.9rem; padding: 0.7rem 0.9rem; font-size: 0.9rem; border-left: 3px solid var(--rule); }
+.pl-verdict.show { display: block; }
+.pl-verdict strong { display: block; margin-bottom: 0.25rem; }
+.pl-verdict.good { border-left-color: var(--good); background: var(--good-soft); }
+.pl-verdict.bad  { border-left-color: var(--bad);  background: var(--bad-soft); }
+.pl-verdict.wait { border-left-color: #b8860b;     background: #fbf6e6; }
+.pl-status { margin-top: 0.45rem; font-family: var(--mono); font-size: 0.78rem; }
+
+@media print {
+  .pl-controls, .pl-mode { display: none; }
+}

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查：.NET 多阶段 Dockerfile 模板</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<header class="masthead">
+  <p class="eyebrow">Reference · .NET Multi-stage Dockerfile</p>
+  <h1>.NET 多阶段 Dockerfile 模板</h1>
+  <p class="subtitle">新项目直接抄这份，改三处：项目名、.NET 版本、端口。每一行的理由写在右侧。</p>
+</header>
+
+<h2>模板（单项目 Web API）</h2>
+<pre><code><span class="c"># ---------- 阶段 1：构建（用完即弃） ----------</span>
+<span class="k">FROM</span> mcr.microsoft.com/dotnet/sdk:9.0 <span class="k">AS</span> build
+<span class="k">ARG</span> BUILD_CONFIGURATION=Release
+<span class="k">WORKDIR</span> /src
+
+<span class="c"># 先只复制依赖清单，单独 restore —— 让这层缓存尽量长命</span>
+<span class="k">COPY</span> MyApi.csproj .
+<span class="k">RUN</span> dotnet restore
+
+<span class="c"># 再复制全部源码并发布（--no-restore：上面已经 restore 过）</span>
+<span class="k">COPY</span> . .
+<span class="k">RUN</span> dotnet publish -c $BUILD_CONFIGURATION -o /app --no-restore
+
+<span class="c"># ---------- 阶段 2：运行（最终镜像 = 只有这一段） ----------</span>
+<span class="k">FROM</span> mcr.microsoft.com/dotnet/aspnet:9.0
+<span class="k">WORKDIR</span> /app
+<span class="k">COPY</span> --from=build /app .
+<span class="k">EXPOSE</span> 8080
+<span class="k">ENTRYPOINT</span> ["dotnet", "MyApi.dll"]</code></pre>
+
+<p>配套 <code>.dockerignore</code>（放在 Dockerfile 同目录）：</p>
+<pre><code>bin/
+obj/
+.git/
+.vs/
+**/*.user</code></pre>
+
+<h2>逐行理由</h2>
+<table class="defs">
+  <tr><th>行</th><th>为什么这么写</th></tr>
+  <tr><td><code>FROM sdk AS build</code></td><td>编译需要 SDK（1.24 GB）。<code>AS build</code> 给阶段命名，供后面 <code>--from=build</code> 引用。</td></tr>
+  <tr><td><code>ARG BUILD_CONFIGURATION</code></td><td>构建期变量，<code>--build-arg BUILD_CONFIGURATION=Debug</code> 可覆盖。<strong>只在本阶段可见</strong>，不进容器。</td></tr>
+  <tr><td><code>COPY *.csproj</code> → <code>restore</code></td><td>层缓存规则：某层输入变了，它及其后所有层重建。csproj 少变、源码多变，所以把 restore 绑在 csproj 上，改代码时可跳过。</td></tr>
+  <tr><td><code>COPY . .</code></td><td>此时才把全部源码送进来。<code>.dockerignore</code> 在这一步起作用，排除 bin/obj 避免污染和无谓传输。</td></tr>
+  <tr><td><code>publish -o /app --no-restore</code></td><td>产物集中到 <code>/app</code>，方便下一阶段一次性拿走。</td></tr>
+  <tr><td><code>FROM aspnet</code></td><td>运行只需 ASP.NET runtime（329 MB）。控制台程序用 <code>runtime</code>；极致体积用 <code>runtime-deps</code> + self-contained。</td></tr>
+  <tr><td><code>COPY --from=build /app .</code></td><td>跨阶段复制。<strong>只有这一行</strong>把 build 阶段的东西带进最终镜像，其余全部丢弃。</td></tr>
+  <tr><td><code>EXPOSE 8080</code></td><td>纯元数据。.NET 8+ 默认监听 8080，写在这里是给人看的。真正映射靠 <code>docker run -p</code>。</td></tr>
+  <tr><td><code>ENTRYPOINT ["dotnet", "MyApi.dll"]</code></td><td>exec 形式；用 ENTRYPOINT 而非 CMD，表示"这个镜像就是这个程序"。<code>docker run 镜像 --urls ...</code> 会作为参数追加。</td></tr>
+</table>
+
+<h2>常见变体</h2>
+<table class="defs">
+  <tr><th>场景</th><th>改法</th></tr>
+  <tr><td>多项目解决方案</td><td>build 阶段 context 设为解决方案根目录；先 <code>COPY *.sln .</code> 与各 <code>COPY src/X/X.csproj src/X/</code>，再 restore；publish 指定入口项目路径。</td></tr>
+  <tr><td>只构建到某阶段（调试）</td><td><code>docker build --target build -t myapi:build .</code></td></tr>
+  <tr><td>非 root 运行</td><td>最终阶段加 <code>USER $APP_UID</code>（.NET 8+ 官方镜像内置该用户）。</td></tr>
+  <tr><td>改监听端口</td><td>不改 Dockerfile，运行期 <code>-e ASPNETCORE_HTTP_PORTS=80</code>。</td></tr>
+  <tr><td>不写 Dockerfile</td><td><code>dotnet publish /t:PublishContainer</code>，见 <a href="https://learn.microsoft.com/en-us/dotnet/core/containers/publish-configuration">publish configuration</a>。</td></tr>
+</table>
+
+<div class="note">
+  <p><strong>实测数字（2026-09，Docker Desktop）：</strong>单阶段 sdk 镜像 1.24 GB；多阶段 aspnet 镜像 329 MB；改一行 .cs 重建，restore 命中 CACHED，publish 约 4 s。</p>
+</div>
+
+<p style="font-size:.9rem;color:var(--ink-soft)">
+  出处：<a href="https://docs.docker.com/build/building/multi-stage/">Docker Docs — Multi-stage builds</a> ·
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/docker/building-net-docker-images">Microsoft Learn — ASP.NET Core in Docker</a> ·
+  <a href="https://docs.docker.com/build/building/best-practices/">Building best practices</a>
+  ｜ 相关课：<a href="../lessons/0003-dotnet-multi-stage-build.html">第 3 课</a> ·
+  <a href="dockerfile-instruction-timing.html">指令时机速查</a> · <a href="GLOSSARY.html">术语表</a>
+</p>
+</body>
+</html>

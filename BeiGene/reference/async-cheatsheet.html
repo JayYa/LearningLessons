@@ -107,6 +107,22 @@ else
   </tbody>
 </table>
 
+<h2>5b · 追问：「那执行 <code>GetStringAsync</code> 的线程是谁」（面试常见反问）</h2>
+
+<table>
+  <thead><tr><th>阶段</th><th>谁在跑</th><th>干什么</th></tr></thead>
+  <tbody>
+    <tr><td>① 同步前缀</td><td><strong>调用线程 T1</strong></td><td>建请求、找连接、序列化、把字节交给内核 —— 一路同步调到<strong>第一个真正挂起的 await</strong></td></tr>
+    <tr><td>② 等待</td><td><strong>没有线程</strong></td><td>内核 + 网卡收发；HttpClient 内部每层 async 都登记续接后 return，T1 一路 return 回线程池</td></tr>
+    <tr><td>③ 响应到达</td><td>IO 完成线程 → 任意线程池线程 Tx</td><td>IOCP / epoll 通知 → 完成最里层 Task → 解析头、读 body、解码</td></tr>
+    <tr><td>④ 你的续接</td><td>通常就是 Tx</td><td><code>GetStringAsync</code> 的 Task 一完成，你登记的 <code>MoveNext</code> 顺手在同一线程上被调起</td></tr>
+  </tbody>
+</table>
+
+<p><strong>要点：</strong>不存在一个从头到尾负责这次 HTTP 的线程；续接落在哪个线程是 IO 完成那一刻才决定的，<strong>默认是线程池里任意空闲线程</strong>（恰好是 T1 纯属巧合），只有 UI 那种带同步上下文的环境才保证回原线程。整个 async 体系终止于操作系统的异步 IO 原语（Overlapped/IOCP、epoll）——那是唯一一个「不需要线程就能等」的东西；底层若是同步 <code>socket.Receive</code>，上面写多少 async 都是假异步。</p>
+
+<p><strong>推论（面试里说出来很值钱）：</strong>把 <code>await</code> 前后当成两个不同线程来对待 —— 不跨 await 持 <code>lock</code>；线程本地状态用 <code>AsyncLocal&lt;T&gt;</code> 不用 <code>ThreadLocal&lt;T&gt;</code>。</p>
+
 <h2>6 · 三段话术骨架</h2>
 
 <table>
@@ -126,8 +142,8 @@ else
   <a href="https://github.com/davidfowl/AspNetCoreDiagnosticScenarios/blob/master/AsyncGuidance.md">David Fowler — Async Guidance</a>（硬规则）。</p>
   <div class="nav-links">
     <a href="../lessons/0009-async-await-state-machine.html">← Lesson 09</a>
+    <a href="di-middleware-cheatsheet.html">→ 速查表：中间件与 DI</a>
     <a href="dotnet-locks-cheatsheet.html">→ 速查表：.NET 锁</a>
-    <a href="claim-patterns-cheatsheet.html">→ 速查表：并发抢单</a>
     <a href="../MISSION.md">→ Mission</a>
   </div>
 </footer>

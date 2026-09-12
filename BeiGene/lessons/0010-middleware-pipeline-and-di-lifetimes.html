@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 10 · 一个请求穿过管道时到底发生了什么</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/pipeline.css">
+<link rel="stylesheet" href="../assets/lifetimes.css">
+<link rel="stylesheet" href="../assets/binsort.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 10 · .NET 核心 · BeiGene 面试备战 · 交互课</p>
+  <h1>一个请求穿过管道时到底发生了什么<br><span style="font-size:0.62em;color:var(--ink-soft);">中间件是套娃，DI 是三个作用域</span></h1>
+  <p class="standfirst">题库里「如何自定义中间件」「中间件的底层逻辑」「依赖注入的理解和使用」三问，加上第九节权限题里那句「涉及到 AOP、自定义中间件、缓存」，全部落在同一张图上：<strong>请求从外往里穿过一串互相嵌套的函数，每层可以决定放行还是拦下；穿到最里面时，DI 容器为这个请求开一个作用域，把对象按三种寿命发下去。</strong>这一课把这张图拆成两个可以点的模型。<strong>这次的动手在浏览器里，不用建项目。</strong></p>
+</header>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>约 35 分钟。两个模拟器都嵌在正文里，<strong>后面的段落会直接引用你点出来的结果</strong>，所以请按顺序、每次点之前先猜。<a href="#s6">第六节</a>的 <code>dotnet</code> 版本是可选的，只给想在真实进程里看一眼哈希码的人。</p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">先破一个错觉</a> <span class="depth">— 管道不是列表，是套娃</span></li>
+    <li><a href="#s2">亲手让请求穿一次</a> <span class="depth">— 短路、抛异常、写完再改状态码</span></li>
+    <li><a href="#s3">自定义中间件</a> <span class="depth">— 三个约定，一个陷阱</span></li>
+    <li><a href="#s4">DI 三种生命周期</a> <span class="depth">— 看编号，不背定义</span></li>
+    <li><a href="#s5">顺序为什么重要</a> <span class="depth">— 三条判据</span></li>
+    <li><a href="#s6">可选：真进程里看一眼</a> <span class="depth">— 20 行 Program.cs</span></li>
+    <li><a href="#s7">归类练习</a> <span class="depth">— 这段逻辑该放哪一层</span></li>
+    <li><a href="#s8">话术</a> <span class="depth">— 三段</span></li>
+    <li><a href="#s9">检验一下</a> <span class="depth">— 6 题</span></li>
+    <li><a href="#s10">下一课</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、先破一个错觉</h2>
+
+<p>很多人把中间件管道想成一个<strong>列表</strong>：请求依次经过 A、B、C，每个处理完交给下一个。这个模型答不了「为什么日志中间件能记到 401」「为什么异常处理要放第一个」——因为它漏掉了<strong>一半的执行</strong>：每个中间件在 <code>await next()</code> <em>之后</em>还有代码，而那段代码是在<strong>所有内层都跑完之后</strong>才执行的。</p>
+
+<div class="callout">
+  <span class="label">这一课唯一必须记死的一句</span>
+  <p><strong>管道不是列表，是一个函数套一个函数。<code>Build()</code> 在启动时把 N 个中间件<em>倒着</em>折叠成一个 <code>RequestDelegate</code>；之后每个请求只是调用这一个函数。</strong></p>
+</div>
+
+<p>这不是比喻，是 <a href="https://github.com/dotnet/aspnetcore/blob/main/src/Http/Http/src/Builder/ApplicationBuilder.cs">ApplicationBuilder.cs</a> 里的原样代码（删掉了诊断分支）：</p>
+
+<pre><code><span class="cm">// app.Use(...) 只是把一个「函数的函数」加进列表</span>
+<span class="kw">public</span> IApplicationBuilder Use(Func&lt;RequestDelegate, RequestDelegate&gt; middleware)
+{
+    _components.Add(middleware);
+    <span class="kw">return</span> <span class="kw">this</span>;
+}
+
+<span class="cm">// 启动时调一次 Build()：从最里层（404）开始，倒着一层层包</span>
+<span class="kw">public</span> RequestDelegate Build()
+{
+    RequestDelegate app = context =&gt;
+    {
+        <span class="kw">if</span> (!context.Response.HasStarted)
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+        <span class="kw">return</span> Task.CompletedTask;
+    };
+
+    <span class="kw">for</span> (<span class="kw">var</span> c = _components.Count - 1; c &gt;= 0; c--)
+        app = _components[c](app);       <span class="cm">// 把「下一层」传给「这一层」，得到新的「这一层」</span>
+
+    <span class="kw">return</span> app;                          <span class="cm">// 一个函数。所有请求都从它进</span>
+}</code></pre>
+
+<p>注意三件事，它们是这道题的全部「底层逻辑」：</p>
+<ol>
+  <li><strong>每个中间件的类型是 <code>Func&lt;RequestDelegate, RequestDelegate&gt;</code></strong>——给它「下一层」，它返回「包着下一层的自己」。<code>app.Use(async (ctx, next) =&gt; {...})</code> 只是这个签名的语法糖。</li>
+  <li><strong>折叠是倒着的</strong>：先包最后注册的，最后包第一个注册的。所以<strong>第一个注册的在最外层</strong>，请求最先进它、响应最后出它。</li>
+  <li><strong>中间件实例只在这里构造一次。</strong>请求进来时没有任何「组装管道」的动作，就是调一个已经折好的委托——这一点在第三节会变成一个真实陷阱。</li>
+</ol>
+
+<p>顺带一句：<code>await next()</code> 这行你上一课已经拆过了——它把中间件的后半段登记成回调然后 return。所以「后置代码在所有内层跑完之后才执行」不是新知识，是 <a href="0009-async-await-state-machine.html#s2">Lesson 09 状态机</a>的直接推论。</p>
+
+<h2 id="s2">二、亲手让请求穿一次</h2>
+
+<p>下面这个管道有四层：异常处理、日志、鉴权、终端。<strong>先猜再点。</strong>依次做这四组实验，每组的结论后面几节都要用：</p>
+
+<ol>
+  <li><strong>默认配置，直接「发一个请求」</strong>——数一下 trace 里的箭头方向，进和出各几行。</li>
+  <li><strong>把 Auth 改成「短路」</strong>——Logging 的后置代码跑了没？它看到的状态码是什么？</li>
+  <li><strong>把 Endpoint 改成「抛异常」</strong>——谁的后置代码<em>没</em>跑？异常在哪一层被接住？</li>
+  <li><strong>Logging 改成「先写响应体再调 next」，Auth 保持「短路」</strong>——看 Auth 试图写 401 时发生了什么。</li>
+</ol>
+
+<div class="pipeline" data-pipeline='{
+  "label": "管道模拟 · 四层中间件，一个请求",
+  "middlewares": [
+    {"id":"ex","name":"UseExceptionHandler","before":"try {","after":"} 没有异常就什么都不做；有异常 catch 后写 500 JSON",
+     "catches":true,"modes":["next"]},
+    {"id":"log","name":"RequestLogging","before":"sw = Stopwatch.StartNew()","after":"log.Info(StatusCode, sw.Elapsed)",
+     "modes":["next","write-next","throw"]},
+    {"id":"auth","name":"UseAuthentication + Authorization","before":"解析 Bearer token，查权限",
+     "after":"—","modes":["next","short","throw"],"shortStatus":401},
+    {"id":"ep","name":"Endpoint → Controller.Action","before":"绑定参数，执行 action",
+     "terminal":true,"modes":["ok","throw"],"throws":"DbUpdateException"}
+  ]
+}'></div>
+
+<div class="callout">
+  <span class="label">四组实验，四个结论（对照你点出来的 trace）</span>
+  <ol>
+    <li><strong>进出顺序相反。</strong>进 1→2→3→4，出 4→3→2→1。这就是「倒着折叠」在运行时的样子。</li>
+    <li><strong>短路 ≠ 跳过外层。</strong>Auth 不调 <code>next</code>，但 Logging 从自己的 <code>await next()</code> 返回后照样记日志，而且记到的是 401。官方原文：<q>Middleware added to the pipeline before the terminal middleware still processes code after their next.Invoke statements.</q>（<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/#short-circuiting-the-request-pipeline">Middleware — Short-circuiting</a>）</li>
+    <li><strong>异常是往外抛的，谁在外面谁接。</strong>Logging 的后置代码被跳过（没有 try/finally），ExceptionHandler 接住。<strong>如果它不在最外层，它外面那些中间件抛的异常就没人管</strong>——这是「异常处理必须第一个注册」的机制原因，不是规范要求。</li>
+    <li><strong>响应一旦开始就不能改头。</strong>Logging 往 body 写了字节，<code>HasStarted</code> 变 true，Auth 再想设 401 直接抛 <code>InvalidOperationException</code>。原文警告：<q>Don't call next.Invoke after the response has been sent to the client. Changes to HttpResponse after the response has started throw an exception.</q></li>
+  </ol>
+</div>
+
+<div class="callout ext">
+  <span class="label">扩展 · Use / Run / Map 三个词的精确含义</span>
+  <table>
+    <thead><tr><th></th><th>拿到 <code>next</code> 吗</th><th>做什么</th></tr></thead>
+    <tbody>
+      <tr><td><code>Use</code></td><td>拿到</td><td>普通中间件，自己决定调不调 <code>next</code>。不调就是短路。</td></tr>
+      <tr><td><code>Run</code></td><td><strong>拿不到</strong></td><td>终端中间件。官方：<q>The first Run delegate is always terminal and terminates the pipeline.</q> 它后面再注册什么都不会被调用。</td></tr>
+      <tr><td><code>Map</code></td><td>—</td><td>按路径前缀<strong>分叉</strong>出一条子管道，匹配上就走分支，<strong>不回主线</strong>。<code>UseWhen</code> 是会回主线的版本。</td></tr>
+    </tbody>
+  </table>
+  <p>面试增量：<code>Run</code> 只是约定——它等于一个不调 <code>next</code> 的 <code>Use</code>。能说出「三个都是往 <code>_components</code> 里加 <code>Func&lt;RequestDelegate, RequestDelegate&gt;</code>」，比背三个定义有分量。</p>
+</div>
+
+<h2 id="s3">三、自定义中间件：三个约定，一个陷阱</h2>
+
+<p>「如何自定义中间件」是送分题，但有一个能拉开差距的陷阱。先给标准答案——它就是 <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/write">官方文档</a>的例子改成你项目里的样子：</p>
+
+<pre><code><span class="kw">public class</span> RequestLoggingMiddleware
+{
+    <span class="kw">private readonly</span> RequestDelegate _next;                       <span class="cm">// ① 构造函数必须能收 RequestDelegate</span>
+    <span class="kw">private readonly</span> ILogger&lt;RequestLoggingMiddleware&gt; _log;      <span class="cm">//    其它构造参数由 DI 填</span>
+
+    <span class="kw">public</span> RequestLoggingMiddleware(RequestDelegate next, ILogger&lt;RequestLoggingMiddleware&gt; log)
+    {
+        _next = next;
+        _log = log;
+    }
+
+    <span class="cm">// ② 方法名必须叫 Invoke 或 InvokeAsync，返回 Task，第一个参数是 HttpContext</span>
+    <span class="kw">public async</span> Task InvokeAsync(HttpContext ctx, ICurrentUser user)   <span class="cm">// ③ 这里也能注入 —— 见下面的陷阱</span>
+    {
+        <span class="kw">var</span> sw = Stopwatch.StartNew();
+        <span class="kw">await</span> _next(ctx);                                            <span class="cm">// 不调它 = 短路</span>
+        _log.LogInformation(<span class="st">"{Method} {Path} → {Status} in {Ms}ms by {User}"</span>,
+            ctx.Request.Method, ctx.Request.Path, ctx.Response.StatusCode, sw.ElapsedMilliseconds, user.Id);
+    }
+}
+
+<span class="cm">// 惯例：包一个扩展方法，Program.cs 里写 app.UseRequestLogging();</span>
+<span class="kw">public static class</span> RequestLoggingExtensions
+{
+    <span class="kw">public static</span> IApplicationBuilder UseRequestLogging(<span class="kw">this</span> IApplicationBuilder app)
+        =&gt; app.UseMiddleware&lt;RequestLoggingMiddleware&gt;();
+}</code></pre>
+
+<p>官方对约定的原话只有三条：<q>A public constructor with a parameter of type RequestDelegate</q>；<q>A public method named Invoke or InvokeAsync</q>，它必须 <q>Return a Task</q> 且 <q>Accept a first parameter of type HttpContext</q>。没有接口、没有基类——<code>UseMiddleware&lt;T&gt;</code> 用反射找这两样，然后把它包成第一节那个 <code>Func&lt;RequestDelegate, RequestDelegate&gt;</code>。</p>
+
+<div class="callout">
+  <span class="label">陷阱：中间件是 Singleton，别在构造函数里要 Scoped 服务</span>
+  <p>第一节说了：中间件实例在 <code>Build()</code> 时构造<strong>一次</strong>。官方：<q>Middleware is constructed once per application lifetime.</q> 所以它的构造函数里注入的任何东西，都会被<strong>整个进程生命周期</strong>持有。你把 <code>DbContext</code>（Scoped）或者「当前用户」（Scoped）塞进构造函数，得到的就是<strong>第一个请求的那份，永远不换</strong>。</p>
+  <p>修法就是上面代码里的 ③：<strong>需要每请求一份的依赖，放到 <code>InvokeAsync</code> 的参数里</strong>。官方：<q>To share a scoped service between middleware and other types, add these services to the InvokeAsync method's signature.</q> 框架会在每次调用时从<strong>当前请求的作用域</strong>解析它。</p>
+  <p>这个陷阱和第四节要讲的 Captive Dependency 是同一件事——中间件只是最常见的那个 Singleton。</p>
+</div>
+
+<h2 id="s4">四、DI 三种生命周期：看编号，不背定义</h2>
+
+<p>三个定义很短（<a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection/service-lifetimes">Service lifetimes</a>）：Transient <q>created each time it's requested</q>；Scoped <q>created once per client request (connection)</q>；Singleton <q>created the first time they're requested</q>，之后 <q>every subsequent request ... uses the same instance</q>。背下来没用，面试追问的是<strong>组合起来会怎样</strong>。所以下面不背定义，看编号。</p>
+
+<p>场景：一个 Controller 依赖 <code>OrderService</code> 和 <code>AppDbContext</code>；<code>OrderService</code> 内部也依赖 <code>AppDbContext</code>，外加一个 <code>Clock</code>。<strong>做四组实验</strong>：</p>
+<ol>
+  <li><strong>默认（都是 Scoped）</strong>：连发两个请求。同一个请求里 <code>AppDbContext</code> 出现两次，编号一样吗？跨请求呢？</li>
+  <li><strong>把 <code>AppDbContext</code> 改成 Transient</strong>：同一个请求里的两个 <code>AppDbContext</code> 编号还一样吗？——想一下这对「一个请求一个事务」意味着什么。</li>
+  <li><strong>把 <code>OrderService</code> 改成 Singleton</strong>（<code>AppDbContext</code> 改回 Scoped），发请求——开发环境炸了。读一下异常消息。</li>
+  <li><strong>取消「开发环境」勾选，重来，再发两个请求</strong>——看 <code>AppDbContext</code> 的编号，看红色标记。</li>
+</ol>
+
+<div class="lifetimes" data-lifetimes='{
+  "label": "DI 生命周期模拟 · 改注册方式，发请求，对编号",
+  "services": [
+    {"id":"svc","name":"OrderService","deps":["db","clock"],"default":"scoped"},
+    {"id":"db","name":"AppDbContext","default":"scoped"},
+    {"id":"clock","name":"Clock","default":"singleton","fixed":true}
+  ],
+  "roots":["svc","db"]
+}'></div>
+
+<div class="callout">
+  <span class="label">四组实验，四个结论</span>
+  <ol>
+    <li><strong>Scoped = 一个请求一份。</strong>Controller 和 OrderService 拿到的是<strong>同一个</strong> <code>AppDbContext</code>；下一个请求换新的。这就是 EF Core 的 <code>AddDbContext</code> 默认注册成 Scoped 的原因——一个请求内所有人共用一个 change tracker，<code>SaveChanges</code> 一次提交。</li>
+    <li><strong>Transient 会把「一个请求一个事务」打碎。</strong>Controller 和 OrderService 各拿一个 <code>DbContext</code>，各自追踪、各自提交——两处修改不在一个事务里。Transient 适合无状态的轻对象，不适合 <code>DbContext</code>。</li>
+    <li><strong>开发环境的异常是保护。</strong><code>Cannot consume scoped service from singleton</code>——这是 <code>ValidateScopes</code> 在第一次解析时抛的。官方：<q>By default, in the development environment, resolving a service from another service with a longer lifetime throws an exception.</q></li>
+    <li><strong>生产环境不抛，只是悄悄错。</strong><code>ValidateScopes</code> 默认只在 Development 开。生产里那个 Scoped 的 <code>DbContext</code> 被 Singleton 抓住，<strong>所有请求共用一个</strong>——症状是偶发的 <code>A second operation was started on this context</code>、内存缓慢上涨、以及最可怕的：一个用户未提交的修改被另一个用户的 <code>SaveChanges</code> 带出去。这个事故有名字：<strong>Captive Dependency</strong>。</li>
+  </ol>
+</div>
+
+<div class="callout ext">
+  <span class="label">扩展 · Singleton 里真的需要 Scoped 服务怎么办</span>
+  <p>典型场景是 <code>BackgroundService</code>（它是 Singleton）里要用 <code>DbContext</code>。正解不是把 <code>DbContext</code> 改成 Singleton，是<strong>自己开作用域</strong>——官方：<q>It's acceptable to resolve a scoped service within a singleton if you create and use an explicit scope with IServiceScopeFactory.</q></p>
+<pre><code><span class="kw">public sealed class</span> OutboxWorker(IServiceScopeFactory scopes) : BackgroundService
+{
+    <span class="kw">protected override async</span> Task ExecuteAsync(CancellationToken ct)
+    {
+        <span class="kw">while</span> (!ct.IsCancellationRequested)
+        {
+            <span class="kw">using var</span> scope = scopes.CreateScope();                       <span class="cm">// 手动开一个「请求」</span>
+            <span class="kw">var</span> db = scope.ServiceProvider.GetRequiredService&lt;AppDbContext&gt;();
+            <span class="cm">// ... 用完随 scope 一起 Dispose</span>
+            <span class="kw">await</span> Task.Delay(1000, ct);
+        }
+    }
+}</code></pre>
+  <p>面试增量：<strong>「作用域」不是 HTTP 请求的专利</strong>，ASP.NET Core 只是替你在每个请求开头 <code>CreateScope()</code>、结尾 <code>Dispose()</code>。消息消费者、定时任务，每处理一条消息就该开一个 scope——你那十个 Solace 服务的 handler，正确形态就是这样。</p>
+</div>
+
+<h2 id="s5">五、顺序为什么重要：三条判据</h2>
+
+<p>官方给了一张推荐顺序表（<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/#middleware-order">Middleware order</a>），并说 <q>The order is critical for security, performance, and functionality.</q> 表可以查，但面试要你说<strong>为什么</strong>。第二节的四组实验已经给了全部理由，压成三条判据：</p>
+
+<table>
+  <thead><tr><th>判据</th><th>推出的顺序</th><th>第二节的证据</th></tr></thead>
+  <tbody>
+    <tr><td><strong>要接住谁的异常，就得在谁外面</strong></td><td><code>UseExceptionHandler</code> 第一个</td><td>实验 3：异常往外抛，外层才能 catch</td></tr>
+    <tr><td><strong>能短路的越早越省</strong></td><td><code>UseStaticFiles</code> 在 Auth 之前——静态文件不需要鉴权，早点返回</td><td>实验 2：短路后内层一点开销都没有</td></tr>
+    <tr><td><strong>用别人产物的，排在别人后面</strong></td><td><code>UseRouting</code> → <code>UseAuthentication</code> → <code>UseAuthorization</code> → 端点：授权要知道「打到哪个端点、它要什么策略」，所以必须在路由之后；认证要先于授权填好 <code>User</code></td><td>实验 1：进的顺序就是注册顺序</td></tr>
+  </tbody>
+</table>
+
+<p>官方推荐的骨架（删掉了 HSTS / Cookie / Session 等可选项）：</p>
+<pre><code>app.UseExceptionHandler(<span class="st">"/error"</span>);   <span class="cm">// 1 最外层：接所有人的异常</span>
+app.UseHttpsRedirection();           <span class="cm">// 2</span>
+app.UseStaticFiles();                <span class="cm">// 3 能短路就早短路</span>
+app.UseRouting();                    <span class="cm">// 5 决定「打到哪个端点」</span>
+app.UseAuthentication();             <span class="cm">// 6 填 HttpContext.User</span>
+app.UseAuthorization();              <span class="cm">// 7 拿着 User 和端点上的策略做判断</span>
+app.MapControllers();                <span class="cm">// 10 终端</span></code></pre>
+
+<div class="callout ext">
+  <span class="label">扩展 · 中间件 vs Filter vs AOP——权限题的那句话</span>
+  <p>题库第九节：<q>如果每一步都需要验证权限，如何避免不停地调用服务获得权限信息，以及如何减少代码量 —— 涉及到 AOP、自定义中间件、缓存。</q>出题人自己给了答案骨架，你要做的是把三者放到<strong>正确的层</strong>：</p>
+  <table>
+    <thead><tr><th>层</th><th>知道什么</th><th>适合放</th></tr></thead>
+    <tbody>
+      <tr><td><strong>中间件</strong></td><td>只有 <code>HttpContext</code>，<strong>不知道</strong>打到哪个 action、参数是什么</td><td>横切所有请求的事：解析 token、把「当前用户 + 权限集」<strong>算一次</strong>塞进 <code>HttpContext.Items</code> 或一个 Scoped 的 <code>ICurrentUser</code></td></tr>
+      <tr><td><strong>Filter / <code>[Authorize]</code></strong></td><td>知道 action、知道路由参数和 model</td><td>「这个人能不能碰这个接口」——声明式，零代码量</td></tr>
+      <tr><td><strong>AOP（拦截器 / 特性 + 源生成）</strong></td><td>知道被调用的<strong>方法</strong>和参数</td><td>「这个人能不能碰<strong>这条数据</strong>」——行级权限，要看 <code>orderId</code> 属于谁</td></tr>
+    </tbody>
+  </table>
+  <p>「避免不停地调用服务」的答案是<strong>Scoped 缓存</strong>：权限集在中间件里查一次，注册成 Scoped 服务，同一个请求里 Filter 和 AOP 拦截器都从它读，请求结束自动释放。跨请求再加一层 <code>IMemoryCache</code>（按用户 id，短 TTL）。三种生命周期在这里各就各位——这一题实际上是第四节的应用题。</p>
+</div>
+
+<h2 id="s6">六、可选：真进程里看一眼</h2>
+
+<p>两个模拟器已经把机制演完了。如果你想在真实进程里看到同样的编号，20 行就够，<strong>不做也不影响后面</strong>：</p>
+
+<pre><code>dotnet new web -o pipedemo &amp;&amp; cd pipedemo</code></pre>
+<p>把 <code>Program.cs</code> 整个替换成：</p>
+<pre><code><span class="kw">var</span> builder = WebApplication.CreateBuilder(args);
+builder.Services.AddScoped&lt;Marker&gt;();
+<span class="kw">var</span> app = builder.Build();
+
+app.Use(<span class="kw">async</span> (ctx, next) =&gt; { Console.WriteLine(<span class="st">"→ A"</span>); <span class="kw">await</span> next(ctx); Console.WriteLine(<span class="st">$"← A  status={ctx.Response.StatusCode}"</span>); });
+app.Use(<span class="kw">async</span> (ctx, next) =&gt; {
+    Console.WriteLine(<span class="st">"→ B"</span>);
+    <span class="kw">if</span> (ctx.Request.Query.ContainsKey(<span class="st">"deny"</span>)) { ctx.Response.StatusCode = 401; <span class="kw">return</span>; }   <span class="cm">// 短路</span>
+    <span class="kw">await</span> next(ctx);
+    Console.WriteLine(<span class="st">"← B"</span>);
+});
+app.Run(<span class="kw">async</span> ctx =&gt; {
+    <span class="kw">var</span> m1 = ctx.RequestServices.GetRequiredService&lt;Marker&gt;();
+    <span class="kw">var</span> m2 = ctx.RequestServices.GetRequiredService&lt;Marker&gt;();
+    Console.WriteLine(<span class="st">$"   endpoint: marker {m1.Id} / {m2.Id}"</span>);      <span class="cm">// Scoped：同一请求两次解析，Id 相同</span>
+    <span class="kw">await</span> ctx.Response.WriteAsync(<span class="st">"ok"</span>);
+});
+app.Run();
+
+<span class="kw">class</span> Marker { <span class="kw">public</span> Guid Id { <span class="kw">get</span>; } = Guid.NewGuid(); }</code></pre>
+
+<p><code>dotnet run</code>，然后在浏览器里开 <code>http://localhost:5000/</code> 两次、<code>http://localhost:5000/?deny</code> 一次。看控制台：正常请求打 <code>→A →B endpoint ←B ←A status=200</code>；<code>?deny</code> 那次<strong>没有 endpoint、没有 ←B，但有 ←A status=401</strong>——就是第二节实验 2。两次正常请求的 marker Id 各自相同、彼此不同——就是第四节实验 1。把 <code>AddScoped</code> 改成 <code>AddTransient</code> 再跑一次，同一行的两个 Id 就不一样了。</p>
+
+<h2 id="s7">七、归类练习：这段逻辑该放哪一层</h2>
+
+<p>判据只有一个：<strong>它需要知道多少上下文</strong>。只需要 <code>HttpContext</code> → 中间件；需要知道 action → Filter；需要知道业务参数 → 服务层 / AOP。</p>
+
+<div class="binsort" data-binsort='{
+  "label": "归类练习 · 这段逻辑放哪里",
+  "bins": [{"id":"mw","label":"中间件","tone":"good"},
+           {"id":"filter","label":"Filter / 特性","tone":"good"},
+           {"id":"svc","label":"服务层 / AOP","tone":"good"}],
+  "items": [
+    {"text":"给每个响应加 X-Correlation-Id 头，没有就生成一个","bin":"mw",
+     "why":"横切所有请求、只需要 HttpContext。而且要在最外层加，才能保证 401 / 500 的响应也带上它。"},
+    {"text":"把 JWT 解析成 ClaimsPrincipal 放进 HttpContext.User","bin":"mw",
+     "why":"这就是 UseAuthentication 干的事。它不判断能不能访问，只负责「你是谁」——判断留给后面知道端点的人。"},
+    {"text":"这个接口只允许 Admin 角色调用","bin":"filter",
+     "why":"[Authorize(Roles = Admin)] 一行搞定。它需要知道打到哪个 action，中间件不知道；写在服务层又太晚（参数都绑定完了）。"},
+    {"text":"用户只能修改自己创建的工单","bin":"svc",
+     "why":"行级权限：要先查出工单、看 owner 是不是当前用户。这需要业务数据，Filter 和中间件都拿不到。放服务层，或用 AOP 拦截器统一做。"},
+    {"text":"所有未处理异常统一转成 ProblemDetails JSON","bin":"mw",
+     "why":"UseExceptionHandler，第一个注册。要接住所有人的异常就得在所有人外面——包括其它中间件抛的。Filter 只能接 action 里抛的。"},
+    {"text":"请求耗时超过 2 秒就记一条 Warning 日志","bin":"mw",
+     "why":"横切、只需要 HttpContext 和一个 Stopwatch。注意它要放在 ExceptionHandler 里面（否则异常穿过时它的后置代码不执行）、Auth 外面（否则 401 记不到）。"}
+  ]
+}'></div>
+
+<h2 id="s8">八、话术</h2>
+
+<div class="script">
+  <span class="label">话术 A · 对应题「中间件的底层逻辑 / 如何自定义中间件」</span>
+  <p><strong>先给机制，一句话：</strong><q>中间件管道不是一个列表，是一个函数套一个函数。每个中间件的类型是 <code>Func&lt;RequestDelegate, RequestDelegate&gt;</code>——给它下一层，它返回包着下一层的自己。启动时 <code>Build()</code> 从最里面的 404 委托开始，倒着把所有中间件折叠成一个 <code>RequestDelegate</code>，之后每个请求就是调这一个函数。</q></p>
+  <p><strong>推出两个现象：</strong><q>所以第一个注册的在最外层：请求最先进、响应最后出。而且每个中间件 <code>await next()</code> 后面的代码，是在所有内层跑完之后才执行的——这就是为什么日志中间件放在鉴权外面能记到 401，为什么异常处理必须第一个注册。</q></p>
+  <p><strong>再给自定义：</strong><q>自定义就是一个普通类，两个约定：构造函数收 <code>RequestDelegate</code>，有个 <code>InvokeAsync(HttpContext)</code> 返回 Task。不调 <code>_next</code> 就是短路。一般再包个 <code>UseXxx</code> 扩展方法。</q></p>
+  <p><strong>收在陷阱上（拉开差距的一句）：</strong><q>要注意中间件实例整个进程只构造一次，所以 Scoped 服务不能注进构造函数——会拿到第一个请求那份永远不换。要每请求一份的，放到 <code>InvokeAsync</code> 的参数里。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 B · 对应题「依赖注入的理解和使用」</span>
+  <p><strong>先定义作用域，不先背三个词：</strong><q>DI 容器里有一个根容器，ASP.NET Core 在每个请求开头开一个子作用域、结尾 Dispose。三种生命周期就是三个存放位置：Singleton 存在根容器、Scoped 存在当前作用域、Transient 不存，每次 new。</q></p>
+  <p><strong>给使用原则：</strong><q>无状态、线程安全的做 Singleton，比如 HttpClient 工厂、配置、时钟；和一个请求绑定的做 Scoped，典型是 DbContext——一个请求共用一个 change tracker，一次 SaveChanges；轻量无状态又不想共享的才 Transient。</q></p>
+  <p><strong>主动讲事故：</strong><q>最经典的坑是 Captive Dependency：Singleton 的构造函数里要了一个 Scoped，那个 Scoped 就被抓成了 Singleton。开发环境 ValidateScopes 会直接抛异常；生产默认关闭，所以症状是上线后才出——DbContext 被所有请求共用，偶发 A second operation was started on this context，还可能把一个用户的未提交修改带进另一个用户的 SaveChanges。修法是 Singleton 拿 <code>IServiceScopeFactory</code> 自己开作用域，后台任务和消息消费者都是这么写的。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 C · 对应题「每一步都要验证权限，如何避免反复调用权限服务、减少代码量」</span>
+  <p><strong>按层拆：</strong><q>我会分三层。中间件层只做「你是谁」——解析 token，把当前用户和他的权限集查一次，放进一个 Scoped 的 <code>ICurrentUser</code> 服务；这个请求里后面所有人都从它读，不再查第二次。接口级权限用 <code>[Authorize]</code> 特性声明，零代码量。行级权限——比如只能改自己的工单——放服务层或用 AOP 拦截器统一做，因为它需要业务数据，前两层拿不到。</q></p>
+  <p><strong>点出缓存的层次：</strong><q>「避免反复调用」有两层缓存：请求内靠 Scoped 生命周期天然缓存，请求间用 <code>IMemoryCache</code> 按用户 id 缓存权限集，TTL 设短一点，权限变更时主动失效。</q></p>
+  <p><strong>为什么这样答强：</strong>出题人自己列了「AOP、中间件、缓存」三个词，多数人会挨个解释这三个词。你把它们放到<strong>各自知道多少上下文</strong>的层上，并把「缓存」落实成 Scoped 生命周期——这说明你理解的是机制，不是词汇。</p>
+</div>
+
+<h2 id="s9">九、检验一下</h2>
+
+<p>先在心里说出理由再选。</p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "注册顺序是 UseExceptionHandler → Logging → Auth → Endpoint。Endpoint 抛了异常，下面哪条是对的：",
+    "options": [
+      "Logging 的后置代码正常执行并记录到状态码 500",
+      "Logging 的后置代码被跳过而异常被最外层接住",
+      "异常在 Auth 处被拦截并被直接转换成 401 响应",
+      "四个中间件的后置代码都执行只是顺序发生了变化"
+    ],
+    "answer": 1,
+    "why": "异常沿着 await next() 的调用栈往外抛。Logging 没有 try/finally，所以它 await next() 后面那行不执行；ExceptionHandler 在最外层，catch 到后写 500。这就是第二节实验 3。也解释了为什么 ExceptionHandler 必须第一个注册——它只能接住比它更内层抛出的异常。"
+  },
+  {
+    "q": "Build() 把中间件折叠成一个 RequestDelegate 时，循环是倒着遍历的，直接后果是：",
+    "options": [
+      "最后注册的中间件在最外层因此最先处理请求",
+      "第一个注册的中间件在最外层因此最先处理请求",
+      "中间件的执行顺序由框架按类型优先级重新排列",
+      "每个请求到来时管道都会被重新构建一次再执行"
+    ],
+    "answer": 1,
+    "why": "从最里层 404 委托开始，先包最后注册的，最后包第一个注册的——所以第一个注册的成了最外层。管道只在启动时折叠一次，之后每个请求调的是同一个已折叠的委托，不会重建。这也是中间件实例只构造一次的原因。"
+  },
+  {
+    "q": "自定义中间件的构造函数里注入了一个 Scoped 的 DbContext，实际效果是：",
+    "options": [
+      "每个请求都会得到一个全新的 DbContext 实例",
+      "整个进程只有第一个请求那份 DbContext 被复用",
+      "框架检测到不匹配后自动把它降级为 Transient",
+      "DbContext 会在每次 InvokeAsync 调用时自动重建"
+    ],
+    "answer": 1,
+    "why": "Middleware is constructed once per application lifetime。构造函数只跑一次，注进去的 DbContext 就是那一次解析出来的那份，整个进程复用——它实际上被抓成了 Singleton。正确做法是把 Scoped 依赖放到 InvokeAsync 的参数里，框架会按当前请求的作用域解析。"
+  },
+  {
+    "q": "OrderService 注册为 Singleton，它的构造函数需要 Scoped 的 AppDbContext。在开发环境第一次请求时：",
+    "options": [
+      "正常运行但所有请求会共用同一个数据库上下文",
+      "容器抛出异常拒绝把作用域服务注入到单例里面",
+      "容器自动为这个单例每次调用开一个新的作用域",
+      "AppDbContext 被静默提升为单例且不会有任何提示"
+    ],
+    "answer": 1,
+    "why": "开发环境 ValidateScopes 默认开启，第一次解析就抛 InvalidOperationException: Cannot consume scoped service from singleton。选项 A 描述的是生产环境（ValidateScopes 默认关闭）的行为——不报错、悄悄错，这才是 Captive Dependency 可怕的地方。修法是注入 IServiceScopeFactory 自己 CreateScope()。"
+  },
+  {
+    "q": "同一个请求里，Controller 和它调用的 Service 都注入了 IFoo。要让两处拿到的是同一个实例、而下一个请求换新的，IFoo 应注册为：",
+    "options": [
+      "Transient——每次请求容器时都创建新实例",
+      "Scoped——每个请求作用域内解析多次共用一个",
+      "Singleton——整个应用生命周期共用同一实例",
+      "任何一种都可以因为容器会自动去重实例对象"
+    ],
+    "answer": 1,
+    "why": "这正是第四节实验 1 的编号现象：同一请求内多次解析编号相同，跨请求编号变化。Transient 会让同一请求里两处编号不同（实验 2）；Singleton 会让跨请求编号也相同。DbContext 就是 Scoped 的标准案例——一个请求共用一个 change tracker。"
+  },
+  {
+    "q": "Logging 中间件在 await next() 之前就往 Response.Body 写了内容，内层 Auth 随后想把状态码设为 401，结果是：",
+    "options": [
+      "状态码成功改成 401 但已写出的内容会被丢弃",
+      "抛出异常因为响应已经开始发送头部不可更改",
+      "框架自动缓冲响应体所以状态码仍可正常修改",
+      "401 会追加到响应体末尾作为第二段返回给客户端"
+    ],
+    "answer": 1,
+    "why": "写 body 会触发头部发送，Response.HasStarted 变为 true，之后改状态码或头部抛 InvalidOperationException。官方警告原文：Changes to HttpResponse after the response has started throw an exception。实际写法是：要写响应体，就在 await next() 之后写，或者先检查 HasStarted。第二节实验 4 就是这个现场。"
+  }
+]'></div>
+
+<h2 id="s10">十、下一课</h2>
+
+<p>.NET 核心板块到这里四块都拿下了：锁、异步、中间件、DI。它们在面试里是一张网：<code>lock</code> 里不能 <code>await</code>（08）← 因为 <code>await</code> 换线程（09）← 中间件的后半段就是一次 <code>await next()</code> 的续接（10）← 中间件是 Singleton 所以别抓 Scoped（10）。被问到任何一个，你都能顺着这条链讲到下一个。</p>
+
+<p>下一课候选两个方向，看你想先补哪块：<strong>(a) 数据库板块第二课</strong>——事务隔离级别与 <code>Transaction</code> 用法（题库「分布式事务以及 Transaction 级别」「事务的使用方式」两问，而且和 Lesson 07 抢单题的 <code>UPDATE ... WHERE</code> 直接相连）；<strong>(b) 算法手写</strong>——快速选择求中位数（Lesson 02 暂停的部分，题库第三节命中最直接）。回复我一个字母就行。</p>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（只看一个的话，看这个）：</strong><br>
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/">Microsoft Learn — ASP.NET Core Middleware</a>。读「Create a middleware pipeline」和「Middleware order」两节就够，其余是各中间件的清单。<br>
+  想再深一层：<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/write">Write custom ASP.NET Core middleware</a>（本课第三节的出处，含 Per-request dependencies 那个陷阱）、<a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection/service-lifetimes">Service lifetimes</a>（第四节，五分钟读完）、<a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection#scope-validation">Dependency injection — Scope validation</a>（ValidateScopes 检查什么）、<a href="https://github.com/dotnet/aspnetcore/blob/main/src/Http/Http/src/Builder/ApplicationBuilder.cs">ApplicationBuilder.cs 源码</a>（第一节那 15 行，<strong>面试前扫一眼，能说出「我看过 Build() 的源码」</strong>）。</p>
+
+  <p><strong>社区（获取智慧，不是知识）：</strong><a href="https://stackoverflow.com/questions/tagged/asp.net-core+dependency-injection">Stack Overflow 的 <code>asp.net-core</code> + <code>dependency-injection</code> 标签</a>，搜 <code>Cannot consume scoped service</code>——几百个真实的 Captive Dependency 现场，看看别人是怎么把 DbContext 注进 Singleton 的，比任何教程都接近面试追问。</p>
+
+  <div class="nav-links">
+    <a href="0009-async-await-state-machine.html">← Lesson 09：async/await</a>
+    <a href="0008-dotnet-locks.html">← Lesson 08：锁</a>
+    <a href="../reference/di-middleware-cheatsheet.html">→ 速查表：中间件与 DI</a>
+    <a href="../reference/async-cheatsheet.html">→ 速查表：async/await</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练，有任何不清楚的直接问我。</strong>这一课<strong>只收两样</strong>，都在浏览器里就能拿到：<a href="#s2">第二节</a>实验 2 里 <strong>Logging 记到的状态码</strong>，和<a href="#s4">第四节</a>实验 4 里 <strong><code>AppDbContext</code> 在请求 2 的编号</strong>（它和请求 1 一样吗）。两个数字一行报回来即可。<br>
+    另外回我一个字母：下一课走 <strong>(a) 事务隔离级别</strong> 还是 <strong>(b) 快速选择求中位数</strong>。
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+<script src="../assets/pipeline.js"></script>
+<script src="../assets/lifetimes.js"></script>
+<script src="../assets/binsort.js"></script>
+</body>
+</html>

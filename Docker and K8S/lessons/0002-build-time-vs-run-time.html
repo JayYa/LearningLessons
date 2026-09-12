@@ -115,15 +115,15 @@ docker run --rm -e BUILD_NOTE=i-want-to-change timing:1.0</code></pre>
 
 <li>
 <p><strong>验证 EXPOSE 的真面目。</strong></p>
-<pre><code>docker run -d --name t timing:1.0 sleep 120
+<pre><code>docker run -d --name tl timing:1.0 sleep 120
 
 <span class="c"># 实际的端口映射：空的</span>
-docker port t
+docker port tl
 
 <span class="c"># 元数据里却确实有 9999</span>
-docker inspect --format "{{.Config.ExposedPorts}}" t
+docker inspect --format "{{.Config.ExposedPorts}}" tl
 
-docker rm -f t</code></pre>
+docker rm -f tl</code></pre>
 <p style="font-size:.92rem;color:var(--ink-soft)">
   顺带一提：<code>docker run 镜像 sleep 120</code> 里的 <code>sleep 120</code> <strong>覆盖了 CMD</strong>。
   CMD 只是"默认命令"，命令行给了就以命令行为准。
@@ -136,14 +136,27 @@ docker rm -f t</code></pre>
 
 <p>build context 不是抽象概念，它有实实在在的体积。做个实验：</p>
 
-<pre><code><span class="c"># 造一个 50 MB 的大文件，放进目录</span>
+<pre><code><span class="c"># 在 timing-lab 目录里，造一个 50 MB 的大文件</span>
 $f = [IO.File]::Create("$PWD\big.bin"); $f.SetLength(50MB); $f.Close()
 
-<span class="c"># 重新构建，盯住输出里的 transferring context</span>
+<span class="c"># 给 Dockerfile 加一条 COPY . —— 复制整个 context（.NET 项目里最常见的写法）</span>
+Add-Content -Encoding utf8 Dockerfile "COPY . /ctx/"
+
+<span class="c"># 重新构建，盯住输出里的 load build context</span>
 docker build -t timing:1.1 .</code></pre>
 
-<p>输出里会出现类似 <code>=&gt; transferring context: 52.43MB</code> 的一行。
-<strong>Dockerfile 里根本没有 <code>COPY big.bin</code>，它却还是被送走了</strong> —— 因为送的是整个目录，不是被引用的文件。</p>
+<p>输出里会出现 <code>[internal] load build context</code> 和 <code>=&gt; transferring context: 52.43MB</code>。
+<strong>你并没有单独提到 <code>big.bin</code>，它却被送走了</strong> —— 因为 <code>COPY .</code> 引用的是整个目录。</p>
+
+<div class="note">
+  <p><strong>BuildKit 是按需传 context 的。</strong>这里的 BuildKit 是现代 Docker 默认的构建引擎，它只传 <code>COPY</code>/<code>ADD</code> 实际引用到的路径：</p>
+  <ul style="margin:.4em 0 0 1.2em;font-size:.93rem">
+    <li>一条 <code>COPY</code> 都没有 → 不传 context（只会看到读 <code>.dockerignore</code> 的 <code>transferring context: 2B</code>）</li>
+    <li><code>COPY Dockerfile /x</code> → 只传 Dockerfile 那几百字节</li>
+    <li><code>COPY . .</code> → 传整个目录，<strong>这时 <code>.dockerignore</code> 才真正起作用</strong></li>
+  </ul>
+  <p style="margin-top:.5em;font-size:.93rem">旧版构建器则无论如何都全传。因为真实项目几乎必然写 <code>COPY . .</code>，所以"该忽略什么"的结论不变。</p>
+</div>
 
 <pre><code><span class="c"># 排除掉它</span>
 "big.bin" | Set-Content -Encoding utf8 .dockerignore
@@ -174,12 +187,12 @@ docker build -t timing:1.2 .</code></pre>
 </div>
 
 <div class="quiz" data-answer="C">
-  <p class="q">2. 你的目录里有个 2 GB 的 <code>data.zip</code>，Dockerfile 里完全没提它。<code>docker build .</code> 会怎样？</p>
+  <p class="q">2. 你的目录里有个 2 GB 的 <code>data.zip</code>，Dockerfile 里有一条 <code>COPY . .</code>，没有 <code>.dockerignore</code>。<code>docker build .</code> 会怎样？</p>
   <button data-opt="A">照常很快，未引用的文件会被自动跳过</button>
   <button data-opt="B">构建失败，提示上下文体积超出了限制</button>
   <button data-opt="C">明显变慢，整个目录都要传给构建引擎</button>
   <button data-opt="D">照常很快，但最终镜像增大两个 GB</button>
-  <p class="why">context 是<strong>整个目录</strong>，与是否被 <code>COPY</code> 无关。它不会进最终镜像，但每次 build 都要传输一遍。这正是 <code>.dockerignore</code> 存在的理由。</p>
+  <p class="why"><code>COPY .</code> 引用了整个目录，BuildKit 就会把它全传过去（并且这里它<em>会</em>进镜像，因为你 COPY 了它）。每次 build 都要传一遍。这正是 <code>.dockerignore</code> 存在的理由。</p>
 </div>
 
 <div class="quiz" data-answer="D">
