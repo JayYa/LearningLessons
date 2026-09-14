@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 10 课：IHostedService 与生命周期——后台任务、启动顺序、优雅关闭 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>第 10 课：IHostedService 与生命周期——后台任务、启动顺序、优雅关闭</h1>
+<div class="lesson-meta">
+  模块：Host 模型（2/2）&nbsp;|&nbsp; 预计阅读/练习时间：30 分钟
+</div>
+
+<p>
+  上一课的 Host "建好、用一下、退出"。但 Host 真正的价值在<strong>长驻进程</strong>：定时任务、队列消费者、Windows 服务。
+  Framework 4.8 时代你要继承 <code>ServiceBase</code>、写 <code>OnStart/OnStop</code>、自己开线程、自己处理停止信号——或者装 TopShelf。
+  现代 .NET 用一个接口统一了这一切：<strong><code>IHostedService</code></strong>。
+</p>
+
+<div class="summary">
+  <ul>
+    <li>掌握 <code>IHostedService</code> 和 <code>BackgroundService</code> 的写法与区别</li>
+    <li>背下 Host 的<strong>启动 / 关闭精确顺序</strong>——这决定了"我的初始化代码该放哪"</li>
+    <li>理解 <code>ExecuteAsync</code> 里的三个陷阱：<strong>同步阻塞启动、异常静默、Scoped 服务</strong></li>
+    <li>掌握 <code>HostOptions</code>：30 秒关闭超时、并发启动、异常策略</li>
+    <li>知道 <code>UseWindowsService()</code> / <code>UseSystemd()</code> 如何替代 <code>ServiceBase</code> 和 TopShelf</li>
+  </ul>
+</div>
+
+<h2>IHostedService：两个方法的契约</h2>
+
+<pre><code>public interface IHostedService
+{
+    Task StartAsync(CancellationToken cancellationToken);  // Host 启动时调用，await 完成后才继续启动下一个
+    Task StopAsync(CancellationToken cancellationToken);   // Host 关闭时调用，token 在超时（默认 30s）后取消
+}
+</code></pre>
+
+<p>
+  注册方式只有一种：<code>builder.Services.AddHostedService&lt;T&gt;()</code>——它本质是 <code>AddSingleton&lt;IHostedService, T&gt;()</code>，
+  所以<strong>hosted service 永远是 Singleton</strong>（记住这点，后面的 Scoped 陷阱就从这来）。
+</p>
+
+<p>
+  <code>StartAsync</code> 的语义是"<strong>启动</strong>"不是"<strong>运行</strong>"：Host 会 <code>await</code> 它，等它返回才启动下一个服务、才算应用启动完成。
+  如果你在里面 <code>while(true)</code>，Host 永远启动不完。所以直接实现 <code>IHostedService</code> 适合"启动时做一件事就返回"的场景（预热缓存、注册服务发现）；
+  真正的长循环要用下面的 <code>BackgroundService</code>。
+</p>
+
+<h2>BackgroundService：长循环的标准写法</h2>
+
+<pre><code>// 抽象基类，帮你实现了 StartAsync / StopAsync，你只写 ExecuteAsync
+public sealed class QueueConsumer(
+    ILogger&lt;QueueConsumer&gt; logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        // stoppingToken 在 Host 开始关闭时被取消——这是你唯一的退出信号
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            logger.LogInformation("Polling at {Time}", DateTimeOffset.Now);
+            await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);  // 把 token 传进去，关闭时立即醒来
+        }
+    }
+}
+
+// Program.cs
+builder.Services.AddHostedService&lt;QueueConsumer&gt;();
+</code></pre>
+
+<p>
+  <code>BackgroundService</code> 的 <code>StartAsync</code> 内部做的事只有一件：调用 <code>ExecuteAsync</code>，
+  <strong>不 await 它</strong>，把返回的 Task 存起来就返回。所以 Host 启动不会被你的循环卡住。<code>StopAsync</code> 则是取消 token，然后等你的 Task 结束（或超时）。
+</p>
+
+<div class="callout callout--warn">
+⚠️ <strong>陷阱 1：<code>ExecuteAsync</code> 第一个 <code>await</code> 之前的代码是同步跑的。</strong>
+"不 await 它"只对异步部分成立——async 方法在遇到第一个未完成的 await 之前，是在调用者线程上同步执行的。
+如果你的 <code>ExecuteAsync</code> 开头有一段耗时同步初始化（读大文件、建连接池），它会阻塞 Host 启动，其他 hosted service 排在后面干等。
+解决：在方法开头 <code>await Task.Yield();</code>，或把同步初始化挪到真正的 <code>StartAsync</code> 里（记得 <code>await base.StartAsync(ct)</code>）。
+</div>
+
+<h2>启动与关闭的精确顺序</h2>
+
+<p>
+  这是本课要背下来的东西。Host 的所有钩子按这个顺序触发
+  （<a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/generic-host#ihostapplicationlifetime">官方示例输出</a>，
+  源码 <a href="https://github.com/dotnet/runtime/blob/main/src/libraries/Microsoft.Extensions.Hosting/src/Internal/Host.cs">Host.cs</a>）：
+</p>
+
+<div class="diagram">
+<pre>
+host.Run() / StartAsync()
+ │
+ ├─ IHostLifetime.WaitForStartAsync          ← ConsoleLifetime 在这里挂 Ctrl+C 处理器
+ ├─ IStartupValidator.Validate               ← 第 8 课的 ValidateOnStart 在这里跑
+ │
+ ├─ 对每个 hosted service（默认按注册顺序、串行）：
+ │    ├─ ① IHostedLifecycleService.StartingAsync
+ │    ├─ ② IHostedService.StartAsync          ← BackgroundService 在此启动 ExecuteAsync
+ │    └─ ③ IHostedLifecycleService.StartedAsync
+ │
+ └─ ④ IHostApplicationLifetime.ApplicationStarted 触发
+      "Application started. Press Ctrl+C to shut down."
+
+──── 收到 Ctrl+C / SIGTERM / StopApplication() ────
+
+ ├─ ⑤ IHostApplicationLifetime.ApplicationStopping 触发
+ │
+ ├─ 对每个 hosted service（按注册顺序的【倒序】，LIFO）：
+ │    ├─ ⑥ IHostedLifecycleService.StoppingAsync
+ │    ├─ ⑦ IHostedService.StopAsync           ← BackgroundService 在此取消 stoppingToken
+ │    └─ ⑧ IHostedLifecycleService.StoppedAsync
+ │
+ ├─ ⑨ IHostApplicationLifetime.ApplicationStopped 触发
+ └─ IHostLifetime.StopAsync
+     Main 继续往下执行 → 进程退出
+</pre>
+</div>
+
+<p>三个直接推论：</p>
+
+<ul>
+  <li><strong>注册顺序有意义。</strong>A 依赖 B 先启动？先 <code>AddHostedService&lt;B&gt;()</code>。关闭时 A 先停 B 后停——正好是依赖的反向。</li>
+  <li><strong>"应用完全启动后才做"的事</strong>挂在 <code>ApplicationStarted</code> 上（比如向注册中心报到），不要放在某个 <code>StartAsync</code> 里——那时其他服务可能还没起。</li>
+  <li><strong>关闭是两阶段的。</strong><code>ApplicationStopping</code> 是"要停了，别接新活"；<code>StopAsync</code> 是"把手上的活收尾"。Kestrel 就是在 ⑤ 停止接受新连接、在 ⑦ 等待现有请求完成。</li>
+</ul>
+
+<div class="callout callout--info">
+💡 <code>IHostedLifecycleService</code>（.NET 8+）是 <code>IHostedService</code> 的扩展，多了 <code>Starting/Started/Stopping/Stopped</code> 四个钩子。
+大多数时候用不到；需要"在所有服务的 StartAsync 之前先跑一段"时才用 <code>StartingAsync</code>。
+</div>
+
+<h2>陷阱 2：ExecuteAsync 抛异常会怎样</h2>
+
+<p>这个行为在 .NET 6 前后不同，而且默认值出人意料：</p>
+
+<table class="tbl">
+  <tr><th></th><th>.NET Core 3.x / .NET 5</th><th>.NET 6+</th></tr>
+  <tr>
+    <td><code>ExecuteAsync</code> 未捕获异常</td>
+    <td>❌ <strong>静默吞掉</strong>——服务悄悄死了，进程继续跑，日志里什么都没有</td>
+    <td>✅ 记录日志 → <code>StopApplication()</code> → 整个 Host 关闭，进程以非零退出码结束</td>
+  </tr>
+  <tr>
+    <td>控制开关</td>
+    <td>无</td>
+    <td><code>HostOptions.BackgroundServiceExceptionBehavior</code>，默认 <code>StopHost</code>；可改为 <code>Ignore</code> 恢复旧行为</td>
+  </tr>
+</table>
+
+<p>
+  .NET 6+ 的默认（<code>StopHost</code>）是对的——一个死掉的后台服务比一个崩掉的进程更危险，因为编排器（K8s、Windows SCM）会重启崩掉的进程，却不知道进程里有个服务已经死了。
+  但这也意味着：<strong>你的循环里必须自己 try/catch 可恢复的错误</strong>（网络抖动、队列暂时不可用），否则一次瞬时故障就让整个进程重启。
+</p>
+
+<pre><code>protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+{
+    while (!stoppingToken.IsCancellationRequested)
+    {
+        try
+        {
+            await ProcessBatchAsync(stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            break;                          // 正常关闭，不是错误
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Batch failed, retrying in 10s");   // 可恢复错误：记日志、退避、继续
+            await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+        }
+        // 真正不可恢复的错误（配置错、程序 bug）——让它抛出去，StopHost 是正确的
+    }
+}
+</code></pre>
+
+<h2>陷阱 3：Singleton 里用 Scoped 服务</h2>
+
+<p>
+  hosted service 是 Singleton，将来你会想在里面用 <code>DbContext</code>（EF Core 默认 Scoped）。直接注入 = 第 4 课的 Captive Dependency，
+  Development 环境下 <code>ValidateScopes</code> 会直接拒绝启动。正确做法：<strong>每次迭代自己开一个 Scope</strong>。
+</p>
+
+<pre><code>public sealed class OrderSyncWorker(
+    IServiceScopeFactory scopeFactory,          // ← 注入工厂，不注入 Scoped 服务本身
+    ILogger&lt;OrderSyncWorker&gt; logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            using (var scope = scopeFactory.CreateScope())          // 一次迭代 = 一个 Scope（对应 Web 里的一个请求）
+            {
+                var sync = scope.ServiceProvider.GetRequiredService&lt;IOrderSyncService&gt;();  // Scoped
+                await sync.RunOnceAsync(stoppingToken);
+            }                                                        // Scope 结束，DbContext 等 IDisposable 被释放
+            await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+        }
+    }
+}
+</code></pre>
+
+<h2>HostOptions：关闭超时与并发启动</h2>
+
+<table class="tbl">
+  <tr><th>属性</th><th>默认</th><th>含义</th></tr>
+  <tr>
+    <td><code>ShutdownTimeout</code></td>
+    <td><strong>30 秒</strong></td>
+    <td><code>StopAsync</code> 的总预算。超时后传给各服务的 token 被取消，Host 不再等待，直接往下走。你的 <code>ExecuteAsync</code> 如果 30 秒内没退出，会被丢下</td>
+  </tr>
+  <tr>
+    <td><code>StartupTimeout</code></td>
+    <td>无限</td>
+    <td><code>StartAsync</code> 的总预算。生产上建议设一个，避免某个服务的 <code>StartAsync</code> 卡死让进程"假活"</td>
+  </tr>
+  <tr>
+    <td><code>ServicesStartConcurrently</code></td>
+    <td><code>false</code></td>
+    <td><code>true</code> 时所有 hosted service 并行启动——启动更快，但失去"注册顺序 = 启动顺序"的保证</td>
+  </tr>
+  <tr>
+    <td><code>ServicesStopConcurrently</code></td>
+    <td><code>false</code></td>
+    <td>同上，用于关闭</td>
+  </tr>
+  <tr>
+    <td><code>BackgroundServiceExceptionBehavior</code></td>
+    <td><code>StopHost</code></td>
+    <td>见陷阱 2</td>
+  </tr>
+</table>
+
+<pre><code>// 代码配置
+builder.Services.Configure&lt;HostOptions&gt;(o =>
+{
+    o.ShutdownTimeout = TimeSpan.FromSeconds(60);
+    o.StartupTimeout  = TimeSpan.FromSeconds(30);
+});
+
+// 或 appsettings.json —— Host 会从配置里读这几个键
+// { "shutdownTimeoutSeconds": 60, "startupTimeoutSeconds": 30, "servicesStartConcurrently": true }
+</code></pre>
+
+<div class="callout callout--warn">
+⚠️ <strong>容器里的 30 秒。</strong><code>docker stop</code> 和 K8s 的 <code>terminationGracePeriodSeconds</code> 默认也是 30 秒——发 SIGTERM，30 秒后 SIGKILL。
+如果你把 <code>ShutdownTimeout</code> 调到 60 秒，编排器会在第 30 秒直接杀进程，你调的 60 秒毫无意义。两边要一起调。
+</div>
+
+<h2>替代 ServiceBase / TopShelf：作为 Windows 服务或 systemd 运行</h2>
+
+<p>
+  同一个 Worker 项目，加一行就能作为系统服务运行——这就是 <code>IHostLifetime</code> 可替换的价值：
+</p>
+
+<pre><code>// NuGet: Microsoft.Extensions.Hosting.WindowsServices
+// NuGet: Microsoft.Extensions.Hosting.Systemd
+var builder = Host.CreateApplicationBuilder(args);
+
+builder.Services.AddWindowsService(o => o.ServiceName = "OrderSync");  // 换成 WindowsServiceLifetime：SCM 的 Start/Stop 映射到 Host 的 Start/Stop
+builder.Services.AddSystemd();                                          // 换成 SystemdLifetime：支持 Type=notify，向 systemd 报告"已就绪"
+
+// 两个都加没关系——各自检测运行环境，不在对应环境下就什么都不做，退回 ConsoleLifetime
+</code></pre>
+
+<pre><code># 安装（Windows）
+sc.exe create OrderSync binPath= "C:\svc\OrderSync.exe"
+sc.exe start OrderSync
+</code></pre>
+
+<div class="callout callout--warn">
+⚠️ <strong>作为 Windows 服务运行时最常见的第一个错误：找不到 appsettings.json。</strong>
+上一课讲过 ContentRoot 默认是当前工作目录——服务由 SCM 启动时当前目录是 <code>C:\Windows\System32</code>。
+现代版本（.NET 6+）的 Host builder 有一个专门的特判：<strong>当前目录恰好是 System32 时，退回 <code>AppContext.BaseDirectory</code></strong>（exe 所在目录），
+源码注释直接点名了 Windows 服务和 MSIX 这两个场景（<a href="https://github.com/dotnet/runtime/blob/main/src/libraries/Microsoft.Extensions.Hosting/src/HostingHostBuilderExtensions.cs">HostingHostBuilderExtensions.SetDefaultContentRoot</a>）。
+老版本没有这个特判，需要自己 <code>UseContentRoot(AppContext.BaseDirectory)</code>。另外注意：这个特判只认 System32，如果你的服务被配置成其他工作目录，还是会找不到文件。
+</div>
+
+<h2>检查理解</h2>
+
+<div class="quiz" id="quiz1"
+     data-feedback-correct="✅ 正确！Host 会 await 每个 StartAsync，等它返回才启动下一个。while(true) 放在 StartAsync 里，Host 永远启动不完；长循环要放在 BackgroundService.ExecuteAsync。"
+     data-feedback-wrong="❌ 不对。IHostedService.StartAsync 被 Host await——它返回了，Host 才继续启动下一个服务。无限循环放在里面会让 Host 永远卡在启动阶段。长循环应放在 BackgroundService.ExecuteAsync。">
+  <div class="quiz__q">❓ 直接实现 <code>IHostedService</code>，在 <code>StartAsync</code> 里写 <code>while(!ct.IsCancellationRequested)</code> 轮询循环，会发生什么？</div>
+  <div class="quiz__opt" data-answer="wrong">正常运行——这就是 IHostedService 的设计用法</div>
+  <div class="quiz__opt" data-answer="correct">Host 永远卡在启动阶段——后续服务和 ApplicationStarted 都不会触发</div>
+  <div class="quiz__opt" data-answer="wrong">编译错误——StartAsync 必须在 StartupTimeout 内返回</div>
+  <div class="quiz__opt" data-answer="wrong">Host 检测到未完成的 Task，自动改为后台运行</div>
+  <div class="quiz__feedback" id="quiz1-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz2" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！.NET 6+ 默认 BackgroundServiceExceptionBehavior = StopHost：记录日志后调用 StopApplication()，整个 Host 关闭。.NET 5 及以前是静默吞掉。"
+     data-feedback-wrong="❌ 不对。.NET 6+ 的默认行为是 StopHost——记日志，然后停止整个 Host（进程退出，非零退出码）。静默吞掉是 .NET 5 及以前的行为，现在需要显式设 Ignore 才会那样。">
+  <div class="quiz__q">❓ .NET 8 上，一个 <code>BackgroundService.ExecuteAsync</code> 抛出未捕获的 <code>InvalidOperationException</code>，默认结果是？</div>
+  <div class="quiz__opt" data-answer="wrong">该服务停止，其他服务和进程继续运行，异常写入日志</div>
+  <div class="quiz__opt" data-answer="wrong">异常被静默吞掉，什么都不会发生，服务悄悄死亡</div>
+  <div class="quiz__opt" data-answer="correct">记录日志后整个 Host 关闭，进程以非零退出码结束</div>
+  <div class="quiz__opt" data-answer="wrong">Host 自动重启该服务，最多重试三次后放弃</div>
+  <div class="quiz__feedback" id="quiz2-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz3" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！Hosted service 按注册顺序启动、按倒序（LIFO）关闭。B 先注册就先启动、后关闭——正好匹配 A 依赖 B 的关系。"
+     data-feedback-wrong="❌ 不对。默认（ServicesStartConcurrently = false）下，启动顺序 = 注册顺序，关闭顺序 = 注册顺序的倒序。A 依赖 B，就先注册 B：B 先起、A 后起；关闭时 A 先停、B 后停。">
+  <div class="quiz__q">❓ 后台服务 A 依赖 B 已经启动（B 建好连接池 A 才能用）。默认配置下，应该怎么注册？</div>
+  <div class="quiz__opt" data-answer="wrong">先 AddHostedService&lt;A&gt; 再 AddHostedService&lt;B&gt;——Host 会解析依赖自动排序</div>
+  <div class="quiz__opt" data-answer="correct">先 AddHostedService&lt;B&gt; 再 AddHostedService&lt;A&gt;——注册顺序即启动顺序</div>
+  <div class="quiz__opt" data-answer="wrong">顺序无关——所有 hosted service 默认并行启动</div>
+  <div class="quiz__opt" data-answer="wrong">在 A 的构造函数注入 B——DI 会保证 B 先构造即先启动</div>
+  <div class="quiz__feedback" id="quiz3-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz4" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！Hosted service 是 Singleton，直接注入 Scoped 服务是 Captive Dependency。正确做法是注入 IServiceScopeFactory，在每次迭代里 CreateScope() 再解析。"
+     data-feedback-wrong="❌ 不对。BackgroundService 是 Singleton，直接注入 DbContext（Scoped）会造成 Captive Dependency——Development 下 ValidateScopes 直接拒绝启动。应注入 IServiceScopeFactory，每次迭代 CreateScope()。">
+  <div class="quiz__q">❓ 一个 <code>BackgroundService</code> 每分钟需要用 EF Core 的 <code>DbContext</code>（Scoped）同步一次数据，正确写法是？</div>
+  <div class="quiz__opt" data-answer="wrong">构造函数直接注入 DbContext——Host 会为 hosted service 自动创建 Scope</div>
+  <div class="quiz__opt" data-answer="wrong">把 DbContext 改注册为 Singleton——后台服务本来就只需要一个</div>
+  <div class="quiz__opt" data-answer="correct">注入 IServiceScopeFactory，每次迭代 CreateScope() 后解析 DbContext</div>
+  <div class="quiz__opt" data-answer="wrong">注入 IServiceProvider，每次迭代 GetRequiredService&lt;DbContext&gt;()</div>
+  <div class="quiz__feedback" id="quiz4-feedback"></div>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+<h2>关键术语</h2>
+
+<dl>
+  <dt><strong>IHostedService</strong></dt>
+  <dd><code>StartAsync</code> / <code>StopAsync</code> 两个方法的接口。通过 <code>AddHostedService&lt;T&gt;()</code> 注册，本质是 Singleton。<code>StartAsync</code> 被 Host await——它是"启动"不是"运行"，长循环不能放这里。</dd>
+  <dt><strong>BackgroundService</strong></dt>
+  <dd><code>IHostedService</code> 的抽象基类，你只实现 <code>ExecuteAsync(CancellationToken stoppingToken)</code>。基类的 <code>StartAsync</code> 调用 <code>ExecuteAsync</code> 但不 await，<code>StopAsync</code> 取消 token 后等待其结束。<code>stoppingToken</code> 是唯一的退出信号，必须传给所有 <code>await</code>。</dd>
+  <dt><strong>IHostedLifecycleService</strong></dt>
+  <dd>.NET 8+ 扩展接口，在 <code>StartAsync/StopAsync</code> 前后各加一个钩子：<code>StartingAsync → StartAsync → StartedAsync</code>，<code>StoppingAsync → StopAsync → StoppedAsync</code>。</dd>
+  <dt><strong>启动顺序 / 关闭顺序</strong></dt>
+  <dd>默认串行：启动按注册顺序，关闭按注册顺序的倒序（LIFO）。<code>ApplicationStarted</code> 在所有服务启动完成后触发；<code>ApplicationStopping</code> 在任何服务停止之前触发。</dd>
+  <dt><strong>BackgroundServiceExceptionBehavior</strong></dt>
+  <dd><code>HostOptions</code> 的属性。.NET 6+ 默认 <code>StopHost</code>：<code>ExecuteAsync</code> 未捕获异常 → 记日志 → 关闭整个 Host。<code>Ignore</code> 恢复 .NET 5 的静默吞掉行为（不推荐）。</dd>
+  <dt><strong>ShutdownTimeout</strong></dt>
+  <dd><code>HostOptions</code> 的属性，默认 30 秒。<code>StopAsync</code> 的总预算，超时后各服务收到的 token 被取消，Host 不再等待。要与容器编排器的 grace period 一起调。</dd>
+  <dt><strong>IServiceScopeFactory</strong></dt>
+  <dd>在 Singleton（如 hosted service）中安全使用 Scoped 服务的方式：注入工厂，每次工作单元 <code>CreateScope()</code>，从 <code>scope.ServiceProvider</code> 解析，<code>using</code> 结束时释放。一次迭代对应 Web 里的一个请求。</dd>
+  <dt><strong>AddWindowsService / AddSystemd</strong></dt>
+  <dd>替换 <code>IHostLifetime</code> 为 <code>WindowsServiceLifetime</code> / <code>SystemdLifetime</code>，让同一个 Worker 项目作为系统服务运行。替代 Framework 时代的 <code>ServiceBase</code> 和 TopShelf。检测到不在对应环境时自动退回 <code>ConsoleLifetime</code>。</dd>
+</dl>
+
+<h2>推荐阅读</h2>
+
+<p>📖 <strong>主文档：</strong><a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/workers">Worker Services in .NET</a> — 模板、<code>BackgroundService</code>、Signal completion、Docker</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/generic-host#host-shutdown">Generic Host → Host shutdown</a> — SIGTERM 处理的演进、<code>Environment.Exit</code> 为什么不行、关闭时序图</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/windows-service">Create a Windows Service using BackgroundService</a> — <code>AddWindowsService</code> 完整教程，含 <code>sc.exe</code> 安装步骤</p>
+
+<p>📖 <a href="https://andrewlock.net/controlling-ihostedservice-execution-order-in-aspnetcore-3/">Controlling IHostedService execution order</a> — Andrew Lock 详解注册顺序与启动顺序的关系</p>
+
+<p>📖 <strong>本课速查：</strong><a href="../reference/host-quick-reference.html">Host 模型速查</a></p>
+
+<h2>接下来</h2>
+
+<p>
+  Host 模块（第 9–10 课）结束。你现在能搭一个完整的长驻 .NET 进程：DI、配置、后台任务、优雅关闭、作为系统服务部署。
+  还差最后一块基础设施：<strong>日志</strong>。下一课讲 <code>ILogger</code>——为什么 <code>LogInformation("Hello, {Name}!", name)</code>
+  不是字符串拼接、什么是结构化日志、Provider 和 Scope 怎么用、以及 <code>[LoggerMessage]</code> 源生成器如何做到零分配。
+  这也是 log4net/NLog 用户思维转换最大的一课。
+</p>
+
+<div class="callout callout--info">
+💬 <strong>有问题？</strong> 直接问我！比如 "多个 BackgroundService 之间怎么传递数据？"（答案是第 13 课的 Channel）
+或 "定时任务用 BackgroundService + Task.Delay 还是 PeriodicTimer？"
+或 "K8s 的 preStop hook 和 ApplicationStopping 是什么关系？"
+</div>
+
+<div class="lesson-nav">
+  <a href="0009-generic-host-fundamentals.html">← 上一课：Generic Host 基础</a>
+  <a href="0011-logging-structured.html">下一课：结构化日志（待生成）→</a>
+</div>
+
+</body>
+</html>

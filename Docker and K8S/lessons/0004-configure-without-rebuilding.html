@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 4 课：不改镜像，只改配置</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/diagram.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="eyebrow">Lesson 04 · 主线 B：运行与配置</p>
+  <h1>不改镜像，只改配置</h1>
+  <p class="subtitle">同一个镜像，换个端口、换个问候语、换个数据库密码 —— 全部在 <code>docker run</code> 那一刻决定，一次 build 都不用。</p>
+</header>
+
+<p class="lede">
+  前三课你学会了<em>造</em>镜像。但日常工作里更多的时刻是：拿到一个别人的镜像（postgres、redis、nginx），
+  要让它按你的方式跑起来。镜像是只读的，你改不了它 —— 那配置从哪进去？
+  答案只有三个入口：<strong>环境变量</strong>、<strong>挂载文件</strong>、<strong>端口映射</strong>。
+  这一课把三个入口全部走一遍，先用你自己的 <code>hello-api</code>，再用 <code>postgres</code>。
+</p>
+
+<h2>一、原理：运行期的三个入口</h2>
+
+<div class="timeline">
+  <div class="phase">
+    <h4>镜像（只读）</h4>
+    <p class="when">build 时冻结</p>
+    <ul>
+      <li>程序文件、依赖</li>
+      <li><code>ENV</code> 写的默认值</li>
+      <li><code>appsettings.json</code> 的默认值</li>
+    </ul>
+  </div>
+  <div class="arrow">→<br><small>docker run</small></div>
+  <div class="phase run">
+    <h4>容器（可配）</h4>
+    <p class="when">run 时注入</p>
+    <ul>
+      <li><code>-e KEY=VALUE</code> 覆盖环境变量</li>
+      <li><code>-v 宿主机路径:容器路径</code> 覆盖文件</li>
+      <li><code>-v 卷名:容器路径</code> 持久化数据</li>
+      <li><code>-p 宿主机端口:容器端口</code></li>
+    </ul>
+  </div>
+</div>
+
+<table class="defs">
+  <tr><th>参数</th><th>做什么</th><th>典型用途</th></tr>
+  <tr><td><code>-e KEY=VALUE</code></td><td>给容器进程设一个环境变量，覆盖镜像里 <code>ENV</code> 的同名值</td><td>密码、端口、连接串、开关</td></tr>
+  <tr><td><code>-v C:\path\file:/app/file</code></td><td><strong>bind mount</strong>：把宿主机上的文件/目录"叠"到容器路径上，遮住镜像里原来的</td><td>覆盖配置文件、挂初始化脚本</td></tr>
+  <tr><td><code>-v pgdata:/var/lib/…</code></td><td><strong>named volume</strong>：Docker 自己管理的一块存储，容器删了它还在</td><td>数据库数据、上传文件</td></tr>
+  <tr><td><code>-p 5000:8080</code></td><td>宿主机 5000 → 容器 8080。只是转发，<em>不改</em>应用监听什么</td><td>对外暴露服务</td></tr>
+</table>
+
+<p>
+  怎么区分 <code>-v</code> 的两种用法？看冒号左边：<strong>是路径（含 <code>\</code> 或 <code>/</code>）就是 bind mount，是个名字就是 named volume</strong>。
+  权威说明：<a href="https://docs.docker.com/engine/storage/bind-mounts/">Bind mounts</a> ·
+  <a href="https://docs.docker.com/engine/storage/volumes/">Volumes</a>。
+</p>
+
+<div class="note">
+  <p><strong>.NET 怎么读这些？</strong>ASP.NET Core 的配置是<em>分层</em>的：<code>appsettings.json</code> → <code>appsettings.{Env}.json</code> → <strong>环境变量</strong> → 命令行参数，
+  <strong>后加载的覆盖先加载的</strong>。所以 <code>-e</code> 能压过 <code>appsettings.json</code>，无论那个文件是镜像里的还是你挂进去的。
+  见 <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/configuration/#default-application-configuration-sources">Configuration in ASP.NET Core</a>。</p>
+</div>
+
+<h2>二、动手</h2>
+
+<p>在 <code>demo\hello-api</code> 目录下操作。约 8 分钟。</p>
+
+<ol class="steps">
+
+<li>
+<p><strong>不重新 build，把监听端口从 8080 改成 5000。</strong></p>
+<pre><code>cd demo\hello-api
+
+docker run -d --rm --name hello -p 5000:5000 -e ASPNETCORE_HTTP_PORTS=5000 hello-api:1.1
+curl http://localhost:5000
+<span class="c"># → Hello from a container!</span>
+docker logs hello
+<span class="c"># 里面有一行：Now listening on: http://[::]:5000</span>
+docker rm -f hello</code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  <code>ASPNETCORE_HTTP_PORTS</code> 是 aspnet 镜像里 <code>ENV</code> 预设的变量（默认 8080），<code>-e</code> 把它覆盖了。
+  <code>-p 5000:5000</code> 是<em>另一件事</em>：宿主机 5000 转发到容器 5000。上一课第 5 题的坑 —— 只改 <code>-p</code> 不改监听端口，容器里没人接电话。
+  <code>--rm</code>：容器停止后自动删除，做实验免得留一堆尸体。
+</p>
+</li>
+
+<li>
+<p><strong>唯一一次 build：让应用读一个配置项。</strong>这是代码改动，所以必须重建 —— 对照后面几步，感受"什么要 build、什么不要"。</p>
+<pre><code>(Get-Content Program.cs) -replace 'app.MapGet\("/", \(\) => "Hello from a container!"\);', 'app.MapGet("/", (IConfiguration cfg) => cfg["Greeting"] ?? "Hello from a container!");' | Set-Content -Encoding utf8 Program.cs
+Get-Content Program.cs
+
+docker build -t hello-api:1.2 .</code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  现在 <code>/</code> 返回配置里的 <code>Greeting</code>；没配就回退到原句。restore 那层依旧 <code>CACHED</code>。
+</p>
+</li>
+
+<li>
+<p><strong>同一个镜像，三种方式喂配置。</strong></p>
+<pre><code><span class="c"># 准备一个要挂进去的配置文件</span>
+mkdir config
+'{ "Greeting": "Hello from a mounted file!" }' | Set-Content -Encoding utf8 config\appsettings.json
+
+<span class="c"># ① 什么都不给 → 回退值</span>
+docker run -d --rm --name hello -p 8080:8080 hello-api:1.2
+curl http://localhost:8080
+docker rm -f hello
+
+<span class="c"># ② 环境变量</span>
+docker run -d --rm --name hello -p 8080:8080 -e Greeting="Hello from an env var!" hello-api:1.2
+curl http://localhost:8080
+docker rm -f hello
+
+<span class="c"># ③ bind mount 覆盖 appsettings.json</span>
+docker run -d --rm --name hello -p 8080:8080 -v "${PWD}\config\appsettings.json:/app/appsettings.json" hello-api:1.2
+curl http://localhost:8080
+docker exec hello cat /app/appsettings.json     <span class="c"># 容器里看到的已经是你的文件</span>
+docker rm -f hello
+
+<span class="c"># ④ 两个都给 → 谁赢？</span>
+docker run -d --rm --name hello -p 8080:8080 -v "${PWD}\config\appsettings.json:/app/appsettings.json" -e Greeting="Hello from an env var!" hello-api:1.2
+curl http://localhost:8080
+docker rm -f hello</code></pre>
+<div class="win">
+  <p>① Hello from a container! → ② Hello from an env var! → ③ Hello from a mounted file! → ④ <strong>Hello from an env var!</strong></p>
+  <p>镜像一个字节没动，行为换了三次。④ 证明了 .NET 的覆盖顺序：环境变量压过文件。</p>
+</div>
+<div class="warn">
+  <p><strong>Windows 上 bind mount 的路径写法：</strong>冒号左边必须是<strong>绝对路径</strong>，所以用 <code>${PWD}</code> 拼出来；
+  反斜杠、正斜杠 Docker Desktop 都认；整段用双引号包住，防止 PowerShell 把冒号当别的东西。
+  路径写错不会报错 —— Docker 会在容器里创建一个空<em>目录</em>盖住原文件，应用启动就崩。用 <code>docker exec hello ls -la /app</code> 验证。</p>
+</div>
+</li>
+
+<li>
+<p><strong>第三方镜像：先让它告诉你缺什么。</strong>不查文档，直接跑 postgres：</p>
+<pre><code>docker run -d --name pg postgres:17-alpine
+docker ps -a --filter name=pg      <span class="c"># STATUS: Exited (1)</span>
+docker logs pg</code></pre>
+<pre><code>Error: Database is uninitialized and superuser password is not specified.
+       You must specify POSTGRES_PASSWORD to a non-empty value for the
+       superuser. For example, "-e POSTGRES_PASSWORD=password" on "docker run".</code></pre>
+<p>
+  容器秒退 → <strong>第一反应永远是 <code>docker logs</code></strong>。写得好的镜像会把缺的配置直接告诉你。
+  再去 <a href="https://hub.docker.com/_/postgres">Docker Hub 的 postgres 页面</a>核对：<code>POSTGRES_PASSWORD</code> 必需，<code>POSTGRES_DB</code> 可选，数据在 <code>/var/lib/postgresql/data</code>。
+  这三类信息（<em>必需 env、可选 env、数据路径</em>）是读任何镜像文档时要找的东西。
+</p>
+<pre><code>docker rm -f pg</code></pre>
+</li>
+
+<li>
+<p><strong>用 named volume 让数据活过容器。</strong></p>
+<pre><code>docker run -d --name pg -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=shop -p 5432:5432 -v pgdata:/var/lib/postgresql/data postgres:17-alpine
+Start-Sleep 5
+docker exec pg psql -U postgres -d shop -c "CREATE TABLE orders(id int); INSERT INTO orders VALUES (1),(2);"
+
+<span class="c"># 干掉容器 —— 连同它的文件系统</span>
+docker rm -f pg
+
+<span class="c"># 同样的命令再跑一次，接上同一个卷</span>
+docker run -d --name pg -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=shop -p 5432:5432 -v pgdata:/var/lib/postgresql/data postgres:17-alpine
+Start-Sleep 5
+docker exec pg psql -U postgres -d shop -c "SELECT count(id) FROM orders;"
+<span class="c"># → 2</span>
+
+docker volume ls --filter name=pgdata</code></pre>
+<div class="win">
+  <p>容器删了又建，<code>orders</code> 表还在。数据不在容器里，在 <code>pgdata</code> 卷里；容器只是"插上"它。
+  自己试试：去掉 <code>-v</code> 重复这一步，表会消失。</p>
+</div>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  顺手回忆上一课：<code>docker exec pg sh -c 'echo $POSTGRES_PASSWORD'</code> 能打印出 <code>secret</code> —— 因为 <code>-e</code> 是运行期环境变量，
+  和只活在构建期的 <code>ARG</code> 正相反。
+</p>
+</li>
+
+</ol>
+
+<h2>三、检索练习</h2>
+
+<div class="quiz" data-answer="B">
+  <p class="q">1. 想让 <code>hello-api</code> 容器里的应用监听 5000 而不是 8080，且不重新 build。怎么做？</p>
+  <button data-opt="A">修改暴露端口指令然后重新构建镜像</button>
+  <button data-opt="B">启动时用环境变量覆盖应用监听端口</button>
+  <button data-opt="C">启动时用端口映射把宿主机改成五千</button>
+  <button data-opt="D">修改配置文件然后重新构建整个镜像</button>
+  <p class="why"><code>-e ASPNETCORE_HTTP_PORTS=5000</code>。<code>-p</code> 只是转发，不改应用监听什么；<code>EXPOSE</code> 是纯元数据，改了也没用。</p>
+</div>
+
+<div class="quiz" data-answer="A">
+  <p class="q">2. 同时给了 <code>-e Greeting=X</code> 和挂载了一个 <code>Greeting</code> 为 Y 的 <code>appsettings.json</code>。.NET 应用读到什么？</p>
+  <button data-opt="A">环境变量的值，环境变量在后覆盖文件</button>
+  <button data-opt="B">配置文件的值，文件比环境变量更优先</button>
+  <button data-opt="C">启动时报错，同一个键不允许两个来源</button>
+  <button data-opt="D">不确定，取决于两个来源谁先加载完成</button>
+  <p class="why">ASP.NET Core 默认配置源顺序：appsettings.json → 环境变量 → 命令行，后者覆盖前者。这是实验 ④ 亲眼看到的。</p>
+</div>
+
+<div class="quiz" data-answer="A">
+  <p class="q">3. <code>docker run -d --name pg postgres:17-alpine</code> 之后容器立刻退出。第一步做什么？</p>
+  <button data-opt="A">用日志命令看容器自己说了什么</button>
+  <button data-opt="B">换一个更新版本的镜像再试一次</button>
+  <button data-opt="C">加上端口映射参数后再启动一次</button>
+  <button data-opt="D">先删除镜像再重新拉取后再运行</button>
+  <p class="why"><code>docker logs pg</code>。容器退出前的输出还在，官方镜像通常会明确说缺什么。这是排查一切"跑不起来"的第一步。</p>
+</div>
+
+<div class="typein" data-answer="-v pgdata:/var/lib/postgresql/data|--volume pgdata:/var/lib/postgresql/data|--mount type=volume,src=pgdata,dst=/var/lib/postgresql/data|--mount type=volume,source=pgdata,target=/var/lib/postgresql/data" data-hint="冒号左边是卷名（不是路径），右边是容器内的数据目录。">
+  <p class="q">4. 只写出 <code>docker run</code> 里那一个参数：把 named volume <code>pgdata</code> 挂到 postgres 的数据目录 <code>/var/lib/postgresql/data</code>。</p>
+</div>
+
+<div class="quiz" data-answer="A">
+  <p class="q">5. 你要用本机的一个 <code>appsettings.json</code> 覆盖容器 <code>/app</code> 里的同名文件。用哪种方式？</p>
+  <button data-opt="A">绑定挂载，源是宿主机上一个具体的路径</button>
+  <button data-opt="B">命名卷，源是引擎自己管理的一块存储区</button>
+  <button data-opt="C">环境变量，把整个文件内容当作字符串传</button>
+  <button data-opt="D">重新构建，把新文件复制进镜像的层里面</button>
+  <p class="why">要指定"宿主机上的哪个文件" → bind mount。named volume 由 Docker 管理，你不直接指定它在宿主机的位置，适合数据库数据这类"我不关心它存哪，只要别丢"的东西。</p>
+</div>
+
+<div class="recall">
+  <p class="q">6. 拿到一个从没用过的第三方镜像，去 Docker Hub 看它的文档时，你要找哪三类信息？容器跑不起来时第一条命令是什么？</p>
+  <div class="a">
+    <ol>
+      <li><strong>必需的环境变量</strong>（如 <code>POSTGRES_PASSWORD</code>）—— 少了就启动失败</li>
+      <li><strong>可选的环境变量</strong>（如 <code>POSTGRES_DB</code>、<code>POSTGRES_USER</code>）—— 改默认行为</li>
+      <li><strong>数据/配置的路径</strong>（如 <code>/var/lib/postgresql/data</code>、<code>/docker-entrypoint-initdb.d</code>）—— 决定 <code>-v</code> 挂哪里</li>
+    </ol>
+    <p>外加：它监听哪个端口（决定 <code>-p</code>）。跑不起来 → <code>docker logs 容器名</code>。速查见<a href="../reference/runtime-config.html">运行期配置速查</a>。</p>
+  </div>
+</div>
+
+<h2 id="next">四、下一步</h2>
+
+<p><strong>本课的一手资料</strong>：</p>
+<blockquote>
+  <a href="https://docs.docker.com/engine/storage/volumes/">Docker Docs — Volumes</a> 与
+  <a href="https://docs.docker.com/engine/storage/bind-mounts/">Bind mounts</a><br>
+  两种挂载各自的语义、什么时候用哪个。各约 5 分钟。<br>
+  .NET 侧：<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/configuration/">Configuration in ASP.NET Core</a>（只看 "Default application configuration sources" 一节）。
+</blockquote>
+
+<p>新增速查：<a href="../reference/runtime-config.html">运行期配置速查</a> —— <code>-e</code> / <code>-v</code> / <code>-p</code> 语法、Windows 路径写法、.NET 配置覆盖顺序、读镜像文档的清单。</p>
+
+<p>清理（保留 <code>hello-api:1.2</code>、<code>config\</code> 目录和 <code>pgdata</code> 卷，下一课 compose 要用）：</p>
+<pre><code>docker rm -f pg
+docker rm -f hello
+cd ..\..</code></pre>
+
+<p><strong>第 5 课预告：</strong>刚才那两条 <code>docker run</code> 各有六七个参数，每次敲都要翻笔记。
+<code>docker compose</code> 把它们写进一个 <code>compose.yaml</code>，一条 <code>docker compose up</code> 同时拉起 hello-api + postgres，
+并让 hello-api 通过服务名连上数据库。</p>
+
+<div class="ask">
+  <strong>随时问我。</strong>本课所有命令已在本机实测（Windows 11 + Docker Desktop），四个 curl 输出和 postgres 的报错原文都是真实结果。
+  如果 <code>${PWD}</code> 那条 bind mount 在你机器上出了岔子，把 <code>docker exec hello ls -la /app</code> 的输出贴给我。
+</div>
+
+<div class="footer">
+  <p>课程：Docker &amp; Kubernetes · 第 4 课 ｜
+  上一课：<a href="0003-dotnet-multi-stage-build.html">.NET 多阶段构建</a> ｜
+  <a href="../reference/GLOSSARY.html">术语表</a> ·
+  <a href="../reference/runtime-config.html">运行期配置速查</a> ·
+  <a href="../reference/dockerfile-instruction-timing.html">指令时机速查</a></p>
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

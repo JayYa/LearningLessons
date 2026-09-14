@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 11 · 隔离级别只决定一件事：你看的是哪一刻的快照</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/race.css">
+<link rel="stylesheet" href="../assets/binsort.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 11 · 数据库 · BeiGene 面试备战 · 交互课</p>
+  <h1>隔离级别只决定一件事：<br>你看的是哪一刻的快照<br><span style="font-size:0.62em;color:var(--ink-soft);">附：.NET 里事务的五种写法，以及「分布式事务」该怎么答</span></h1>
+  <p class="standfirst">题库第 32、33 行：「数据库处理分布式事务以及 Transaction 级别」「事务的使用方式有哪些」。多数人把四个隔离级别背成一张「安全性从低到高」的表，然后被追问一句「那 PostgreSQL 默认级别下，第七课那条 <code>UPDATE ... WHERE status='approved'</code> 为什么是对的」就哑了。这一课把四个级别压成<strong>一个机制</strong>（快照在哪一刻拍），让你在浏览器里亲眼看三种现象怎么在不同级别下出现或消失，再把 .NET 那边的写法和「分布式事务」一并收掉。</p>
+</header>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>约 35 分钟。<a href="#s2">第二节</a>的赛跑模拟器有四个标签页，<strong>每一步点之前先猜</strong>，后面的段落直接引用你点出来的结果。<a href="#s6">第六节</a>的 psql 版是可选的，给想在真库里看到那两条报错的人。</p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">先破一个错觉</a> <span class="depth">— 隔离级别不是安全档位</span></li>
+    <li><a href="#s2">亲手让三种现象发生</a> <span class="depth">— 不可重复读 / 丢失更新 / 写偏斜</span></li>
+    <li><a href="#s3">四个级别，一张表，三个 PG 特例</a></li>
+    <li><a href="#s4">回到第七课</a> <span class="depth">— 抢单为什么不需要升级别</span></li>
+    <li><a href="#s5">.NET 里事务的五种写法</a> <span class="depth">— 题「事务的使用方式」</span></li>
+    <li><a href="#s6">可选：在 psql 里看两条报错</a></li>
+    <li><a href="#s7">分布式事务怎么答</a> <span class="depth">— 2PC 是什么，为什么不用</span></li>
+    <li><a href="#s8">归类练习</a> <span class="depth">— 这个场景要什么级别</span></li>
+    <li><a href="#s9">话术</a> <span class="depth">— 三段</span></li>
+    <li><a href="#s10">检验一下</a> <span class="depth">— 6 题</span></li>
+    <li><a href="#s11">下一课</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、先破一个错觉</h2>
+
+<p>教科书的表长这样：四个级别、三种现象、打勾打叉。它给人的印象是「级别越高越安全，怕出事就往上调」。这个模型答不了两个追问：「为什么默认是 Read Committed 而不是最安全的那个」「调高之后代码要不要改」。因为它把<strong>机制</strong>藏掉了。</p>
+
+<div class="callout">
+  <span class="label">这一课唯一必须记死的一句</span>
+  <p><strong>隔离级别决定的只有一件事：你的 SELECT 看的是哪一刻的快照。Read Committed 每条语句拍一张，Repeatable Read 整个事务只拍一张，Serializable 在这之上再加一道「提交前检查你读过的东西有没有被别人改」。</strong></p>
+</div>
+
+<p>PostgreSQL 靠 MVCC 实现这句话：每行数据可以同时存在多个版本，每个事务按自己的快照决定看哪个版本。<strong>写不阻塞读，读不阻塞写</strong>——所以脏读在 PG 里根本不可能发生，哪怕你要求 Read Uncommitted。官方原文：<q>PostgreSQL's Read Uncommitted mode behaves like Read Committed.</q>（<a href="https://www.postgresql.org/docs/current/transaction-iso.html">PostgreSQL — Transaction Isolation</a>）</p>
+
+<p>两个快照策略的精确定义，都是原文：</p>
+<ul>
+  <li><strong>Read Committed</strong>：<q>a SELECT query sees a snapshot of the database as of the instant the query begins to run.</q>——<strong>每条语句</strong>一张快照。</li>
+  <li><strong>Repeatable Read</strong>：<q>sees a snapshot as of the start of the first non-transaction-control statement in the transaction, not as of the start of the current statement.</q>——<strong>整个事务</strong>一张快照。</li>
+</ul>
+
+<p>剩下的一切——三种现象哪个级别出现、报错什么时候抛、要不要重试——都是这一句的推论。下一节让你亲手推。</p>
+
+<h2 id="s2">二、亲手让三种现象发生</h2>
+
+<p>场景沿用第七课的工单系统。两个事务 A、B 同时跑，你单步点。四个标签页，<strong>依次做</strong>：</p>
+<ol>
+  <li><strong>不可重复读 @ Read Committed</strong>：A 读两次同一行，中间 B 改了并提交。A 第二次读到什么？</li>
+  <li><strong>同一交错 @ Repeatable Read</strong>：一模一样的步骤，只换级别。A 第二次读到什么？</li>
+  <li><strong>丢失更新 @ Repeatable Read</strong>：A、B 都要 <code>UPDATE</code> 同一行。第二个提交的人会怎样？——读一下报错。</li>
+  <li><strong>写偏斜 @ Repeatable Read</strong>：两位复核员各自检查「至少有两人在岗」后下班。两个事务都提交了，结果在岗几人？</li>
+</ol>
+
+<div class="race" data-race='{
+  "label": "隔离级别赛跑 · 同一张 ticket 表，两个事务",
+  "actors": [{"id":"a","label":"事务 A"},{"id":"b","label":"事务 B"}],
+  "state": [
+    {"key":"status","label":"1001.status","init":"approved"},
+    {"key":"a_on","label":"张三.on_duty","init":"true"},
+    {"key":"b_on","label":"李四.on_duty","init":"true"}
+  ],
+  "strategies": [
+    {
+      "id":"nrr-rc",
+      "label":"① 不可重复读 @ Read Committed",
+      "sql":"-- 两边都是默认级别\nBEGIN;                                   -- A\nSELECT status FROM ticket WHERE id = 1001;\n-- ... B 在这中间改并提交 ...\nSELECT status FROM ticket WHERE id = 1001;   -- A 再读一次\nCOMMIT;",
+      "steps":[
+        {"actor":"a","text":"BEGIN; SELECT status → <strong>approved</strong>","note":"这条语句开始那一刻拍了张快照，看到 approved。"},
+        {"actor":"b","text":"BEGIN; UPDATE 1001 SET status = &#39;reviewing&#39;; COMMIT;","set":{"status":"reviewing"},"note":"B 改完立刻提交。注意 B 没有被 A 的 SELECT 挡住——<strong>读不阻塞写</strong>。"},
+        {"actor":"a","text":"SELECT status → <strong>reviewing</strong>","note":"新语句，新快照。B 已提交，所以看得到。同一个事务里两次读到不同值——这就是<strong>不可重复读</strong>。","tone":"bad"},
+        {"actor":"a","text":"COMMIT;"}
+      ],
+      "verdict":{"tone":"warn","title":"Read Committed 下，同一事务两次读同一行可以不一样。",
+        "text":"这不是 bug，是定义：每条语句一张快照。对绝大多数 OLTP 请求这完全没问题——一个 HTTP 请求里很少需要「两次读一致」。它成为问题的场景是<strong>报表 / 对账</strong>：先 SUM 一张表、再 COUNT 另一张表，两条语句之间有人提交，两个数就对不上。"}
+    },
+    {
+      "id":"nrr-rr",
+      "label":"② 同一交错 @ Repeatable Read",
+      "sql":"BEGIN ISOLATION LEVEL REPEATABLE READ;   -- A 只改这一行\nSELECT status FROM ticket WHERE id = 1001;\n-- ... B 在这中间改并提交 ...\nSELECT status FROM ticket WHERE id = 1001;\nCOMMIT;",
+      "steps":[
+        {"actor":"a","text":"BEGIN RR; SELECT status → <strong>approved</strong>","note":"第一条语句开始那一刻拍快照。<strong>这张快照将用到事务结束。</strong>"},
+        {"actor":"b","text":"BEGIN; UPDATE 1001 SET status = &#39;reviewing&#39;; COMMIT;","set":{"status":"reviewing"},"note":"B 照样不被挡，照样提交成功。数据库里这一行<strong>确实已经是 reviewing 了</strong>。"},
+        {"actor":"a","text":"SELECT status → <strong>approved</strong>","note":"还是那张旧快照。A 看到的是「事务开始时的世界」，不是「现在的世界」。","tone":"good"},
+        {"actor":"a","text":"COMMIT;","note":"提交成功。A 全程没写任何东西，所以没有冲突可言。"}
+      ],
+      "verdict":{"tone":"good","title":"Repeatable Read 解决的就是「一个事务内看到一致的世界」。",
+        "text":"代价是：A 看到的<strong>可能已经过时</strong>。对只读的报表这正是你要的（一致性 &gt; 新鲜度）；对「读了再决定写什么」的业务逻辑，这会引出下一个标签页的问题。"}
+    },
+    {
+      "id":"lost-rr",
+      "label":"③ 丢失更新 @ Repeatable Read",
+      "sql":"-- A、B 都是 REPEATABLE READ，都要改同一行\nBEGIN ISOLATION LEVEL REPEATABLE READ;\nSELECT status FROM ticket WHERE id = 1001;\nUPDATE ticket SET status = &#39;reviewing&#39; WHERE id = 1001;\nCOMMIT;",
+      "steps":[
+        {"actor":"a","text":"BEGIN RR; SELECT status → approved","note":"A 拍快照。"},
+        {"actor":"b","text":"BEGIN RR; SELECT status → approved","note":"B 也拍快照，也看到 approved。两人都认为可以抢。"},
+        {"actor":"a","text":"UPDATE 1001 SET status = &#39;reviewing&#39;","set":{"status":"reviewing"},"note":"A 拿到行锁，改成功。还没提交。"},
+        {"actor":"b","text":"UPDATE 1001 ... → <strong>阻塞</strong>","note":"行被 A 锁着。原文：<q>the would-be updater will wait for the first updating transaction to commit or roll back</q>。","tone":"wait"},
+        {"actor":"a","text":"COMMIT;","note":"A 提交。行的最新版本是 reviewing，且这个版本诞生在 B 的快照<strong>之后</strong>。"},
+        {"actor":"b","text":"<strong>ERROR: could not serialize access due to concurrent update</strong>","note":"B 被唤醒，发现自己要改的行在自己快照之后被别人改过。RR 规则：<q>a repeatable read transaction cannot modify or lock rows changed by other transactions after the repeatable read transaction began</q>。整个事务回滚。","tone":"bad"}
+      ],
+      "verdict":{"tone":"warn","title":"Repeatable Read 靠「报错」防丢失更新，不靠「排队」。",
+        "text":"对比 Read Committed 下的同一交错（第七课第三节写法 ③）：B 被唤醒后<strong>重新求值 WHERE</strong>，条件不满足就 UPDATE 0，不报错。RR 做不到这一点——它的快照是旧的，没法「重看一眼」，只能把你整个事务打回去。官方因此说：<q>Applications using this level must be prepared to retry transactions due to serialization failures.</q><br><strong>这就是「调高级别代码要不要改」的答案：要。</strong>用 RR / Serializable 的代码必须有重试循环，否则用户会随机看到 500。"}
+    },
+    {
+      "id":"skew-rr",
+      "label":"④ 写偏斜 @ Repeatable Read",
+      "sql":"-- 规则：任何时刻至少 1 人在岗。两人各自执行：\nBEGIN ISOLATION LEVEL REPEATABLE READ;\nSELECT count(*) FROM reviewer WHERE on_duty;   -- 看到 2，觉得可以走\nUPDATE reviewer SET on_duty = false WHERE id = @me;\nCOMMIT;",
+      "steps":[
+        {"actor":"a","text":"BEGIN RR; SELECT count(*) WHERE on_duty → <strong>2</strong>","note":"张三：还有两个人，我走了还剩一个，可以。"},
+        {"actor":"b","text":"BEGIN RR; SELECT count(*) WHERE on_duty → <strong>2</strong>","note":"李四：同样的快照，同样的推理。"},
+        {"actor":"a","text":"UPDATE reviewer SET on_duty = false WHERE id = 张三","set":{"a_on":"false"},"note":"改的是<strong>自己那一行</strong>。"},
+        {"actor":"b","text":"UPDATE reviewer SET on_duty = false WHERE id = 李四","set":{"b_on":"false"},"note":"改的是<strong>另一行</strong>。两个 UPDATE 碰的不是同一行——<strong>没有行锁冲突</strong>。"},
+        {"actor":"a","text":"COMMIT; ✓"},
+        {"actor":"b","text":"COMMIT; ✓","note":"两个都成功。看一眼行状态。","tone":"bad"}
+      ],
+      "verdict":{"tone":"bad","title":"在岗 0 人。两个事务各自都是对的，合起来违反了规则。",
+        "text":"这叫<strong>写偏斜（write skew）</strong>：两个事务<strong>读了重叠的数据、写了不同的行</strong>。RR 只看「我要写的行有没有被改」——没有，所以放行。它看不到「我<em>读过</em>的行被改了」。<br>解法两条：<strong>(a)</strong> 改成 Serializable——PG 用 <q>predicate locking</q> 记录你读过什么，提交时发现 <q>read/write dependencies among transactions</q> 就把其中一个打回，报错 <code>could not serialize access due to read/write dependencies</code>，同样要重试；<strong>(b)</strong> 留在 RC，把「读」变成「锁」：<code>SELECT ... FOR UPDATE</code> 锁住所有在岗行，或者把「在岗人数」物化成一行去 <code>UPDATE ... WHERE cnt &gt; 1</code>。<strong>面试里能说出「写偏斜」三个字并给出这两条解法，这道题就到顶了。</strong>"}
+    }
+  ]
+}'></div>
+
+<div class="callout">
+  <span class="label">四个标签页，四个结论</span>
+  <ol>
+    <li><strong>RC 每条语句一张快照</strong>，同一事务两次读可以不同。对单个 HTTP 请求几乎无害，对多语句报表有害。</li>
+    <li><strong>RR 整个事务一张快照</strong>，代价是可能过时。只读事务的最佳选择。</li>
+    <li><strong>RR 下的写冲突靠报错解决，不靠重看 WHERE。</strong>所以 RR / Serializable 的代码<strong>必须带重试</strong>——这是「调级别」真正的成本。</li>
+    <li><strong>RR 防不了写偏斜</strong>（读重叠、写不同行）。要么 Serializable（谓词锁 + 报错 + 重试），要么留在 RC 用 <code>FOR UPDATE</code> 把读变成锁。</li>
+  </ol>
+</div>
+
+<h2 id="s3">三、四个级别，一张表，三个 PG 特例</h2>
+
+<p>现在再看那张表，每个格子你都能说出<strong>为什么</strong>了（<a href="https://www.postgresql.org/docs/current/transaction-iso.html">原表出处</a>）：</p>
+
+<table>
+  <thead><tr><th>级别</th><th>脏读</th><th>不可重复读</th><th>幻读</th><th>序列化异常（含写偏斜）</th><th>快照在哪一刻</th></tr></thead>
+  <tbody>
+    <tr><td>Read Uncommitted</td><td>标准允许，<strong>PG 不会</strong></td><td>可能</td><td>可能</td><td>可能</td><td>= Read Committed</td></tr>
+    <tr><td><strong>Read Committed（默认）</strong></td><td>不可能</td><td>可能</td><td>可能</td><td>可能</td><td>每条语句开始时</td></tr>
+    <tr><td>Repeatable Read</td><td>不可能</td><td>不可能</td><td>标准允许，<strong>PG 不会</strong></td><td>可能</td><td>事务第一条语句开始时</td></tr>
+    <tr><td>Serializable</td><td>不可能</td><td>不可能</td><td>不可能</td><td>不可能</td><td>同 RR + 提交前谓词锁检查</td></tr>
+  </tbody>
+</table>
+
+<p>三个 PG 特例，面试里说出任何一个都是加分项：</p>
+<ol>
+  <li><strong>PG 只实现了三个级别</strong>。原文：<q>internally only three distinct isolation levels are implemented</q>。Read Uncommitted 就是 Read Committed，因为 MVCC 下未提交的版本别人根本看不见。</li>
+  <li><strong>PG 的 RR 没有幻读</strong>。标准允许 RR 出现幻读（同样的 WHERE 第二次返回不同的行集），但 PG 的 RR 是整事务一张快照，行集当然也不变。所以 PG 的 RR 比标准更强——等于其它数据库说的「快照隔离」。</li>
+  <li><strong>Serializable 不是加锁，是检测</strong>。它叫 SSI（Serializable Snapshot Isolation）：正常跑，提交时发现依赖环就回滚一个。所以它比 RR 只多一点开销，但<strong>会随机失败</strong>——代码必须重试。</li>
+</ol>
+
+<div class="callout ext">
+  <span class="label">扩展 · 四个现象的精确定义（原文，背两个）</span>
+  <ul>
+    <li><strong>dirty read</strong>：<q>A transaction reads data written by a concurrent uncommitted transaction.</q></li>
+    <li><strong>nonrepeatable read</strong>：<q>A transaction re-reads data it has previously read and finds that data has been modified by another transaction (that committed since the initial read).</q></li>
+    <li><strong>phantom read</strong>：<q>A transaction re-executes a query returning a set of rows that satisfy a search condition and finds that the set of rows satisfying the condition has changed.</q>——和不可重复读的区别：一个是<strong>行的值</strong>变了，一个是<strong>行的集合</strong>变了。</li>
+    <li><strong>serialization anomaly</strong>：<q>The result of successfully committing a group of transactions is inconsistent with all possible orderings of running those transactions one at a time.</q>——写偏斜是它最常见的形态。</li>
+  </ul>
+</div>
+
+<h2 id="s4">四、回到第七课：抢单为什么不需要升级别</h2>
+
+<p>这是这一课和第七课的接缝，也是面试里最可能被追的一层。第七课的推荐写法是<strong>默认级别（RC）+ 条件更新</strong>：</p>
+
+<pre><code><span class="kw">UPDATE</span> ticket <span class="kw">SET</span> status = <span class="st">'reviewing'</span>, claimed_by = @me
+ <span class="kw">WHERE</span> id = 1001 <span class="kw">AND</span> status = <span class="st">'approved'</span> <span class="kw">AND</span> claimed_by <span class="kw">IS NULL</span>;   <span class="cm">-- 受影响行数 1 = 抢到，0 = 没抢到</span></code></pre>
+
+<p>它在 RC 下正确，靠的是 RC 独有的一条规则（<a href="https://www.postgresql.org/docs/current/transaction-iso.html#XACT-READ-COMMITTED">原文</a>）：第二个 UPDATE 等第一个提交后，<q>The search condition of the command (the WHERE clause) is re-evaluated to see if the updated version of the row still matches the search condition.</q>——被唤醒后<strong>重看一眼最新版本</strong>，条件不满足就影响 0 行。<strong>没有报错、没有重试、一条语句。</strong></p>
+
+<p>如果你「为了安全」把它改成 RR 会怎样？就是第二节标签页 ③：第二个人拿到的不是 <code>UPDATE 0</code>，而是 <code>could not serialize access</code> 异常。功能上没变好（本来就抢不到），工程上变差了（要 catch、要重试、要区分「没抢到」和「真出错」）。</p>
+
+<div class="callout">
+  <span class="label">一句可以直接说的判断</span>
+  <p><strong>「单行的 check-then-act，RC + 条件更新就是最优解；只有当正确性依赖<em>多行</em>的读（写偏斜那类），才需要 Serializable 或显式锁。」</strong>这句话把第七课和这一课接在一起，而且回答了「为什么默认是 RC」：因为它在最常见的场景下既正确又零重试。</p>
+</div>
+
+<h2 id="s5">五、.NET 里事务的五种写法</h2>
+
+<p>题「事务的使用方式有哪些」是一道清单题，但答清单不如答<strong>「每种写法的事务边界在哪」</strong>。从隐式到显式排：</p>
+
+<table>
+  <thead><tr><th>#</th><th>写法</th><th>事务边界</th><th>什么时候用</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>单条语句的隐式事务</strong></td><td>一条 SQL</td><td>PG 里每条语句本身就是原子的。第七课那条条件 UPDATE 不需要任何 BEGIN。</td></tr>
+    <tr><td>2</td><td><strong>ORM 的自动事务</strong>：EF Core <code>SaveChanges()</code></td><td>一次 SaveChanges 内的全部变更</td><td>默认行为。原文：<q>all changes in a single call to SaveChanges are applied in a transaction.</q>（<a href="https://learn.microsoft.com/en-us/ef/core/saving/transactions">EF Core — Transactions</a>）</td></tr>
+    <tr><td>3</td><td><strong>显式事务</strong>：EF Core <code>BeginTransaction(IsolationLevel)</code> / SqlSugar <code>db.Ado.BeginTran(IsolationLevel)</code> / <code>UseTran(...)</code></td><td>你画的 Begin 到 Commit</td><td>跨多次 SaveChanges、或要指定隔离级别、或混用 raw SQL。<strong>这是日常业务代码的主力。</strong></td></tr>
+    <tr><td>4</td><td><strong>环境事务</strong>：<code>TransactionScope</code></td><td>作用域内所有打开的连接自动加入</td><td>多个仓储 / 多个 DbContext 共享一个事务、又不想把 transaction 对象一路传下去。Npgsql 原文：<q>automatically enlists if a connection is opened within an ambient TransactionScope</q>。</td></tr>
+    <tr><td>5</td><td><strong>保存点</strong>：<code>CreateSavepoint</code> / <code>RollbackToSavepoint</code></td><td>事务内的一段</td><td>大事务里某一步允许失败并跳过。EF Core 在事务内调 SaveChanges 时会<strong>自动</strong>建保存点。</td></tr>
+  </tbody>
+</table>
+
+<p>第 3 种写出来（你项目用 SqlSugar，两种都给）：</p>
+
+<pre><code><span class="cm">// EF Core：指定隔离级别的显式事务</span>
+<span class="kw">await using var</span> tx = <span class="kw">await</span> db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+<span class="kw">try</span>
+{
+    <span class="cm">// ... 多次 SaveChangesAsync、raw SQL 都在同一事务里</span>
+    <span class="kw">await</span> tx.CommitAsync();
+}
+<span class="kw">catch</span> (PostgresException e) <span class="kw">when</span> (e.SqlState == <span class="st">"40001"</span>)   <span class="cm">// serialization_failure → 该重试</span>
+{
+    <span class="cm">// 回滚由 Dispose 自动做；这里决定重试几次</span>
+}
+
+<span class="cm">// SqlSugar：同一件事</span>
+<span class="kw">var</span> r = <span class="kw">await</span> db.UseTranAsync(<span class="kw">async</span> () =&gt;
+{
+    <span class="cm">// ... Updateable / Insertable ...</span>
+}, ex =&gt; log.LogError(ex, <span class="st">"tx failed"</span>));
+<span class="kw">if</span> (!r.IsSuccess) { <span class="cm">/* 已回滚 */</span> }
+
+<span class="cm">// 要指定级别用底层形式：</span>
+db.Ado.BeginTran(IsolationLevel.Serializable);  <span class="cm">// ... db.Ado.CommitTran() / RollbackTran()</span></code></pre>
+
+<div class="callout">
+  <span class="label">三条工程规则（比清单更值钱）</span>
+  <ol>
+    <li><strong>事务边界放在服务层，一个用例一个事务。</strong>Controller 不开事务，Repository 不开事务——前者太外（会把序列化 JSON 都包进去），后者太内（一个用例调三个仓储就变三个事务）。这和 Lesson 10 里「DbContext 是 Scoped」是一回事：一个请求一个 DbContext、一个用例一个事务。</li>
+    <li><strong>事务要短，里面不许有网络调用。</strong>行锁从 UPDATE 起一直持有到 COMMIT。事务里 <code>await http.PostAsync(...)</code> 一次 300ms，就是所有想改同一行的人排队 300ms。要调第三方，先提交本地事务，再调，失败走补偿——这正是 Lesson 05 的 Saga。</li>
+    <li><strong>用了 RR / Serializable 就必须有重试。</strong>SQLSTATE <code>40001</code>（serialization_failure）和 <code>40P01</code>（deadlock_detected）是「再来一次大概率成功」的错，和业务异常分开处理。</li>
+  </ol>
+</div>
+
+<div class="callout ext">
+  <span class="label">扩展 · TransactionScope 的三个坑</span>
+  <ul>
+    <li><strong>async 下必须写 <code>TransactionScopeAsyncFlowOption.Enabled</code></strong>，否则 await 换线程后环境事务就丢了（Lesson 09：续接在任意线程池线程）。EF Core 文档原话：<q>be sure to specify TransactionScopeAsyncFlowOption.Enabled in the TransactionScope constructor to ensure that the ambient transaction flows across async calls.</q></li>
+    <li><strong>Dispose 是同步的。</strong>原文：<q>TransactionScope does not support async commit/rollback; that means that disposing it synchronously blocks the executing thread.</q>——高并发下这就是 Lesson 09 讲的线程池饥饿的来源之一。</li>
+    <li><strong>作用域里打开第二个连接就会试图升级成分布式事务</strong>——下一节告诉你为什么这几乎一定失败。Npgsql 的缓解：连接<strong>不重叠</strong>地开关时它会复用同一个连接，避免升级。</li>
+  </ul>
+</div>
+
+<h2 id="s6">六、可选：在 psql 里看两条报错</h2>
+
+<p>两个模拟器已经把机制演完。如果你想在真库里看到那两条 <code>could not serialize</code>，用第七课那个容器（<code>docker run --rm -e POSTGRES_PASSWORD=x -p 5432:5432 postgres:16</code>，开两个 psql 窗口），<strong>不做也不影响后面</strong>：</p>
+
+<pre><code><span class="cm">-- 窗口 A                                          -- 窗口 B</span>
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+SELECT status FROM ticket WHERE id = 1001;
+                                                   BEGIN ISOLATION LEVEL REPEATABLE READ;
+                                                   SELECT status FROM ticket WHERE id = 1001;
+UPDATE ticket SET status = 'reviewing' WHERE id = 1001;
+                                                   UPDATE ticket SET status = 'reviewing' WHERE id = 1001;  <span class="cm">-- 卡住</span>
+COMMIT;
+                                                   <span class="cm">-- ERROR: could not serialize access due to concurrent update</span>
+
+<span class="cm">-- 写偏斜：两边都改成 SERIALIZABLE，各自 SELECT count(*) 再 UPDATE 自己那行，</span>
+<span class="cm">-- 第二个 COMMIT 报 could not serialize access due to read/write dependencies among transactions</span></code></pre>
+
+<p>顺手看一眼当前级别：<code>SHOW transaction_isolation;</code>——默认打 <code>read committed</code>。</p>
+
+<h2 id="s7">七、分布式事务怎么答</h2>
+
+<p>题目原句「数据库处理分布式事务」，出题人想听的是你知道<strong>它是什么、为什么几乎没人用、那用什么</strong>。三段：</p>
+
+<p><strong>它是什么：两阶段提交（2PC / XA）。</strong>一个协调者、多个参与者。阶段一 <code>PREPARE</code>：每个库把事务写到持久化状态但不提交，回答「能提交」；阶段二协调者收齐后广播 <code>COMMIT</code>。PG 原生支持：<code>PREPARE TRANSACTION 'x'</code> / <code>COMMIT PREPARED 'x'</code>，但 <code>max_prepared_transactions</code> <strong>默认为 0</strong>——默认是关掉的，这本身就是态度。</p>
+
+<p><strong>为什么不用：</strong>阶段一到阶段二之间，所有参与者的锁都<strong>持有着等协调者</strong>；协调者挂了，锁就一直挂着（「in-doubt」事务）。可用性和协调者绑死，吞吐被最慢的参与者拖住。.NET 侧的现实更直接：<q>Distributed transaction support in System.Transactions was added to .NET 7.0 for Windows only</q>（EF Core 文档），Npgsql 明确写了<strong>没有实现恢复（recovery）</strong>、不建议依赖。你的服务跑在 Linux 容器里——这条路在技术上就是关着的。</p>
+
+<p><strong>那用什么：</strong>不追求「多个库同时提交」，追求「每个库各自提交 + 最终一致」。就是 <a href="0005-saga-and-choreography.html">Lesson 05</a> 那套：本地事务 + 补偿事务（Saga），本地事务里顺手写一张 outbox 表再由单独进程发消息（保证「改库」和「发消息」原子）。你那十个 Solace 服务的做法，正式名字就叫这个。</p>
+
+<div class="callout">
+  <span class="label">面试话术里的转折句</span>
+  <p><q>2PC 我知道，PG 也支持 PREPARE TRANSACTION，但生产上我不会用——它把可用性押在协调者上，而且 .NET 在 Linux 上根本没有分布式事务支持。跨库一致性我用本地事务 + Saga 补偿，我们那十个系统就是这么做的。</q>——先证明你懂，再说不用，最后落到真事。</p>
+</div>
+
+<h2 id="s8">八、归类练习：这个场景要什么级别</h2>
+
+<p>判据就一条：<strong>正确性依赖的「读」有多宽。</strong>只依赖要改的那一行 → RC + 条件更新；要一个一致的只读快照 → RR；正确性依赖多行的读、又要写 → Serializable 或 <code>FOR UPDATE</code>。</p>
+
+<div class="binsort" data-binsort='{
+  "label": "归类练习 · 这个场景用什么",
+  "bins": [{"id":"rc","label":"RC + 条件更新 / 单语句","tone":"good"},
+           {"id":"rr","label":"Repeatable Read（只读快照）","tone":"good"},
+           {"id":"ser","label":"Serializable 或 FOR UPDATE","tone":"good"}],
+  "items": [
+    {"text":"抢单：把 approved 的工单改成 reviewing 并写上自己","bin":"rc",
+     "why":"单行 check-then-act。UPDATE ... WHERE status = approved，RC 下被唤醒会重看 WHERE，影响 0 行就是没抢到。升级别只会把 UPDATE 0 变成异常。"},
+    {"text":"月末对账：先 SUM 订单表再 SUM 流水表，两个数必须对得上","bin":"rr",
+     "why":"多条只读语句要看同一个世界。RR 整事务一张快照，且全程不写、不会有序列化失败。这是 RR 最纯粹的用途。"},
+    {"text":"排班：每人下班前检查至少两人在岗，才允许把自己置为离岗","bin":"ser",
+     "why":"读的是所有人的行，写的是自己的行——写偏斜的标准形态。RR 挡不住（第二节标签页 ④）。要么 Serializable + 重试，要么 SELECT ... FOR UPDATE 锁住在岗行。"},
+    {"text":"扣库存：库存够就减 n，不够就返回失败","bin":"rc",
+     "why":"UPDATE stock SET qty = qty - n WHERE id = ? AND qty >= n，一条语句。受影响行数就是答案。和抢单是同一个模式。"},
+    {"text":"导出报表：连查五张表生成一份 Excel，要求数据是同一时刻的","bin":"rr",
+     "why":"只读、多语句、要一致。开一个 RR 事务把五个查询包起来即可，导出期间别人的提交不会渗进来。"},
+    {"text":"转账：从 A 扣 100 加到 B，A 余额不能为负","bin":"rc",
+     "why":"两行、但正确性只依赖 A 那一行的余额。UPDATE A ... WHERE balance >= 100 影响 0 行就回滚整个事务。不需要读 B 再决定什么，所以没有写偏斜。"}
+  ]
+}'></div>
+
+<h2 id="s9">九、话术</h2>
+
+<div class="script">
+  <span class="label">话术 A · 对应题「Transaction 级别」</span>
+  <p><strong>先给机制，不背表：</strong><q>隔离级别决定的只有一件事：SELECT 看的是哪一刻的快照。Read Committed 每条语句一张，Repeatable Read 整个事务一张，Serializable 在 RR 上加一道提交前检查——你读过的东西有没有被别人改。PostgreSQL 是 MVCC，写不阻塞读，所以脏读根本不存在，Read Uncommitted 等于 Read Committed，实际只有三个级别。</q></p>
+  <p><strong>推出现象：</strong><q>所以 RC 下同一事务两次读可以不一样——不可重复读；RR 下不会，但代价是看到的可能过时，而且写冲突时 RR 没法重看 WHERE，只能报 could not serialize access 让你重试。RR 还挡不住写偏斜——两个事务读了重叠的数据、写了不同的行，各自都对、合起来违反约束——那要 Serializable 或者 FOR UPDATE 把读变成锁。</q></p>
+  <p><strong>落到选型（拉开差距的一句）：</strong><q>我默认留在 RC。单行的 check-then-act 用条件更新就是最优解，零重试；只读报表开 RR 拿一致快照；只有正确性依赖多行读又要写的场景才上 Serializable，而且代码必须带重试循环——调级别不是改一个参数，是改错误处理。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 B · 对应题「事务的使用方式有哪些」</span>
+  <p><strong>按边界从小到大：</strong><q>五种。单条语句本身就是事务；ORM 的 SaveChanges 自动包一个事务；显式 BeginTransaction 可以指定隔离级别、跨多次保存——这是主力；TransactionScope 环境事务让作用域内的连接自动加入，适合跨多个仓储；保存点用来让大事务里某一步可以局部回滚。</q></p>
+  <p><strong>三条规则：</strong><q>事务边界放服务层，一个用例一个事务，Controller 和 Repository 都不开；事务要短，里面绝不调 HTTP，行锁从 UPDATE 持有到 COMMIT，一次外部调用就是所有人排队；用了 RR 或 Serializable，SQLSTATE 40001 和死锁 40P01 要单独 catch 重试，和业务异常分开。</q></p>
+  <p><strong>顺手带一个坑：</strong><q>TransactionScope 在 async 代码里要加 AsyncFlowOption.Enabled，不然 await 换线程后环境事务就丢了；而且它的 Dispose 是同步阻塞的，高并发下我更倾向显式 BeginTransactionAsync。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 C · 对应题「数据库处理分布式事务」</span>
+  <p><strong>证明你懂：</strong><q>分布式事务的经典方案是两阶段提交：协调者先让每个库 PREPARE，都答应了再广播 COMMIT。PostgreSQL 原生支持 PREPARE TRANSACTION，但 max_prepared_transactions 默认是 0。</q></p>
+  <p><strong>说为什么不用：</strong><q>两个阶段之间所有参与者的锁都挂着等协调者，协调者一挂就是 in-doubt 事务；可用性和吞吐都被最慢的一方拖住。而且 .NET 的分布式事务只在 .NET 7+ 的 Windows 上有，Npgsql 没实现恢复——我们跑 Linux 容器，这条路根本不通。</q></p>
+  <p><strong>落到真事：</strong><q>跨库一致性我用本地事务加补偿——Saga。每个服务只提交自己的库，在同一个本地事务里写 outbox，再由独立进程发消息；下游失败就调回退接口逆序撤销。我们十个 Solace 服务之间就是这么做的，补偿本身也要幂等、也可能失败，这块我踩过坑。</q>——最后一句把面试官引向 Lesson 05 你最有料的那段经历。</p>
+</div>
+
+<h2 id="s10">十、检验一下</h2>
+
+<p>先在心里说出理由再选。</p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "Read Committed 和 Repeatable Read 在 PostgreSQL 里的本质区别是：",
+    "options": [
+      "前者每条语句拍一张快照而后者整个事务只拍一张",
+      "前者允许脏读而后者通过加锁彻底阻止了脏读",
+      "前者不加行锁而后者对读到的每一行都加共享锁",
+      "前者用于写事务而后者只能用于纯粹的只读事务"
+    ],
+    "answer": 0,
+    "why": "这就是本课唯一必须记死的一句。PG 是 MVCC，两个级别都不会脏读、都不靠共享锁；RR 也可以写，只是写冲突时会报 could not serialize access。区别只在快照拍在哪一刻。"
+  },
+  {
+    "q": "两个 Repeatable Read 事务都要 UPDATE 同一行，先提交的成功了，后一个会：",
+    "options": [
+      "被唤醒后重新求值 WHERE 条件然后影响零行",
+      "报 could not serialize access 异常并整个回滚",
+      "覆盖前一个事务的修改导致前者的更新丢失",
+      "自动等待前一个事务结束后再把修改合并进去"
+    ],
+    "answer": 1,
+    "why": "第二节标签页 ③。选项 A 是 Read Committed 的行为（WHERE 重新求值）；RR 的快照是旧的，无法重看，只能报错。所以用 RR 的代码必须准备重试。"
+  },
+  {
+    "q": "第七课的抢单 UPDATE ... WHERE status = approved 在默认级别下正确，靠的是：",
+    "options": [
+      "默认级别是 Serializable 所以冲突会被检测出来",
+      "被阻塞的更新者被唤醒后会重新求值 WHERE 子句",
+      "PostgreSQL 会对被更新的行自动升级为表级排他锁",
+      "两个 UPDATE 语句会被数据库自动合并成一个执行"
+    ],
+    "answer": 1,
+    "why": "PG 默认是 Read Committed，原文：The search condition of the command (the WHERE clause) is re-evaluated to see if the updated version of the row still matches。这是 RC 独有的行为，也是「抢单不需要升级别」的全部理由。"
+  },
+  {
+    "q": "两位复核员各自在 Repeatable Read 下检查「在岗人数 ≥ 2」后把自己置为离岗，两个事务都提交成功，最终在岗 0 人。这个现象叫：",
+    "options": [
+      "脏读，因为两人各自读到了对方未提交的修改",
+      "写偏斜，因为两人读了重叠的行却写了不同的行",
+      "幻读，因为第二次查询时返回的行集合发生了变化",
+      "丢失更新，因为后提交的事务覆盖了先提交的结果"
+    ],
+    "answer": 1,
+    "why": "第二节标签页 ④。两个 UPDATE 碰的不是同一行，所以没有行锁冲突、RR 也不报错；违反的是跨行的约束。解法：Serializable（谓词锁检测）或 SELECT ... FOR UPDATE 把读变成锁。"
+  },
+  {
+    "q": "在 async 方法里用 TransactionScope，最容易漏掉的一项是：",
+    "options": [
+      "必须显式调用 Complete 否则作用域结束时会提交",
+      "必须传 TransactionScopeAsyncFlowOption.Enabled",
+      "必须把隔离级别显式设置成 ReadCommitted 才生效",
+      "必须在作用域里手动打开连接并调用 EnlistTransaction"
+    ],
+    "answer": 1,
+    "why": "await 之后续接可能在另一个线程池线程上（Lesson 09），环境事务默认不跨线程流动，所以 EF Core 文档专门提醒要加这个选项。选项 A 反了：不调 Complete 是回滚不是提交。Npgsql 会自动 enlist，不需要手动。"
+  },
+  {
+    "q": "被问「怎么处理跨两个数据库的事务」，最站得住的回答是：",
+    "options": [
+      "用 TransactionScope 把两个连接包起来让框架自动做两阶段提交",
+      "本地事务各自提交再用补偿事务保证最终一致并解释为何不用两阶段提交",
+      "把两个库合并成一个库这样就不存在跨库事务的问题了",
+      "在应用层加一把分布式锁保证同一时刻只有一个请求在写两个库"
+    ],
+    "answer": 1,
+    "why": "选项 A 在 Linux 上的 .NET 直接失败（分布式事务仅 .NET 7+ Windows，Npgsql 无恢复实现）。正确姿势是先证明你知道 2PC 和它的问题（锁挂在协调者上），再给 Saga + outbox，最后落到你自己那十个服务的真实经历。"
+  }
+]'></div>
+
+<h2 id="s11">十一、下一课</h2>
+
+<p>数据库板块现在有三块：索引（01）、抢单并发（07）、事务隔离（11），它们串成一条线：<strong>索引决定找得多快 → 条件更新决定并发下谁赢 → 隔离级别决定每个人看到哪个世界</strong>。被问到任何一个，你都能往两边讲。</p>
+
+<p>下一课候选：<strong>(a) 权限与身份验证</strong>——题库第九节整段，JWT / Claims / Policy / <code>[Authorize]</code>，Lesson 10 权限三层的展开；<strong>(b) 列存 vs 行存 + JSONB 属性表</strong>——题库剩下的两道数据库题，Lesson 01 埋的 GIN 伏笔在这里收；<strong>(c) 快速选择求中位数</strong>——算法手写，Lesson 02 暂停的部分。回复一个字母即可。</p>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（只看一个的话，看这个）：</strong><br>
+  <a href="https://www.postgresql.org/docs/current/transaction-iso.html">PostgreSQL Docs — 13.2 Transaction Isolation</a>。整章 15 分钟读完，本课第一到四节的每一句引文都出自这里。读到 13.2.3 Serializable 那段的 <code>mytab</code> 例子（class 1 / class 2 求和互写）——那就是写偏斜的官方示范。<br>
+  想再深一层：<a href="https://learn.microsoft.com/en-us/ef/core/saving/transactions">EF Core — Transactions</a>（第五节，含 TransactionScope 三条限制原文）、<a href="https://www.donet5.com/Home/Doc?typeId=1183">SqlSugar — 事务</a>（<code>UseTran</code> / <code>BeginTran(IsolationLevel)</code>）、<a href="https://www.npgsql.org/doc/basic-usage.html">Npgsql — Basic usage · Transactions</a>（分布式事务支持现状）、<a href="https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-ROWS">PostgreSQL — Row-Level Locks</a>（<code>FOR UPDATE</code> 的精确语义）。</p>
+
+  <p><strong>社区（获取智慧，不是知识）：</strong><a href="https://stackoverflow.com/questions/tagged/postgresql+transactions+isolation-level">Stack Overflow 的 <code>postgresql</code> + <code>isolation-level</code> 标签</a>，搜 <code>could not serialize access</code>——几百个生产现场，绝大多数是「升了 RR 没写重试」，看看别人怎么加重试循环的。</p>
+
+  <div class="nav-links">
+    <a href="0007-claiming-a-ticket.html">← Lesson 07：抢单</a>
+    <a href="0005-saga-and-choreography.html">← Lesson 05：Saga</a>
+    <a href="0010-middleware-pipeline-and-di-lifetimes.html">← Lesson 10：DI</a>
+    <a href="../reference/transactions-cheatsheet.html">→ 速查表：事务与隔离级别</a>
+    <a href="../reference/claim-patterns-cheatsheet.html">→ 速查表：抢单写法</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练，有任何不清楚的直接问我。</strong>这一课只收一样：<a href="#s2">第二节</a>标签页 ④ 走到最后一步时，<strong>行状态栏里在岗的人数</strong>（一个数字）。<br>
+    另外回我一个字母：下一课走 <strong>(a) 权限与身份验证</strong>、<strong>(b) 列存行存 + JSONB</strong>，还是 <strong>(c) 快速选择</strong>。
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+<script src="../assets/race.js"></script>
+<script src="../assets/binsort.js"></script>
+</body>
+</html>

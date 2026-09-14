@@ -28,7 +28,10 @@
   <tr><td><code>ARG</code> vs <code>ENV</code></td><td><code>ARG</code>：构建期变量，<code>--build-arg</code> 传入，只在声明它的阶段可见，<strong>不进容器</strong>。<code>ENV</code>：写进镜像元数据，容器进程能读到，运行期可用 <code>-e</code> 覆盖。</td></tr>
   <tr><td><code>layer cache</code>（层缓存）</td><td>某一层的指令与输入都没变则直接复用（显示 <code>CACHED</code>）；一旦某层失效，<strong>它之后的所有层</strong>一并重建。所以少变的（依赖清单）放前面，多变的（源码）放后面。</td></tr>
   <tr><td><code>port mapping</code></td><td><code>-p 主机端口:容器端口</code>。容器有自己的网络命名空间，不映射就无法从 Windows 侧访问。</td></tr>
-  <tr><td><code>volume</code>（卷）</td><td>容器外的持久化存储。容器删掉数据就没了，除非放在 volume 或 bind mount 里。</td></tr>
+  <tr><td><code>named volume</code>（命名卷）</td><td>Docker 自己管理的一块存储，<code>-v 卷名:/容器路径</code>。容器删掉它还在，适合数据库数据。冒号左边是<strong>名字</strong>。</td></tr>
+  <tr><td><code>bind mount</code>（绑定挂载）</td><td>把宿主机的文件/目录叠到容器路径上，<code>-v C:\绝对路径:/容器路径</code>，遮住镜像里原来的内容。适合挂配置文件。冒号左边是<strong>路径</strong>。</td></tr>
+  <tr><td><code>-e</code></td><td><code>docker run -e KEY=VALUE</code>：给容器进程设环境变量，覆盖镜像 <code>ENV</code> 的同名默认值。第三方镜像最主要的配置入口。</td></tr>
+  <tr><td><code>docker logs</code> / <code>docker exec</code></td><td>看容器输出 / 在运行中的容器里执行命令。容器跑不起来先 <code>logs</code>，想看容器里有什么用 <code>exec</code>。</td></tr>
 </table>
 
 <h2>Kubernetes</h2>

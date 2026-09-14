@@ -106,6 +106,14 @@ services.AddSingleton&lt;OrderService&gt;();                  <span class="cm">/
 <span class="kw">var</span> db = scope.ServiceProvider.GetRequiredService&lt;AppDbContext&gt;();   <span class="cm">// 随 scope 一起 Dispose</span></code></pre>
 <p>原文：<q>It's acceptable to resolve a scoped service within a singleton if you create and use an explicit scope with IServiceScopeFactory.</q>（<a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection/service-lifetimes">Service lifetimes</a>）</p>
 
+<p><strong>反方向随便依赖。</strong>规则只有一条：<strong>短的可以依赖长的，长的不能依赖短的。</strong>Transient 最短，构造函数里注 Scoped / Singleton 都合法；Singleton 最长，谁都不能直接依赖。会出事的是上游：一个 Singleton 抓了这个 Transient，Transient 体内的 Scoped 就跟着被抓——ValidateScopes 会顺着链查出来。</p>
+
+<p><strong>注入不影响 GC。</strong>注入只建立「我 → 依赖」的单向引用，Singleton 不会反过来拖住持有它的 Transient。真正让 Transient 活得比预期久的只有两样：</p>
+<ul>
+  <li>它实现了 <code>IDisposable</code>：容器把它登记在解析它的 scope 里，scope 结束才释放。<strong>从根容器解析 IDisposable 的 Transient = 持有到进程退出</strong>（官方警告的经典泄漏）。</li>
+  <li>Singleton 里手写了反向引用（<code>List&lt;T&gt;</code>、事件订阅）——那是你的代码，不是注入造成的。</li>
+</ul>
+
 <h2>8 · 权限题的三层（题库第九节）</h2>
 
 <table>

@@ -185,6 +185,7 @@ services.Configure&lt;MyOptions&gt;("Local", config.GetSection("Cache:Local"));
 // ── 校验（Data Annotations） ──
 services.AddOptions&lt;MyOptions&gt;()
         .Bind(config.GetSection("MySection"))
+        .ValidateDataAnnotations()
         .ValidateOnStart();
 // POCO 上标记 [Required]、[Range]、[RegularExpression]
 

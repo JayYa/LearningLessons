@@ -314,10 +314,12 @@ public class DatabaseOptions
     public string AdditionalConnectionString { get; set; }
 }
 
-// 注册时加上 ValidateOnStart
+// 注册时启用 Data Annotations 校验，并把校验提前到启动时
+// NuGet: Microsoft.Extensions.Options.DataAnnotations
 services.AddOptions&lt;DatabaseOptions&gt;()
         .Bind(config.GetSection("Database"))
-        .ValidateOnStart();  // ← 启动时立即校验！校验失败 → 应用启动失败
+        .ValidateDataAnnotations()  // ← 让 [Required]/[Range] 生效（没有这行，标记不会被读）
+        .ValidateOnStart();         // ← 启动时立即校验！校验失败 → 应用启动失败
 
 // 如果连接串为空，你的应用会在启动时抛出 OptionsValidationException：
 // "DatabaseOptions.ConnectionString: 数据库连接串不能为空"
@@ -359,9 +361,46 @@ services.AddSingleton&lt;IValidateOptions&lt;DatabaseOptions&gt;, DatabaseOption
 </code></pre>
 
 <div class="callout callout--info">
-💡 <strong>ValidateOnStart = 什么也不做？</strong>只有当 Options 被<strong>第一次解析</strong>时才会触发校验。
-Singleton 服务通常在第一次注入时解析——也就是启动时。但如果你只想"校验一下依赖图，实际上不用这些服务"，
-可能需要手动触发一次解析或依赖 Host 的默认行为（ASP.NET Core 启动时会解析大量服务）。
+💡 <strong>没有 ValidateOnStart 时校验在哪里跑？</strong>在 Options 被<strong>第一次构建</strong>时——也就是某个服务第一次访问 <code>.Value</code> / <code>.CurrentValue</code>。
+加上 <code>ValidateOnStart()</code> 后，Host 会在 <code>IHost.StartAsync()</code> 内、启动任何 hosted service 之前主动构建并校验一次。
+注意它<strong>只跑这一次</strong>：热重载后的重新校验靠的是下面这条。
+</div>
+
+<h2>热重载时校验会重跑——以及失败后会怎样</h2>
+
+<p>
+  所有校验器（<code>ValidateDataAnnotations</code>、<code>Validate</code>、<code>IValidateOptions</code>）都挂在
+  <code>OptionsFactory&lt;T&gt;.Create()</code> 里。Snapshot 每个请求、Monitor 每次文件变更都会调用 <code>Create()</code>，
+  所以<strong>每次重新构建 T 都会重新校验</strong>。Monitor 的重载流程（
+  <a href="https://github.com/dotnet/runtime/blob/main/src/libraries/Microsoft.Extensions.Options/src/OptionsMonitor.cs">OptionsMonitor.cs</a>）：
+</p>
+
+<pre><code>private void InvokeChanged(string? name)
+{
+    _cache.TryRemove(name);            // 1. 先删掉旧缓存
+    TOptions options = Get(name);      // 2. factory.Create → Bind → Configure → Validate ← 这里可能抛
+    _onChange?.Invoke(options, name);  // 3. 校验通过才会到这里
+}
+</code></pre>
+
+<table class="tbl">
+  <tr><th>接口</th><th>配置改错（校验失败）后</th></tr>
+  <tr><td><code>IOptions&lt;T&gt;</code></td><td>无影响，继续用启动时的值</td></tr>
+  <tr><td><code>IOptionsSnapshot&lt;T&gt;</code></td><td>每个新请求 <code>.Value</code> 抛 <code>OptionsValidationException</code> → 500；文件改对后下一个请求恢复</td></tr>
+  <tr><td><code>IOptionsMonitor&lt;T&gt;</code></td><td>旧缓存已删，<strong>不会回退到上次合法值</strong>；每次 <code>.CurrentValue</code> 重跑 Create 并抛异常；<code>OnChange</code> <strong>不触发</strong></td></tr>
+</table>
+
+<div class="callout callout--warn">
+⚠️ <strong>进程不会崩，但也没有任何日志。</strong>文件变更回调由
+<a href="https://github.com/dotnet/runtime/blob/main/src/libraries/Microsoft.Extensions.FileProviders.Physical/src/PhysicalFilesWatcher.cs"><code>PhysicalFilesWatcher</code></a>
+用 <code>Task.Factory.StartNew(() =&gt; cts.Cancel())</code> 触发——校验异常变成没人观察的 Task 异常，静默消失。
+生产环境开 <code>reloadOnChange</code> 的兜底做法：在 <code>OnChange</code> 里自己 try/catch 并记日志；如果需要"坏配置就保留上次好值"，在 <code>OnChange</code> 里把最后一份合法 options 存到字段，读的地方读字段而不是 <code>CurrentValue</code>。
+</div>
+
+<div class="callout callout--info">
+💡 <strong>性能不是三个接口的取舍点。</strong>它们都靠同一个 <code>OptionsFactory</code> 构建实例：<code>IOptions</code> 整个进程一次；<code>Monitor</code> 只在变更时重建；<code>Snapshot</code> 每个 Scope 一次（小 POCO 约 1–5 μs，相对一个 Web 请求可忽略）。按<strong>生命周期语义</strong>选，不按性能选。真要压榨，用
+<a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/options-validation-generator">Options 校验源生成器</a>和
+<a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/configuration-generator">配置绑定源生成器</a>消掉反射。
 </div>
 
 <h2>Framework 4.8 时代 vs 现代 .NET Options</h2>
@@ -462,7 +501,7 @@ Singleton 服务通常在第一次注入时解析——也就是启动时。但�
   <dt><strong>Named Options</strong></dt>
   <dd>同一 POCO 类型，通过 <code>name</code> 参数注册多份配置。注入时用 <code>.Get("name")</code> 获取指定那份。典型场景：多个数据库连接、多个缓存后端、多个外部 API 端点——都映射到同一个 Options 类，按名称区分。</dd>
   <dt><strong>ValidateOnStart</strong></dt>
-  <dd><code>.ValidateOnStart()</code> 在 Options 首次被解析时立即运行 Data Annotations 校验（<code>[Required]</code>、<code>[Range]</code>、<code>[RegularExpression]</code>）。校验失败抛 <code>OptionsValidationException</code>——应用启动失败。Fail Fast 哲学：配置问题应该在部署时发现，不是凌晨 3 点。</dd>
+  <dd><code>.ValidateDataAnnotations()</code> 启用 Data Annotations 校验，<code>.ValidateOnStart()</code> 把校验提前到 Host 启动阶段（<code>[Required]</code>、<code>[Range]</code>、<code>[RegularExpression]</code>）。校验失败抛 <code>OptionsValidationException</code>——应用启动失败。Fail Fast 哲学：配置问题应该在部署时发现，不是凌晨 3 点。</dd>
   <dt><strong>IValidateOptions&lt;T&gt;</strong></dt>
   <dd>自定义校验逻辑接口。实现 <code>Validate(string name, T options)</code> 方法，返回 <code>ValidateOptionsResult.Success</code> 或 <code>.Fail("原因")</code>。可以注入其他服务——实现跨字段校验和外部依赖校验。</dd>
 </dl>
@@ -498,7 +537,7 @@ Singleton 服务通常在第一次注入时解析——也就是启动时。但�
 
 <div class="lesson-nav">
   <a href="0007-configuration-fundamentals.html">← 上一课：配置系统基础</a>
-  <a href="0009-host-model.html">下一课：Host 模型（待生成）→</a>
+  <a href="0009-generic-host-fundamentals.html">下一课：Generic Host 基础 →</a>
 </div>
 
 </body>

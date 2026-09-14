@@ -11,11 +11,13 @@
 | 1 | [第 1 课：构建你的第一个镜像](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0001-build-your-first-image.html) | 从一个 Dockerfile 出发，走完镜像构建到容器运行的完整链路 |
 | 2 | [第 2 课：构建期与运行期](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0002-build-time-vs-run-time.html) | 分清哪些指令在 build 时执行、哪些留到容器启动才生效 |
 | 3 | [第 3 课：.NET 多阶段构建](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0003-dotnet-multi-stage-build.html) | 用 SDK 镜像编译、用 runtime 镜像运行，把 .NET 应用的构建与部署拆成多阶段以压缩最终镜像 |
+| 4 | [第 4 课：不改镜像，只改配置](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0004-configure-without-rebuilding.html) | 用环境变量、挂载卷与端口映射在运行期注入配置，同一镜像跑不同环境而无需重新构建 |
 
 **参考资料：**
 - [术语表 · Docker & Kubernetes](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/GLOSSARY.html) — 容器与编排领域的核心名词速查
 - [速查：Dockerfile 指令 —— 构建期还是运行期？](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/dockerfile-instruction-timing.html) — 逐条列出各 Dockerfile 指令的生效时机
 - [速查：.NET 多阶段 Dockerfile 模板](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/dotnet-multistage-dockerfile.html) — 可直接套用的 .NET 多阶段 Dockerfile 模板与逐行说明
+- [速查：运行期配置 —— -e / -v / -p](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/runtime-config.html) — docker run 的 -e、-v、-p 三个运行期配置参数用法速查
 
 
 ## BeiGene
@@ -32,6 +34,7 @@
 | 8 | [Lesson 08 · lock 到底锁住了什么](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0008-dotnet-locks.html) | 讲清 C# 中 lock 究竟锁住了什么对象、保护的是哪段临界区，以及它管不到的进程外并发 |
 | 9 | [Lesson 09 · await 那一行到底发生了什么](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0009-async-await-state-machine.html) | 拆开编译器为 async 方法生成的状态机，说清 await 那一行的挂起、续延与线程归属 |
 | 10 | [Lesson 10 · 一个请求穿过管道时到底发生了什么](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0010-middleware-pipeline-and-di-lifetimes.html) | 跟随一次 HTTP 请求穿过 ASP.NET Core 中间件管道，串起 DI 的 Transient、Scoped、Singleton 三种生命周期 |
+| 11 | [Lesson 11 · 隔离级别只决定一件事：你看的是哪一刻的快照](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0011-transaction-isolation-and-usage.html) | 用「快照时刻」一个视角讲清四种事务隔离级别的差异，以及 .NET 中事务的实际用法 |
 
 **参考资料：**
 - [速查表 · 排序、选择、Top-K 与外部排序（C#）](https://JayYa.github.io/LearningLessons/BeiGene/reference/algo-cheatsheet.html) — 排序、选择、Top-K 与外部排序算法速查
@@ -41,6 +44,7 @@
 - [速查表 · 中间件管道与 DI 生命周期](https://JayYa.github.io/LearningLessons/BeiGene/reference/di-middleware-cheatsheet.html) — 中间件注册顺序、短路规则与 DI 三种生命周期的行为对照速查
 - [速查表 · .NET 锁的种类](https://JayYa.github.io/LearningLessons/BeiGene/reference/dotnet-locks-cheatsheet.html) — lock、Monitor、SemaphoreSlim 等 .NET 各类锁的适用场景与取舍速查
 - [速查表 · 微服务](https://JayYa.github.io/LearningLessons/BeiGene/reference/microservices-cheatsheet.html) — 微服务架构下延迟、失败、序列化与一致性四类新增开销速查
+- [速查表 · 事务隔离级别与事务用法](https://JayYa.github.io/LearningLessons/BeiGene/reference/transactions-cheatsheet.html) — 四种隔离级别的读现象对照与 TransactionScope / EF Core 事务写法速查
 
 ## Build an Agent
 
@@ -69,10 +73,13 @@
 | 6 | [第 6 课：超越 MSDI——Scrutor、容器替换与反模式总结](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0006-di-scrutor-container-replacement.html) | 探索 Scrutor 装饰器与程序集扫描、第三方容器替换及 DI 常见反模式，完成依赖注入知识体系闭环 |
 | 7 | [第 7 课：配置系统基础——多源、分层、热重载](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0007-configuration-fundamentals.html) | 深入 .NET 配置系统的多源加载、分层覆盖与热重载机制，掌握 Options 模式之前的配置基础 |
 | 8 | [第 8 课：Options 模式——强类型、热重载、校验](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0008-configuration-options-pattern.html) | 讲解 Options 模式的强类型绑定、热重载验证与数据校验，完成 .NET 配置体系从基础到进阶的学习闭环 |
+| 9 | [第 9 课：Generic Host——把 DI、配置、日志串起来的那个对象](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0009-generic-host-fundamentals.html) | 讲解 Generic Host 如何统一装配 DI、配置与日志，成为 .NET 应用的组合根 |
+| 10 | [第 10 课：IHostedService 与生命周期——后台任务、启动顺序、优雅关闭](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0010-hosted-services-lifecycle.html) | 用 IHostedService / BackgroundService 编写后台任务，理清启动顺序与优雅关闭的生命周期钩子 |
 
 **参考资料：**
 - [参考：配置系统速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/configuration-quick-reference.html) — .NET 配置系统常用 API 与配置模式速查
 - [参考：DI 生命周期与注册速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/di-lifetime-reference.html) — 依赖注入三种生命周期（Transient、Scoped、Singleton）的行为差异与选择指南
+- [参考：Host 模型速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/host-quick-reference.html) — Generic Host 构建、生命周期事件与 HostedService API 速查
 - [参考：旧项目迁移到 SDK 风格](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/migrate-to-sdk-style.html) — 传统 .csproj 项目迁移到 SDK 风格的操作指南
 - [参考：NuGet 传递依赖解析规则](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/nuget-dependency-resolution.html) — NuGet 依赖版本选择与冲突解析机制速查
 - [参考：运行时配置速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/runtime-configuration.html) — runtimeconfig.json 与 MSBuild 运行时配置选项速查

@@ -128,6 +128,7 @@
       <li><a href="Docker%20and%20K8S/lessons/0001-build-your-first-image.html">第 1 课：构建你的第一个镜像</a></li>
       <li><a href="Docker%20and%20K8S/lessons/0002-build-time-vs-run-time.html">第 2 课：构建期与运行期</a></li>
       <li><a href="Docker%20and%20K8S/lessons/0003-dotnet-multi-stage-build.html">第 3 课：.NET 多阶段构建</a></li>
+      <li><a href="Docker%20and%20K8S/lessons/0004-configure-without-rebuilding.html">第 4 课：不改镜像，只改配置</a></li>
     </ol>
     <div class="ref-section">
       <h3>参考资料</h3>
@@ -135,6 +136,7 @@
         <li><a href="Docker%20and%20K8S/reference/GLOSSARY.html">术语表 · Docker &amp; Kubernetes</a></li>
         <li><a href="Docker%20and%20K8S/reference/dockerfile-instruction-timing.html">速查：Dockerfile 指令 —— 构建期还是运行期？</a></li>
         <li><a href="Docker%20and%20K8S/reference/dotnet-multistage-dockerfile.html">速查：.NET 多阶段 Dockerfile 模板</a></li>
+        <li><a href="Docker%20and%20K8S/reference/runtime-config.html">速查：运行期配置 —— -e / -v / -p</a></li>
       </ul>
     </div>
   </div>
@@ -152,6 +154,7 @@
       <li><a href="BeiGene/lessons/0008-dotnet-locks.html">Lesson 08 · lock 到底锁住了什么</a></li>
       <li><a href="BeiGene/lessons/0009-async-await-state-machine.html">Lesson 09 · await 那一行到底发生了什么</a></li>
       <li><a href="BeiGene/lessons/0010-middleware-pipeline-and-di-lifetimes.html">Lesson 10 · 一个请求穿过管道时到底发生了什么</a></li>
+      <li><a href="BeiGene/lessons/0011-transaction-isolation-and-usage.html">Lesson 11 · 隔离级别只决定一件事：你看的是哪一刻的快照</a></li>
     </ol>
     <div class="ref-section">
       <h3>参考资料</h3>
@@ -163,6 +166,7 @@
         <li><a href="BeiGene/reference/di-middleware-cheatsheet.html">速查表 · 中间件管道与 DI 生命周期</a></li>
         <li><a href="BeiGene/reference/dotnet-locks-cheatsheet.html">速查表 · .NET 锁的种类</a></li>
         <li><a href="BeiGene/reference/microservices-cheatsheet.html">速查表 · 微服务</a></li>
+        <li><a href="BeiGene/reference/transactions-cheatsheet.html">速查表 · 事务隔离级别与事务用法</a></li>
       </ul>
     </div>
   </div>
@@ -197,12 +201,15 @@
       <li><a href="DotNET%20Platform/lessons/0006-di-scrutor-container-replacement.html">第 6 课：超越 MSDI——Scrutor、容器替换与反模式总结 — .NET 平台基础</a></li>
       <li><a href="DotNET%20Platform/lessons/0007-configuration-fundamentals.html">第 7 课：配置系统基础——多源、分层、热重载 — .NET 平台基础</a></li>
       <li><a href="DotNET%20Platform/lessons/0008-configuration-options-pattern.html">第 8 课：Options 模式——强类型、热重载、校验 — .NET 平台基础</a></li>
+      <li><a href="DotNET%20Platform/lessons/0009-generic-host-fundamentals.html">第 9 课：Generic Host——把 DI、配置、日志串起来的那个对象 — .NET 平台基础</a></li>
+      <li><a href="DotNET%20Platform/lessons/0010-hosted-services-lifecycle.html">第 10 课：IHostedService 与生命周期——后台任务、启动顺序、优雅关闭 — .NET 平台基础</a></li>
     </ol>
     <div class="ref-section">
       <h3>参考资料</h3>
       <ul>
         <li><a href="DotNET%20Platform/reference/configuration-quick-reference.html">参考：配置系统速查 — .NET 平台基础</a></li>
         <li><a href="DotNET%20Platform/reference/di-lifetime-reference.html">参考：DI 生命周期与注册速查 — .NET 平台基础</a></li>
+        <li><a href="DotNET%20Platform/reference/host-quick-reference.html">参考：Host 模型速查 — .NET 平台基础</a></li>
         <li><a href="DotNET%20Platform/reference/migrate-to-sdk-style.html">参考：旧项目迁移到 SDK 风格 — .NET 平台基础</a></li>
         <li><a href="DotNET%20Platform/reference/nuget-dependency-resolution.html">参考：NuGet 传递依赖解析规则 — .NET 平台基础</a></li>
         <li><a href="DotNET%20Platform/reference/runtime-configuration.html">参考：运行时配置速查 — .NET 平台基础</a></li>

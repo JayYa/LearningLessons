@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查表 · 事务隔离级别与事务用法</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Reference · PostgreSQL 事务 / .NET 事务 · BeiGene 面试备战</p>
+  <h1>事务隔离级别与事务用法<br>＋ 分布式事务怎么答</h1>
+  <p class="standfirst">压缩自 <a href="../lessons/0011-transaction-isolation-and-usage.html">Lesson 11</a>。面试前 10 分钟只看这一页。</p>
+</header>
+
+<h2>0 · 一句话判据</h2>
+
+<p><strong>隔离级别决定的只有一件事：SELECT 看的是哪一刻的快照。</strong>RC 每条语句一张，RR 整个事务一张，Serializable = RR + 提交前检查「你读过的有没有被别人改」。PG 是 MVCC：写不阻塞读，脏读不存在。</p>
+
+<h2>1 · 四级别表（PG 版）</h2>
+
+<table>
+  <thead><tr><th>级别</th><th>脏读</th><th>不可重复读</th><th>幻读</th><th>写偏斜 / 序列化异常</th><th>快照</th><th>冲突时</th></tr></thead>
+  <tbody>
+    <tr><td>Read Uncommitted</td><td>PG 不会</td><td>可能</td><td>可能</td><td>可能</td><td>= RC</td><td>= RC</td></tr>
+    <tr><td><strong>Read Committed（默认）</strong></td><td>否</td><td>可能</td><td>可能</td><td>可能</td><td>每条语句</td><td>等锁 → <strong>重新求值 WHERE</strong>，不报错</td></tr>
+    <tr><td>Repeatable Read</td><td>否</td><td>否</td><td>PG 不会</td><td>可能</td><td>整个事务</td><td>等锁 → <code>could not serialize access due to concurrent update</code></td></tr>
+    <tr><td>Serializable</td><td>否</td><td>否</td><td>否</td><td>否</td><td>整个事务 + 谓词锁</td><td>提交时 <code>could not serialize access due to read/write dependencies</code></td></tr>
+  </tbody>
+</table>
+
+<p><strong>三个 PG 特例</strong>：只有三个真实级别（RU = RC）；RR 没有幻读（比标准强，= 快照隔离）；Serializable 是 SSI——检测不加锁，会随机失败，<strong>必须重试</strong>。</p>
+
+<h2>2 · 三种现象一句话</h2>
+
+<table>
+  <thead><tr><th>现象</th><th>形态</th><th>哪级挡住</th></tr></thead>
+  <tbody>
+    <tr><td><strong>不可重复读</strong></td><td>同事务两次读同一行，<strong>值</strong>变了</td><td>RR</td></tr>
+    <tr><td><strong>幻读</strong></td><td>同事务两次同样 WHERE，<strong>行集</strong>变了</td><td>PG 的 RR</td></tr>
+    <tr><td><strong>丢失更新</strong></td><td>两人读后写同一行，后写覆盖前写</td><td>RC + 条件更新（UPDATE 0）/ RR（报错）</td></tr>
+    <tr><td><strong>写偏斜</strong></td><td>读<strong>重叠</strong>、写<strong>不同行</strong>，各自对、合起来违反约束</td><td>只有 Serializable，或 RC + <code>FOR UPDATE</code></td></tr>
+  </tbody>
+</table>
+
+<h2>3 · 选型（判据：正确性依赖的「读」有多宽）</h2>
+
+<table>
+  <thead><tr><th>场景</th><th>用</th><th>为什么</th></tr></thead>
+  <tbody>
+    <tr><td>单行 check-then-act（抢单 / 扣库存 / 扣余额）</td><td><strong>RC + 条件更新</strong></td><td>被唤醒重看 WHERE，影响 0 行 = 没抢到。零重试、一条语句。<strong>升级别只会把 UPDATE 0 变成异常。</strong></td></tr>
+    <tr><td>多语句只读（报表 / 对账 / 导出）</td><td><strong>RR</strong></td><td>一致快照，全程不写所以不会序列化失败</td></tr>
+    <tr><td>读多行决定写（排班至少 N 人在岗）</td><td><strong>Serializable + 重试</strong> 或 <code>SELECT ... FOR UPDATE</code></td><td>写偏斜，RR 挡不住</td></tr>
+  </tbody>
+</table>
+
+<h2>4 · .NET 五种写法（按边界从小到大）</h2>
+
+<ol>
+  <li><strong>单条语句</strong>——本身原子，不需要 BEGIN</li>
+  <li><strong>ORM 自动事务</strong>——EF Core <code>SaveChanges()</code>：<q>all changes in a single call to SaveChanges are applied in a transaction</q></li>
+  <li><strong>显式事务（主力）</strong>——EF <code>BeginTransactionAsync(IsolationLevel.X)</code> / SqlSugar <code>db.Ado.BeginTran(IsolationLevel.X)</code>、<code>db.UseTranAsync(async () =&gt; {...})</code> → <code>r.IsSuccess</code></li>
+  <li><strong>环境事务</strong>——<code>TransactionScope</code>，作用域内连接自动 enlist（Npgsql 支持）</li>
+  <li><strong>保存点</strong>——<code>CreateSavepoint</code> / <code>RollbackToSavepoint</code>；EF 在事务内 SaveChanges 自动建</li>
+</ol>
+
+<pre><code><span class="kw">await using var</span> tx = <span class="kw">await</span> db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead);
+<span class="kw">try</span> { <span class="cm">/* ... */</span> <span class="kw">await</span> tx.CommitAsync(); }
+<span class="kw">catch</span> (PostgresException e) <span class="kw">when</span> (e.SqlState <span class="kw">is</span> <span class="st">"40001"</span> <span class="kw">or</span> <span class="st">"40P01"</span>) { <span class="cm">/* serialization_failure / deadlock → 重试 */</span> }</code></pre>
+
+<h2>5 · 三条工程规则</h2>
+
+<ol>
+  <li><strong>事务边界在服务层，一个用例一个事务。</strong>Controller 太外，Repository 太内。</li>
+  <li><strong>事务要短，里面不许有网络调用。</strong>行锁从 UPDATE 持有到 COMMIT。要调第三方：先提交，再调，失败走补偿（Saga）。</li>
+  <li><strong>RR / Serializable 必须带重试。</strong><code>40001</code> serialization_failure、<code>40P01</code> deadlock_detected 单独 catch，与业务异常分开。</li>
+</ol>
+
+<p><strong>TransactionScope 三坑</strong>：async 必须 <code>TransactionScopeAsyncFlowOption.Enabled</code>（await 换线程）；Dispose 同步阻塞；作用域里开第二个连接会试图升级为分布式事务。</p>
+
+<h2>6 · 分布式事务三段答</h2>
+
+<ol>
+  <li><strong>是什么</strong>：2PC / XA。PREPARE 全员答应 → 广播 COMMIT。PG 原生 <code>PREPARE TRANSACTION</code>，但 <code>max_prepared_transactions</code> 默认 0。</li>
+  <li><strong>为什么不用</strong>：两阶段之间锁挂在协调者上，协调者挂 = in-doubt；.NET 分布式事务仅 .NET 7+ Windows，Npgsql 无恢复实现——Linux 容器里根本没这条路。</li>
+  <li><strong>用什么</strong>：本地事务各自提交 + Saga 补偿 + outbox。落到自己那十个 Solace 服务（<a href="../lessons/0005-saga-and-choreography.html">Lesson 05</a>）。</li>
+</ol>
+
+<h2>7 · 词汇表</h2>
+
+<table>
+  <thead><tr><th>术语</th><th>一句话</th></tr></thead>
+  <tbody>
+    <tr><td><strong>MVCC</strong></td><td>多版本并发控制：一行多版本，每个事务按快照挑版本；写不阻塞读</td></tr>
+    <tr><td><strong>Snapshot</strong></td><td>「哪些事务已提交」的一张清单；RC 每语句拍，RR 每事务拍</td></tr>
+    <tr><td><strong>Snapshot Isolation</strong></td><td>整事务一张快照；PG 的 RR 就是它</td></tr>
+    <tr><td><strong>SSI</strong></td><td>Serializable Snapshot Isolation：快照 + 谓词锁检测依赖环，提交时回滚一个</td></tr>
+    <tr><td><strong>Predicate lock</strong></td><td>SSI 记录「你读过什么条件」，用来发现别人的写会不会改变你的读</td></tr>
+    <tr><td><strong>Write skew</strong></td><td>读重叠、写不同行；RR 放行，Serializable 拦截</td></tr>
+    <tr><td><strong>Serialization failure</strong></td><td>SQLSTATE 40001，「再来一次大概率成功」的错</td></tr>
+    <tr><td><strong>FOR UPDATE</strong></td><td>把读变成行锁，让 RC 下的多行读也串行化</td></tr>
+    <tr><td><strong>Savepoint</strong></td><td>事务内的回滚点</td></tr>
+    <tr><td><strong>Ambient transaction</strong></td><td>TransactionScope 建立的环境事务，作用域内连接自动加入</td></tr>
+    <tr><td><strong>2PC / XA</strong></td><td>两阶段提交 / 其接口标准；in-doubt = 阶段一之后协调者失联</td></tr>
+    <tr><td><strong>Outbox</strong></td><td>改库和「要发的消息」写在同一本地事务，独立进程再发</td></tr>
+  </tbody>
+</table>
+
+<footer class="footer">
+  <div class="nav-links">
+    <a href="../lessons/0011-transaction-isolation-and-usage.html">← Lesson 11</a>
+    <a href="claim-patterns-cheatsheet.html">→ 速查表：抢单写法</a>
+    <a href="db-index-cheatsheet.html">→ 速查表：索引</a>
+    <a href="microservices-cheatsheet.html">→ 速查表：微服务</a>
+  </div>
+</footer>
+
+</body>
+</html>

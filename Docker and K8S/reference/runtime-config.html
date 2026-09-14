@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查：运行期配置 —— -e / -v / -p</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<header class="masthead">
+  <p class="eyebrow">Reference · Runtime Configuration</p>
+  <h1>运行期配置速查</h1>
+  <p class="subtitle">镜像只读，配置从 <code>docker run</code> 进去。拿到任何第三方镜像时照这张表填空。</p>
+</header>
+
+<h2>三个入口</h2>
+<table class="defs">
+  <tr><th>参数</th><th>语法</th><th>说明</th></tr>
+  <tr><td>环境变量</td><td><code>-e KEY=VALUE</code><br><code>-e KEY</code>（从当前 shell 继承）<br><code>--env-file .env</code></td><td>覆盖镜像 <code>ENV</code> 的同名值。密码、端口、连接串都走这里。PowerShell 里值含空格用双引号：<code>-e Greeting="Hi there"</code></td></tr>
+  <tr><td>bind mount</td><td><code>-v "C:\abs\path:/container/path"</code><br><code>-v "${PWD}\config\x.json:/app/x.json"</code><br><code>-v "…:/path:ro"</code>（只读）</td><td>宿主机文件/目录叠到容器路径上。<strong>必须绝对路径</strong>。宿主机路径不存在时 Docker 会创建一个空目录盖上去 —— 应用会崩，用 <code>docker exec 名 ls -la /path</code> 查。</td></tr>
+  <tr><td>named volume</td><td><code>-v 卷名:/container/path</code></td><td>Docker 管理的存储，容器删了还在。第一次用自动创建。<code>docker volume ls / inspect / rm</code>。</td></tr>
+  <tr><td>端口</td><td><code>-p 宿主机端口:容器端口</code></td><td>只是转发。<strong>不改</strong>应用在容器里监听什么。</td></tr>
+</table>
+
+<h2><code>-v</code> 冒号左边是什么？</h2>
+<table class="defs">
+  <tr><th>左边长这样</th><th>类型</th><th>用途</th></tr>
+  <tr><td><code>C:\…</code>、<code>/…</code>、<code>${PWD}\…</code>、<code>.\…</code>（不行，要绝对）</td><td>bind mount</td><td>配置文件、初始化脚本、开发时挂源码</td></tr>
+  <tr><td><code>pgdata</code>、<code>my-cache</code>（纯名字）</td><td>named volume</td><td>数据库数据、上传文件 —— "我不关心存哪，只要别丢"</td></tr>
+</table>
+
+<h2>.NET 配置覆盖顺序</h2>
+<p>后加载的覆盖先加载的（<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/configuration/#default-application-configuration-sources">官方顺序</a>）：</p>
+<pre><code>appsettings.json  →  appsettings.{Environment}.json  →  环境变量  →  命令行参数
+   （镜像里的，或 -v 挂进来的）                        （-e）          （CMD 后面的）</code></pre>
+<table class="defs">
+  <tr><th>要改</th><th>怎么写</th></tr>
+  <tr><td>顶层键 <code>Greeting</code></td><td><code>-e Greeting=Hi</code></td></tr>
+  <tr><td>嵌套键 <code>Logging:LogLevel:Default</code></td><td><code>-e Logging__LogLevel__Default=Debug</code>（冒号在 Linux 环境变量里不合法，用<strong>双下划线</strong>）</td></tr>
+  <tr><td>连接串 <code>ConnectionStrings:Default</code></td><td><code>-e ConnectionStrings__Default="Host=pg;…"</code></td></tr>
+  <tr><td>监听端口（默认 8080）</td><td><code>-e ASPNETCORE_HTTP_PORTS=5000</code></td></tr>
+  <tr><td>环境名</td><td><code>-e ASPNETCORE_ENVIRONMENT=Development</code></td></tr>
+</table>
+
+<h2>读第三方镜像文档的清单</h2>
+<p>打开 <code>hub.docker.com/_/镜像名</code>，找这四样：</p>
+<table class="defs">
+  <tr><th>找什么</th><th>决定</th><th>postgres 的例子</th></tr>
+  <tr><td>必需的环境变量</td><td>不给就启动失败</td><td><code>POSTGRES_PASSWORD</code></td></tr>
+  <tr><td>可选的环境变量</td><td>改默认行为</td><td><code>POSTGRES_DB</code> <code>POSTGRES_USER</code></td></tr>
+  <tr><td>数据目录 / 配置目录 / 初始化钩子</td><td><code>-v</code> 挂哪</td><td><code>/var/lib/postgresql/data</code>、<code>/docker-entrypoint-initdb.d/</code>（放 <code>.sql</code>，首次初始化时执行）</td></tr>
+  <tr><td>监听端口</td><td><code>-p</code> 右边</td><td>5432</td></tr>
+</table>
+
+<h2>跑不起来 / 不对劲</h2>
+<table class="defs">
+  <tr><th>症状</th><th>命令</th></tr>
+  <tr><td>容器秒退</td><td><code>docker logs 名</code> —— 退出前的输出还在</td></tr>
+  <tr><td>想看容器里实际的文件/变量</td><td><code>docker exec 名 ls -la /app</code>、<code>docker exec 名 env</code>、<code>docker exec -it 名 sh</code></td></tr>
+  <tr><td>想看它是用什么参数启动的</td><td><code>docker inspect 名</code>（找 <code>Env</code>、<code>Mounts</code>、<code>Ports</code>）</td></tr>
+  <tr><td>ENTRYPOINT 挡住了你</td><td><code>docker run --rm --entrypoint sh 镜像 -c '…'</code></td></tr>
+</table>
+
+<h2>完整例子</h2>
+<pre><code><span class="c"># hello-api：改端口 + 挂配置</span>
+docker run -d --rm --name hello -p 5000:5000 `
+  -e ASPNETCORE_HTTP_PORTS=5000 `
+  -v "${PWD}\config\appsettings.json:/app/appsettings.json" `
+  hello-api:1.2
+
+<span class="c"># postgres：必需 env + 持久化</span>
+docker run -d --name pg -p 5432:5432 `
+  -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=shop `
+  -v pgdata:/var/lib/postgresql/data `
+  postgres:17-alpine</code></pre>
+<p style="font-size:.9rem;color:var(--ink-soft)">PowerShell 续行是反引号 <code>`</code>，不是 <code>\</code>。</p>
+
+<div class="footer">
+  <p>来自 <a href="../lessons/0004-configure-without-rebuilding.html">第 4 课：不改镜像，只改配置</a> ·
+  <a href="GLOSSARY.html">术语表</a> ·
+  <a href="dockerfile-instruction-timing.html">指令时机速查</a></p>
+</div>
+</body>
+</html>

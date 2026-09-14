@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参考：Host 模型速查 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>🏠 参考：Host 模型速查</h1>
+<div class="lesson-meta">
+  模块：Host 模型 &nbsp;|&nbsp; 速查参考
+</div>
+
+<h2>最小骨架</h2>
+
+<pre><code>// NuGet: Microsoft.Extensions.Hosting（一个包带全 DI / Configuration / Options / Logging）
+var builder = Host.CreateApplicationBuilder(args);
+
+builder.Configuration.AddJsonFile("extra.json", optional: true);   // 追加配置源
+builder.Services.AddSingleton&lt;MyService&gt;();                        // DI
+builder.Services.AddHostedService&lt;MyWorker&gt;();                     // 后台任务
+builder.Logging.AddConsole();                                      // 日志（默认已有）
+
+using IHost host = builder.Build();
+
+// 长驻：
+await host.RunAsync();
+// 或 跑一次就退：
+// var svc = host.Services.GetRequiredService&lt;MyService&gt;(); svc.Run(); return 0;
+</code></pre>
+
+<h2>CreateApplicationBuilder 默认行为</h2>
+
+<div class="diagram">
+<pre>
+ContentRoot   = 当前工作目录（当前目录是 C:\Windows\System32 时退回 exe 目录）
+
+Host 配置     ← DOTNET_* 环境变量、命令行
+               （DOTNET_ENVIRONMENT / --environment 决定环境名）
+
+应用配置      ← 顺序即优先级，最后胜出
+   appsettings.json
+   appsettings.{Environment}.json
+   User Secrets（仅 Development）
+   环境变量（无前缀）
+   命令行
+
+日志 Provider ← Console、Debug、EventSource、EventLog（仅 Windows）
+
+DI 容器校验   ← 仅 Development：ValidateScopes = true、ValidateOnBuild = true
+</pre>
+</div>
+
+<h2>两种 Builder</h2>
+
+<table class="tbl">
+  <tr><th></th><th><code>Host.CreateApplicationBuilder</code></th><th><code>Host.CreateDefaultBuilder</code></th></tr>
+  <tr><td>风格</td><td>属性式：<code>builder.Services / .Configuration / .Logging / .Environment</code></td><td>回调式：<code>ConfigureServices(...) / ConfigureAppConfiguration(...)</code></td></tr>
+  <tr><td>版本</td><td>.NET 6+，模板默认</td><td>.NET Core 2.1+，仍完全支持</td></tr>
+  <tr><td>默认行为</td><td colspan="2" style="text-align:center">完全相同</td></tr>
+  <tr><td>用哪个</td><td>新项目</td><td>维护老代码、第三方库要求回调式</td></tr>
+</table>
+
+<h2>Host 自动注册的服务</h2>
+
+<table class="tbl">
+  <tr><th>服务</th><th>用途</th></tr>
+  <tr><td><code>IHostEnvironment</code></td><td><code>EnvironmentName</code>、<code>ContentRootPath</code>、<code>ApplicationName</code>；<code>IsDevelopment()</code> / <code>IsProduction()</code></td></tr>
+  <tr><td><code>IHostApplicationLifetime</code></td><td><code>ApplicationStarted / Stopping / Stopped</code> 三个 token；<code>StopApplication()</code> 优雅退出</td></tr>
+  <tr><td><code>IHostLifetime</code></td><td>决定启动完成时机和停止信号。默认 <code>ConsoleLifetime</code>；<code>AddWindowsService()</code> / <code>AddSystemd()</code> 替换</td></tr>
+</table>
+
+<h2>IHostedService 与 BackgroundService</h2>
+
+<pre><code>// 启动时做一件事就返回（预热、注册）
+public sealed class Warmup : IHostedService
+{
+    public Task StartAsync(CancellationToken ct) { /* 被 Host await，必须返回 */ return Task.CompletedTask; }
+    public Task StopAsync(CancellationToken ct)  => Task.CompletedTask;
+}
+
+// 长循环
+public sealed class Worker(ILogger&lt;Worker&gt; logger, IServiceScopeFactory scopeFactory) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await Task.Yield();                                  // 避免同步段阻塞 Host 启动
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var scope = scopeFactory.CreateScope();  // Singleton 里用 Scoped：每次迭代一个 Scope
+                var job = scope.ServiceProvider.GetRequiredService&lt;IJob&gt;();
+                await job.RunAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Iteration failed");     // 可恢复错误：自己兜住
+            }
+            await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);   // token 一定要传
+        }
+    }
+}
+
+builder.Services.AddHostedService&lt;Warmup&gt;();   // 注册顺序 = 启动顺序
+builder.Services.AddHostedService&lt;Worker&gt;();   // 关闭顺序 = 倒序
+</code></pre>
+
+<h2>生命周期顺序</h2>
+
+<div class="diagram">
+<pre>
+启动  IHostLifetime.WaitForStartAsync
+      IStartupValidator（ValidateOnStart）
+      每个服务（注册顺序）：StartingAsync → StartAsync → StartedAsync
+      ApplicationStarted
+
+关闭  ApplicationStopping                 ← "别接新活"
+      每个服务（倒序）：StoppingAsync → StopAsync → StoppedAsync   ← "收尾"，总预算 ShutdownTimeout
+      ApplicationStopped
+      IHostLifetime.StopAsync
+</pre>
+</div>
+
+<h2>HostOptions</h2>
+
+<table class="tbl">
+  <tr><th>属性</th><th>默认</th><th>appsettings 键</th><th>说明</th></tr>
+  <tr><td><code>ShutdownTimeout</code></td><td>30 s</td><td><code>shutdownTimeoutSeconds</code></td><td>超时后 token 取消、不再等待。与 <code>docker stop</code> / K8s grace period 一起调</td></tr>
+  <tr><td><code>StartupTimeout</code></td><td>无限</td><td><code>startupTimeoutSeconds</code></td><td>生产建议设置，防止启动卡死"假活"</td></tr>
+  <tr><td><code>ServicesStartConcurrently</code></td><td>false</td><td><code>servicesStartConcurrently</code></td><td>true = 并行启动，失去顺序保证</td></tr>
+  <tr><td><code>ServicesStopConcurrently</code></td><td>false</td><td><code>servicesStopConcurrently</code></td><td>同上</td></tr>
+  <tr><td><code>BackgroundServiceExceptionBehavior</code></td><td><code>StopHost</code></td><td>—</td><td>.NET 6+：未捕获异常 → 记日志 → 停 Host。<code>Ignore</code> = .NET 5 的静默吞掉</td></tr>
+</table>
+
+<pre><code>builder.Services.Configure&lt;HostOptions&gt;(o =>
+{
+    o.ShutdownTimeout = TimeSpan.FromSeconds(60);
+    o.StartupTimeout  = TimeSpan.FromSeconds(30);
+});
+</code></pre>
+
+<h2>优雅退出</h2>
+
+<table class="tbl">
+  <tr><th>方式</th><th>走关闭流程？</th><th>说明</th></tr>
+  <tr><td>Ctrl+C / SIGINT、SIGTERM（<code>docker stop</code>）、SIGQUIT</td><td>✅</td><td><code>ConsoleLifetime</code> 捕获</td></tr>
+  <tr><td><code>IHostApplicationLifetime.StopApplication()</code></td><td>✅</td><td>代码里主动退出的正确方式</td></tr>
+  <tr><td><code>Environment.Exit()</code></td><td>❌</td><td>StopAsync、finally 都不执行。.NET 6+ 的 Host 不再介入</td></tr>
+  <tr><td>SIGKILL、崩溃</td><td>❌</td><td>Host 无能为力</td></tr>
+</table>
+
+<h2>作为系统服务运行</h2>
+
+<pre><code>// NuGet: Microsoft.Extensions.Hosting.WindowsServices / .Systemd
+builder.Services.AddWindowsService(o => o.ServiceName = "MySvc");   // 非服务环境自动忽略
+builder.Services.AddSystemd();                                       // 同上
+
+// 安装
+// sc.exe create MySvc binPath= "C:\svc\MySvc.exe"  &amp;&amp;  sc.exe start MySvc
+</code></pre>
+
+<h2>NuGet 包</h2>
+
+<table class="tbl">
+  <tr><th>功能</th><th>NuGet 包</th></tr>
+  <tr><td>Generic Host（带全套 DI/配置/日志）</td><td><code>Microsoft.Extensions.Hosting</code></td></tr>
+  <tr><td>只要接口（写库时）</td><td><code>Microsoft.Extensions.Hosting.Abstractions</code></td></tr>
+  <tr><td>Windows 服务</td><td><code>Microsoft.Extensions.Hosting.WindowsServices</code></td></tr>
+  <tr><td>systemd</td><td><code>Microsoft.Extensions.Hosting.Systemd</code></td></tr>
+</table>
+
+<hr class="section">
+
+<p>
+  ← 返回 <a href="../lessons/0009-generic-host-fundamentals.html">第 9 课：Generic Host 基础</a>
+  &nbsp;|&nbsp;
+  <a href="../lessons/0010-hosted-services-lifecycle.html">第 10 课：IHostedService 与生命周期</a>
+</p>
+
+</body>
+</html>
