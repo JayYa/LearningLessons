@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 11 课：ILogger 与结构化日志——从"拼字符串"到"记事件" — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>第 11 课：ILogger 与结构化日志——从"拼字符串"到"记事件"</h1>
+<div class="lesson-meta">
+  模块：日志（1/1）&nbsp;|&nbsp; 预计阅读/练习时间：30 分钟
+</div>
+
+<p>
+  <code>Microsoft.Extensions.*</code> 四件套——DI、配置、Host、日志——你已经拿下三件。日志是最后一块，
+  也是 <strong>log4net / NLog 用户思维转换最大的一块</strong>。
+  Framework 时代你写 <code>log.Info("Order " + id + " processed in " + ms + "ms")</code>——日志是一行文本，
+  出了事用 grep 找。现代 .NET 的 <code>ILogger</code> 记的不是文本，是<strong>一个带命名字段的事件</strong>——
+  文本只是这个事件的一种渲染方式。
+</p>
+
+<div class="summary">
+  <ul>
+    <li>理解<strong>消息模板</strong>为什么不是字符串拼接——占位符名字会变成可查询的字段</li>
+    <li>掌握 <strong>Category / Level / EventId</strong> 三个坐标，以及 <code>appsettings.json</code> 里 <code>Logging</code> 节的过滤规则</li>
+    <li>会用 <strong>Scope</strong> 给一段操作内的所有日志自动附加上下文（TransactionId、OrderId）</li>
+    <li>会用 <strong><code>[LoggerMessage]</code></strong> 源生成器写零分配、强类型的日志方法（推荐写法）</li>
+    <li>知道 Provider 是什么、Serilog 在这个体系里站在哪</li>
+  </ul>
+</div>
+
+<h2>Framework 4.8 vs 现代 .NET：日志的三个思维差异</h2>
+
+<table class="tbl">
+  <tr><th></th><th>log4net / NLog（Framework 时代用法）</th><th>Microsoft.Extensions.Logging</th></tr>
+  <tr>
+    <td>日志是什么</td>
+    <td>一行格式化好的<strong>文本</strong></td>
+    <td>一个<strong>事件</strong>：Category + Level + EventId + 命名字段 + 模板 + 异常</td>
+  </tr>
+  <tr>
+    <td>怎么拿 logger</td>
+    <td><code>LogManager.GetLogger(typeof(Foo))</code> 静态获取</td>
+    <td>构造函数注入 <code>ILogger&lt;Foo&gt;</code>——Host 已经注册好了</td>
+  </tr>
+  <tr>
+    <td>怎么控制输出</td>
+    <td><code>log4net.config</code> XML，appender + logger 层级</td>
+    <td><code>appsettings.json</code> 的 <code>Logging</code> 节，Provider + Category 前缀；<strong>支持热重载</strong></td>
+  </tr>
+  <tr>
+    <td>库之间</td>
+    <td>每个库绑死一个日志框架，ASP.NET / EF 各写各的</td>
+    <td>所有库只依赖 <code>ILogger</code> 抽象，EF Core / HttpClient / Kestrel 的日志和你的日志走<strong>同一条管道</strong></td>
+  </tr>
+</table>
+
+<div class="callout callout--info">
+💡 log4net / NLog / Serilog 并没有被淘汰——它们变成了 <code>ILogger</code> 后面的 <strong>Provider</strong>（输出端）。
+你的代码只认 <code>ILogger</code>，换日志框架不用改一行业务代码。Serilog 是现在最流行的 Provider，本课末尾讲它怎么接。
+</div>
+
+<h2>一个事件的六个字段</h2>
+
+<p>看官方对一条日志的定义（<a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/logging">Logging in C#</a>）——所有 <code>Log*</code> 扩展方法最终都调用这一个接口方法：</p>
+
+<pre><code>public interface ILogger
+{
+    void Log&lt;TState&gt;(
+        LogLevel logLevel,                              // ① 严重程度
+        EventId eventId,                                // ② 事件编号（可选）
+        TState state,                                   // ③ 命名字段 + 原始模板
+        Exception? exception,                           // ④ 异常（可选）
+        Func&lt;TState, Exception?, string&gt; formatter);    // ⑤ 怎么渲染成文本——Provider 决定要不要调
+    IDisposable? BeginScope&lt;TState&gt;(TState state);      // ⑥ 附加上下文
+}
+// 还有一个隐含的坐标：Category——创建 logger 时就定了，通常是类的全名
+</code></pre>
+
+<p>
+  重点是 ③ 和 ⑤ 的关系：<strong>字段和渲染是分开的</strong>。Provider 拿到的是 <code>{OrderId = 42, Elapsed = 17}</code> 这样的键值对，
+  控制台 Provider 会调 formatter 渲染成一行文本；写到 Seq / Elasticsearch / OpenTelemetry 的 Provider 则直接存字段——之后你就能查
+  "<code>Elapsed &gt; 1000</code> 的所有 order"，而不是写正则去解析文本。
+</p>
+
+<h2>消息模板：为什么 <code>{Name}</code> 不是字符串插值</h2>
+
+<div class="cmp">
+  <div class="cmp-col">
+    <div class="cmp-col__head cmp-col__head--old">❌ 字符串拼接 / 插值</div>
+    <div class="cmp-col__body"><pre>logger.LogInformation(
+    $"Order {id} took {ms}ms");
+
+// 传给 Provider 的：
+// "Order 42 took 17ms"
+// 字段：无。信息已经被压扁成文本。
+// 而且不管日志级别开没开，
+// 插值都先执行了——白白分配字符串。
+// 分析器会警告 CA2254。</pre></div>
+  </div>
+  <div class="cmp-col">
+    <div class="cmp-col__head cmp-col__head--new">✅ 消息模板</div>
+    <div class="cmp-col__body"><pre>logger.LogInformation(
+    "Order {OrderId} took {Elapsed}ms", id, ms);
+
+// 传给 Provider 的：
+// 模板 "Order {OrderId} took {Elapsed}ms"
+// 字段 OrderId = 42, Elapsed = 17
+// 级别没开 → 直接返回，不格式化。
+// JSON Provider 输出：
+// { "Message": "Order 42 took 17ms",
+//   "OrderId": 42, "Elapsed": 17,
+//   "{OriginalFormat}": "Order {OrderId}..." }</pre></div>
+  </div>
+</div>
+
+<p>模板的三条规则（<a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/logging#log-message-template">官方</a>）：</p>
+<ol>
+  <li><strong>占位符用名字，不用序号</strong>：<code>{OrderId}</code> 不是 <code>{0}</code>。名字就是字段名。</li>
+  <li><strong>参数按位置匹配，不按名字</strong>：<code>LogInformation("{B} {A}", a, b)</code> 会把 <code>a</code> 填进 <code>{B}</code>。名字只决定字段叫什么，顺序决定值是谁——这是最常见的 bug。</li>
+  <li><strong>支持格式说明符</strong>：<code>{Timestamp:yyyy-MM-dd}</code>、<code>{Ratio:P2}</code>。字面大括号写 <code>{{</code>。</li>
+</ol>
+
+<div class="callout callout--warn">
+⚠️ 命名习惯：<strong>占位符用 PascalCase</strong>（<code>{OrderId}</code>），因为它会成为 JSON / 数据库里的字段名。
+同一个概念在全项目用同一个名字——<code>{OrderId}</code> 和 <code>{orderId}</code> 在 Seq 里是两个不同字段，查的时候会漏。
+</div>
+
+<h2>三个坐标：Category、Level、EventId</h2>
+
+<h3>Category——谁记的</h3>
+<p>
+  注入 <code>ILogger&lt;OrderService&gt;</code>，Category 就是 <code>OrderService</code> 的<strong>全名</strong>（含命名空间）。
+  它是过滤的主要依据：<code>"Microsoft"</code> 这条规则匹配所有以 <code>Microsoft</code> 开头的 Category——
+  <code>Microsoft.EntityFrameworkCore.Database.Command</code>、<code>Microsoft.Hosting.Lifetime</code> 全在内。
+  这和 log4net 的 logger 层级是同一个思路，只是不用你配 XML。
+</p>
+
+<h3>Level——多严重</h3>
+<table class="tbl">
+  <tr><th>Level</th><th>值</th><th>官方定义</th><th>你该记什么</th></tr>
+  <tr><td>Trace</td><td>0</td><td>最详细，<strong>可能含敏感数据</strong>，生产禁用</td><td>请求/响应原文、SQL 参数值</td></tr>
+  <tr><td>Debug</td><td>1</td><td>开发调试用，量大</td><td>分支走向、中间值</td></tr>
+  <tr><td>Information</td><td>2</td><td>应用的一般流程，<strong>默认级别</strong></td><td>"订单 42 已创建"</td></tr>
+  <tr><td>Warning</td><td>3</td><td>异常或意外，但应用没失败</td><td>重试成功、配置缺省回退</td></tr>
+  <tr><td>Error</td><td>4</td><td><strong>当前操作</strong>失败，不是整个应用</td><td>一个请求 500</td></tr>
+  <tr><td>Critical</td><td>5</td><td>需要立即处理：数据丢失、磁盘满</td><td>启动失败、连不上数据库</td></tr>
+  <tr><td>None</td><td>6</td><td>关闭该 Category 的所有输出</td><td>用在配置里做静音</td></tr>
+</table>
+<p>
+  对应 <code>LogTrace / LogDebug / LogInformation / LogWarning / LogError / LogCritical</code> 六个扩展方法。
+  Error 和 Critical 的边界比 log4net 的 ERROR/FATAL 更清楚："这个请求挂了" 是 Error；"整个进程要挂了" 才是 Critical。
+</p>
+
+<h3>EventId——哪类事件</h3>
+<p>
+  可选的整数（加可选名字），把"同一类事件"编号。控制台里显示在 Category 后的方括号：<code>info: OrderService[1001]</code>。
+  手写 <code>Log*</code> 时很少有人用；<strong>用了 <code>[LoggerMessage]</code> 之后它自然就有了</strong>（见下文）。
+</p>
+
+<h2>appsettings.json 的 Logging 节：过滤规则</h2>
+
+<p>Worker 模板生成的 <code>appsettings.Development.json</code> 长这样，现在你能读懂每一行了：</p>
+
+<pre><code>{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",              // 所有没被单独指定的 Category
+      "Microsoft": "Warning",                // Category 以 Microsoft 开头的 → 只要 Warning 以上
+      "Microsoft.Hosting.Lifetime": "Information"  // 更长的前缀更具体，覆盖上一条
+    },
+    "Console": {                             // 只对 Console Provider 生效的规则（用 Provider 别名）
+      "IncludeScopes": true,                 // 控制台显示 Scope（默认关）
+      "LogLevel": { "Default": "Debug" }
+    }
+  }
+}
+</code></pre>
+
+<p>规则怎么选（<a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/logging#how-filtering-rules-are-applied">官方算法</a>），对每个 Provider × Category 组合：</p>
+<div class="diagram"><pre>① 先挑指定了这个 Provider 的规则；没有 → 挑没指定 Provider 的规则
+② 从中挑 Category 前缀<strong>最长</strong>匹配的；没有 → 挑没指定 Category 的（Default）
+③ 还有多条 → 取<strong>最后</strong>一条
+④ 一条都没有 → SetMinimumLevel（默认 Information）</pre></div>
+
+<p>
+  三个实用推论：<strong>(1)</strong> 这个节走的是第 7 课的配置管道，所以 <code>Logging__LogLevel__Default=Debug</code> 环境变量能覆盖它，
+  而且 <code>reloadOnChange</code> 让你<strong>改文件就能在线调级别</strong>，不用重启。
+  <strong>(2)</strong> Provider 级规则优先于全局规则——"控制台只看 Warning，但 Seq 收 Debug" 这种需求就靠它。
+  <strong>(3)</strong> 生产环境常见配法：<code>Default: Warning</code>，再对自己的命名空间开 <code>Information</code>。
+</p>
+
+<h2>Scope：给一段操作自动附加上下文</h2>
+
+<p>
+  处理一个订单要记 5 条日志，每条都想带 <code>OrderId</code>——不用每次都写进模板。<code>BeginScope</code> 返回一个 <code>IDisposable</code>，
+  在它释放之前，<strong>这个 logger 的所有日志都自动附带 scope 里的字段</strong>：
+</p>
+
+<pre><code>public async Task ProcessAsync(int orderId)
+{
+    // 用字典（或 KeyValuePair 列表）当 state，字段才能被结构化 Provider 拿到
+    using (logger.BeginScope(new Dictionary&lt;string, object&gt; { ["OrderId"] = orderId }))
+    {
+        logger.LogInformation("Validating");          // → 自动带 OrderId = 42
+        await paymentService.ChargeAsync(orderId);    // paymentService 里的日志也带（同一个异步流）
+        logger.LogInformation("Done");                // → 自动带 OrderId = 42
+    }
+}
+</code></pre>
+
+<p>
+  Scope 通过 <code>AsyncLocal</code> 传播，所以 <strong>await 之后、调用链里其他类的 logger 也在 scope 内</strong>。
+  ASP.NET Core 就靠它给每条日志自动附上 <code>RequestId</code> / <code>TraceId</code>。控制台 Provider 默认不显示 scope，
+  要开 <code>IncludeScopes: true</code>；结构化 Provider（Serilog、OTel）默认就把它们当字段存。
+</p>
+
+<div class="callout callout--warn">
+⚠️ <code>BeginScope("Order {OrderId}", orderId)</code> 这种模板写法也行，但传字典更明确——你要的是字段，不是一段文本。
+而且不要在 scope 里放大对象：它会跟着每条日志被 Provider 遍历。
+</div>
+
+<h2><code>[LoggerMessage]</code> 源生成器：推荐写法</h2>
+
+<p>
+  官方现在的建议（<a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/logging#logging-in-a-non-trivial-app">原文</a>）：
+  "Compile-time source generation for logging is usually a better alternative to <code>ILogger</code> extension methods like <code>LogInformation</code>."
+  原因是 <code>LogInformation(string, params object[])</code> 每次调用都要把参数<strong>装箱进 object[]</strong>，
+  即使这个级别没开。源生成器在编译期生成强类型方法，先查 <code>IsEnabled</code>，零装箱、零临时分配。
+</p>
+
+<pre><code>// 类和方法都要 partial；.NET 9+ 可直接用主构造函数里的 ILogger
+public sealed partial class OrderService(ILogger&lt;OrderService&gt; logger)
+{
+    [LoggerMessage(EventId = 1001, Level = LogLevel.Information,
+                   Message = "Order {OrderId} took {Elapsed}ms")]
+    private partial void LogOrderProcessed(int orderId, long elapsed);
+
+    [LoggerMessage(EventId = 1002, Level = LogLevel.Error,
+                   Message = "Order {OrderId} failed")]
+    private partial void LogOrderFailed(Exception ex, int orderId);   // 第一个 Exception 参数自动当异常，不进模板
+
+    public async Task ProcessAsync(int orderId)
+    {
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            await DoWorkAsync(orderId);
+            LogOrderProcessed(orderId, sw.ElapsedMilliseconds);       // 强类型：传错类型编译不过
+        }
+        catch (Exception ex)
+        {
+            LogOrderFailed(ex, orderId);
+            throw;
+        }
+    }
+}
+</code></pre>
+
+<p>几条规则（<a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator">官方</a>）：</p>
+<ul>
+  <li>方法必须 <code>partial void</code>；静态方法要把 <code>ILogger</code> 作为参数传入（可加 <code>this</code> 做成扩展方法）</li>
+  <li>签名里<strong>第一个</strong> <code>ILogger</code>、<code>LogLevel</code>、<code>Exception</code> 参数被特殊对待；<code>LogLevel</code> 参数让级别在运行时决定</li>
+  <li>占位符和参数名<strong>按名字、不分大小写</strong>匹配——模板写 <code>{OrderId}</code>、参数叫 <code>orderId</code> 即可。这修掉了手写模板"按位置匹配"的坑</li>
+  <li>重复的 <code>EventId</code> 会有编译警告——你顺手就得到了一套事件编号</li>
+</ul>
+
+<div class="callout callout--info">
+💡 团队约定的一种常见做法：每个类底部放一组 <code>[LoggerMessage]</code> 私有方法，或者集中在一个 <code>static partial class Log</code> 里。
+业务代码里就不再出现字符串模板——"日志长什么样"和"什么时候记"分开了。
+</div>
+
+<h2>Provider：日志去哪</h2>
+
+<p>
+  第 9 课讲过 <code>CreateApplicationBuilder</code> 默认加了 Console / Debug / EventSource / EventLog（Windows）四个 Provider。
+  Provider 就是 log4net 里的 appender。生产上你通常会 <code>ClearProviders()</code> 再加自己要的：
+</p>
+
+<pre><code>builder.Logging.ClearProviders();
+builder.Logging.AddJsonConsole();                    // 内置：每行一个 JSON 对象，容器里给 fluentd / Loki 收
+builder.Logging.AddOpenTelemetry(o =&gt; o.AddOtlpExporter());   // OTLP：现代可观测性栈的标准入口
+
+// 或者 Serilog——最流行的第三方 Provider
+// NuGet: Serilog.Extensions.Hosting / Serilog.AspNetCore + 各种 Sink
+builder.Services.AddSerilog(cfg =&gt; cfg
+    .ReadFrom.Configuration(builder.Configuration)   // 从 "Serilog" 配置节读 sink 和级别
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.Seq("http://localhost:5341"));
+</code></pre>
+
+<p>
+  <strong>Serilog 的定位</strong>：它本身就是一个结构化日志框架，消息模板语法和 <code>ILogger</code> 完全一致
+  （两者都遵循 <a href="https://messagetemplates.org">messagetemplates.org</a>）。接入 Host 之后，你的代码依然只注入 <code>ILogger&lt;T&gt;</code>；
+  Serilog 负责 sink（文件滚动、Seq、Elasticsearch）、enricher（机器名、进程 ID）。
+  <strong>从 log4net 迁移的推荐路径：业务代码全改成 <code>ILogger</code>，输出端选 Serilog。</strong>
+</p>
+
+<div class="callout callout--warn">
+⚠️ <strong>没有异步日志方法</strong>——这是设计决定，不是遗漏
+（<a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/logging#no-asynchronous-logger-methods">官方</a>）。
+日志应该快到不值得 async。慢目标（数据库、HTTP）应由 Provider 内部用队列 + 后台线程批量写——Serilog 的 <code>Async</code> sink、OTel 的 BatchExporter 都是这么做的。
+你的 <code>Log*</code> 调用永远是同步的、非阻塞的。
+</div>
+
+<h2>动手：给第 9 课的最小 Host 加上结构化日志</h2>
+
+<div class="steps">
+  <div class="step"><p>打开第 9 课的 <code>MinimalHost</code> 项目，把 <code>Program.cs</code> 里的 <code>logger.LogInformation("Hello, {Name}!", ...)</code> 改成 <code>[LoggerMessage]</code> 方法。</p></div>
+  <div class="step"><p>在 <code>appsettings.json</code> 里加 <code>"Logging": { "Console": { "IncludeScopes": true } }</code>，并把 <code>builder.Logging.AddJsonConsole()</code> 加上。</p></div>
+  <div class="step"><p>用 <code>BeginScope(new Dictionary&lt;string, object&gt; { ["RunId"] = Guid.NewGuid() })</code> 包住主逻辑，运行——看 JSON 输出里的 <code>Scopes</code> 数组和 <code>State</code> 里的字段。</p></div>
+  <div class="step"><p>不重启进程，把 <code>appsettings.json</code> 里 <code>Default</code> 改成 <code>Warning</code> 并保存——观察日志立即消失（热重载）。</p></div>
+  <div class="step"><p>故意写一条 <code>logger.LogInformation($"Hello {name}")</code>，看 IDE 的 CA2254 警告。</p></div>
+</div>
+
+<h2>检查理解</h2>
+
+<div class="quiz" id="quiz1"
+     data-feedback-correct="✅ 正确！参数按位置填入占位符，名字只决定字段名。第一个参数 userId 会填进 {OrderId}。这是手写模板最常见的 bug，[LoggerMessage] 源生成器按名字匹配可以避免。"
+     data-feedback-wrong="❌ 不对。消息模板的规则是：占位符名字决定字段名，但参数按【位置】匹配，不按名字。所以 userId 填进 {OrderId}，orderId 填进 {UserId}——字段名和值对调了。">
+  <div class="quiz__q">❓ <code>logger.LogInformation("Order {OrderId} for user {UserId}", userId, orderId)</code>——结构化 Provider 收到的字段是？</div>
+  <div class="quiz__opt" data-answer="wrong">OrderId = orderId，UserId = userId——运行时按占位符名字匹配参数名</div>
+  <div class="quiz__opt" data-answer="correct">OrderId = userId，UserId = orderId——参数按位置填入，名字只决定字段名</div>
+  <div class="quiz__opt" data-answer="wrong">编译错误——分析器检测到占位符名字和参数名字不一致会拒绝编译</div>
+  <div class="quiz__opt" data-answer="wrong">运行时抛出 FormatException——占位符数量和参数顺序校验失败时中止</div>
+  <div class="quiz__feedback" id="quiz1-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz2" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！Category 前缀最长匹配优先：Microsoft.EntityFrameworkCore 比 Microsoft 更具体，所以 EF 的日志按 Information 输出，其他 Microsoft.* 按 Warning。"
+     data-feedback-wrong="❌ 不对。过滤规则选择时，Category 前缀【最长匹配】的规则胜出。Microsoft.EntityFrameworkCore.Database.Command 同时匹配 Microsoft 和 Microsoft.EntityFrameworkCore，后者更长，所以用 Information。">
+  <div class="quiz__q">❓ 配置 <code>"LogLevel": { "Default": "Warning", "Microsoft": "Warning", "Microsoft.EntityFrameworkCore": "Information" }</code>。Category 为 <code>Microsoft.EntityFrameworkCore.Database.Command</code> 的 Information 日志会输出吗？</div>
+  <div class="quiz__opt" data-answer="wrong">不会——Microsoft 规则在前面，先匹配到的规则生效，后面的被忽略</div>
+  <div class="quiz__opt" data-answer="wrong">不会——多条规则冲突时取最严格的那一条，Warning 比 Information 严格</div>
+  <div class="quiz__opt" data-answer="correct">会——Microsoft.EntityFrameworkCore 是更长的前缀匹配，比 Microsoft 更具体</div>
+  <div class="quiz__opt" data-answer="wrong">会——但仅当在 Console Provider 节下再写一遍这条规则，否则用 Default</div>
+  <div class="quiz__feedback" id="quiz2-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz3" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！Scope 通过 AsyncLocal 传播，await 之后和被调用的其他服务里的 logger 都在 scope 内——ASP.NET Core 的 RequestId 就是这样附加到整个请求链的。"
+     data-feedback-wrong="❌ 不对。Scope 通过 AsyncLocal 沿异步调用链传播：await 之后、同一调用链里其他类注入的 ILogger 写的日志，都会附带 scope 字段。只有 Provider 支持且开启了 IncludeScopes（或结构化 Provider）才显示，但传播本身与类无关。">
+  <div class="quiz__q">❓ <code>OrderService</code> 里 <code>using (logger.BeginScope(...))</code> 之内 <code>await paymentService.ChargeAsync()</code>，<code>PaymentService</code> 用自己注入的 <code>ILogger&lt;PaymentService&gt;</code> 记了一条日志。这条日志带 scope 字段吗？</div>
+  <div class="quiz__opt" data-answer="wrong">不带——Scope 只作用于调用 BeginScope 的那个 ILogger 实例本身</div>
+  <div class="quiz__opt" data-answer="wrong">不带——await 切换线程后 Scope 丢失，只有同步代码内才有效</div>
+  <div class="quiz__opt" data-answer="correct">带——Scope 通过 AsyncLocal 沿异步调用链传播到所有 logger</div>
+  <div class="quiz__opt" data-answer="wrong">带——但仅当 PaymentService 也是 Scoped 生命周期并在同一 DI Scope</div>
+  <div class="quiz__feedback" id="quiz3-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz4" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！LogInformation(string, params object[]) 每次调用都要装箱参数并分配 object[]，即使级别没开。源生成器生成强类型方法，先查 IsEnabled，零装箱。"
+     data-feedback-wrong="❌ 不对。[LoggerMessage] 的核心收益是性能和强类型：避免 params object[] 的装箱与分配、先查 IsEnabled 再做事、参数类型编译期检查、占位符按名字匹配。它并不改变日志去哪（那是 Provider 的事），也不需要额外 NuGet 包（源生成器随 SDK 自带）。">
+  <div class="quiz__q">❓ 相比直接调用 <code>logger.LogInformation("...{OrderId}", id)</code>，<code>[LoggerMessage]</code> 源生成器的主要收益是？</div>
+  <div class="quiz__opt" data-answer="wrong">日志可以异步写入慢目标，不阻塞调用线程，吞吐更高</div>
+  <div class="quiz__opt" data-answer="correct">避免参数装箱和 object[] 分配，先查 IsEnabled，强类型编译检查</div>
+  <div class="quiz__opt" data-answer="wrong">自动把日志同时发到所有已注册 Provider，不需要 ClearProviders</div>
+  <div class="quiz__opt" data-answer="wrong">日志级别可以在运行时通过配置热重载，而普通方法级别是固定的</div>
+  <div class="quiz__feedback" id="quiz4-feedback"></div>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+<h2>关键术语</h2>
+
+<dl>
+  <dt><strong>结构化日志（Structured Logging）</strong></dt>
+  <dd>日志作为带命名字段的事件而非文本记录。<code>ILogger</code> 把模板和参数分开传给 Provider，Provider 可存字段供查询。</dd>
+  <dt><strong>消息模板（Message Template）</strong></dt>
+  <dd><code>"Order {OrderId} took {Elapsed}ms"</code>。占位符用名字（PascalCase），参数按位置匹配。禁止用字符串插值代替（CA2254）。</dd>
+  <dt><strong>Category</strong></dt>
+  <dd>logger 的名字，<code>ILogger&lt;T&gt;</code> 即 <code>T</code> 的全名。过滤规则按 Category 前缀匹配，最长前缀优先。</dd>
+  <dt><strong>LogLevel</strong></dt>
+  <dd>Trace(0) → Debug → Information(默认) → Warning → Error(当前操作失败) → Critical(应用级失败) → None(6, 静音)。</dd>
+  <dt><strong>EventId</strong></dt>
+  <dd>可选的整数编号 + 名字，把同类事件归组。<code>[LoggerMessage]</code> 强制你写它。</dd>
+  <dt><strong>Provider</strong></dt>
+  <dd>日志的输出端，相当于 log4net 的 appender。内置 Console / JsonConsole / Debug / EventSource / EventLog；第三方 Serilog / OpenTelemetry。在配置里用别名（<code>"Console"</code>）写 Provider 级规则。</dd>
+  <dt><strong>Scope</strong></dt>
+  <dd><code>BeginScope(state)</code> 返回的 <code>IDisposable</code>，释放前该异步调用链内所有日志自动附带 state 中的字段。通过 <code>AsyncLocal</code> 传播。控制台需 <code>IncludeScopes: true</code>。</dd>
+  <dt><strong>[LoggerMessage]</strong></dt>
+  <dd>源生成器特性，标在 <code>partial void</code> 方法上，编译期生成零分配、强类型的日志方法。占位符与参数按名字（不分大小写）匹配；第一个 <code>Exception</code> / <code>LogLevel</code> 参数被特殊处理。官方推荐的默认写法。</dd>
+</dl>
+
+<h2>推荐阅读</h2>
+
+<p>📖 <strong>主文档：</strong><a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/logging">Logging in C#</a> — 模板、级别、过滤规则算法、Scope、Provider 配置全集</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator">Compile-time logging source generation</a> — <code>[LoggerMessage]</code> 全部规则与 JsonConsole 输出示例</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/logging/providers">Logging providers</a> — 内置 Provider 与第三方 Provider 清单</p>
+
+<p>📖 <a href="https://github.com/serilog/serilog-extensions-hosting">Serilog.Extensions.Hosting</a> — Serilog 接入 Generic Host 的官方 README</p>
+
+<p>📖 <strong>本课速查：</strong><a href="../reference/logging-quick-reference.html">日志速查</a></p>
+
+<h2>接下来</h2>
+
+<p>
+  <code>Microsoft.Extensions.*</code> 四件套（DI、配置、Host、日志）到此全部完成——这是 ASP.NET Core 和 EF Core 系列的地基。
+  剩下的两课是 <strong>BCL 现代化</strong>：Framework 时代那些"能用但别用了"的 API，以及取代它们的东西。
+  下一课讲两个每天都会碰到的：<code>new HttpClient()</code> 为什么是错的（<code>IHttpClientFactory</code>），
+  以及 Newtonsoft.Json → <code>System.Text.Json</code> 的默认行为差异。
+</p>
+
+<div class="callout callout--info">
+💬 <strong>有问题？</strong> 直接问我！比如 "log4net 的 <code>log.Debug(() =&gt; expensive())</code> 延迟求值在 ILogger 里怎么写？"（答案：<code>if (logger.IsEnabled(LogLevel.Debug))</code>）
+或 "Serilog 的 <code>@</code> 解构操作符（<code>{@Order}</code>）ILogger 认吗？"
+或 "EF Core 的 SQL 日志是哪个 Category？怎么只开它？"
+</div>
+
+<div class="lesson-nav">
+  <a href="0010-hosted-services-lifecycle.html">← 上一课：IHostedService 与生命周期</a>
+  <a href="0012-httpclientfactory-system-text-json.html">下一课：HttpClientFactory 与 System.Text.Json →</a>
+</div>
+
+</body>
+</html>

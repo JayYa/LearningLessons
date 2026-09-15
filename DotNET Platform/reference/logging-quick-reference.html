@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参考：日志速查 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>📝 参考：日志速查</h1>
+<div class="lesson-meta">
+  模块：日志 &nbsp;|&nbsp; 速查参考
+</div>
+
+<h2>一条日志 = 一个事件</h2>
+
+<table class="tbl">
+  <tr><th>字段</th><th>来源</th><th>用途</th></tr>
+  <tr><td>Category</td><td><code>ILogger&lt;T&gt;</code> → <code>T</code> 全名</td><td>过滤（前缀匹配）</td></tr>
+  <tr><td>Level</td><td><code>LogXxx</code> 方法名 / <code>[LoggerMessage(Level)]</code></td><td>过滤（阈值）</td></tr>
+  <tr><td>EventId</td><td>可选整数 + 名字</td><td>归组同类事件</td></tr>
+  <tr><td>State</td><td>模板占位符 → 命名字段</td><td>结构化查询</td></tr>
+  <tr><td>Exception</td><td>独立参数，不进模板</td><td>堆栈</td></tr>
+  <tr><td>Scope</td><td><code>BeginScope</code>，AsyncLocal 传播</td><td>上下文字段（RequestId、OrderId）</td></tr>
+</table>
+
+<h2>级别</h2>
+
+<table class="tbl">
+  <tr><th>Level</th><th>值</th><th>用法</th></tr>
+  <tr><td>Trace</td><td>0</td><td>原始数据、可能含敏感信息，生产禁用</td></tr>
+  <tr><td>Debug</td><td>1</td><td>开发调试，量大</td></tr>
+  <tr><td>Information</td><td>2</td><td>一般流程（<strong>默认阈值</strong>）</td></tr>
+  <tr><td>Warning</td><td>3</td><td>意外但未失败</td></tr>
+  <tr><td>Error</td><td>4</td><td>当前操作失败</td></tr>
+  <tr><td>Critical</td><td>5</td><td>应用级失败，需立即处理</td></tr>
+  <tr><td>None</td><td>6</td><td>静音（只用于配置）</td></tr>
+</table>
+
+<h2>消息模板规则</h2>
+
+<pre><code>logger.LogInformation("Order {OrderId} took {Elapsed:N0}ms", id, ms);
+//  ✅ 占位符用名字、PascalCase        ✅ 支持格式说明符
+//  ⚠️ 参数按【位置】填入，名字只决定字段名
+//  ❌ 不要 $"..." 插值（CA2254）—— 字段丢失、级别没开也分配
+//  {{ }} 输出字面大括号
+
+logger.LogError(ex, "Order {OrderId} failed", id);   // 异常是独立参数（第一个）
+if (logger.IsEnabled(LogLevel.Debug)) { ... }        // 昂贵参数先判断
+</code></pre>
+
+<h2>[LoggerMessage] 源生成器（推荐写法）</h2>
+
+<pre><code>public sealed partial class OrderService(ILogger&lt;OrderService&gt; logger)   // 类 partial；.NET 9+ 认主构造函数
+{
+    [LoggerMessage(EventId = 1001, Level = LogLevel.Information, Message = "Order {OrderId} took {Elapsed}ms")]
+    private partial void LogProcessed(int orderId, long elapsed);         // 方法 partial void
+
+    [LoggerMessage(EventId = 1002, Level = LogLevel.Error, Message = "Order {OrderId} failed")]
+    private partial void LogFailed(Exception ex, int orderId);            // 第一个 Exception 自动当异常
+
+    [LoggerMessage(EventId = 1003, Message = "Retry {Attempt}")]
+    private partial void LogRetry(LogLevel level, int attempt);           // 省略 Level → 运行时传入
+}
+
+// 静态版本（集中放在 static partial class Log）
+[LoggerMessage(EventId = 1, Level = LogLevel.Warning, Message = "Slow query {Ms}ms")]
+public static partial void SlowQuery(this ILogger logger, long ms);      // this → 扩展方法
+
+// 规则：占位符与参数按名字匹配（不分大小写）；不能 params / ref struct；名字不能下划线开头
+// 收益：零装箱、零 object[]、先查 IsEnabled、强类型、EventId 重复有警告
+</code></pre>
+
+<h2>appsettings.json 的 Logging 节</h2>
+
+<pre><code>{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",                      // 前缀匹配
+      "Microsoft.Hosting.Lifetime": "Information", // 更长前缀优先
+      "System.Net.Http.HttpClient": "Warning",
+      "Microsoft.EntityFrameworkCore.Database.Command": "Information"   // 只看 SQL
+    },
+    "Console": {                                   // Provider 别名：Console / Debug / EventSource / EventLog
+      "IncludeScopes": true,                       // 控制台显示 Scope
+      "FormatterName": "json",                     // simple | systemd | json
+      "LogLevel": { "Default": "Warning" }         // Provider 级规则覆盖全局
+    }
+  }
+}
+// 环境变量覆盖：Logging__LogLevel__Default=Debug
+// 文件热重载：改文件即生效，不用重启
+</code></pre>
+
+<div class="diagram"><pre>规则选择（每个 Provider × Category）：
+① 有指定该 Provider 的规则？用它们；否则用未指定 Provider 的
+② 取 Category 前缀最长匹配；没有 → Default
+③ 仍多条 → 最后一条
+④ 一条都没 → SetMinimumLevel（默认 Information）</pre></div>
+
+<h2>代码配置</h2>
+
+<pre><code>builder.Logging.ClearProviders();                      // 去掉默认 4 个
+builder.Logging.AddSimpleConsole(o =&gt; o.IncludeScopes = true);
+builder.Logging.AddJsonConsole();                      // 容器 / 日志采集
+builder.Logging.SetMinimumLevel(LogLevel.Warning);     // 兜底阈值
+builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
+builder.Logging.AddFilter&lt;ConsoleLoggerProvider&gt;("MyApp", LogLevel.Debug);   // Provider 级
+builder.Logging.AddOpenTelemetry(o =&gt; o.AddOtlpExporter());
+
+// Serilog（NuGet: Serilog.Extensions.Hosting + Sinks）
+builder.Services.AddSerilog(cfg =&gt; cfg
+    .ReadFrom.Configuration(builder.Configuration)     // 读 "Serilog" 节
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.File("logs/app-.log", rollingInterval: RollingInterval.Day));
+// 业务代码依旧只注入 ILogger&lt;T&gt;
+</code></pre>
+
+<h2>Scope</h2>
+
+<pre><code>using (logger.BeginScope(new Dictionary&lt;string, object&gt; { ["OrderId"] = id, ["UserId"] = uid }))
+{
+    // 此异步调用链内、任何类的 ILogger 写的日志都附带 OrderId / UserId
+    await ProcessAsync();
+}
+// 控制台需 IncludeScopes = true；结构化 Provider 直接存字段
+// 不要放大对象；字典优于模板字符串
+</code></pre>
+
+<h2>常用 Category 前缀</h2>
+
+<table class="tbl">
+  <tr><th>前缀</th><th>谁</th></tr>
+  <tr><td><code>Microsoft.Hosting.Lifetime</code></td><td>Host 启动/关闭消息</td></tr>
+  <tr><td><code>Microsoft.Extensions.Hosting</code></td><td>BackgroundService 异常等</td></tr>
+  <tr><td><code>System.Net.Http.HttpClient.{Name}.LogicalHandler</code></td><td>HttpClientFactory 整个管道</td></tr>
+  <tr><td><code>System.Net.Http.HttpClient.{Name}.ClientHandler</code></td><td>HttpClientFactory 实际网络</td></tr>
+  <tr><td><code>Microsoft.EntityFrameworkCore.Database.Command</code></td><td>EF Core SQL</td></tr>
+  <tr><td><code>Microsoft.AspNetCore.Hosting.Diagnostics</code></td><td>ASP.NET Core 请求开始/结束</td></tr>
+</table>
+
+<h2>Framework 4.8 对照</h2>
+
+<table class="tbl">
+  <tr><th>log4net / NLog</th><th>Microsoft.Extensions.Logging</th></tr>
+  <tr><td><code>LogManager.GetLogger(typeof(T))</code></td><td>注入 <code>ILogger&lt;T&gt;</code></td></tr>
+  <tr><td>appender</td><td>Provider</td></tr>
+  <tr><td>logger 层级（名字前缀）</td><td>Category 前缀过滤</td></tr>
+  <tr><td><code>log4net.config</code></td><td><code>appsettings.json → Logging</code>，可热重载</td></tr>
+  <tr><td><code>log.Info("a" + b)</code></td><td><code>LogInformation("{A}", b)</code> / <code>[LoggerMessage]</code></td></tr>
+  <tr><td><code>log.Debug(() =&gt; expensive())</code></td><td><code>if (logger.IsEnabled(LogLevel.Debug))</code></td></tr>
+  <tr><td>FATAL</td><td>Critical（应用级）；单个操作失败是 Error</td></tr>
+  <tr><td>NDC / MDC / ThreadContext</td><td><code>BeginScope</code></td></tr>
+</table>
+
+<h2>NuGet 包</h2>
+
+<table class="tbl">
+  <tr><th>需要</th><th>包</th></tr>
+  <tr><td>只要接口（写库时）</td><td><code>Microsoft.Extensions.Logging.Abstractions</code>（含 <code>[LoggerMessage]</code> 生成器）</td></tr>
+  <tr><td>实现 + 过滤</td><td><code>Microsoft.Extensions.Logging</code>（<code>Microsoft.Extensions.Hosting</code> 已带）</td></tr>
+  <tr><td>控制台</td><td><code>Microsoft.Extensions.Logging.Console</code></td></tr>
+  <tr><td>OpenTelemetry</td><td><code>OpenTelemetry.Extensions.Hosting</code> + <code>OpenTelemetry.Exporter.OpenTelemetryProtocol</code></td></tr>
+  <tr><td>Serilog</td><td><code>Serilog.Extensions.Hosting</code>（或 <code>Serilog.AspNetCore</code>）+ Sinks</td></tr>
+</table>
+
+<hr class="section">
+
+<p>
+  ← 返回 <a href="../lessons/0011-logging-structured.html">第 11 课：ILogger 与结构化日志</a>
+</p>
+
+</body>
+</html>

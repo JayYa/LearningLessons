@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参考：HttpClient 与 JSON 速查 — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>🌐 参考：HttpClient 与 JSON 速查</h1>
+<div class="lesson-meta">
+  模块：BCL 现代化 &nbsp;|&nbsp; 速查参考
+</div>
+
+<h2>HttpClient：两条正路</h2>
+
+<table class="tbl">
+  <tr><th>场景</th><th>做法</th><th>解决</th></tr>
+  <tr><td>有 DI（Host / ASP.NET Core）</td><td><code>IHttpClientFactory</code>，短命 client</td><td>handler 共享 → 不耗尽；2 分钟轮换 → DNS 刷新</td></tr>
+  <tr><td>无 DI（脚本、小工具）</td><td>长命单例 + <code>SocketsHttpHandler { PooledConnectionLifetime = 2min }</code></td><td>连接层定期重建 → DNS 刷新</td></tr>
+  <tr><td>❌ 每次 <code>using new HttpClient()</code></td><td colspan="2">Socket 耗尽（TIME_WAIT）</td></tr>
+  <tr><td>❌ 裸 <code>static HttpClient</code></td><td colspan="2">DNS 陈旧</td></tr>
+</table>
+
+<h2>IHttpClientFactory 三种用法</h2>
+
+<pre><code>// NuGet: Microsoft.Extensions.Http
+// ① 基本
+builder.Services.AddHttpClient();
+var client = factory.CreateClient();
+
+// ② 命名
+builder.Services.AddHttpClient("github", c =&gt;
+{
+    c.BaseAddress = new Uri("https://api.github.com/");
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("my-app");
+    c.Timeout = TimeSpan.FromSeconds(10);
+})
+.SetHandlerLifetime(TimeSpan.FromMinutes(5));
+var client = factory.CreateClient("github");
+
+// ③ 类型化（推荐）—— Transient，构造函数收 HttpClient
+public sealed class GitHubClient(HttpClient http)
+{
+    public Task&lt;Repo?&gt; GetRepoAsync(string o, string n) =&gt; http.GetFromJsonAsync&lt;Repo&gt;($"repos/{o}/{n}");
+}
+builder.Services.AddHttpClient&lt;GitHubClient&gt;(c =&gt; c.BaseAddress = new Uri("https://api.github.com/"));
+
+// 全局默认（所有客户端）
+builder.Services.ConfigureHttpClientDefaults(b =&gt; b.AddStandardResilienceHandler());
+</code></pre>
+
+<h2>IHttpClientBuilder 常用链式方法</h2>
+
+<table class="tbl">
+  <tr><th>方法</th><th>作用</th></tr>
+  <tr><td><code>ConfigureHttpClient(c =&gt; ...)</code></td><td>BaseAddress、默认头、Timeout</td></tr>
+  <tr><td><code>AddHttpMessageHandler&lt;T&gt;()</code></td><td>挂 <code>DelegatingHandler</code>（出站中间件：认证、追踪）；T 注册为 Transient</td></tr>
+  <tr><td><code>ConfigurePrimaryHttpMessageHandler(() =&gt; ...)</code></td><td>换底层 handler（代理、证书、Cookie）</td></tr>
+  <tr><td><code>UseSocketsHttpHandler((h, _) =&gt; h.PooledConnectionLifetime = ...)</code></td><td>.NET 5+，与 <code>SetHandlerLifetime(Timeout.InfiniteTimeSpan)</code> 搭配</td></tr>
+  <tr><td><code>SetHandlerLifetime(TimeSpan)</code></td><td>handler 轮换周期，默认 2 分钟</td></tr>
+  <tr><td><code>AddStandardResilienceHandler()</code></td><td>NuGet <code>Microsoft.Extensions.Http.Resilience</code>：重试 + 断路器 + 超时 + 限流</td></tr>
+  <tr><td><code>RedactLoggedHeaders([...])</code></td><td>日志里遮蔽 Authorization 等头</td></tr>
+</table>
+
+<h2>生命周期规则</h2>
+
+<ul class="check-list">
+  <li><code>CreateClient</code> 每次返回新 <code>HttpClient</code>；dispose 它<strong>不</strong>释放 handler</li>
+  <li>handler 按名字缓存，默认 2 分钟过期；过期后没人用了才释放</li>
+  <li>类型化客户端 <strong>不要注入 Singleton</strong>——handler 不再轮换。Singleton 里注入 <code>IHttpClientFactory</code></li>
+  <li>handler 有自己的 DI Scope，与请求 Scope 无关——<code>DelegatingHandler</code> 里别缓存 <code>HttpContext</code> 之类的东西</li>
+  <li>需要 Cookie 会话的场景不适合工厂（<code>CookieContainer</code> 随 handler 共享 / 丢失）</li>
+</ul>
+
+<h2>日志 Category</h2>
+
+<pre><code>"System.Net.Http.HttpClient": "Information"                     // 所有客户端
+"System.Net.Http.HttpClient.GitHubClient.LogicalHandler": "Trace" // 某一个，整个管道（含重试）
+"System.Net.Http.HttpClient.GitHubClient.ClientHandler": "Trace"  // 某一个，实际网络请求
+</code></pre>
+
+<hr class="section">
+
+<h2>System.Text.Json：默认差异（vs Newtonsoft）</h2>
+
+<table class="tbl">
+  <tr><th>行为</th><th>Newtonsoft</th><th>STJ 默认</th><th>选项</th></tr>
+  <tr><td>反序列化大小写</td><td>不区分</td><td><strong>区分</strong>，不匹配则静默默认值</td><td><code>PropertyNameCaseInsensitive</code></td></tr>
+  <tr><td>输出命名</td><td>PascalCase</td><td>PascalCase</td><td><code>PropertyNamingPolicy = CamelCase / SnakeCaseLower / KebabCaseLower</code></td></tr>
+  <tr><td><code>"42"</code> → int</td><td>可以</td><td>抛</td><td><code>NumberHandling = AllowReadingFromString</code></td></tr>
+  <tr><td>注释 / 尾逗号</td><td>允许</td><td>抛</td><td><code>ReadCommentHandling = Skip</code>、<code>AllowTrailingCommas</code></td></tr>
+  <tr><td>多态 <code>$type</code></td><td><code>TypeNameHandling</code>（危险）</td><td>不支持（by design）</td><td><code>[JsonDerivedType]</code> 白名单</td></tr>
+  <tr><td>public 字段</td><td>序列化</td><td>忽略</td><td><code>IncludeFields</code> / <code>[JsonInclude]</code></td></tr>
+  <tr><td>null → 不可空值类型</td><td>默认值</td><td>抛</td><td>改为可空类型或自定义 converter</td></tr>
+  <tr><td>DateTime</td><td>各种格式、时区转换</td><td>只认 ISO 8601</td><td>自定义 <code>JsonConverter&lt;DateTime&gt;</code></td></tr>
+  <tr><td>枚举</td><td>数字</td><td>数字</td><td><code>JsonStringEnumConverter</code></td></tr>
+  <tr><td>null 属性</td><td>输出</td><td>输出</td><td><code>DefaultIgnoreCondition = WhenWritingNull</code></td></tr>
+  <tr><td>循环引用</td><td>抛</td><td>抛（深度 64）</td><td><code>ReferenceHandler = IgnoreCycles / Preserve</code></td></tr>
+</table>
+
+<h2>预设与选项</h2>
+
+<pre><code>// Web 预设 = camelCase + 不区分大小写 + 字符串数字。ASP.NET Core / GetFromJsonAsync 默认
+private static readonly JsonSerializerOptions s_web = new(JsonSerializerDefaults.Web)
+{
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    Converters = { new JsonStringEnumConverter() },
+    WriteIndented = false,
+};
+// ⚠️ Options 实例要缓存复用（static readonly），每次 new 重建元数据缓存
+
+var json = JsonSerializer.Serialize(obj, s_web);
+var obj  = JsonSerializer.Deserialize&lt;Order&gt;(json, s_web);
+await JsonSerializer.SerializeAsync(stream, obj, s_web);              // 流式，不经过 string
+var list = await JsonSerializer.DeserializeAsyncEnumerable&lt;Item&gt;(stream);  // 大数组逐项读
+
+// HttpClient 扩展（System.Net.Http.Json，默认 Web 预设）
+var repo = await http.GetFromJsonAsync&lt;Repo&gt;("repos/x/y");
+var resp = await http.PostAsJsonAsync("items", item);
+var back = await resp.Content.ReadFromJsonAsync&lt;Item&gt;();
+</code></pre>
+
+<h2>特性</h2>
+
+<pre><code>public sealed record Order(
+    [property: JsonPropertyName("order_id")] int Id,        // 重命名
+    [property: JsonIgnore] string? Secret,                  // 忽略
+    [property: JsonRequired] string Customer,               // 缺失即抛（或 C# required）
+    [property: JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] decimal Total,
+    [property: JsonPropertyOrder(-1)] DateTimeOffset Created);
+
+[JsonDerivedType(typeof(Circle), "circle")]                // 多态白名单，鉴别器默认 "$type"
+[JsonDerivedType(typeof(Square), "square")]
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]   // 改鉴别器名
+public abstract record Shape;
+
+[JsonConverter(typeof(MyConverter))] public sealed class Foo { }   // 类型级自定义 converter
+</code></pre>
+
+<h2>源生成（NativeAOT / 剪裁必需）</h2>
+
+<pre><code>[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(Order))]
+[JsonSerializable(typeof(List&lt;Order&gt;))]
+internal partial class AppJsonContext : JsonSerializerContext { }
+
+JsonSerializer.Serialize(order, AppJsonContext.Default.Order);
+JsonSerializer.Deserialize(json, AppJsonContext.Default.ListOrder);
+// 与 Options 组合：new JsonSerializerOptions { TypeInfoResolver = AppJsonContext.Default }
+</code></pre>
+
+<h2>DOM：JsonNode / JsonDocument</h2>
+
+<table class="tbl">
+  <tr><th>Newtonsoft</th><th>STJ</th><th>特点</th></tr>
+  <tr><td><code>JObject / JArray / JToken</code></td><td><code>JsonObject / JsonArray / JsonNode</code></td><td>可读写，<code>JsonNode.Parse(json)</code>，<code>node["a"]!["b"]</code></td></tr>
+  <tr><td>—</td><td><code>JsonDocument / JsonElement</code></td><td>只读、池化内存、<code>using</code> 释放；<code>RootElement.GetProperty("a")</code></td></tr>
+  <tr><td><code>JsonPath</code> 查询</td><td>❌ 无</td><td>手动导航或第三方库</td></tr>
+  <tr><td><code>JsonTextReader/Writer</code></td><td><code>Utf8JsonReader / Utf8JsonWriter</code></td><td>ref struct，零分配流式，写 converter 用</td></tr>
+</table>
+
+<h2>Framework API 替代清单</h2>
+
+<table class="tbl">
+  <tr><th>Framework 4.8</th><th>现代 .NET</th></tr>
+  <tr><td><code>ConfigurationManager</code> / <code>web.config</code></td><td><code>IConfiguration</code> + <code>IOptions&lt;T&gt;</code></td></tr>
+  <tr><td>Autofac / Ninject 手工接入</td><td><code>Microsoft.Extensions.DependencyInjection</code></td></tr>
+  <tr><td><code>Global.asax</code> / <code>ServiceBase</code> / TopShelf</td><td><code>IHost</code> + <code>IHostedService</code></td></tr>
+  <tr><td>log4net / NLog 直接调用</td><td><code>ILogger&lt;T&gt;</code>（它们降为 Provider）</td></tr>
+  <tr><td><code>new HttpClient()</code> / <code>WebClient</code> / <code>HttpWebRequest</code></td><td><code>IHttpClientFactory</code></td></tr>
+  <tr><td><code>JsonConvert</code> / <code>JavaScriptSerializer</code> / <code>DataContractJsonSerializer</code></td><td><code>System.Text.Json</code></td></tr>
+  <tr><td><code>HttpContext.Current</code></td><td><code>IHttpContextAccessor</code>（尽量传参）</td></tr>
+  <tr><td><code>System.Web.*</code></td><td><code>Microsoft.AspNetCore.*</code>；<code>WebUtility</code></td></tr>
+  <tr><td><code>Thread</code> / <code>BackgroundWorker</code> / <code>Timer</code> 轮询</td><td><code>Task</code> / <code>Channel&lt;T&gt;</code> / <code>PeriodicTimer</code></td></tr>
+  <tr><td><code>byte[]</code> 拷贝切片</td><td><code>Span&lt;T&gt;</code> / <code>Memory&lt;T&gt;</code> / <code>ArrayPool&lt;T&gt;</code></td></tr>
+  <tr><td><code>BinaryFormatter</code></td><td>已移除（.NET 9）→ STJ / MessagePack / protobuf</td></tr>
+  <tr><td><code>AppDomain</code> / <code>Remoting</code></td><td>无；<code>AssemblyLoadContext</code> / 进程隔离</td></tr>
+  <tr><td><code>Thread.Abort</code></td><td>无；<code>CancellationToken</code></td></tr>
+  <tr><td><code>System.Drawing</code>（跨平台）</td><td>ImageSharp / SkiaSharp（Windows 仍可用 <code>System.Drawing.Common</code>）</td></tr>
+</table>
+
+<hr class="section">
+
+<p>
+  ← 返回 <a href="../lessons/0012-httpclientfactory-system-text-json.html">第 12 课：IHttpClientFactory 与 System.Text.Json</a>
+</p>
+
+</body>
+</html>

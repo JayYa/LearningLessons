@@ -1,6 +1,6 @@
 # 📘 Learning Lessons
 
-本仓库收录五门独立课程，其中三门围绕 .NET 技术栈展开：`Morden .NET` 沿 C# 8 到 15 的每一次语法升级梳理语言演进，`DotNET Platform` 下沉到 SDK 项目系统、CoreCLR 运行时、GC、依赖注入与配置体系，两者互为语言层与平台层的对照；`BeiGene` 是一份面试向的综合专题，从联合索引与索引失效讲到排序与 Top-K 算法，再到微服务拆分、Saga、并发抢单、async/await 状态机与中间件管道。`Docker and K8S` 从构建第一个镜像入手，把「构建期」与「运行期」这条最容易混淆的界线讲透，并落到 .NET 多阶段构建的实战模板。`Build an Agent` 独立成篇，讲 AI Agent 的工具调用、记忆管理、任务编排与多智能体协作。各课程按需选读，共享同一方法论——从表层 API 下沉到底层机制。
+本仓库收录四门独立课程，其中三门围绕 .NET 技术栈展开：`Morden .NET` 沿 C# 8 到 15 的每一次语法升级梳理语言演进，`DotNET Platform` 下沉到 SDK 项目系统、CoreCLR 运行时、GC、依赖注入、配置、Generic Host、结构化日志与 HttpClient/JSON 等平台基础设施，两者互为语言层与平台层的对照；`BeiGene` 是一份面试向的综合专题，从联合索引与索引失效讲到排序与 Top-K 算法，再到微服务拆分、Saga、并发抢单、async/await 状态机、中间件管道与事务隔离级别。`Docker and K8S` 从构建第一个镜像入手，把「构建期」与「运行期」这条最容易混淆的界线讲透，落到 .NET 多阶段构建与运行期配置，再用 Compose 一次拉起应用与数据库。各课程按需选读，共享同一方法论——从表层 API 下沉到底层机制。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
 
@@ -12,9 +12,11 @@
 | 2 | [第 2 课：构建期与运行期](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0002-build-time-vs-run-time.html) | 分清哪些指令在 build 时执行、哪些留到容器启动才生效 |
 | 3 | [第 3 课：.NET 多阶段构建](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0003-dotnet-multi-stage-build.html) | 用 SDK 镜像编译、用 runtime 镜像运行，把 .NET 应用的构建与部署拆成多阶段以压缩最终镜像 |
 | 4 | [第 4 课：不改镜像，只改配置](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0004-configure-without-rebuilding.html) | 用环境变量、挂载卷与端口映射在运行期注入配置，同一镜像跑不同环境而无需重新构建 |
+| 5 | [第 5 课：一个文件，拉起应用 + 数据库](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0005-compose-app-plus-database.html) | 用 docker compose 一份 YAML 同时定义应用与数据库服务，理清服务发现、依赖顺序与数据卷持久化 |
 
 **参考资料：**
 - [术语表 · Docker & Kubernetes](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/GLOSSARY.html) — 容器与编排领域的核心名词速查
+- [速查：Docker Compose](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/compose-cheatsheet.html) — compose.yaml 常用字段与 docker compose 命令速查
 - [速查：Dockerfile 指令 —— 构建期还是运行期？](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/dockerfile-instruction-timing.html) — 逐条列出各 Dockerfile 指令的生效时机
 - [速查：.NET 多阶段 Dockerfile 模板](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/dotnet-multistage-dockerfile.html) — 可直接套用的 .NET 多阶段 Dockerfile 模板与逐行说明
 - [速查：运行期配置 —— -e / -v / -p](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/runtime-config.html) — docker run 的 -e、-v、-p 三个运行期配置参数用法速查
@@ -46,21 +48,6 @@
 - [速查表 · 微服务](https://JayYa.github.io/LearningLessons/BeiGene/reference/microservices-cheatsheet.html) — 微服务架构下延迟、失败、序列化与一致性四类新增开销速查
 - [速查表 · 事务隔离级别与事务用法](https://JayYa.github.io/LearningLessons/BeiGene/reference/transactions-cheatsheet.html) — 四种隔离级别的读现象对照与 TransactionScope / EF Core 事务写法速查
 
-## Build an Agent
-
-| # | 课程 | 描述 |
-|---|------|------|
-| 1 | [Lesson 01 · What is an Agent](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0001-what-is-an-agent.html) | 从零认识 AI Agent 的核心概念，理解 Agent 与普通 LLM 调用的本质区别 |
-| 2 | [Lesson 02 · Tools & Plugins](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0002-tools-and-plugins.html) | 讲解 Agent 的工具调用与插件扩展机制，理解如何赋予 Agent 与外部世界交互的能力 |
-| 3 | [Lesson 03 · Memory & Context](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0003-memory-and-context.html) | 探索 Agent 的记忆与上下文管理机制，理解如何让 Agent 跨多轮对话保持状态与连贯性 |
-| 4 | [Lesson 04 · Planning & Orchestration](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0004-planning-and-orchestration.html) | 深入 Agent 的任务规划与编排能力，理解如何将复杂目标拆解为可执行的子任务链 |
-| 5 | [Lesson 05 · MAF Migration Bridge](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0005-maf-migration-bridge.html) | 讲解 MAF（Multi-Agent Framework）迁移桥接层设计，理解如何在不同 Agent 框架之间实现互操作与平滑过渡 |
-| 6 | [Lesson 06 · Multi-Agent Collaboration](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0006-multi-agent-collaboration.html) | 探索多智能体协作模式，理解多个 Agent 如何分工、通信与协同完成复杂任务 |
-| 7 | [Lesson 07 · Agent Observability](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/lessons/0007-agent-observability.html) | 讲解 Agent 可观测性设计，理解如何通过日志、指标与追踪监控 Agent 系统的运行状态与性能 |
-
-**参考资料：**
-- [Agent Glossary · Reference](https://JayYa.github.io/LearningLessons/Build%20an%20Agent/reference/agent-glossary.html) — AI Agent 领域核心术语速查
-
 ## DotNET Platform
 
 | # | 课程 | 描述 |
@@ -75,11 +62,15 @@
 | 8 | [第 8 课：Options 模式——强类型、热重载、校验](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0008-configuration-options-pattern.html) | 讲解 Options 模式的强类型绑定、热重载验证与数据校验，完成 .NET 配置体系从基础到进阶的学习闭环 |
 | 9 | [第 9 课：Generic Host——把 DI、配置、日志串起来的那个对象](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0009-generic-host-fundamentals.html) | 讲解 Generic Host 如何统一装配 DI、配置与日志，成为 .NET 应用的组合根 |
 | 10 | [第 10 课：IHostedService 与生命周期——后台任务、启动顺序、优雅关闭](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0010-hosted-services-lifecycle.html) | 用 IHostedService / BackgroundService 编写后台任务，理清启动顺序与优雅关闭的生命周期钩子 |
+| 11 | [第 11 课：ILogger 与结构化日志——从"拼字符串"到"记事件"](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0011-logging-structured.html) | 用 ILogger 的消息模板与作用域记录结构化事件，理解日志级别、分类与 Provider 的协作方式 |
+| 12 | [第 12 课：BCL 现代化（上）——IHttpClientFactory 与 System.Text.Json](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0012-httpclientfactory-system-text-json.html) | 用 IHttpClientFactory 管理连接生命周期，用 System.Text.Json 替代 Newtonsoft 完成高性能序列化 |
 
 **参考资料：**
 - [参考：配置系统速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/configuration-quick-reference.html) — .NET 配置系统常用 API 与配置模式速查
 - [参考：DI 生命周期与注册速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/di-lifetime-reference.html) — 依赖注入三种生命周期（Transient、Scoped、Singleton）的行为差异与选择指南
 - [参考：Host 模型速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/host-quick-reference.html) — Generic Host 构建、生命周期事件与 HostedService API 速查
+- [参考：HttpClient 与 JSON 速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/httpclient-json-quick-reference.html) — IHttpClientFactory 注册方式与 System.Text.Json 常用选项速查
+- [参考：日志速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/logging-quick-reference.html) — ILogger API、日志级别与 Provider 配置速查
 - [参考：旧项目迁移到 SDK 风格](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/migrate-to-sdk-style.html) — 传统 .csproj 项目迁移到 SDK 风格的操作指南
 - [参考：NuGet 传递依赖解析规则](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/nuget-dependency-resolution.html) — NuGet 依赖版本选择与冲突解析机制速查
 - [参考：运行时配置速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/runtime-configuration.html) — runtimeconfig.json 与 MSBuild 运行时配置选项速查

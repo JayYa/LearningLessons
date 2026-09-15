@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 5 课：一个文件，拉起应用 + 数据库</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/diagram.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="eyebrow">Lesson 05 · 主线 B：运行与配置</p>
+  <h1>一个文件，拉起应用 + 数据库</h1>
+  <p class="subtitle">把上一课那两条六七个参数的 <code>docker run</code> 翻译成 <code>compose.yaml</code>，一条 <code>docker compose up</code> 同时启动 hello-api 和 postgres，让它们互相能找到对方。</p>
+</header>
+
+<p class="lede">
+  上一课你已经能把任何镜像配置好跑起来。问题是每次都要敲一长串参数，两个服务就是两长串，还要自己保证启动顺序。
+  <code>docker compose</code> 做的事很朴素：<strong>把 <code>docker run</code> 的参数写进一个 YAML 文件</strong>，加上"这几个容器是一组"的概念。
+  你上一课学的 <code>-e</code> / <code>-v</code> / <code>-p</code> 一个不少，只是换了写法。
+</p>
+
+<h2>一、原理：参数 → 字段，一一对应</h2>
+
+<table class="defs">
+  <tr><th><code>docker run</code></th><th><code>compose.yaml</code></th><th>说明</th></tr>
+  <tr><td><code>--name pg</code></td><td><code>services:</code> 下的键名 <code>db:</code></td><td>服务名。容器实际叫 <code>项目名-db-1</code>；服务名同时是<strong>DNS 名</strong>，见下</td></tr>
+  <tr><td><code>postgres:17-alpine</code></td><td><code>image: postgres:17-alpine</code></td><td>用现成镜像。要现场 build 就写 <code>build: .</code></td></tr>
+  <tr><td><code>-p 5432:5432</code></td><td><code>ports: ["5432:5432"]</code></td><td>同样是"宿主机:容器"，<strong>加引号</strong>——YAML 会把 <code>22:22</code> 这种当成六十进制数</td></tr>
+  <tr><td><code>-e POSTGRES_DB=shop</code></td><td><code>environment:</code><br><code>&nbsp;&nbsp;POSTGRES_DB: shop</code></td><td>map 写法；也可以写成 <code>- POSTGRES_DB=shop</code> 列表</td></tr>
+  <tr><td><code>-v pgdata:/var/lib/…</code></td><td><code>volumes:</code><br><code>&nbsp;&nbsp;- type: volume</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;source: pgdata</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;target: /var/lib/…</code></td><td><strong>长格式</strong>把类型写明（<code>volume</code> / <code>bind</code>），不再靠"冒号左边像不像路径"去猜。named volume 还要在<strong>顶层 <code>volumes:</code></strong> 声明一次</td></tr>
+  <tr><td>（手动先起 pg 再起 api）</td><td><code>depends_on:</code> + <code>healthcheck:</code></td><td>声明"api 要等 db <em>健康</em>了再启动"，compose 替你排顺序</td></tr>
+</table>
+
+<p>
+  权威对照：<a href="https://docs.docker.com/reference/compose-file/services/">Compose file reference — services</a>。
+  每个字段都能在那页查到；本课只用最常见的六个。
+</p>
+
+<div class="timeline">
+  <div class="phase">
+    <h4>docker compose up</h4>
+    <p class="when">按项目名创建一组资源</p>
+    <ul>
+      <li>network <code>hello-api_default</code></li>
+      <li>volume <code>hello-api_pgdata</code></li>
+      <li>container <code>hello-api-db-1</code></li>
+      <li>container <code>hello-api-api-1</code></li>
+    </ul>
+  </div>
+  <div class="arrow">→<br><small>down</small></div>
+  <div class="phase run">
+    <h4>docker compose down</h4>
+    <p class="when">删容器和网络，<strong>留卷</strong></p>
+    <ul>
+      <li>container ✗</li>
+      <li>network ✗</li>
+      <li>named volume <strong>保留</strong></li>
+      <li><code>down -v</code> 才连卷一起删</li>
+    </ul>
+  </div>
+</div>
+
+<div class="note">
+  <p><strong>项目名（project name）</strong>默认是 <code>compose.yaml</code> 所在目录的名字。compose 创建的一切都以它做前缀，
+  所以你在 <code>docker volume ls</code> 里会看到 <code>hello-api_pgdata</code>，而不是你写的 <code>pgdata</code>。
+  这是 compose 隔离不同项目的手段——也是本课第 3 步要亲手踩一下的坑。
+  见 <a href="https://docs.docker.com/compose/how-tos/project-name/">Specify a project name</a>。</p>
+</div>
+
+<div class="note">
+  <p><strong>服务名就是主机名。</strong>compose 会给这组容器建一个私有网络，并注册内部 DNS：
+  api 容器里访问 <code>db:5432</code> 就到了 postgres。注意用的是<strong>容器端口</strong>（5432），不是宿主机端口；
+  <code>ports:</code> 只对"从 Windows 侧访问"有意义，容器之间不经过它。
+  见 <a href="https://docs.docker.com/compose/how-tos/networking/">Networking in Compose</a>。</p>
+</div>
+
+<h2>二、动手</h2>
+
+<p>在 <code>demo\hello-api</code> 目录下操作。约 10 分钟。上一课留下的 <code>hello-api:1.2</code> 镜像和 <code>pgdata</code> 卷（里面有 2 行 <code>orders</code>）这一课都会用到。</p>
+
+<ol class="steps">
+
+<li>
+<p><strong>用编辑器在 <code>demo\hello-api</code> 下新建 <code>compose.yaml</code>，内容如下。</strong>先照抄，每一行的"为什么"在上面的表里。</p>
+<pre><code><span class="k">services:</span>
+
+  <span class="k">api:</span>
+    image: hello-api:1.2
+    ports:
+      - "8080:8080"
+    environment:
+      Greeting: ${GREETING:-Hello from compose!}
+      ConnectionStrings__Default: Host=db;Port=5432;Database=shop;Username=postgres;Password=secret
+    depends_on:
+      db:
+        condition: service_healthy
+
+  <span class="k">db:</span>
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: shop
+    volumes:
+      - type: volume
+        source: pgdata
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d shop"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+<span class="k">volumes:</span>
+  pgdata:</code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  三处新东西：<code>${GREETING:-默认值}</code> 是<strong>插值</strong>——值从你 shell 或 <code>.env</code> 文件里取，没有就用冒号后面的默认值（第 5 步用）。
+  <code>ConnectionStrings__Default</code> 里 <code>Host=db</code>：连接串写的是<em>服务名</em>，不是 localhost——hello-api 现在还没用它，但这就是以后真实项目的写法。
+  <code>healthcheck.test</code> 用 postgres 自带的 <code>pg_isready</code> 探活；
+  <code>depends_on … condition: service_healthy</code> 让 api 等到它绿了才起。
+  见 <a href="https://docs.docker.com/reference/compose-file/services/#depends_on">depends_on</a> 与 <a href="https://docs.docker.com/reference/compose-file/services/#healthcheck">healthcheck</a>。
+</p>
+</li>
+
+<li>
+<p><strong>一条命令拉起两个服务。</strong></p>
+<pre><code>cd demo\hello-api
+docker compose up -d
+<span class="c"># Network hello-api_default  Created</span>
+<span class="c"># Volume  hello-api_pgdata   Created</span>
+<span class="c"># Container hello-api-db-1   Healthy      ← 等到它健康</span>
+<span class="c"># Container hello-api-api-1  Started      ← 才起这个</span>
+
+docker compose ps
+curl http://localhost:8080
+<span class="c"># → Hello from compose!</span></code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  <code>docker compose ps</code> 里 db 一行 STATUS 是 <code>Up … (healthy)</code>——这就是 healthcheck 的结果。
+  <code>compose up -d</code> 之后所有的 <code>docker compose</code> 子命令（<code>ps</code> / <code>logs</code> / <code>exec</code> / <code>down</code>）都在这个目录下执行，它靠目录找到 <code>compose.yaml</code>。
+</p>
+</li>
+
+<li>
+<p><strong>踩坑：上一课的 2 行 orders 呢？</strong></p>
+<pre><code>docker compose exec db psql -U postgres -d shop -c "SELECT count(*) FROM orders;"
+<span class="c"># ERROR:  relation "orders" does not exist</span>
+
+docker volume ls
+<span class="c"># hello-api_pgdata   ← compose 新建的，空的</span>
+<span class="c"># pgdata             ← 上一课的，数据在这</span></code></pre>
+<p>
+  你写的 <code>pgdata</code> 被加了项目前缀，变成了另一个卷。要接上原来那个，在顶层 <code>volumes:</code> 里指定确切的名字：
+</p>
+<pre><code><span class="c"># 把文件末尾改成：</span>
+volumes:
+  pgdata:
+    name: pgdata
+
+docker compose up -d
+<span class="c"># Container hello-api-db-1  Recreated   ← 只重建了变化的服务</span>
+docker compose exec db psql -U postgres -d shop -c "SELECT count(*) FROM orders;"
+<span class="c"># → 2</span>
+
+docker volume rm hello-api_pgdata          <span class="c"># 那个空的没用了</span></code></pre>
+<div class="win">
+  <p>2 行回来了。你现在知道两件事：compose 给资源加前缀；改了 YAML 再 <code>up</code>，compose 只重建受影响的容器，不动其他的。</p>
+</div>
+</li>
+
+<li>
+<p><strong>服务名 = DNS 名。</strong>在 api 容器里查 <code>db</code> 这个名字：</p>
+<pre><code>docker compose exec api getent hosts db
+<span class="c"># 172.18.0.2      db</span></code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  aspnet 镜像里没有 <code>ping</code>/<code>curl</code>，<code>getent hosts</code> 是 glibc 自带的查名工具。这个 IP 每次 <code>up</code> 都可能变——所以永远写服务名，别写 IP。
+  也顺便验证一下 <code>docker compose exec api env | findstr Connection</code>：连接串已经在容器里了，指向 <code>db</code>。
+</p>
+</li>
+
+<li>
+<p><strong>不改 YAML，用 <code>.env</code> 换配置。</strong></p>
+<pre><code>'GREETING=Hello from .env!' | Set-Content .env
+
+docker compose config | Select-String Greeting
+<span class="c">#       Greeting: Hello from .env!     ← 插值后的最终结果</span>
+
+docker compose up -d
+<span class="c"># Container hello-api-api-1  Recreated</span>
+curl http://localhost:8080
+<span class="c"># → Hello from .env!</span></code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  <code>docker compose config</code> 打印<strong>插值和合并之后</strong>的完整文件——"配置没生效"时先看它，别猜。
+  <code>.env</code> 只参与插值（替换 YAML 里的 <code>${…}</code>），它本身<em>不会</em>直接变成容器的环境变量；要整文件喂给容器是另一个字段 <code>env_file:</code>。
+  优先级见 <a href="https://docs.docker.com/compose/how-tos/environment-variables/envvars-precedence/">Environment variables precedence</a>。
+</p>
+</li>
+
+<li>
+<p><strong>拆掉，看什么留下来。</strong></p>
+<pre><code>docker compose down
+<span class="c"># Container hello-api-api-1  Removed</span>
+<span class="c"># Container hello-api-db-1   Removed</span>
+<span class="c"># Network hello-api_default  Removed</span>
+
+docker volume ls
+<span class="c"># pgdata   ← 还在</span></code></pre>
+<div class="win">
+  <p><code>down</code> 删容器和网络，<strong>不删 named volume</strong>。<code>docker compose down -v</code> 才会连卷一起删——那是"我要彻底重来"时用的，敲之前想一秒。
+  见 <a href="https://docs.docker.com/reference/cli/docker/compose/down/">docker compose down</a>。</p>
+</div>
+</li>
+
+</ol>
+
+<h2>三、检索练习</h2>
+
+<div class="quiz" data-answer="C">
+  <p class="q">1. api 容器里的连接串该写 <code>Host=</code> 什么，才能连到同一 compose 文件里的 postgres？</p>
+  <button data-opt="A">写 localhost 加上宿主机端口即可连上</button>
+  <button data-opt="B">写容器的 IP 地址加上容器内部端口</button>
+  <button data-opt="C">写它的服务名加上容器里监听的端口</button>
+  <button data-opt="D">写宿主机名再加上映射出来的端口号</button>
+  <p class="why"><code>Host=db;Port=5432</code>。compose 内部 DNS 按服务名解析；容器间走容器端口，<code>ports:</code> 映射只服务于宿主机侧。localhost 在容器里指它自己。IP 每次可能变。</p>
+</div>
+
+<div class="quiz" data-answer="B">
+  <p class="q">2. YAML 里写了 <code>source: pgdata</code>，<code>docker volume ls</code> 却看到 <code>hello-api_pgdata</code>。为什么？</p>
+  <button data-opt="A">拼写有误导致引擎创建了一个新的卷</button>
+  <button data-opt="B">项目名被自动加成了前缀来隔离项目</button>
+  <button data-opt="C">长格式的卷名与短格式卷名并不相同</button>
+  <button data-opt="D">这是引擎给匿名卷分配的默认名字格式</button>
+  <p class="why">默认项目名 = 目录名，volume / network / container 都加此前缀。要用确切名字，顶层 <code>volumes:</code> 里写 <code>name: pgdata</code>（或 <code>external: true</code> 表示"已存在，别替我建"）。</p>
+</div>
+
+<div class="quiz" data-answer="A">
+  <p class="q">3. <code>docker compose down</code> 之后，哪个还在？</p>
+  <button data-opt="A">顶层声明的命名卷保留，容器和网络删除</button>
+  <button data-opt="B">容器停止但保留，网络与命名卷都被删除</button>
+  <button data-opt="C">全部资源都删除，包括卷、网络与容器</button>
+  <button data-opt="D">全部资源都保留，只是把容器停止运行</button>
+  <p class="why">默认删容器 + 网络，留 named volume（和 <code>docker rm</code> 一样，宁可留垃圾不丢数据）。<code>down -v</code> 才删卷。</p>
+</div>
+
+<div class="quiz" data-answer="D">
+  <p class="q">4. 改了 <code>.env</code> 里的值，<code>curl</code> 结果却没变。第一步查什么？</p>
+  <button data-opt="A">删除全部容器与卷之后再重新启动一遍</button>
+  <button data-opt="B">重新构建镜像因为环境变量已冻结在层里</button>
+  <button data-opt="C">重启引擎让它重新读取环境文件的内容</button>
+  <button data-opt="D">打印插值合并后的配置看最终值是什么</button>
+  <p class="why"><code>docker compose config</code>。它显示插值后的最终 YAML；值不对就是插值/优先级问题，值对了就是忘了 <code>up -d</code> 重建容器（改 <code>.env</code> 不会自动重建）。</p>
+</div>
+
+<div class="typein" data-answer="docker compose down -v|docker compose down --volumes|docker compose down -v --remove-orphans" data-hint="down 加一个删卷的参数。">
+  <p class="q">5. 写出那条"删容器、删网络、<strong>连 named volume 一起删</strong>"的命令。</p>
+</div>
+
+<div class="quiz" data-answer="B">
+  <p class="q">6.（回顾上一课）第 4 课不带 <code>-v</code> 直接跑 postgres，事后 <code>docker volume ls</code> 多了一个 64 位哈希名的卷。它从哪来？</p>
+  <button data-opt="A">引擎为每个容器的可写层都会创建一个卷</button>
+  <button data-opt="B">镜像里声明了卷指令，未指定时自动创建</button>
+  <button data-opt="C">数据库进程启动时自己申请了一块存储区</button>
+  <button data-opt="D">是上一次未清理干净的构建缓存残留数据</button>
+  <p class="why">postgres 的 Dockerfile 有 <code>VOLUME /var/lib/postgresql/data</code>：该路径必须是卷，你不指定就得到一个匿名卷。<code>docker rm</code> 默认不删它（<code>rm -v</code> 才删），<code>docker volume prune</code> 清理。</p>
+</div>
+
+<div class="recall">
+  <p class="q">7. 不看文件，默写一个最小 compose 服务：镜像 <code>postgres:17-alpine</code>，密码 <code>secret</code>，数据持久化到 named volume <code>pgdata</code>（长格式），宿主机 5432 可访问。</p>
+  <div class="a">
+<pre><code>services:
+  db:
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - type: volume
+        source: pgdata
+        target: /var/lib/postgresql/data
+
+volumes:
+  pgdata:</code></pre>
+    <p>检查点：<code>ports</code> 有引号；named volume 顶层声明了；长格式三个键 <code>type / source / target</code>。速查见<a href="../reference/compose-cheatsheet.html">Compose 速查</a>。</p>
+  </div>
+</div>
+
+<h2 id="next">四、下一步</h2>
+
+<p><strong>本课的一手资料</strong>：</p>
+<blockquote>
+  <a href="https://docs.docker.com/compose/how-tos/networking/">Docker Docs — Networking in Compose</a>（约 5 分钟）<br>
+  服务名 DNS、HOST_PORT vs CONTAINER_PORT 的原文。这一页读懂了，"容器连不上数据库"这类问题就有了推理起点。<br>
+  再看 <a href="https://docs.docker.com/reference/compose-file/services/">Compose file reference — services</a>，只查你用到的六个字段。
+</blockquote>
+
+<p>新增速查：<a href="../reference/compose-cheatsheet.html">Compose 速查</a> —— <code>docker run</code> 参数与 YAML 字段对照表、常用子命令、项目名与前缀规则、插值与优先级、排查清单。</p>
+
+<p>清理（保留 <code>compose.yaml</code>、<code>.env</code>、<code>pgdata</code> 卷；容器和网络已经被 <code>down</code> 删掉了）：</p>
+<pre><code>docker volume ls        <span class="c"># 应只剩 pgdata</span>
+cd ..\..</code></pre>
+
+<p><strong>第 6 课预告：</strong>回到主线 A 收尾——给镜像打正确的 tag，推到 registry（Docker Hub 或本地 registry），
+再从 compose 里 <code>pull</code> 它。这是 K8s 的前置条件：集群只认 registry 里的镜像，不认你本机 build 的。</p>
+
+<div class="ask">
+  <strong>随时问我。</strong>本课所有命令已在本机实测（Windows 11 + Docker Desktop），输出注释都是真实结果。
+  YAML 对缩进敏感：<code>up</code> 时报 <code>yaml: line N</code> 之类的错，把整个 <code>compose.yaml</code> 贴给我；
+  想知道某一行"为什么这么写"，直接问。
+</div>
+
+<div class="footer">
+  <p>课程：Docker &amp; Kubernetes · 第 5 课 ｜
+  上一课：<a href="0004-configure-without-rebuilding.html">不改镜像，只改配置</a> ｜
+  <a href="../reference/GLOSSARY.html">术语表</a> ·
+  <a href="../reference/compose-cheatsheet.html">Compose 速查</a> ·
+  <a href="../reference/runtime-config.html">运行期配置速查</a></p>
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

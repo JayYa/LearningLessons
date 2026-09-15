@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查：Docker Compose</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<header class="masthead">
+  <p class="eyebrow">Reference · Docker Compose</p>
+  <h1>Compose 速查</h1>
+  <p class="subtitle"><code>compose.yaml</code> 就是写成文件的 <code>docker run</code>。忘了字段名时对照左列。</p>
+</header>
+
+<h2>参数 ↔ 字段对照</h2>
+<table class="defs">
+  <tr><th><code>docker run</code></th><th><code>compose.yaml</code>（在某个 service 下）</th><th>备注</th></tr>
+  <tr><td><code>--name x</code></td><td>服务键名 <code>x:</code></td><td>实际容器名 <code>项目名-x-1</code>；服务名即 DNS 名</td></tr>
+  <tr><td><code>镜像名</code></td><td><code>image: nginx:alpine</code></td><td>要现场构建：<code>build: .</code>（可与 <code>image:</code> 同时写，用作 tag）</td></tr>
+  <tr><td><code>-p 80:8080</code></td><td><code>ports:</code><br><code>&nbsp;&nbsp;- "80:8080"</code></td><td><strong>加引号</strong>，YAML 会把 <code>a:b</code> 数字对当六十进制</td></tr>
+  <tr><td><code>-e K=V</code></td><td><code>environment:</code><br><code>&nbsp;&nbsp;K: V</code>&nbsp;&nbsp;或&nbsp;&nbsp;<code>- K=V</code></td><td>值含 <code>:</code>、<code>#</code>、<code>*</code> 等符号时加引号。布尔要写 <code>"true"</code></td></tr>
+  <tr><td><code>--env-file app.env</code></td><td><code>env_file: app.env</code></td><td>整文件喂进容器。<code>environment:</code> 里的同名键优先</td></tr>
+  <tr><td><code>-v pgdata:/data</code></td><td><code>volumes:</code><br><code>&nbsp;&nbsp;- type: volume</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;source: pgdata</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;target: /data</code></td><td>再在<strong>顶层</strong> <code>volumes:</code> 写 <code>pgdata:</code>。短格式 <code>- pgdata:/data</code> 也行，长格式意图更清楚</td></tr>
+  <tr><td><code>-v "C:\x\a.json:/app/a.json"</code></td><td><code>volumes:</code><br><code>&nbsp;&nbsp;- type: bind</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;source: ./config/a.json</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;target: /app/a.json</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;read_only: true</code></td><td>compose 里<strong>可以用相对路径</strong>（相对 compose.yaml 所在目录），比 <code>docker run</code> 方便</td></tr>
+  <tr><td><code>--restart unless-stopped</code></td><td><code>restart: unless-stopped</code></td><td>Docker Desktop 重启后自动拉起</td></tr>
+  <tr><td>（先起 db 再起 api）</td><td><code>depends_on:</code><br><code>&nbsp;&nbsp;db:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;condition: service_healthy</code></td><td>需要 db 有 <code>healthcheck:</code>。短格式 <code>- db</code> 只保证"先启动"，不保证"已就绪"</td></tr>
+  <tr><td>（无）</td><td><code>healthcheck:</code><br><code>&nbsp;&nbsp;test: ["CMD-SHELL", "pg_isready -U postgres"]</code><br><code>&nbsp;&nbsp;interval: 2s</code><br><code>&nbsp;&nbsp;retries: 10</code></td><td>探活命令在<strong>容器里</strong>执行，只能用镜像里有的工具</td></tr>
+</table>
+<p>全部字段：<a href="https://docs.docker.com/reference/compose-file/services/">Compose file reference — services</a></p>
+
+<h2>常用子命令（在 compose.yaml 所在目录执行）</h2>
+<table class="defs">
+  <tr><th>命令</th><th>做什么</th></tr>
+  <tr><td><code>docker compose up -d</code></td><td>创建/更新并启动。改了 YAML 或 <code>.env</code> 再跑一次 → 只重建受影响的服务</td></tr>
+  <tr><td><code>docker compose ps</code></td><td>本项目的容器、状态、健康、端口</td></tr>
+  <tr><td><code>docker compose logs -f api</code></td><td>看某服务日志（不写服务名 = 全部）</td></tr>
+  <tr><td><code>docker compose exec db psql -U postgres</code></td><td>在运行中的服务里执行命令。用<strong>服务名</strong>，不是容器名</td></tr>
+  <tr><td><code>docker compose config</code></td><td>打印插值、合并后的最终 YAML。<strong>"配置没生效"第一步看它</strong></td></tr>
+  <tr><td><code>docker compose down</code></td><td>删容器 + 网络。<strong>留 named volume</strong></td></tr>
+  <tr><td><code>docker compose down -v</code></td><td>连 named volume 与匿名卷一起删。数据没了</td></tr>
+  <tr><td><code>docker compose pull</code> / <code>build</code></td><td>只拉镜像 / 只构建，不启动</td></tr>
+  <tr><td><code>docker compose restart api</code></td><td>重启一个服务（不重新读 YAML；改了配置要用 <code>up -d</code>）</td></tr>
+</table>
+
+<h2>项目名与前缀</h2>
+<table class="defs">
+  <tr><th>规则</th><th>例子（目录 <code>hello-api</code>）</th></tr>
+  <tr><td>项目名默认 = 目录名；可用 <code>-p 名字</code> 或顶层 <code>name:</code> 改</td><td><code>hello-api</code></td></tr>
+  <tr><td>容器：<code>项目-服务-序号</code></td><td><code>hello-api-db-1</code></td></tr>
+  <tr><td>网络：<code>项目_default</code></td><td><code>hello-api_default</code></td></tr>
+  <tr><td>卷：<code>项目_卷名</code></td><td><code>hello-api_pgdata</code></td></tr>
+  <tr><td>要用确切名字 / 复用已有卷</td><td>顶层 <code>volumes:</code><br><code>&nbsp;&nbsp;pgdata:</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;name: pgdata</code>&nbsp;&nbsp;（或 <code>external: true</code>：必须已存在，compose 绝不创建也绝不删除）</td></tr>
+</table>
+
+<h2>网络：谁连谁用什么地址</h2>
+<table class="defs">
+  <tr><th>从哪</th><th>到哪</th><th>写什么</th></tr>
+  <tr><td>容器 api</td><td>容器 db</td><td><code>db:5432</code>（服务名 + <strong>容器端口</strong>；<code>ports:</code> 与此无关）</td></tr>
+  <tr><td>Windows 侧</td><td>容器 db</td><td><code>localhost:5432</code>（<code>ports:</code> 左边的宿主机端口）</td></tr>
+  <tr><td>容器</td><td>Windows 侧的服务</td><td><code>host.docker.internal:端口</code>（Docker Desktop 专用名）</td></tr>
+</table>
+<p><a href="https://docs.docker.com/compose/how-tos/networking/">Networking in Compose</a></p>
+
+<h2>变量插值与优先级</h2>
+<pre><code><span class="c"># compose.yaml</span>
+environment:
+  Greeting: ${GREETING:-默认值}        <span class="c"># 没设就用默认值</span>
+  Secret:   ${DB_PASSWORD:?必须设置}   <span class="c"># 没设就报错退出</span>
+
+<span class="c"># .env（与 compose.yaml 同目录，自动读取，只参与插值）</span>
+GREETING=Hello from .env!</code></pre>
+<p>容器里最终看到的值，高优先级在上（<a href="https://docs.docker.com/compose/how-tos/environment-variables/envvars-precedence/">官方表</a>）：</p>
+<ol>
+  <li><code>docker compose run -e K=V</code></li>
+  <li>shell 环境变量 / <code>.env</code> 经插值填进 <code>environment:</code> 的值</li>
+  <li><code>environment:</code> 里写死的值</li>
+  <li><code>env_file:</code> 文件里的值</li>
+  <li>镜像 <code>ENV</code></li>
+</ol>
+<p style="font-size:.9rem;color:var(--ink-soft)"><code>.env</code> ≠ <code>env_file:</code>。前者替换 YAML 里的 <code>${…}</code>，后者把文件内容直接喂给容器。</p>
+
+<h2>排查清单</h2>
+<table class="defs">
+  <tr><th>症状</th><th>做什么</th></tr>
+  <tr><td><code>up</code> 报 <code>yaml: line N</code></td><td>缩进错了。两个空格一级，不用 Tab；<code>ports</code> 值加引号</td></tr>
+  <tr><td>配置没生效</td><td><code>docker compose config</code> 看最终值 → 值对了就是没 <code>up -d</code> 重建</td></tr>
+  <tr><td>api 连不上 db</td><td>连接串是否写服务名 + 容器端口？<code>docker compose exec api getent hosts db</code> 能解析吗？db 是否 healthy？</td></tr>
+  <tr><td>数据"丢了"</td><td><code>docker volume ls</code>：是不是多了个带前缀的新卷？是不是跑过 <code>down -v</code>？</td></tr>
+  <tr><td>某服务秒退</td><td><code>docker compose logs 服务名</code>（同第 4 课）</td></tr>
+  <tr><td>改了 YAML 没反应</td><td><code>restart</code> 不重读文件；用 <code>up -d</code></td></tr>
+</table>
+
+<div class="footer">
+  <p>来自 <a href="../lessons/0005-compose-app-plus-database.html">第 5 课：一个文件，拉起应用 + 数据库</a> ·
+  <a href="runtime-config.html">运行期配置速查</a> ·
+  <a href="GLOSSARY.html">术语表</a></p>
+</div>
+</body>
+</html>

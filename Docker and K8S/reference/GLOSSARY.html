@@ -32,6 +32,13 @@
   <tr><td><code>bind mount</code>（绑定挂载）</td><td>把宿主机的文件/目录叠到容器路径上，<code>-v C:\绝对路径:/容器路径</code>，遮住镜像里原来的内容。适合挂配置文件。冒号左边是<strong>路径</strong>。</td></tr>
   <tr><td><code>-e</code></td><td><code>docker run -e KEY=VALUE</code>：给容器进程设环境变量，覆盖镜像 <code>ENV</code> 的同名默认值。第三方镜像最主要的配置入口。</td></tr>
   <tr><td><code>docker logs</code> / <code>docker exec</code></td><td>看容器输出 / 在运行中的容器里执行命令。容器跑不起来先 <code>logs</code>，想看容器里有什么用 <code>exec</code>。</td></tr>
+  <tr><td><code>named volume</code>（命名卷）</td><td>Docker 管理的一块存储，<code>-v 卷名:/容器路径</code>，容器删了它还在。冒号左边是<strong>名字</strong>。<code>-v</code> 靠"左边像不像路径"区分两种挂载是历史包袱，<code>--mount type=…</code> / compose 长格式把类型写明。</td></tr>
+  <tr><td><code>anonymous volume</code>（匿名卷）</td><td>镜像里 <code>VOLUME /path</code> 声明的路径若启动时未指定挂载，Docker 自动创建的随机哈希名卷。<code>docker rm</code> 默认不删（<code>rm -v</code> 才删），<code>docker volume prune</code> 清理。</td></tr>
+  <tr><td><code>compose.yaml</code></td><td>把多个 <code>docker run</code> 的参数写成一个文件，外加"这些容器是一组"。<code>services:</code> 下每个键是一个服务。<a href="https://docs.docker.com/reference/compose-file/">↗ 规范</a></td></tr>
+  <tr><td><code>service</code>（服务）</td><td>compose 里一个容器的定义。服务名同时是<strong>内部 DNS 名</strong>：同一项目的容器用 <code>服务名:容器端口</code> 互访。实际容器名是 <code>项目名-服务名-1</code>。</td></tr>
+  <tr><td><code>project name</code>（项目名）</td><td>compose 给一组资源加的前缀，默认 = <code>compose.yaml</code> 所在目录名。网络 <code>项目_default</code>、卷 <code>项目_卷名</code>。顶层 <code>volumes: x: name: x</code> 可指定确切名字。</td></tr>
+  <tr><td><code>healthcheck</code> / <code>depends_on</code></td><td><code>healthcheck</code> 在容器里定期跑一条命令判断"就绪"；<code>depends_on: db: condition: service_healthy</code> 让依赖方等到它健康再启动。短格式 <code>depends_on: [db]</code> 只保证启动顺序。</td></tr>
+  <tr><td>插值（interpolation）</td><td><code>compose.yaml</code> 里的 <code>${VAR:-默认}</code>，由 shell 环境或同目录 <code>.env</code> 填充。<code>.env</code> 只参与插值，不直接进容器；<code>docker compose config</code> 看填充后的结果。</td></tr>
 </table>
 
 <h2>Kubernetes</h2>
