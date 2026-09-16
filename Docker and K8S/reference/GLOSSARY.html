@@ -23,6 +23,7 @@
   <tr><td><code>base image</code></td><td><code>FROM</code> 指定的起点 image，例如 <code>nginx:alpine</code>。<a href="https://docs.docker.com/build/building/base-images/">↗</a></td></tr>
   <tr><td><code>tag</code>（标签）</td><td>image 的人类可读名字，格式 <code>name:version</code>，如 <code>myapp:1.0</code>。省略版本时默认 <code>:latest</code>（这只是个普通标签，不代表"最新"）。</td></tr>
   <tr><td><code>registry</code>（仓库）</td><td>存放和分发 image 的服务器，如 Docker Hub、GHCR、私有 Harbor。<code>push</code> 上传、<code>pull</code> 下载。</td></tr>
+  <tr><td><code>digest</code>（摘要）</td><td>镜像内容的 SHA256，形如 <code>sha256:37da…</code>，由内容算出、不可变。tag 是指向某个 digest 的可移动指针；<code>image: repo@sha256:…</code> 可按 digest 锁定版本。<a href="image-naming.html">↗ 速查</a></td></tr>
   <tr><td><code>build context</code></td><td><code>docker build</code> 末尾那个路径（常见是 <code>.</code>）。<code>COPY</code> 只能取到 context 里的文件。BuildKit 只传输 <code>COPY</code>/<code>ADD</code> 实际引用的路径；<code>COPY . .</code> 时才是整个目录，<code>.dockerignore</code> 在那时起作用。</td></tr>
   <tr><td><code>stage</code>（阶段）</td><td>Dockerfile 里每个 <code>FROM</code> 开启一个阶段，<code>FROM x AS 名字</code> 可命名。最终镜像<strong>只含最后一个阶段</strong>；前面阶段的文件要靠 <code>COPY --from=名字</code> 显式带过去。用于"SDK 编译、runtime 运行"的<strong>多阶段构建</strong>。<a href="https://docs.docker.com/build/building/multi-stage/">↗ 官方参考</a></td></tr>
   <tr><td><code>ARG</code> vs <code>ENV</code></td><td><code>ARG</code>：构建期变量，<code>--build-arg</code> 传入，只在声明它的阶段可见，<strong>不进容器</strong>。<code>ENV</code>：写进镜像元数据，容器进程能读到，运行期可用 <code>-e</code> 覆盖。</td></tr>

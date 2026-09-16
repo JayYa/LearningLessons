@@ -289,7 +289,7 @@ node["status"] = "shipped";                               // JsonNode 可写；J
 </div>
 
 <div class="quiz" id="quiz3" style="margin-top:1rem"
-     data-feedback-correct="✅ 正确！STJ 默认区分大小写，\"orderId\" 匹配不到 OrderId，属性静默保持默认值 0——不抛异常。用 JsonSerializerDefaults.Web 或 PropertyNameCaseInsensitive = true 解决。"
+     data-feedback-correct="✅ 正确！STJ 默认区分大小写，&quot;orderId&quot; 匹配不到 OrderId，属性静默保持默认值 0——不抛异常。用 JsonSerializerDefaults.Web 或 PropertyNameCaseInsensitive = true 解决。"
      data-feedback-wrong="❌ 不对。System.Text.Json 默认【区分大小写】，而且匹配不到的 JSON 属性会被静默忽略（不抛异常），所以 OrderId 保持默认值 0。这是从 Newtonsoft 迁移最常见的静默 bug。用 JsonSerializerDefaults.Web 或 PropertyNameCaseInsensitive = true。">
   <div class="quiz__q">❓ 用默认的 <code>JsonSerializer.Deserialize&lt;Order&gt;("{\"orderId\":42}")</code>，<code>Order</code> 有属性 <code>int OrderId</code>。结果是？</div>
   <div class="quiz__opt" data-answer="wrong">OrderId = 42——和 Newtonsoft 一样，反序列化默认不区分大小写</div>
@@ -301,7 +301,7 @@ node["status"] = "shipped";                               // JsonNode 可写；J
 
 <div class="quiz" id="quiz4" style="margin-top:1rem"
      data-feedback-correct="✅ 正确！TypeNameHandling 让 JSON 里的 $type 决定实例化什么类型，是多次 RCE 漏洞的根源。STJ 用 [JsonDerivedType] 要求你在代码里显式列出允许的子类型白名单。"
-     data-feedback-wrong="❌ 不对。STJ 永远不会支持 TypeNameHandling.All——让不可信 JSON 决定实例化哪个类型是安全漏洞。正确做法是在基类上用 [JsonDerivedType(typeof(Sub), \"discriminator\")] 显式声明白名单，反序列化只认列出的类型。">
+     data-feedback-wrong="❌ 不对。STJ 永远不会支持 TypeNameHandling.All——让不可信 JSON 决定实例化哪个类型是安全漏洞。正确做法是在基类上用 [JsonDerivedType(typeof(Sub), &quot;discriminator&quot;)] 显式声明白名单，反序列化只认列出的类型。">
   <div class="quiz__q">❓ Newtonsoft 里用 <code>TypeNameHandling.All</code> 做多态反序列化，迁移到 System.Text.Json 该怎么办？</div>
   <div class="quiz__opt" data-answer="wrong">设置 options.TypeNameHandling = All——STJ 从 .NET 7 起提供了同名选项</div>
   <div class="quiz__opt" data-answer="wrong">写一个自定义 JsonConverter 读取 $type 字段并用 Type.GetType 反射实例化</div>
@@ -363,7 +363,7 @@ node["status"] = "shipped";                               // JsonNode 可写；J
 
 <div class="lesson-nav">
   <a href="0011-logging-structured.html">← 上一课：ILogger 与结构化日志</a>
-  <a href="0013-span-channels-pipelines.html">下一课：Span、Channels 与 Pipelines（待生成）→</a>
+  <a href="0013-span-channels-pipelines.html">下一课：Channels、PeriodicTimer、Span I/O 与 Pipelines →</a>
 </div>
 
 </body>

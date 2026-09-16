@@ -28,7 +28,7 @@
   <tr><th><code>docker run</code></th><th><code>compose.yaml</code></th><th>说明</th></tr>
   <tr><td><code>--name pg</code></td><td><code>services:</code> 下的键名 <code>db:</code></td><td>服务名。容器实际叫 <code>项目名-db-1</code>；服务名同时是<strong>DNS 名</strong>，见下</td></tr>
   <tr><td><code>postgres:17-alpine</code></td><td><code>image: postgres:17-alpine</code></td><td>用现成镜像。要现场 build 就写 <code>build: .</code></td></tr>
-  <tr><td><code>-p 5432:5432</code></td><td><code>ports: ["5432:5432"]</code></td><td>同样是"宿主机:容器"，<strong>加引号</strong>——YAML 会把 <code>22:22</code> 这种当成六十进制数</td></tr>
+  <tr><td><code>-p 5432:5432</code></td><td><code>ports: ["5432:5432"]</code></td><td>同样是"宿主机:容器"，<strong>加引号</strong>——老的 YAML 1.1 解析器（如 PyYAML）会把 <code>22:22</code> 当成六十进制数 1342；Compose v2 用的 go-yaml 不会，但引号让它不依赖解析器</td></tr>
   <tr><td><code>-e POSTGRES_DB=shop</code></td><td><code>environment:</code><br><code>&nbsp;&nbsp;POSTGRES_DB: shop</code></td><td>map 写法；也可以写成 <code>- POSTGRES_DB=shop</code> 列表</td></tr>
   <tr><td><code>-v pgdata:/var/lib/…</code></td><td><code>volumes:</code><br><code>&nbsp;&nbsp;- type: volume</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;source: pgdata</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;target: /var/lib/…</code></td><td><strong>长格式</strong>把类型写明（<code>volume</code> / <code>bind</code>），不再靠"冒号左边像不像路径"去猜。named volume 还要在<strong>顶层 <code>volumes:</code></strong> 声明一次</td></tr>
   <tr><td>（手动先起 pg 再起 api）</td><td><code>depends_on:</code> + <code>healthcheck:</code></td><td>声明"api 要等 db <em>健康</em>了再启动"，compose 替你排顺序</td></tr>
@@ -317,6 +317,7 @@ cd ..\..</code></pre>
   上一课：<a href="0004-configure-without-rebuilding.html">不改镜像，只改配置</a> ｜
   <a href="../reference/GLOSSARY.html">术语表</a> ·
   <a href="../reference/compose-cheatsheet.html">Compose 速查</a> ·
+  <a href="../reference/yaml-basics.html">YAML 基础</a> ·
   <a href="../reference/runtime-config.html">运行期配置速查</a></p>
 </div>
 

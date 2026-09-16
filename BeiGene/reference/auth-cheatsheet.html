@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查表 · 认证与授权</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Reference · 身份验证与权限 · BeiGene 面试备战</p>
+  <h1>认证与授权<br>＋ 让 token 失效的四条路</h1>
+  <p class="standfirst">压缩自 <a href="../lessons/0012-authentication-and-authorization.html">Lesson 12</a>。面试前 10 分钟只看这一页。</p>
+</header>
+
+<h2>0 · 一句话判据</h2>
+
+<p><strong>认证的产出只有一样：<code>HttpContext.User</code>（一张 <code>ClaimsPrincipal</code>）。</strong>之后所有授权——<code>[Authorize]</code>、Policy、行级检查——都只是对这张 claims 表提问，不再碰凭据。认证回答「你是谁」，授权回答「你能不能」。</p>
+
+<h2>1 · 流水线与状态码</h2>
+
+<table>
+  <thead><tr><th>位置</th><th>做什么</th><th>失败时</th></tr></thead>
+  <tbody>
+    <tr><td><code>UseAuthentication</code></td><td>按 scheme 调 handler，凭据 → <code>ClaimsPrincipal</code></td><td><strong>不拦</strong>，User 匿名，继续</td></tr>
+    <tr><td><code>UseAuthorization</code></td><td>看 <code>[Authorize]</code> / Policy，对 User 提问</td><td>匿名 → Challenge <strong>401</strong>（JwtBearer 带 <code>WWW-Authenticate: Bearer</code>）；有身份不满足 → Forbid <strong>403</strong></td></tr>
+    <tr><td>服务层 / <code>IAuthorizationService</code></td><td>加载数据后再问「能碰这一条吗」</td><td>403 或 404（不暴露存在性）</td></tr>
+  </tbody>
+</table>
+<p>顺序：认证在授权<strong>外层</strong>（先注册），因为授权要读 User。<code>[AllowAnonymous]</code> + 坏 token = 照样进（认证不拒绝）。</p>
+
+<h2>2 · 三种方式（按状态存哪）</h2>
+
+<table>
+  <thead><tr><th>方式</th><th>状态在哪</th><th>Handler</th><th>用于</th></tr></thead>
+  <tbody>
+    <tr><td>Session Cookie</td><td>服务器（会话表）或加密 ticket</td><td><code>AddCookie</code></td><td>同域服务端渲染</td></tr>
+    <tr><td>JWT Bearer</td><td>token 自己；服务器只有密钥 / 公钥</td><td><code>AddJwtBearer</code></td><td>前后端分离、移动端、服务间</td></tr>
+    <tr><td>OIDC / OAuth 2.0</td><td>身份提供方（OP）</td><td><code>AddOpenIdConnect</code>（<code>RemoteAuthenticationHandler</code>）</td><td>SSO（Azure AD）、社交登录</td></tr>
+  </tbody>
+</table>
+
+<h2>3 · JWT 三句话</h2>
+<ol>
+  <li><code>header.payload.signature</code>，前两段 <strong>base64url 明文</strong>——防篡改不防偷看。</li>
+  <li>签名 = alg(header + payload, 密钥)。HS256 对称（只能自家用），RS256 非对称（第三方只拿公钥）。</li>
+  <li>注册 claims：<code>sub</code> 主体 / <code>exp</code> 过期 / <code>iat</code> 签发时间 / <code>jti</code> 唯一 id（防重放、做黑名单 key）/ <code>iss</code> 谁签 / <code>aud</code> 签给谁。</li>
+</ol>
+
+<h2>4 · 让 token 失效：四条路</h2>
+
+<p><strong>矛盾一句话：</strong>JWT 天生撤不掉（服务器不存它）；能撤的都是在某处补了状态。</p>
+<table>
+  <thead><tr><th>#</th><th>做法</th><th>多存</th><th>延迟</th><th>选它当</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>短 exp（5–15 min）+ refresh token 存库、可撤、rotation、旧的再用整族作废</td><td>refresh 表</td><td>≤ 一个 access 寿命</td><td><strong>默认</strong></td></tr>
+    <tr><td>2</td><td>jti 黑名单（Redis，TTL = 剩余寿命，自动清）</td><td>只存被撤的</td><td>立即</td><td>要求秒级失效</td></tr>
+    <tr><td>3</td><td>用户级版本号 / security stamp，token 带 <code>ver</code></td><td>每用户一个 int</td><td>立即，<strong>踢全体设备</strong></td><td>封号、改密码、改权限</td></tr>
+    <tr><td>4</td><td>不透明引用 token（回到 session）</td><td>整张会话表</td><td>立即</td><td>内网、撤销要求极高</td></tr>
+  </tbody>
+</table>
+<p>黑名单 key 用 <code>jti</code>，别用 token 哈希（OWASP：malleability）。Identity 内置的 <code>SecurityStampValidator</code> 就是路 3。</p>
+
+<h2>5 · 授权三层 + 兜底</h2>
+
+<table>
+  <thead><tr><th>层</th><th>能看到</th><th>写法</th></tr></thead>
+  <tbody>
+    <tr><td>中间件</td><td>只有 HttpContext</td><td><code>UseAuthentication()</code>；查一次权限集放 Scoped <code>ICurrentUser</code></td></tr>
+    <tr><td>特性 / Policy</td><td>User + 哪个 action</td><td><code>[Authorize(Roles=..)]</code> / <code>[Authorize(Policy=..)]</code>；Policy = RequireClaim / 自定义 Requirement + Handler</td></tr>
+    <tr><td>资源级</td><td>User + <strong>那条数据</strong></td><td><code>authz.AuthorizeAsync(User, ticket, TicketOps.Review)</code>；handler 继承 <code>AuthorizationHandler&lt;TReq, TResource&gt;</code></td></tr>
+    <tr><td>数据层</td><td>WHERE</td><td><code>UPDATE … WHERE id=@id AND claimed_by=@me</code>，0 行 = 拒绝</td></tr>
+  </tbody>
+</table>
+<p><strong>为什么特性做不了行级：</strong><q>Attribute evaluation occurs before data binding and before execution of any method that loads a resource.</q></p>
+
+<pre><code><span class="kw">public class</span> TicketAuthorizationHandler : AuthorizationHandler&lt;OperationAuthorizationRequirement, Ticket&gt;
+{
+    <span class="kw">protected override</span> Task HandleRequirementAsync(AuthorizationHandlerContext ctx,
+        OperationAuthorizationRequirement req, Ticket t)
+    {
+        <span class="kw">if</span> (req.Name == <span class="st">"Review"</span> &amp;&amp; t.ClaimedBy == ctx.User.FindFirstValue(ClaimTypes.NameIdentifier))
+            ctx.Succeed(req);
+        <span class="kw">return</span> Task.CompletedTask;
+    }
+}
+<span class="cm">// AddSingleton&lt;IAuthorizationHandler, TicketAuthorizationHandler&gt;();  服务层：先 Find，再 AuthorizeAsync，!Succeeded → Forbid()</span></code></pre>
+
+<h2>6 · 少调服务、少写代码</h2>
+<ol>
+  <li>能编进 token 的 claim 直接编进去（零查询；代价 = 撤销延迟）。</li>
+  <li>请求内：Scoped <code>ICurrentUser</code> 查一次，全请求共用。</li>
+  <li>跨请求：<code>IMemoryCache</code> / Redis，key = userId，短 TTL；权限变更时<strong>删 key + 升版本号</strong>。</li>
+  <li>代码量：接口级全靠特性；行级用 Action Filter（按参数 id 先加载再判）或 DI 拦截器。Filter 够用别上代理。</li>
+</ol>
+
+<h2>7 · SSO 与两步登录（都是中间态凭据）</h2>
+<p><strong>SSO</strong>：认证外包给 OP，应用只看 id_token（<code>sub</code> + 何时怎么认证的）。浏览器在 OP 域有会话 cookie → 第二个应用跳过去直接签发。</p>
+<p><strong>密码 → 短信码</strong>：密码对了<strong>不发正式 token</strong>，发一张 5 分钟半张票（claims 只有 <code>sub</code> + <code>amr:["pwd"]</code>）；业务 Policy 要求 <code>amr</code> 含 <code>mfa</code> → 半张票调什么都 403；验证码 Redis 5 min TTL、比对即删、错 5 次锁；通过后签正式 token（<code>amr:["pwd","mfa"]</code>）。Identity 内置版：<code>PasswordSignInAsync</code> → <code>RequiresTwoFactor</code> + <code>TwoFactorUserIdScheme</code> cookie → <code>TwoFactorSignInAsync</code>。</p>
+
+<h2>8 · 话术骨架</h2>
+<ul>
+  <li><strong>认证 vs 授权：</strong>你是谁 / 你能不能；中间隔一张 ClaimsPrincipal；401 是 Challenge、403 是 Forbid，都由授权触发。</li>
+  <li><strong>项目里怎么做：</strong>三层加兜底——特性、资源级 AuthorizeAsync、SQL WHERE claimed_by。</li>
+  <li><strong>token 失效：</strong>先说矛盾，再按容忍度给 refresh 轮换 / 版本号 / 黑名单。</li>
+  <li><strong>少调服务：</strong>编进 token → Scoped → 短 TTL 缓存；主动说缓存和撤销是一对矛盾。</li>
+  <li><strong>两步登录：</strong>半张票；和 OIDC 的 code、Saga 的中间态是一个思路。</li>
+</ul>
+
+<footer class="footer">
+  <div class="nav-links">
+    <a href="../lessons/0012-authentication-and-authorization.html">← Lesson 12</a>
+    <a href="di-middleware-cheatsheet.html">→ 速查表：管道与 DI</a>
+    <a href="claim-patterns-cheatsheet.html">→ 速查表：抢单写法</a>
+  </div>
+</footer>
+</body>
+</html>

@@ -1,8 +1,17 @@
 # 📘 Learning Lessons
 
-本仓库收录四门独立课程，其中三门围绕 .NET 技术栈展开：`Morden .NET` 沿 C# 8 到 15 的每一次语法升级梳理语言演进，`DotNET Platform` 下沉到 SDK 项目系统、CoreCLR 运行时、GC、依赖注入、配置、Generic Host、结构化日志与 HttpClient/JSON 等平台基础设施，两者互为语言层与平台层的对照；`BeiGene` 是一份面试向的综合专题，从联合索引与索引失效讲到排序与 Top-K 算法，再到微服务拆分、Saga、并发抢单、async/await 状态机、中间件管道与事务隔离级别。`Docker and K8S` 从构建第一个镜像入手，把「构建期」与「运行期」这条最容易混淆的界线讲透，落到 .NET 多阶段构建与运行期配置，再用 Compose 一次拉起应用与数据库。各课程按需选读，共享同一方法论——从表层 API 下沉到底层机制。
+本仓库收录五门独立课程，其中四门围绕 .NET 技术栈展开：`Morden .NET` 沿 C# 8 到 15 的每一次语法升级梳理语言演进，`DotNET Platform` 下沉到 SDK 项目系统、CoreCLR 运行时、GC、依赖注入、配置、Generic Host、结构化日志与 HttpClient/JSON/Channels/Pipelines 等平台基础设施，两者互为语言层与平台层的对照；`ASP.NET Core` 从 Program.cs 解剖切入，面向从 Global.asax 时代迁移过来的开发者讲清 WebApplication 的启动装配；`BeiGene` 是一份面试向的综合专题，从联合索引与索引失效讲到排序与 Top-K 算法，再到微服务拆分、Saga、并发抢单、async/await 状态机、中间件管道、事务隔离级别与认证授权。`Docker and K8S` 从构建第一个镜像入手，把「构建期」与「运行期」这条最容易混淆的界线讲透，落到 .NET 多阶段构建与运行期配置，再用 Compose 一次拉起应用与数据库，最后给镜像命名并推送到 registry。各课程按需选读，共享同一方法论——从表层 API 下沉到底层机制。
 
 🌐 在线查看：[JayYa.github.io/LearningLessons](https://JayYa.github.io/LearningLessons/)
+
+## ASP.NET Core
+
+| # | 课程 | 描述 |
+|---|------|------|
+| 1 | [第 1 课：Program.cs 解剖——从 Global.asax 到 WebApplication](https://JayYa.github.io/LearningLessons/ASP.NET%20Core/lessons/0001-program-cs-anatomy.html) | 逐行拆解 Program.cs，对照 Global.asax 理解 WebApplication 的 builder、服务注册与管道装配 |
+
+**参考资料：**
+- [Program.cs 速查表](https://JayYa.github.io/LearningLessons/ASP.NET%20Core/reference/program-cs-quick-reference.html) — WebApplication 启动流程各阶段常用 API 速查
 
 ## Docker and K8S
 
@@ -13,13 +22,16 @@
 | 3 | [第 3 课：.NET 多阶段构建](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0003-dotnet-multi-stage-build.html) | 用 SDK 镜像编译、用 runtime 镜像运行，把 .NET 应用的构建与部署拆成多阶段以压缩最终镜像 |
 | 4 | [第 4 课：不改镜像，只改配置](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0004-configure-without-rebuilding.html) | 用环境变量、挂载卷与端口映射在运行期注入配置，同一镜像跑不同环境而无需重新构建 |
 | 5 | [第 5 课：一个文件，拉起应用 + 数据库](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0005-compose-app-plus-database.html) | 用 docker compose 一份 YAML 同时定义应用与数据库服务，理清服务发现、依赖顺序与数据卷持久化 |
+| 6 | [第 6 课：给镜像一个全名，推到 registry](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/lessons/0006-tag-and-push-to-registry.html) | 理解镜像全名的 registry/仓库/标签结构，用 docker tag 与 docker push 把本地镜像发布到远端 |
 
 **参考资料：**
 - [术语表 · Docker & Kubernetes](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/GLOSSARY.html) — 容器与编排领域的核心名词速查
 - [速查：Docker Compose](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/compose-cheatsheet.html) — compose.yaml 常用字段与 docker compose 命令速查
 - [速查：Dockerfile 指令 —— 构建期还是运行期？](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/dockerfile-instruction-timing.html) — 逐条列出各 Dockerfile 指令的生效时机
 - [速查：.NET 多阶段 Dockerfile 模板](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/dotnet-multistage-dockerfile.html) — 可直接套用的 .NET 多阶段 Dockerfile 模板与逐行说明
+- [速查：镜像命名与 registry](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/image-naming.html) — 镜像全名各段含义、tag 约定与 push/pull 命令速查
 - [速查：运行期配置 —— -e / -v / -p](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/runtime-config.html) — docker run 的 -e、-v、-p 三个运行期配置参数用法速查
+- [速查：YAML 基础语法](https://JayYa.github.io/LearningLessons/Docker%20and%20K8S/reference/yaml-basics.html) — 写 compose.yaml 所需的 YAML 缩进、列表、映射与多行字符串语法速查
 
 
 ## BeiGene
@@ -37,10 +49,12 @@
 | 9 | [Lesson 09 · await 那一行到底发生了什么](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0009-async-await-state-machine.html) | 拆开编译器为 async 方法生成的状态机，说清 await 那一行的挂起、续延与线程归属 |
 | 10 | [Lesson 10 · 一个请求穿过管道时到底发生了什么](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0010-middleware-pipeline-and-di-lifetimes.html) | 跟随一次 HTTP 请求穿过 ASP.NET Core 中间件管道，串起 DI 的 Transient、Scoped、Singleton 三种生命周期 |
 | 11 | [Lesson 11 · 隔离级别只决定一件事：你看的是哪一刻的快照](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0011-transaction-isolation-and-usage.html) | 用「快照时刻」一个视角讲清四种事务隔离级别的差异，以及 .NET 中事务的实际用法 |
+| 12 | [Lesson 12 · 认证只产出一样东西：一张 ClaimsPrincipal](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0012-authentication-and-authorization.html) | 把认证与授权拆开看：认证只负责产出 ClaimsPrincipal，授权基于它做策略判断，串起 Cookie/JWT 与 ASP.NET Core 的 Authorize 机制 |
 
 **参考资料：**
 - [速查表 · 排序、选择、Top-K 与外部排序（C#）](https://JayYa.github.io/LearningLessons/BeiGene/reference/algo-cheatsheet.html) — 排序、选择、Top-K 与外部排序算法速查
 - [速查表 · async / await 状态机](https://JayYa.github.io/LearningLessons/BeiGene/reference/async-cheatsheet.html) — async/await 状态机结构、续延调度与常见陷阱速查
+- [速查表 · 认证与授权](https://JayYa.github.io/LearningLessons/BeiGene/reference/auth-cheatsheet.html) — Cookie 与 JWT 认证配置、ClaimsPrincipal 结构与授权策略写法速查
 - [速查表 · 并发抢单与审批流](https://JayYa.github.io/LearningLessons/BeiGene/reference/claim-patterns-cheatsheet.html) — 并发抢单的原子更新写法与审批流状态流转速查
 - [Reference · 索引与 SQL 优化速查表](https://JayYa.github.io/LearningLessons/BeiGene/reference/db-index-cheatsheet.html) — 数据库索引设计与 SQL 优化常用手法速查
 - [速查表 · 中间件管道与 DI 生命周期](https://JayYa.github.io/LearningLessons/BeiGene/reference/di-middleware-cheatsheet.html) — 中间件注册顺序、短路规则与 DI 三种生命周期的行为对照速查
@@ -64,8 +78,10 @@
 | 10 | [第 10 课：IHostedService 与生命周期——后台任务、启动顺序、优雅关闭](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0010-hosted-services-lifecycle.html) | 用 IHostedService / BackgroundService 编写后台任务，理清启动顺序与优雅关闭的生命周期钩子 |
 | 11 | [第 11 课：ILogger 与结构化日志——从"拼字符串"到"记事件"](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0011-logging-structured.html) | 用 ILogger 的消息模板与作用域记录结构化事件，理解日志级别、分类与 Provider 的协作方式 |
 | 12 | [第 12 课：BCL 现代化（上）——IHttpClientFactory 与 System.Text.Json](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0012-httpclientfactory-system-text-json.html) | 用 IHttpClientFactory 管理连接生命周期，用 System.Text.Json 替代 Newtonsoft 完成高性能序列化 |
+| 13 | [第 13 课：BCL 现代化（下）——Channels、PeriodicTimer、Span I/O 与 Pipelines](https://JayYa.github.io/LearningLessons/DotNET%20Platform/lessons/0013-span-channels-pipelines.html) | 用 Channel 做生产者消费者队列、PeriodicTimer 做异步定时，再以 Span 与 Pipelines 实现零拷贝 I/O |
 
 **参考资料：**
+- [参考：Channels / PeriodicTimer / Span I/O 速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/channels-timer-io-quick-reference.html) — Channel 创建与读写、PeriodicTimer 循环与 Span/Pipelines I/O 常用模式速查
 - [参考：配置系统速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/configuration-quick-reference.html) — .NET 配置系统常用 API 与配置模式速查
 - [参考：DI 生命周期与注册速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/di-lifetime-reference.html) — 依赖注入三种生命周期（Transient、Scoped、Singleton）的行为差异与选择指南
 - [参考：Host 模型速查](https://JayYa.github.io/LearningLessons/DotNET%20Platform/reference/host-quick-reference.html) — Generic Host 构建、生命周期事件与 HostedService API 速查

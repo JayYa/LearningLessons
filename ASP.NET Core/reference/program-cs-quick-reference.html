@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Program.cs 速查表 — ASP.NET Core</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>Program.cs 速查表</h1>
+<div class="lesson-meta">参考文档 · 来源：<a href="../lessons/0001-program-cs-anatomy.html">第 1 课</a> · 基于 .NET 10 模板</div>
+
+<h2>三阶段</h2>
+<div class="diagram">
+<pre>
+var builder = WebApplication.CreateBuilder(args);   ① 注册阶段
+    builder.Configuration  builder.Services  builder.Environment
+    builder.Logging        builder.Host      builder.WebHost
+var app = builder.Build();                          ② 冻结：Services 变只读
+    app.Use…()  app.Map…()  app.Services  app.Environment  app.Configuration
+app.Run();                                          ③ 启动 Kestrel，阻塞
+</pre>
+</div>
+<p>Build 后再 <code>builder.Services.Add…</code> → <code>InvalidOperationException: The service collection cannot be modified because it is read-only.</code></p>
+
+<h2>Web API 2 → ASP.NET Core 对照</h2>
+<table class="tbl">
+  <tr><th>Web API 2</th><th>ASP.NET Core</th></tr>
+  <tr><td><code>Global.asax</code> / <code>Application_Start</code></td><td><code>Program.cs</code> 顶层语句</td></tr>
+  <tr><td><code>WebApiConfig.Register</code></td><td><code>builder.Services.Add…</code> + <code>app.Map…</code></td></tr>
+  <tr><td><code>DependencyResolver</code></td><td><code>builder.Services</code>（内置 DI）</td></tr>
+  <tr><td><code>web.config &lt;appSettings&gt;</code></td><td><code>appsettings.json</code> + 环境变量</td></tr>
+  <tr><td><code>&lt;httpModules&gt;</code> / OWIN <code>IAppBuilder</code></td><td><code>app.Use…</code> 中间件</td></tr>
+  <tr><td>IIS + System.Web</td><td>Kestrel（进程内）</td></tr>
+  <tr><td>Web.Release.config 转换</td><td><code>appsettings.{Env}.json</code></td></tr>
+</table>
+
+<h2><code>WebApplication.CreateBuilder</code> = Generic Host 默认 + 以下</h2>
+<table class="tbl">
+  <tr><th>层</th><th>内容</th></tr>
+  <tr><td>配置</td><td><code>ASPNETCORE_*</code> 环境变量；<code>--environment</code> <code>--urls</code> <code>--contentRoot</code></td></tr>
+  <tr><td>服务</td><td>Kestrel、IIS 进程内集成、HostFiltering、路由、<code>IWebHostEnvironment</code>（+<code>WebRootPath</code>，目录不存在则 null）</td></tr>
+  <tr><td>自动中间件</td><td>Dev → <code>UseDeveloperExceptionPage</code> 首位；有端点 → <code>UseRouting</code> 开头 + <code>UseEndpoints</code> 末尾；注册了认证/授权服务 → <code>UseAuthentication</code>/<code>UseAuthorization</code>。<strong>显式调用则不再自动插入。</strong></td></tr>
+</table>
+<p>变体：<code>CreateSlimBuilder</code>（AOT，去 IIS/HTTPS 默认/正则路由约束）、<code>CreateEmptyBuilder</code>（全手动）。</p>
+
+<h2>环境</h2>
+<table class="tbl">
+  <tr><th>问题</th><th>答案</th></tr>
+  <tr><td>未设置时</td><td><code>Production</code></td></tr>
+  <tr><td>本机 <code>dotnet run</code></td><td>读 <code>Properties/launchSettings.json</code> 第一个 <code>commandName:"Project"</code> profile 的 <code>environmentVariables</code> + <code>applicationUrl</code>；覆盖系统环境变量</td></tr>
+  <tr><td>绕过 launchSettings</td><td><code>dotnet run --no-launch-profile</code>；或 <code>dotnet run -e Staging</code>；或 <code>-lp https</code> 选 profile</td></tr>
+  <tr><td>发布后</td><td>launchSettings.json 不部署；只看环境变量 / 命令行</td></tr>
+  <tr><td>两个变量都设</td><td><code>WebApplication</code> 下 <code>DOTNET_ENVIRONMENT</code> &gt; <code>ASPNETCORE_ENVIRONMENT</code>（老 WebHost 相反）</td></tr>
+  <tr><td>代码里定</td><td><code>WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Staging })</code></td></tr>
+  <tr><td>判断</td><td><code>builder.Environment</code>（Build 前可用）/ <code>app.Environment</code>：<code>IsDevelopment()</code> <code>IsStaging()</code> <code>IsProduction()</code> <code>IsEnvironment("Testing")</code></td></tr>
+</table>
+
+<h2>配置加载顺序（后者覆盖前者）</h2>
+<div class="diag"><pre>appsettings.json → appsettings.{Env}.json → User Secrets（仅 Dev） → 环境变量 → 命令行</pre></div>
+
+<h2>端口 / URL</h2>
+<table class="tbl">
+  <tr><th>方式</th><th>示例</th></tr>
+  <tr><td>launchSettings.json</td><td><code>"applicationUrl": "https://localhost:7052;http://localhost:5249"</code></td></tr>
+  <tr><td>环境变量（首选）</td><td><code>ASPNETCORE_URLS=http://*:3000;https://+:5000</code></td></tr>
+  <tr><td>命令行</td><td><code>dotnet run --urls http://localhost:5100</code></td></tr>
+  <tr><td>仅端口</td><td><code>ASPNETCORE_HTTP_PORTS=8080</code>（<code>ASPNETCORE_URLS</code> 存在时被其覆盖）</td></tr>
+  <tr><td>代码</td><td><code>app.Run("http://localhost:3000")</code> / <code>app.Urls.Add(…)</code></td></tr>
+  <tr><td>默认</td><td><code>http://localhost:5000</code>（+ <code>https://localhost:5001</code>）；本机 4904–5003 被 Windows 保留，5000 会绑定失败</td></tr>
+</table>
+
+<h2>模板文件职责</h2>
+<table class="tbl">
+  <tr><th>文件</th><th>部署？</th><th>作用</th></tr>
+  <tr><td><code>*.csproj</code>（<code>Sdk="Microsoft.NET.Sdk.Web"</code>）</td><td>—</td><td>隐式引用 ASP.NET Core 共享框架</td></tr>
+  <tr><td><code>appsettings.json</code></td><td>✔</td><td>所有环境基础配置</td></tr>
+  <tr><td><code>appsettings.Development.json</code></td><td>✔（生产不读）</td><td>Development 叠加</td></tr>
+  <tr><td><code>Properties/launchSettings.json</code></td><td>✘</td><td>仅 dotnet run / IDE</td></tr>
+  <tr><td><code>*.http</code></td><td>✘</td><td>IDE 的 REST 测试文件</td></tr>
+</table>
+
+<h2>来源</h2>
+<ul>
+  <li><a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/webapplication">WebApplication and WebApplicationBuilder</a></li>
+  <li><a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/environments">Use multiple environments in ASP.NET Core</a></li>
+  <li><a href="https://andrewlock.net/exploring-dotnet-6-part-2-comparing-webapplicationbuilder-to-the-generic-host/">Andrew Lock — Comparing WebApplicationBuilder to the Generic Host</a></li>
+</ul>
+
+</body>
+</html>

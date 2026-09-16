@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 12 · 认证只产出一样东西：一张 ClaimsPrincipal</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/tokenlab.css">
+<link rel="stylesheet" href="../assets/binsort.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 12 · 身份验证与权限 · BeiGene 面试备战 · 交互课</p>
+  <h1>认证只产出一样东西：<br>一张 ClaimsPrincipal<br><span style="font-size:0.62em;color:var(--ink-soft);">之后的一切——[Authorize]、行级权限、缓存、让 token 失效——都是围绕这张表做文章</span></h1>
+  <p class="standfirst">题库第九节整段七问：「身份验证和权限验证」「项目中权限怎么实现」「一个人不该操作某条数据怎么避免」「每一步都要验权限如何少调服务、少写代码」「身份验证方式有哪些、SSO」「让客户端 token 失效」「密码登录后再手机验证码怎么做」。七问看起来散，其实是<strong>一条流水线上的七个位置</strong>：凭据进来 → 变成一张 claims 表 → 各层对这张表提问。这一课先把流水线立起来，再让你在浏览器里亲手签发、篡改、过期、撤销一个 JWT——「让 token 失效」那道题的坑，你会亲眼看到。</p>
+</header>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>约 35 分钟。<a href="#s3">第三节</a>的 Token 实验室有四个场景，<strong>每次点「发请求」之前先猜状态码</strong>——后文直接引用你点出来的结果。没有命令行，全部在浏览器里。</p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">先破一个错觉</a> <span class="depth">— 认证和授权不是一件事的两个名字</span></li>
+    <li><a href="#s2">三种凭据，一个出口</a> <span class="depth">— Cookie / JWT / 外部 OIDC</span></li>
+    <li><a href="#s3">亲手签发、篡改、过期、撤销</a> <span class="depth">— Token 实验室</span></li>
+    <li><a href="#s4">让客户端 token 失效</a> <span class="depth">— 四条路，各付什么代价</span></li>
+    <li><a href="#s5">授权三层 + 数据层兜底</a> <span class="depth">— 「一个人不该操作某条数据」</span></li>
+    <li><a href="#s6">少调服务、少写代码</a> <span class="depth">— 缓存放哪、AOP 放哪</span></li>
+    <li><a href="#s7">SSO 与两步登录</a> <span class="depth">— 都是「中间态凭据」</span></li>
+    <li><a href="#s8">归类练习</a> <span class="depth">— 这个检查放哪一层</span></li>
+    <li><a href="#s9">话术</a> <span class="depth">— 四段</span></li>
+    <li><a href="#s10">检验一下</a> <span class="depth">— 6 题</span></li>
+    <li><a href="#s11">下一课</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、先破一个错觉</h2>
+
+<p>很多人把「身份验证」和「权限验证」说成一句话：「就是登录之后看他有没有权限」。面试官第一问就是拆这句话：<strong>「那 401 和 403 分别是谁返回的？」</strong>答不出来，说明脑子里只有一个笼统的「安全检查」。</p>
+
+<p>官方定义只有两句（<a href="https://learn.microsoft.com/en-us/aspnet/core/security/authentication/">ASP.NET Core — Authentication overview</a>）：<q>Authentication is the process of determining a user&#39;s identity. Authorization is the process of determining whether a user has access to a resource.</q> 前者回答<strong>「你是谁」</strong>，后者回答<strong>「你能不能」</strong>。两者之间隔着一个具体的东西——</p>
+
+<div class="callout">
+  <span class="label">这一课唯一必须记死的一句</span>
+  <p><strong>认证的产出只有一样：<code>HttpContext.User</code>——一张 <code>ClaimsPrincipal</code>。之后所有授权——<code>[Authorize]</code>、Policy、行级检查——都只是对这张 claims 表提问，不再碰凭据。</strong></p>
+</div>
+
+<p>原文就是这么说的：<q>Authentication is responsible for providing the ClaimsPrincipal for authorization to make permission decisions against.</q> 把这句话摊开成流水线：</p>
+
+<table>
+  <thead><tr><th>位置</th><th>谁</th><th>做什么</th><th>失败时</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><code>UseAuthentication</code> 中间件</td><td>按注册的 <strong>scheme</strong>（Cookie / JwtBearer / …）调对应 <strong>handler</strong>，把凭据变成 <code>ClaimsPrincipal</code>，塞进 <code>HttpContext.User</code></td><td><strong>不拦</strong>。User 是匿名的，继续往里走</td></tr>
+    <tr><td>2</td><td><code>UseAuthorization</code> 中间件</td><td>看终结点上的 <code>[Authorize]</code> / Policy，对 <code>User</code> 提问</td><td>User 匿名 → <strong>Challenge → 401</strong>；User 有身份但不满足 → <strong>Forbid → 403</strong></td></tr>
+    <tr><td>3</td><td>你的服务层 / <code>IAuthorizationService</code></td><td>拿到<strong>业务数据</strong>后再问：这个人能碰<strong>这一条</strong>吗</td><td>403（或按业务返回 404，不暴露存在性）</td></tr>
+  </tbody>
+</table>
+
+<p>两个常被答错的细节，都是这张表的推论：</p>
+<ul>
+  <li><strong>认证中间件不拒绝请求。</strong>token 错了它只是不给 User 填身份；拒绝是授权层看到 <code>[Authorize]</code> 之后才做的。所以 <code>[AllowAnonymous]</code> 的接口带一个坏 token 照样能进。</li>
+  <li><strong>401 和 403 都由认证 handler 执行，但由授权层触发。</strong>原文：Challenge 是 <q>invoked by Authorization when an unauthenticated user requests an endpoint that requires authentication</q>；Forbid 是 <q>called by Authorization when an authenticated user attempts to access a resource they&#39;re not permitted to access</q>。JwtBearer 的 Challenge = <q>returning a 401 result with a www-authenticate: bearer header</q>，Forbid = <q>returning a 403 result</q>。</li>
+</ul>
+
+<p>顺序为什么是 <code>UseAuthentication</code> 在 <code>UseAuthorization</code> 前面——<a href="0010-middleware-pipeline-and-di-lifetimes.html">Lesson 10</a> 的套娃：外层先跑前置代码。授权要读 <code>User</code>，所以填 <code>User</code> 的那层必须在外面。</p>
+
+<h2 id="s2">二、三种凭据，一个出口</h2>
+
+<p>题「身份验证方式有哪些」是清单题，但清单要按<strong>「状态存在哪」</strong>排，才答得出后面「token 怎么失效」：</p>
+
+<table>
+  <thead><tr><th>方式</th><th>客户端拿着什么</th><th>服务器存什么</th><th>Handler 怎么变出 ClaimsPrincipal</th><th>典型场景</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Session Cookie</strong></td><td>一个 session id（或加密的 ticket）</td><td>会话表 / 或什么都不存（ticket 自包含、已加密）</td><td>Cookie handler 解密 ticket → claims。原文：<q>constructing the user&#39;s identity from cookies</q></td><td>同域的服务端渲染站点</td></tr>
+    <tr><td><strong>JWT Bearer</strong></td><td>一串 <code>header.payload.signature</code>，放 <code>Authorization: Bearer</code></td><td><strong>只存密钥</strong>（对称 HS256）或公钥（RS256）</td><td>验签 → 检查 exp/iss/aud → payload 里的 claims 直接成为 User。原文：<q>deserializing and validating a JWT bearer token</q></td><td>前后端分离、移动端、微服务间</td></tr>
+    <tr><td><strong>外部身份提供方（OIDC / OAuth 2.0）</strong></td><td>跳转去 OP 登录，回来带 code，换 id_token</td><td>只存 OP 的元数据 / 公钥</td><td><code>RemoteAuthenticationHandler</code>：<q>requires a remote authentication step ... calls back to the CallbackPath</q></td><td>企业 SSO（Azure AD）、社交登录</td></tr>
+  </tbody>
+</table>
+
+<p>三种方式的 handler 不一样，<strong>出口一样</strong>：都是往 <code>HttpContext.User</code> 里放一张 <code>ClaimsPrincipal</code>。你的 Controller、你的 Policy、你的行级检查，完全不知道也不关心用户是靠 cookie 还是 JWT 进来的。这就是 scheme 这个抽象存在的意义：<q>An authentication scheme is a name that corresponds to: an authentication handler; options for configuring that specific instance of the handler.</q></p>
+
+<p>JWT 要多说三句，因为第三节要动手拆它（<a href="https://datatracker.ietf.org/doc/html/rfc7519">RFC 7519</a>）：</p>
+<ol>
+  <li>它是 <q>a compact, URL-safe means of representing claims to be transferred between two parties</q>，三段用点分隔，<strong>每段都只是 base64url——不是加密</strong>，任何人都能解码看 payload。</li>
+  <li>安全性全在第三段：签名 = 算法(header + payload, 密钥)。改 payload 一个字，签名就对不上；没有密钥，算不出新签名。</li>
+  <li>几个注册 claim 的原文定义，面试会问：<code>sub</code>（<q>the principal that is the subject of the JWT</q>）、<code>exp</code>（<q>the expiration time on or after which the JWT MUST NOT be accepted</q>）、<code>jti</code>（<q>a unique identifier for the JWT ... to prevent the JWT from being replayed</q>）、<code>iss</code> / <code>aud</code>（谁签的 / 签给谁的）。</li>
+</ol>
+
+<h2 id="s3">三、亲手签发、篡改、过期、撤销</h2>
+
+<p>下面是一个缩小版的 JWT 世界：左边客户端只有一串 token，右边服务器有密钥、时钟、黑名单和一组可开关的检查。<strong>四个场景依次做，每次点「③ 发请求」之前先猜状态码。</strong></p>
+
+<div class="tokenlab" data-tokenlab='{
+  "label": "Token 实验室 · 工单系统的复核员登录",
+  "secret": "beigene-hs256-secret",
+  "ttlMinutes": 15,
+  "claims": {"sub":"u1001","name":"张三","role":"reviewer"},
+  "checks": [
+    {"id":"deny","label":"查 jti 黑名单（Redis，TTL = 剩余有效期）","on":false},
+    {"id":"ver","label":"比对用户的 token 版本（每次注销 / 改密码 +1）","on":false}
+  ],
+  "scenarios": [
+    {"title":"场景 ① 篡改：复核员想把自己改成 admin",
+     "steps":["点「登录」。看左边 token 三段的颜色，再看下面解码出来的 payload——<strong>role 明文可见</strong>。",
+              "在 payload 里把 <code>reviewer</code> 改成 <code>admin</code>，点「① 篡改」。",
+              "点「③ 发请求」。"],
+     "guess":"200 还是 401？验证链上第一个 ✗ 在哪一格？"},
+    {"title":"场景 ② 客户端猜密钥重签",
+     "steps":["payload 仍是 admin，点「② 用猜的密钥重签」（默认猜 guess123）。",
+              "点「③ 发请求」。",
+              "把「客户端猜的密钥」改成 <code>beigene-hs256-secret</code> 再重签、再发——这一步模拟<strong>密钥泄露</strong>。"],
+     "guess":"密钥没猜中时是几？猜中之后是几？"},
+    {"title":"场景 ③ 过期，以及撤销但服务器什么都不查",
+     "steps":["重新「登录」拿一个干净 token。点「时间 +20 min」，再发请求——看 exp 那一格。",
+              "再「登录」拿新 token，发一次请求确认 200。",
+              "点「注销 / 撤销这个 token」。<strong>两个开关都保持关闭。</strong>再发请求。"],
+     "guess":"撤销之后、开关全关，这次是 200 还是 401？——这个数字是本课要你报回来的。"},
+    {"title":"场景 ④ 撤销真正生效",
+     "steps":["勾上「查 jti 黑名单」，发请求。",
+              "取消黑名单，改勾「比对用户的 token 版本」，发请求。",
+              "点「时间 +20 min」，看右边黑名单条目怎么变。"],
+     "guess":"两种开关各由验证链的哪一格拦下？黑名单条目为什么可以到期自动清？"}
+  ]
+}'></div>
+
+<div class="callout">
+  <span class="label">四个场景，四个结论</span>
+  <ol>
+    <li><strong>payload 是明文，签名才是防线。</strong>改 role 立刻死在「签名 ✗」——服务器用自己的密钥重算，对不上。JWT 防篡改、<strong>不防偷看</strong>，敏感信息别放进去。</li>
+    <li><strong>安全性 = 密钥的安全性。</strong>猜错密钥照样签名 ✗；猜中了就是 200——所以对称密钥（HS256）只能在你自己的服务之间用，给第三方验签要用非对称（RS256，只发公钥）。</li>
+    <li><strong>撤销之后服务器什么都不查，token 照样 200。</strong>这不是 bug，是 JWT 的定义：服务器<strong>不存状态</strong>，验签 + exp 通过就认。「让客户端 token 失效」这道题的全部难度就在这一格。</li>
+    <li><strong>要撤销就得存一点状态</strong>：要么按 jti 记黑名单（只记到 exp，所以可以自动清），要么按用户记一个版本号。两种都把「无状态」打了个洞——下一节算这笔账。</li>
+  </ol>
+</div>
+
+<h2 id="s4">四、让客户端 token 失效：四条路，各付什么代价</h2>
+
+<p>先把面试官想听的那句说出来：<strong>「JWT 天生撤不掉，因为服务器不存它；能撤的都是在某处补了状态。」</strong>然后给四条路，从最省到最重：</p>
+
+<table>
+  <thead><tr><th>#</th><th>做法</th><th>服务器多存什么</th><th>失效延迟</th><th>什么时候够用</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>短 exp + refresh token</strong>：access token 5–15 分钟，refresh token 长期、<strong>存库</strong>、可撤销、用一次换一个（rotation）</td><td>refresh token 表（一行一个）</td><td>最多一个 access token 的寿命</td><td><strong>默认选这个。</strong>绝大多数「注销」「改密码」容忍 10 分钟延迟</td></tr>
+    <tr><td>2</td><td><strong>jti 黑名单</strong>：注销时把 jti 写进 Redis，TTL = 该 token 剩余寿命；验签后多查一次</td><td>只存被撤销的，且会自动过期</td><td>立即</td><td>要求「点了退出立刻失效」；每个请求多一次 Redis 读</td></tr>
+    <tr><td>3</td><td><strong>用户级版本号 / security stamp</strong>：token 里带 <code>ver</code>，改密码、封号、改角色时 +1；验签后比对</td><td>每用户一个整数（可放缓存）</td><td>立即，且<strong>一次踢掉该用户所有设备</strong></td><td>封号、权限变更这类「必须全体失效」的场景</td></tr>
+    <tr><td>4</td><td><strong>不用自包含 token</strong>：发一个随机引用（opaque token），服务器查表还原身份——本质回到 session</td><td>整张会话表</td><td>立即</td><td>对撤销要求极高、又不想维护上面三套的内网系统</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="label">一句可以直接说的判断</span>
+  <p><strong>「撤销的实时性和服务器的无状态是一对矛盾，我按业务容忍度选：一般注销用短 exp + refresh token 轮换；封号和改权限用用户版本号一次踢全体；真要秒级失效才上黑名单，而且黑名单只记到 exp、能自动清。」</strong>——这段把第三节四个场景按顺序串起来，面试官听得出你是做过取舍的。</p>
+</div>
+
+<div class="callout ext">
+  <span class="label">扩展 · 三个细节，追问时用</span>
+  <ul>
+    <li><strong>ASP.NET Core Identity 内置的就是路 3。</strong>Cookie 方案里 <code>SecurityStampValidator</code> 每隔 <code>ValidationInterval</code>（默认 30 分钟）拿 cookie 里的 stamp 和库里的比一次，改密码 / 注销全部设备会 <code>UpdateSecurityStampAsync</code>。把同样的字段塞进 JWT 就是本课的 <code>ver</code>。</li>
+    <li><strong>黑名单的 key 用 jti，不要用整个 token 的哈希。</strong>OWASP 的 JWT 速查表专门警告：<q>Using the raw JWT or a secure hash of the JWT (SHA-256(token)) as the denylist key is not safe</q>——因为同一 payload 可以被重新编码成字节不同、语义相同的串（malleability）。</li>
+    <li><strong>refresh token rotation 要检测重放。</strong>旧 refresh token 被再次使用 = 有人偷了它，此时把这一族全部作废。这是 OAuth 2.0 Security BCP 的要求，也是路 1 和「只是把 exp 调长」的本质区别。</li>
+  </ul>
+</div>
+
+<h2 id="s5">五、授权三层 + 数据层兜底：「一个人不该操作某条数据」</h2>
+
+<p>题「如果一个人不应该有权限操作某一条数据，我们如何避免」，出题人想听的是你知道<strong><code>[Authorize]</code> 做不到这件事</strong>。原文（<a href="https://learn.microsoft.com/en-us/aspnet/core/security/authorization/resourcebased">Resource-based authorization</a>）：<q>Attribute evaluation occurs before data binding and before execution of any method that loads a resource. Declarative authorization with an [Authorize] attribute doesn&#39;t suffice for resource-based authorization.</q>——特性在<strong>数据还没加载时</strong>就跑完了，它根本不知道你要碰的是哪一条。</p>
+
+<p>所以是三层加一道兜底，每层能看到的信息不同（这张表是 <a href="0010-middleware-pipeline-and-di-lifetimes.html#s5">Lesson 10 第五节</a>那张的展开）：</p>
+
+<table>
+  <thead><tr><th>层</th><th>能看到什么</th><th>回答哪类问题</th><th>写法</th></tr></thead>
+  <tbody>
+    <tr><td><strong>中间件</strong></td><td>只有 <code>HttpContext</code>：token、路径、头</td><td>「你是谁」——把凭据变成 User</td><td><code>UseAuthentication()</code>，一次注册，零业务代码</td></tr>
+    <tr><td><strong>特性 / Policy</strong>（接口级）</td><td><code>User</code> 的 claims + 打到哪个 action</td><td>「这类人能不能调这个接口」：角色、claim、组合规则</td><td><code>[Authorize(Roles = "reviewer")]</code>、<code>[Authorize(Policy = "CanReview")]</code>；Policy 里可以是 <code>RequireClaim</code>、也可以是自定义 <code>IAuthorizationRequirement</code> + handler</td></tr>
+    <tr><td><strong>资源级</strong>（行级）</td><td><code>User</code> + <strong>已加载的那条数据</strong></td><td>「这个人能不能碰<em>这一条</em>」：owner 是不是他、工单是不是他抢到的</td><td><code>IAuthorizationService.AuthorizeAsync(User, ticket, Operations.Update)</code>，handler 继承 <code>AuthorizationHandler&lt;TRequirement, TResource&gt;</code></td></tr>
+    <tr><td><strong>数据层兜底</strong></td><td>SQL 里的 WHERE</td><td>就算上面漏了，也改不到别人的行</td><td><code>UPDATE ... WHERE id = @id AND claimed_by = @me</code>，受影响行数 0 = 拒绝</td></tr>
+  </tbody>
+</table>
+
+<p>资源级那一行写出来（原文示例改成工单）：</p>
+
+<pre><code><span class="cm">// 需求（requirement）：一个空标记类；操作用内置的 OperationAuthorizationRequirement</span>
+<span class="kw">public static class</span> TicketOps
+{
+    <span class="kw">public static readonly</span> OperationAuthorizationRequirement Review = <span class="kw">new</span> { Name = <span class="st">"Review"</span> };
+}
+
+<span class="cm">// handler：同时拿到 User 和那条数据</span>
+<span class="kw">public class</span> TicketAuthorizationHandler
+    : AuthorizationHandler&lt;OperationAuthorizationRequirement, Ticket&gt;
+{
+    <span class="kw">protected override</span> Task HandleRequirementAsync(
+        AuthorizationHandlerContext ctx, OperationAuthorizationRequirement req, Ticket ticket)
+    {
+        <span class="kw">var</span> me = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        <span class="kw">if</span> (req.Name == <span class="st">"Review"</span> &amp;&amp; ticket.ClaimedBy == me)   <span class="cm">// 只有抢到它的人能复核</span>
+            ctx.Succeed(req);
+        <span class="kw">return</span> Task.CompletedTask;
+    }
+}
+<span class="cm">// Program.cs：builder.Services.AddSingleton&lt;IAuthorizationHandler, TicketAuthorizationHandler&gt;();</span>
+
+<span class="cm">// 服务层：先加载，再问</span>
+<span class="kw">var</span> ticket = <span class="kw">await</span> repo.FindAsync(id);
+<span class="kw">var</span> ok = <span class="kw">await</span> authz.AuthorizeAsync(User, ticket, TicketOps.Review);
+<span class="kw">if</span> (!ok.Succeeded) <span class="kw">return</span> Forbid();                    <span class="cm">// 403；不想暴露存在性就 NotFound()</span></code></pre>
+
+<div class="callout">
+  <span class="label">回到第七课：你已经写过数据层兜底了</span>
+  <p><a href="0007-claiming-a-ticket.html">Lesson 07</a> 的复核提交语句是 <code>UPDATE ticket SET status = &#39;reviewed&#39; WHERE id = @id AND claimed_by = @me AND status = &#39;reviewing&#39;</code>。那时它是<strong>并发断言</strong>（Lesson 11 说的「前置状态断言」）；现在看它同时也是<strong>权限断言</strong>——<code>claimed_by = @me</code> 保证别人就算绕过了上面三层，SQL 也影响 0 行。<strong>同一条 WHERE，两个身份。</strong>面试里把这两课接起来说，比单说任何一层都强。</p>
+</div>
+
+<h2 id="s6">六、少调服务、少写代码：缓存放哪、AOP 放哪</h2>
+
+<p>题「每一步都要验证权限，如何避免不停地调用服务获得权限信息，以及如何减少代码量——涉及到 AOP、自定义中间件、缓存」。出题人给了三个词，你要做的是把它们放到<strong>各自的层</strong>，并说清缓存的<strong>寿命</strong>：</p>
+
+<table>
+  <thead><tr><th>要省的是什么</th><th>放哪</th><th>寿命</th><th>失效怎么办</th></tr></thead>
+  <tbody>
+    <tr><td>「他有哪些权限」这次查询</td><td>① 先看能不能<strong>直接编进 token</strong>（角色、少量权限 claim）——零查询</td><td>= token 寿命</td><td>就是第四节的问题：权限变了要等 exp 或版本号踢人</td></tr>
+    <tr><td>同一个请求里反复查</td><td>② <strong>Scoped 的 <code>ICurrentUser</code></strong>：中间件 / 第一次访问时查一次，请求内所有人从它读</td><td>一个请求（Lesson 10 的 Scoped）</td><td>请求结束自动没了，不用管</td></tr>
+    <tr><td>跨请求反复查</td><td>③ <code>IMemoryCache</code> / Redis，key = userId，短 TTL（1–5 分钟）</td><td>TTL</td><td>权限变更时主动删 key；分布式就发一条「权限变更」消息让各实例删</td></tr>
+    <tr><td>每个接口都写一遍 if</td><td>④ <strong>特性 + Policy</strong> 覆盖接口级；行级用 <strong>AOP 拦截器</strong>统一读方法参数里的资源 id 做检查</td><td>—</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<p>AOP 那一格要说得准：ASP.NET Core 自己没有通用 AOP，行级权限的「统一做」有两个落点——<strong>Action Filter</strong>（能拿到 action 参数，比如路由里的 <code>ticketId</code>，在进 action 之前先加载并 <code>AuthorizeAsync</code>）或者 <strong>DI 层拦截器</strong>（Castle DynamicProxy / 源生成，在服务方法上打 <code>[RequireOwner("ticketId")]</code>）。两者都是「把那段 if 从每个方法里抽出来，挂在元数据上」。Filter 够用就别上代理——它是框架内置的，调试栈干净。</p>
+
+<div class="callout ext">
+  <span class="label">扩展 · 缓存一致性的反面例子</span>
+  <p>「把权限缓存 30 分钟」听起来省事，但和第四节撤销是同一个矛盾：管理员刚把某人踢出复核组，他还能复核半小时。所以缓存 TTL 要和撤销策略一起定：<strong>要么短 TTL 接受延迟，要么权限变更时同步删缓存 + 升版本号</strong>。面试里主动说出这个矛盾，比说「加缓存」本身值钱。</p>
+</div>
+
+<h2 id="s7">七、SSO 与两步登录：都是「中间态凭据」</h2>
+
+<p><strong>SSO。</strong>题「对 SSO 的理解」，机制一句话：<strong>认证这件事外包给一个身份提供方（OP），每个应用不再自己看密码，只看 OP 签发的 id_token。</strong>标准是 OpenID Connect：<q>an interoperable authentication protocol based on the OAuth 2.0 framework</q>；id_token <q>represents the outcome of an authentication process. It contains at a bare minimum an identifier for the user (called the sub aka subject claim) and information about how and when the user authenticated</q>（<a href="https://openid.net/developers/how-connect-works/">OpenID — How Connect Works</a>）。「单点」从哪来：浏览器在 <strong>OP 的域</strong>上有一个会话 cookie；第二个应用把用户重定向到 OP 时，OP 看到 cookie 直接签发，用户没有再输密码。ASP.NET Core 里就是 <code>AddOpenIdConnect(...)</code>，handler 类型是第二节说的 <code>RemoteAuthenticationHandler</code>；企业场景多半对着 Azure AD / Entra ID。</p>
+
+<p><strong>两步登录。</strong>题「第一次用户名、密码登录完之后，再进行手机验证码验证，如何做」。错误答案是「密码对了就发正式 token，然后验证码再查一次」——那验证码就是摆设，拿到 token 的人可以直接调业务接口。正确的机制是：<strong>密码正确只换来一张「半张票」，它唯一能做的事是提交验证码。</strong></p>
+
+<ol>
+  <li><code>POST /login</code>：校验密码。<strong>不签发正式 token。</strong>生成 6 位验证码，写 Redis：key = <code>mfa:{userId}</code>，value = 验证码，TTL 5 分钟，另记尝试次数；发短信。</li>
+  <li>返回一张<strong>中间态凭据</strong>：一个短命 JWT（exp 5 分钟），claims 里只有 <code>sub</code> 和 <code>scope: "mfa_pending"</code>（或 <code>amr: ["pwd"]</code>）。所有业务接口的 Policy 都要求 <code>amr</code> 包含 <code>"mfa"</code>，所以这张票<strong>调什么都是 403</strong>。</li>
+  <li><code>POST /login/verify-sms</code>：<code>[Authorize(Policy = "MfaPending")]</code>——只有半张票能进。比对验证码（<strong>比对完立刻删 key</strong>，一次性；错 5 次锁）。通过后签正式 token，<code>amr: ["pwd","mfa"]</code>，走第四节的 access + refresh。</li>
+</ol>
+
+<p>ASP.NET Core Identity 内置的 2FA 就是这个结构，只是用 cookie 装那半张票：<code>PasswordSignInAsync</code> 返回 <code>RequiresTwoFactor</code>，同时写一个 <code>IdentityConstants.TwoFactorUserIdScheme</code> 的 cookie——官方描述是 <q>the scheme used to identify Two Factor authentication cookies for round tripping user identities</q>（<a href="https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.identity.identityconstants">IdentityConstants</a>）；然后 <code>TwoFactorSignInAsync</code> 校验码、换正式 cookie。</p>
+
+<div class="callout">
+  <span class="label">把 SSO 和两步登录接到你已经会的东西上</span>
+  <p>两者的共同点是<strong>中间态</strong>：OIDC 里的 <code>code</code>（还不是 token）、2FA 里的半张票（还不是正式身份）。这和 <a href="0005-saga-and-choreography.html">Lesson 05</a> 的「语义锁 / 业务中间态」是同一个思路——多步流程里，每一步只发放<strong>刚好够走下一步</strong>的凭据，不提前给终态。面试里能把这三处说成一件事，是很强的信号。</p>
+</div>
+
+<h2 id="s8">八、归类练习：这个检查放哪一层</h2>
+
+<p>判据就一条：<strong>做这个判断需要什么信息？</strong>只要 token → 中间件；要 User 和接口 → 特性 / Policy；要那条数据 → 资源级；要「就算前面全漏也不能错」→ 数据层 WHERE。</p>
+
+<div class="binsort" data-binsort='{
+  "label": "归类练习 · 这个检查放哪一层",
+  "bins": [{"id":"mw","label":"中间件","tone":"good"},
+           {"id":"attr","label":"特性 / Policy","tone":"good"},
+           {"id":"res","label":"资源级 handler / 服务层","tone":"good"},
+           {"id":"sql","label":"数据层 WHERE","tone":"good"}],
+  "items": [
+    {"text":"解析 Bearer token，把 claims 装进 HttpContext.User","bin":"mw",
+     "why":"这是认证本身：只需要 token，不需要知道打到哪个接口。UseAuthentication 一次注册，零业务代码。"},
+    {"text":"只有 reviewer 角色可以调 POST /tickets/{id}/review","bin":"attr",
+     "why":"接口级：只看 User 里的 role claim 和是哪个 action。[Authorize(Roles = reviewer)] 一行搞定，不用加载任何数据。"},
+    {"text":"复核提交时，只有抢到这张工单的人才能提交","bin":"res",
+     "why":"要先加载工单看 claimed_by 是不是当前用户。特性跑在数据绑定之前，拿不到这条数据；用 IAuthorizationService.AuthorizeAsync(User, ticket, Review)。"},
+    {"text":"UPDATE 时带上 claimed_by = @me，影响 0 行就视为拒绝","bin":"sql",
+     "why":"兜底层：前面三层任何一层漏了，SQL 也改不到别人的行。第七课那条条件更新同时是并发断言和权限断言。"},
+    {"text":"要求用户既是 reviewer 又已经通过了手机验证码","bin":"attr",
+     "why":"两个 claim 的组合规则：Policy 里 RequireRole(reviewer) + RequireClaim(amr, mfa)。不需要业务数据，仍是接口级。"},
+    {"text":"把当前请求的用户与权限集查一次，放进 Scoped 服务供后续读","bin":"mw",
+     "why":"横切所有请求、只依赖 HttpContext 的事放中间件；产物注册成 Scoped 的 ICurrentUser，同一请求内 Filter 和服务层都从它读。"},
+    {"text":"删除附件前，确认附件所属工单的部门与用户所在部门一致","bin":"res",
+     "why":"要加载附件、再加载工单、再比部门——需要两层业务数据。放服务层或资源级 handler；想统一就用 Action Filter 按参数里的 id 先加载再判。"},
+    {"text":"用 jti 黑名单挡掉已注销的 token","bin":"mw",
+     "why":"这是认证阶段的事：JwtBearer 的 OnTokenValidated 事件里查一次 Redis，命中就 context.Fail()。它不依赖接口和数据，只依赖 token 本身。"}
+  ]
+}'></div>
+
+<h2 id="s9">九、话术</h2>
+
+<div class="script">
+  <span class="label">话术 A · 对应题「身份验证和权限验证」「项目中权限怎么实现」</span>
+  <p><strong>先给机制：</strong><q>认证回答你是谁，授权回答你能不能，中间隔着一张 ClaimsPrincipal。ASP.NET Core 里 UseAuthentication 按 scheme 调 handler——cookie、JWT、OIDC 各一个——把凭据变成 HttpContext.User；它不拒绝请求，只填身份。UseAuthorization 才对 User 提问：匿名就 Challenge 返回 401，有身份但不满足就 Forbid 返回 403。</q></p>
+  <p><strong>再给分层：</strong><q>我们项目权限分三层加一道兜底。接口级用 [Authorize] 和 Policy 声明，零代码；行级——比如只有抢到工单的人能复核——特性做不到，因为它跑在数据加载之前，所以用 IAuthorizationService.AuthorizeAsync 传 User 和那条工单进去；最后 SQL 里 WHERE claimed_by = 当前用户兜底，影响 0 行就拒绝。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 B · 对应题「每一步都要验权限，如何少调服务、少写代码」</span>
+  <p><q>先把「他有哪些权限」尽量编进 token 的 claims，验签即得，零查询。编不进去的，请求内查一次放 Scoped 的 ICurrentUser，同一请求里 Filter、服务层都从它读；跨请求再加 IMemoryCache 或 Redis，按用户 id、短 TTL。代码量靠元数据：接口级全部 [Authorize] 特性，行级用 Action Filter 或拦截器统一按参数里的资源 id 加载再判，业务方法里不写 if。</q></p>
+  <p><strong>主动补一句矛盾：</strong><q>缓存和撤销是一对矛盾——权限缓存 30 分钟，被踢出复核组的人还能复核半小时。所以我们权限变更时同步删缓存并升用户的 token 版本号，TTL 只是兜底。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 C · 对应题「让客户端 token 失效」「身份验证方式有哪些 / SSO」</span>
+  <p><strong>先把矛盾说破：</strong><q>JWT 天生撤不掉，因为服务器不存它，验签加 exp 通过就认。能撤的都是在某处补了状态。我按业务容忍度选：一般注销用短 exp 加 refresh token 轮换，access 十分钟以内，refresh 存库可撤、用一次换一个、旧的再被用就整族作废；封号和改权限用用户级版本号，token 带 ver，比对不上就拒，一次踢掉所有设备；真要秒级失效才上 jti 黑名单，Redis 里 TTL 等于剩余寿命，能自动清。</q></p>
+  <p><strong>方式与 SSO：</strong><q>身份验证方式按状态存哪分三类：session cookie 状态在服务器、JWT 状态在 token 自己、OIDC 把认证外包给身份提供方。SSO 就是第三类：各应用只看 OP 签的 id_token，浏览器在 OP 域上有一个会话，第二个应用跳过去时 OP 直接签发，不用再输密码。企业里对着 Azure AD 用 AddOpenIdConnect 就行。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 D · 对应题「密码登录后再手机验证码，怎么做」</span>
+  <p><q>关键是密码通过后不能发正式 token，只发一张半张票：一个五分钟的短命 JWT，claims 里只有 sub 和 amr 等于 pwd。所有业务接口的 Policy 都要求 amr 里有 mfa，所以这张票调什么都是 403，唯一能进的是提交验证码的接口。验证码放 Redis，五分钟 TTL，比对一次就删，错五次锁；通过后再签正式 token，amr 变成 pwd 加 mfa，走正常的 access 加 refresh。ASP.NET Core Identity 内置的 2FA 就是这个结构，只是半张票装在 TwoFactorUserId 那个 cookie 里。</q></p>
+  <p><strong>收尾一句：</strong><q>这和 OIDC 的 code、和我们做 Saga 时的业务中间态是一个思路——多步流程里每一步只发刚好够走下一步的凭据。</q></p>
+</div>
+
+<h2 id="s10">十、检验一下</h2>
+
+<p>先在心里说出理由再选。第 6 题是 Lesson 10 的回炉。</p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "一个 [AllowAnonymous] 的接口收到一个签名错误的 Bearer token，会发生什么？",
+    "options": [
+      "认证中间件直接返回四零一并附带挑战头",
+      "认证不填身份但不拦截，接口以匿名身份正常执行",
+      "授权中间件发现签名错误后返回四零三拒绝",
+      "请求在路由阶段就被丢弃，接口不会被调用到"
+    ],
+    "answer": 1,
+    "why": "认证中间件只负责产出 ClaimsPrincipal，失败时 User 为匿名，不拒绝。拒绝是授权层看到 [Authorize] 才做的；这个接口是 AllowAnonymous，所以照常执行。"
+  },
+  {
+    "q": "第三节场景 ③：撤销之后、两个开关都关，再发请求得到 200。根本原因是：",
+    "options": [
+      "服务器的黑名单条目在时钟拨动后已被自动清除",
+      "服务器不存 token，验签与过期通过就视为有效",
+      "客户端在撤销后自动用旧密钥重新签发了新的",
+      "撤销操作只升了版本号而没有把该 jti 写入黑名单"
+    ],
+    "answer": 1,
+    "why": "JWT 的定义：自包含、服务器无状态。撤销动作改的是服务器侧的黑名单和版本号，但服务器根本没去查它们，所以那串字符串照样通过。要撤销就必须补状态并且真的去查。"
+  },
+  {
+    "q": "「只有抢到这张工单的人才能提交复核」为什么不能只靠 [Authorize] 特性实现？",
+    "options": [
+      "特性只能检查角色，无法读取任何自定义的声明",
+      "特性在数据绑定和加载资源之前求值，拿不到那条工单",
+      "特性只在控制器级生效，无法标注到单个方法上",
+      "特性求值发生在授权中间件之后，此时已经太晚了"
+    ],
+    "answer": 1,
+    "why": "原文：Attribute evaluation occurs before data binding and before execution of any method that loads a resource。它不知道你要碰哪一条。行级权限要先加载再 AuthorizeAsync(User, resource, requirement)。"
+  },
+  {
+    "q": "封号后要让该用户在所有设备上立刻失效，四条路里最合适的是：",
+    "options": [
+      "缩短 access token 的过期时间到五分钟以内",
+      "维护用户级版本号，验签后比对 token 里的 ver",
+      "把该用户当前这个 token 的 jti 写入黑名单",
+      "改用不透明引用 token 并把整张会话表清空"
+    ],
+    "answer": 1,
+    "why": "版本号是按用户记的，一次 +1 就让该用户所有已签发 token 的 ver 都对不上——正好是「所有设备」。黑名单是按 jti 记的，只能撤你手里知道的那一个；缩短 exp 有延迟；清整张会话表会误伤所有人。"
+  },
+  {
+    "q": "两步登录里，密码校验通过后返回的那张「半张票」，正确的性质是：",
+    "options": [
+      "一张和正式票完全相同但有效期更短的访问令牌",
+      "一张只能用于提交验证码接口、调业务接口一律被拒的凭据",
+      "一段服务器生成的随机字符串，验证码接口据此查表",
+      "一张不含任何声明的空令牌，仅用来证明请求来自客户端"
+    ],
+    "answer": 1,
+    "why": "半张票的 claims 只有 sub 和 amr=pwd；业务接口的 Policy 要求 amr 含 mfa，所以它调什么都是 403，唯一能进的是 verify 接口。选项 A 是最常见的错误做法——验证码成了摆设。"
+  },
+  {
+    "q": "回炉 Lesson 10：为什么 UseAuthentication 必须写在 UseAuthorization 之前？",
+    "options": [
+      "两者是并列的独立步骤，顺序其实并不影响结果",
+      "管道是函数套函数，先注册的在外层，外层先跑前置代码填好 User",
+      "授权中间件会主动调用认证中间件，写反会造成递归",
+      "框架在启动时会自动按名字排序，写反只会得到一个警告"
+    ],
+    "answer": 1,
+    "why": "Build() 倒着折叠，第一个注册的在最外层，它的前置代码最先执行。授权要读 HttpContext.User，所以填 User 的认证层必须在外面。写反了授权看到的永远是匿名用户，所有 [Authorize] 接口都 401。"
+  }
+]'></div>
+
+<h2 id="s11">十一、下一课</h2>
+
+<p>.NET 板块现在有四块：锁（08）、async（09）、DI + 中间件（10）、认证授权（12）。它们也串成一条线：<strong>中间件决定请求经过谁 → 认证在最外层把凭据变成 User → DI 用 Scoped 把 User 和权限集在请求内共享 → 行级检查在服务层拿着数据再问一次</strong>。</p>
+
+<p>下一课候选：<strong>(a) 第三方交互与数据一致性 + RabbitMQ ACK</strong>——题库第十、十一节，Lesson 04/05 的「确认丢失」机制直接复用，是你真实经历最厚的一块；<strong>(b) 日志、监控与「用户访问慢怎么排查」</strong>——题库第七节，Lesson 09 的线程池饥饿画像在这里升级成一套排查流程；<strong>(c) Git flow + 单元测试 + Code Review</strong>——题库第八、十二节，偏流程题，轻。回复一个字母即可。</p>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（只看一个的话，看这个）：</strong><br>
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/security/authentication/">ASP.NET Core Docs — Overview of Authentication</a>。10 分钟读完，本课第一、二节的每一句引文都出自这里；重点看 Authenticate / Challenge / Forbid 三个小节。<br>
+  想再深一层：<a href="https://learn.microsoft.com/en-us/aspnet/core/security/authorization/resourcebased">Resource-based authorization</a>（第五节代码的原型）、<a href="https://datatracker.ietf.org/doc/html/rfc7519">RFC 7519 — JSON Web Token</a>（第 4 节注册 claims 的定义）、<a href="https://openid.net/developers/how-connect-works/">OpenID — How Connect Works</a>（SSO 一页讲清）、<a href="https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_Cheat_Sheet.html">OWASP — JWT Cheat Sheet</a>（撤销、黑名单 key、alg=none 的坑）。</p>
+
+  <p><strong>社区（获取智慧，不是知识）：</strong><a href="https://stackoverflow.com/questions/tagged/asp.net-core+jwt">Stack Overflow 的 <code>asp.net-core</code> + <code>jwt</code> 标签</a>，搜 <q>invalidate token</q>——几百个生产现场，绝大多数在重新发明第四节那张表的某一行。看别人怎么被「JWT 无法撤销」反复教育。</p>
+
+  <div class="nav-links">
+    <a href="0010-middleware-pipeline-and-di-lifetimes.html">← Lesson 10：管道与 DI</a>
+    <a href="0007-claiming-a-ticket.html">← Lesson 07：抢单</a>
+    <a href="0005-saga-and-choreography.html">← Lesson 05：Saga</a>
+    <a href="../reference/auth-cheatsheet.html">→ 速查表：认证与授权</a>
+    <a href="../reference/di-middleware-cheatsheet.html">→ 速查表：管道与 DI</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练，有任何不清楚的直接问我。</strong>这一课只收一样：<a href="#s3">第三节</a>场景 ③ 最后一步——撤销之后、两个开关都关——那次请求的<strong>状态码</strong>（一个数字）。<br>
+    另外回我一个字母：下一课走 <strong>(a) 第三方一致性 + RabbitMQ</strong>、<strong>(b) 日志监控与慢排查</strong>，还是 <strong>(c) Git / 测试 / Code Review</strong>。
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+<script src="../assets/tokenlab.js"></script>
+<script src="../assets/binsort.js"></script>
+</body>
+</html>

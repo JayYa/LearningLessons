@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查：YAML 基础语法</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<header class="masthead">
+  <p class="eyebrow">Reference · YAML</p>
+  <h1>YAML 基础语法</h1>
+  <p class="subtitle">Compose 和 Kubernetes 的配置文件都是 YAML。本页只讲这两者用得到的子集——够写、够读、够排错。</p>
+</header>
+
+<h2>一句话</h2>
+<p>YAML 只有三种结构：<strong>标量</strong>（一个值）、<strong>映射</strong>（键: 值）、<strong>序列</strong>（- 项）。三者可以任意嵌套，<strong>嵌套靠缩进表示</strong>。</p>
+
+<h2>三种结构</h2>
+<table class="defs">
+  <tr><th>结构</th><th>写法</th><th>等价 JSON</th></tr>
+  <tr><td>标量</td><td><code>image: nginx</code></td><td><code>{"image": "nginx"}</code></td></tr>
+  <tr><td>映射（map）</td><td><code>environment:</code><br><code>&nbsp;&nbsp;POSTGRES_DB: shop</code><br><code>&nbsp;&nbsp;POSTGRES_PASSWORD: secret</code></td><td><code>{"environment": {"POSTGRES_DB": "shop", "POSTGRES_PASSWORD": "secret"}}</code></td></tr>
+  <tr><td>序列（list）</td><td><code>ports:</code><br><code>&nbsp;&nbsp;- "8080:8080"</code><br><code>&nbsp;&nbsp;- "5432:5432"</code></td><td><code>{"ports": ["8080:8080", "5432:5432"]}</code></td></tr>
+  <tr><td>序列里放映射</td><td><code>volumes:</code><br><code>&nbsp;&nbsp;- type: volume</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;source: pgdata</code><br><code>&nbsp;&nbsp;- type: bind</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;source: ./cfg</code></td><td><code>{"volumes": [{"type":"volume","source":"pgdata"}, {"type":"bind","source":"./cfg"}]}</code></td></tr>
+  <tr><td>行内写法（flow style）</td><td><code>test: ["CMD-SHELL", "pg_isready"]</code><br><code>labels: {app: api, tier: web}</code></td><td>就是 JSON。YAML 是 JSON 的超集，短列表常这么写</td></tr>
+</table>
+
+<h2>缩进规则</h2>
+<ul>
+  <li><strong>只能用空格，不能用 Tab。</strong>Tab 直接报错。</li>
+  <li>同一层级的键，缩进必须一致。常用 2 空格，多少个不重要，一致才重要。</li>
+  <li><code>- </code> 后面的内容算作新的一层：<code>- type: volume</code> 下一行的 <code>source:</code> 要和 <code>type</code> 对齐（即比 <code>-</code> 多缩 2 格）。</li>
+  <li>空行和缩进无关，可以随便加。</li>
+</ul>
+
+<h2>标量类型：什么时候要引号</h2>
+<p>YAML 会<strong>猜</strong>一个不带引号的值是什么类型。猜错了就出 bug，所以规则是：<strong>拿不准就加引号</strong>。</p>
+<table class="defs">
+  <tr><th>你写的</th><th>YAML 理解为</th><th>要字符串就写</th></tr>
+  <tr><td><code>8080</code></td><td>整数</td><td><code>"8080"</code></td></tr>
+  <tr><td><code>3.14</code>、<code>1e3</code></td><td>浮点数</td><td><code>"1e3"</code></td></tr>
+  <tr><td><code>true</code> / <code>false</code></td><td>布尔。K8s 的 env value 必须是字符串，写 <code>"true"</code></td><td><code>"true"</code></td></tr>
+  <tr><td><code>yes</code> / <code>no</code> / <code>on</code> / <code>off</code></td><td>YAML 1.1 解析器当布尔（有名的"挪威问题"：国家代码 <code>NO</code> 变成 <code>false</code>）</td><td><code>"no"</code></td></tr>
+  <tr><td><code>null</code>、<code>~</code>、什么都不写</td><td>空值。<code>pgdata:</code> 后面留空 = <code>pgdata: null</code>，Compose 靠这个表示"用默认设置"</td><td><code>"null"</code></td></tr>
+  <tr><td><code>22:22</code></td><td>YAML 1.1 解析器当六十进制整数 1342；1.2 不会。Compose v2 不会，但习惯加引号</td><td><code>"22:22"</code></td></tr>
+  <tr><td><code>0755</code></td><td>八进制 493。K8s 的 <code>defaultMode</code> 常踩</td><td>写十进制 <code>493</code> 或 <code>"0755"</code>看字段要求</td></tr>
+  <tr><td><code>a: b: c</code></td><td>报错（值里有 <code>: </code>）</td><td><code>"b: c"</code></td></tr>
+  <tr><td><code>Host=db;Port=5432</code></td><td>字符串，没问题——<code>=</code> <code>;</code> 不是特殊字符</td><td>不用引号</td></tr>
+  <tr><td>以 <code>*</code> <code>&amp;</code> <code>!</code> <code>%</code> <code>@</code> <code>`</code> <code>[</code> <code>{</code> 开头</td><td>YAML 特殊符号，报错或误解析</td><td>加引号</td></tr>
+  <tr><td><code># 注释</code></td><td>从 <code>#</code> 到行尾是注释（前面要有空格）。值里要含 <code>#</code> 就加引号</td><td><code>"a #b"</code></td></tr>
+</table>
+
+<h3>单引号 vs 双引号</h3>
+<ul>
+  <li><code>'单引号'</code>：里面什么都不转义，只有 <code>''</code> 表示一个 <code>'</code>。</li>
+  <li><code>"双引号"</code>：支持 <code>\n</code> <code>\t</code> <code>\"</code> 等转义。</li>
+  <li>Compose 的 <code>${VAR}</code> 插值在两种引号里都生效（插值是 Compose 做的，不是 YAML）。</li>
+</ul>
+
+<h2>多行字符串</h2>
+<pre><code>command: |
+  echo one
+  echo two          <span class="c"># | 保留换行 → "echo one\necho two\n"</span>
+
+description: >
+  这是一段很长的话
+  会被折成一行        <span class="c"># > 把换行折成空格 → "这是一段很长的话 会被折成一行\n"</span></code></pre>
+<p>K8s 的 ConfigMap 里塞整个配置文件、脚本时，几乎都用 <code>|</code>。</p>
+
+<h2>多文档与锚点</h2>
+<pre><code><span class="c"># --- 分隔多个文档。K8s 常把 Deployment + Service 放一个文件</span>
+apiVersion: apps/v1
+kind: Deployment
+---
+apiVersion: v1
+kind: Service</code></pre>
+<pre><code><span class="c"># &amp; 定义锚点，* 引用，&lt;&lt;: 合并。Compose 里偶尔用来去重</span>
+x-common: &amp;common
+  restart: unless-stopped
+  logging: {driver: json-file}
+
+services:
+  api:
+    &lt;&lt;: *common
+    image: hello-api:1.2</code></pre>
+<p>Compose 允许顶层任何 <code>x-</code> 开头的键作为"扩展字段"，专门放这种复用片段。K8s 不支持锚点合并（kubectl 会解析锚点，但风格上不用）。</p>
+
+<h2>排错清单</h2>
+<ol>
+  <li><code>yaml: line N: …</code> → 先看第 N 行和上一行的缩进是否对齐、有没有 Tab。</li>
+  <li><code>mapping values are not allowed in this context</code> → 某个值里有 <code>: </code>（冒号+空格），加引号。</li>
+  <li><code>did not find expected key</code> → 缩进层级错了，通常是某行多/少了 2 格。</li>
+  <li>值"类型不对"（期望 string 得到 bool/int） → 加引号。</li>
+  <li>Compose：<code>docker compose config</code> 打印解析后的结果，看它理解成了什么。K8s：<code>kubectl apply --dry-run=client -f x.yaml</code>。</li>
+</ol>
+
+<h2>权威参考</h2>
+<ul>
+  <li><a href="https://yaml.org/spec/1.2.2/">YAML 1.2.2 规范</a> — 太长，只查第 2 章"Language Overview"的示例即可。</li>
+  <li><a href="https://learnxinyminutes.com/yaml/">Learn YAML in Y minutes</a> — 一页看完所有语法。</li>
+  <li><a href="https://docs.docker.com/reference/compose-file/extension/">Compose — Extensions（x- 字段与锚点）</a></li>
+</ul>
+
+<div class="footer">
+  <p>课程：Docker &amp; Kubernetes · 参考 ｜
+  <a href="GLOSSARY.html">术语表</a> ·
+  <a href="compose-cheatsheet.html">Compose 速查</a> ·
+  <a href="../lessons/0005-compose-app-plus-database.html">第 5 课</a></p>
+</div>
+</body>
+</html>

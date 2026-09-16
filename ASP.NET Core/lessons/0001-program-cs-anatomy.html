@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 1 课：Program.cs 解剖——从 Global.asax 到 WebApplication — ASP.NET Core</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>第 1 课：Program.cs 解剖——从 Global.asax 到 WebApplication</h1>
+<div class="lesson-meta">
+  模块：项目基础（1/1）&nbsp;|&nbsp; 预计阅读/练习时间：30 分钟 &nbsp;|&nbsp; 环境：.NET 10 SDK（已安装 10.0.400）
+</div>
+
+<p>
+  Web API 2 时代，一个项目的"启动"散落在四个地方：<code>Global.asax</code> 的 <code>Application_Start</code>、
+  <code>App_Start/WebApiConfig.cs</code> 的 <code>Register</code>、<code>web.config</code> 的几十行 XML，以及你看不见的 IIS 管道。
+  ASP.NET Core 把这四样全部收进<strong>一个文件、十几行代码</strong>——<code>Program.cs</code>。
+</p>
+
+<p>
+  好消息：你在 <a href="../../.NET Platform/lessons/0009-generic-host-fundamentals.html">.NET Platform 第 9 课</a> 已经学过
+  <code>Host.CreateApplicationBuilder</code>。<code>WebApplication.CreateBuilder</code> 就是它<strong>再叠三层 Web 专属的东西</strong>：Kestrel、
+  <code>ASPNETCORE_</code> 环境变量、以及一条自动帮你排好的中间件管道。本课只讲这三层，Host 部分不重复。
+</p>
+
+<div class="summary">
+  <ul>
+    <li>把 <code>dotnet new webapi</code> 生成的 <code>Program.cs</code> <strong>逐行对应</strong>到 Web API 2 的旧位置</li>
+    <li>理解启动的<strong>两个阶段</strong>：<code>builder</code>（注册）→ <code>Build()</code> → <code>app</code>（管道），以及为什么 Build 之后不能再注册服务</li>
+    <li>搞清 <code>WebApplication.CreateBuilder</code> 在 Generic Host 之上<strong>多做了什么</strong></li>
+    <li>掌握环境管理：<code>launchSettings.json</code>、<code>ASPNETCORE_ENVIRONMENT</code>、<code>appsettings.{Env}.json</code> 三者的分工</li>
+    <li>亲手跑通一个 API，并让它在 Development / Staging 两个环境下表现不同（任务书目标之一）</li>
+  </ul>
+</div>
+
+<h2>Web API 2 vs ASP.NET Core：启动代码去哪了</h2>
+
+<table class="tbl">
+  <tr><th>Web API 2（Framework 4.8）</th><th>ASP.NET Core</th><th>做什么</th></tr>
+  <tr>
+    <td><code>Global.asax</code> → <code>Application_Start</code></td>
+    <td><code>Program.cs</code> 顶层语句</td>
+    <td>进程入口，IIS 触发 → 现在是普通 <code>Main</code></td>
+  </tr>
+  <tr>
+    <td><code>WebApiConfig.Register(HttpConfiguration)</code></td>
+    <td><code>builder.Services.Add…()</code> + <code>app.Map…()</code></td>
+    <td>路由、格式化器、过滤器、服务注册</td>
+  </tr>
+  <tr>
+    <td><code>GlobalConfiguration.Configuration.DependencyResolver</code></td>
+    <td><code>builder.Services</code>（内置 DI）</td>
+    <td>依赖注入——不再是可选插件</td>
+  </tr>
+  <tr>
+    <td><code>web.config</code> <code>&lt;appSettings&gt;</code></td>
+    <td><code>appsettings.json</code> + 环境变量</td>
+    <td>业务配置</td>
+  </tr>
+  <tr>
+    <td><code>web.config</code> <code>&lt;system.webServer&gt;</code> / <code>&lt;httpModules&gt;</code></td>
+    <td><code>app.Use…()</code> 中间件（第 3–4 课）</td>
+    <td>请求管道</td>
+  </tr>
+  <tr>
+    <td>IIS + <code>System.Web</code>（进程外托管）</td>
+    <td>Kestrel（进程内，自宿主）（第 2 课）</td>
+    <td>Web 服务器</td>
+  </tr>
+  <tr>
+    <td>Web.Debug.config / Web.Release.config 转换</td>
+    <td><code>appsettings.{Environment}.json</code></td>
+    <td>按环境切换配置</td>
+  </tr>
+</table>
+
+<div class="callout callout--info">
+  <strong>OWIN/Katana 熟悉者注意：</strong>如果你用过 <code>Startup.Configuration(IAppBuilder app)</code>，ASP.NET Core 的 <code>app.Use…</code>
+  就是它的直系后代——同样的 "builder 上串中间件" 思路，只是 <code>IAppBuilder</code> 变成了 <code>IApplicationBuilder</code>，
+  <code>Func&lt;IDictionary&lt;string,object&gt;, Task&gt;</code> 变成了 <code>RequestDelegate</code>。
+</div>
+
+<h2>逐行解剖：<code>dotnet new webapi</code> 生成的 Program.cs</h2>
+
+<p>下面是 .NET 10 SDK 生成的原文（删掉了 WeatherForecast 示例数据），每一行右侧标注它在 Web API 2 里的"前身"：</p>
+
+<pre><code>// ── 阶段 1：builder（注册） ─────────────────────────────────────
+var builder = WebApplication.CreateBuilder(args);   // ≈ Global.asax + web.config 加载 + IIS 启动，一行搞定
+
+builder.Services.AddOpenApi();                       // ≈ WebApiConfig 里 config.EnableSwagger()
+                                                     //   builder.Services 就是 IServiceCollection（平台第 4 课）
+
+// ── 阶段 2：Build（冻结） ───────────────────────────────────────
+var app = builder.Build();                           // 构建 DI 容器 + Host + Kestrel；此后 Services 只读
+
+// ── 阶段 3：app（管道） ─────────────────────────────────────────
+if (app.Environment.IsDevelopment())                 // ≈ #if DEBUG / web.config 的 debug="true"
+{
+    app.MapOpenApi();                                //   只在开发环境暴露 /openapi/v1.json
+}
+
+app.UseHttpsRedirection();                           // ≈ IIS URL Rewrite 的 HTTPS 规则 —— 现在是一个中间件
+
+app.MapGet("/weatherforecast", () =&gt; ...)           // ≈ 一个 ApiController 的 GET Action（Minimal API 形式）
+   .WithName("GetWeatherForecast");
+
+app.Run();                                           // 启动 Kestrel，阻塞直到 Ctrl+C / SIGTERM</code></pre>
+
+<h3>三个阶段，一个铁律</h3>
+
+<div class="rule">
+  <div class="rule__num">Rule</div>
+  <h4><code>Build()</code> 是分水岭：之前只能注册，之后只能使用</h4>
+  <p>
+    <code>builder.Build()</code> 会把 <code>IServiceCollection</code> 构建成 <code>IServiceProvider</code>，然后<strong>把集合标记为只读</strong>。
+    Build 之后再调 <code>builder.Services.AddScoped&lt;…&gt;()</code> 会抛 <code>InvalidOperationException: The service collection cannot be modified because it is read-only</code>。
+    这和 Web API 2 完全不同——<code>GlobalConfiguration.Configuration</code> 在运行时随时可改（虽然不该改）。
+  </p>
+</div>
+
+<div class="diagram">
+<pre>
+WebApplication.CreateBuilder(args)
+   │  builder.Configuration   ← 读配置（appsettings / 环境变量 / 命令行）
+   │  builder.Services        ← 注册服务（IServiceCollection，可写）
+   │  builder.Environment     ← IWebHostEnvironment（此时已可用！）
+   │  builder.Logging / builder.WebHost / builder.Host
+   ▼
+builder.Build()               ← DI 容器构建、Services 冻结、Kestrel 就位
+   │
+   ▼
+app (WebApplication)
+   │  app.Services            ← IServiceProvider（只读，可 GetRequiredService）
+   │  app.Use…()              ← 中间件，按调用顺序串成管道
+   │  app.Map…()              ← 端点（Minimal API / Controller）
+   ▼
+app.Run()                     ← 启动 IHost → 启动 Kestrel → 监听
+</pre>
+</div>
+
+<div class="callout callout--info">
+  <strong>为什么 <code>builder.Environment</code> 在 Build 之前就能用？</strong>
+  因为环境名属于<strong>Host 配置</strong>（平台第 9 课），在 <code>CreateBuilder</code> 内部第一步就读完了。
+  所以 <code>if (builder.Environment.IsDevelopment()) builder.Services.Add…</code> 是合法且常见的写法——按环境注册不同实现。
+</div>
+
+<h2><code>WebApplication.CreateBuilder</code> 比 <code>Host.CreateApplicationBuilder</code> 多做了什么</h2>
+
+<p>
+  你已知 Generic Host 默认做的事（<code>DOTNET_</code> 环境变量、appsettings 链、Console 日志、Development 下 <code>ValidateScopes</code>）。
+  <code>WebApplication.CreateBuilder</code> 在其上叠加的 Web 层，按
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/webapplication">官方文档</a>
+  和 <a href="https://andrewlock.net/exploring-dotnet-6-part-2-comparing-webapplicationbuilder-to-the-generic-host/">Andrew Lock 的源码分析</a>，主要是三块：
+</p>
+
+<table class="tbl">
+  <tr><th>叠加层</th><th>内容</th><th>Web API 2 对应</th></tr>
+  <tr>
+    <td><strong>① 配置</strong></td>
+    <td>额外读 <code>ASPNETCORE_</code> 前缀环境变量（<code>ASPNETCORE_ENVIRONMENT</code>、<code>ASPNETCORE_URLS</code>、<code>ASPNETCORE_CONTENTROOT</code>）；命令行 <code>--environment</code>、<code>--urls</code></td>
+    <td>web.config + IIS 站点绑定</td>
+  </tr>
+  <tr>
+    <td><strong>② 服务器与服务</strong></td>
+    <td>注册 Kestrel、IIS 进程内集成（Windows）、HostFiltering、路由服务；注册 <code>IWebHostEnvironment</code>（比 <code>IHostEnvironment</code> 多一个 <code>WebRootPath</code> = <code>wwwroot</code>）</td>
+    <td>System.Web + IIS</td>
+  </tr>
+  <tr>
+    <td><strong>③ 自动中间件</strong></td>
+    <td>Development 下首位插入 <code>UseDeveloperExceptionPage</code>；若有端点则自动 <code>UseRouting</code>（开头）+ <code>UseEndpoints</code>（末尾）；若注册了认证/授权服务则自动 <code>UseAuthentication</code> / <code>UseAuthorization</code></td>
+    <td>customErrors + 路由表 + 认证模块</td>
+  </tr>
+</table>
+
+<p>③ 的效果等价于框架替你写了这段（<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/webapplication#webapplication">文档原文</a>）：</p>
+
+<pre><code>if (isDevelopment)              app.UseDeveloperExceptionPage();
+app.UseRouting();
+if (isAuthenticationConfigured) app.UseAuthentication();
+if (isAuthorizationConfigured)  app.UseAuthorization();
+// ← 你写的 app.Use…() 和 app.Map…() 都在这里
+app.UseEndpoints(e =&gt; { });</code></pre>
+
+<div class="callout callout--warn">
+  <strong>陷阱：</strong>"自动"只在你<strong>没显式调用</strong>时生效。一旦你自己写了 <code>app.UseRouting()</code>，框架就不再插入，
+  位置完全由你负责——这在第 3 课中间件顺序里会反复出现（典型事故：<code>UseAuthorization</code> 放在 <code>UseRouting</code> 之前）。
+</div>
+
+<div class="callout callout--info">
+  <strong>.NET 8+ 的两个兄弟：</strong><code>WebApplication.CreateSlimBuilder</code>（面向 Native AOT，去掉 IIS 集成、HTTPS 默认配置、正则路由约束等）和
+  <code>CreateEmptyBuilder</code>（什么都不注册，全手动）。本系列一律用 <code>CreateBuilder</code>；
+  见 <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/native-aot#the-createslimbuilder-method">CreateSlimBuilder 文档</a>。
+</div>
+
+<h2>项目里其他文件：谁管环境</h2>
+
+<p><code>dotnet new webapi</code> 生成 6 个文件。和环境有关的三个，职责边界必须分清：</p>
+
+<div class="diagram">
+<pre>
+HelloApi/
+ ├── HelloApi.csproj                ← &lt;Project Sdk="Microsoft.NET.Sdk.Web"&gt;：Web SDK 隐式引用整个 ASP.NET Core 共享框架
+ ├── Program.cs
+ ├── appsettings.json               ← 所有环境的基础配置（✔ 部署）
+ ├── appsettings.Development.json   ← 仅 Development 时叠加覆盖（✔ 部署但生产不读）
+ ├── Properties/launchSettings.json ← 仅 dotnet run / VS / VS Code 本机启动用（✘ 不部署）
+ └── HelloApi.http                  ← VS / VS Code 的 REST 测试文件，与运行无关
+</pre>
+</div>
+
+<h3>环境名是怎么定下来的</h3>
+
+<div class="steps">
+  <div class="step">
+    <h4>本机 <code>dotnet run</code></h4>
+    <p>读 <code>launchSettings.json</code> 第一个 <code>commandName: "Project"</code> 的 profile，把其中的 <code>environmentVariables</code>（模板里是 <code>ASPNETCORE_ENVIRONMENT=Development</code>）和 <code>applicationUrl</code> 注入进程。<strong>它覆盖系统环境变量</strong>。</p>
+  </div>
+  <div class="step">
+    <h4>部署后（<code>dotnet HelloApi.dll</code> / 容器 / IIS）</h4>
+    <p><code>launchSettings.json</code> 根本不存在。环境只来自真正的环境变量或命令行 <code>--environment</code>。<strong>没设就是 <code>Production</code></strong>——开发者异常页、OpenAPI 全部关闭。</p>
+  </div>
+  <div class="step">
+    <h4>两个变量都设了？</h4>
+    <p>
+      <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/environments#environment-variables-that-determine-the-runtime-environment">官方文档</a>明确：
+      <em>使用 <code>WebApplication</code> 时，<code>DOTNET_ENVIRONMENT</code> 的优先级高于 <code>ASPNETCORE_ENVIRONMENT</code></em>
+      （老的 <code>WebHost</code> 相反）。原因是 <code>WebApplicationBuilder</code> 内部先读 <code>ASPNETCORE_</code> 再读 <code>DOTNET_</code>，后加载者覆盖。
+      实践建议：一台机器上只用一个，Web 项目统一 <code>ASPNETCORE_ENVIRONMENT</code>。
+    </p>
+  </div>
+</div>
+
+<p>环境名一旦定下，配置链就按它加载（平台第 7 课的顺序，Web 项目完全相同）：</p>
+
+<div class="diag">
+<pre>appsettings.json <span class="arrow">→</span> appsettings.{Env}.json <span class="arrow">→</span> User Secrets（仅 Dev） <span class="arrow">→</span> 环境变量 <span class="arrow">→</span> 命令行
+<span class="arrow">后者覆盖前者</span></pre>
+</div>
+
+<h2>动手：让 API 在两个环境下表现不同</h2>
+
+<p>每一步都有<strong>预期输出</strong>——看到就对，看不到就停下来问我。全程 PowerShell。</p>
+
+<div class="steps">
+
+<div class="step">
+  <h4>生成并运行</h4>
+<pre><code>cd D:\teach\ASPNET Core
+dotnet new webapi -n HelloApi -o playground\HelloApi
+cd playground\HelloApi
+dotnet run</code></pre>
+  <p>预期看到（端口号可能不同）：</p>
+<pre><code>info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:5249
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: D:\teach\ASPNET Core\playground\HelloApi</code></pre>
+  <p>三行信息 = 本课三个概念：Kestrel 在监听、环境是 Development（来自 launchSettings.json）、Content root 是配置文件所在目录。</p>
+  <p>浏览器打开 <code>http://localhost:5249/openapi/v1.json</code> 应看到 JSON 文档；<code>/weatherforecast</code> 应看到 5 条天气。<kbd>Ctrl</kbd>+<kbd>C</kbd> 停止。</p>
+</div>
+
+<div class="step">
+  <h4>加一个暴露环境信息的端点</h4>
+  <p>在 <code>app.UseHttpsRedirection();</code> 之后加：</p>
+<pre><code>app.MapGet("/env", (IWebHostEnvironment env, IConfiguration cfg) =&gt; new
+{
+    env.EnvironmentName,
+    env.ContentRootPath,
+    env.WebRootPath,
+    Greeting = cfg["Greeting"] ?? "(未配置)"
+});</code></pre>
+  <p>注意参数直接从 DI 注入——这是 Minimal API 的参数绑定，第 5 课详讲；现在只需知道"注册过的服务可以直接写在 lambda 参数里"。</p>
+  <p>再运行，访问 <code>/env</code>，预期：<code>"environmentName":"Development"</code>，<code>"webRootPath":null</code>（API 模板没有 <code>wwwroot</code> 目录，目录不存在时该属性就是 null），<code>"greeting":"(未配置)"</code>。</p>
+</div>
+
+<div class="step">
+  <h4>给两个环境不同的配置</h4>
+  <p>在 <code>appsettings.Development.json</code> 加 <code>"Greeting": "hi from dev"</code>；新建 <code>appsettings.Staging.json</code>，内容 <code>{ "Greeting": "hi from staging" }</code>。</p>
+  <p>运行 <code>dotnet run</code>，访问 <code>/env</code>，预期 <code>"greeting":"hi from dev"</code>。</p>
+</div>
+
+<div class="step">
+  <h4>绕过 launchSettings.json，切到 Staging</h4>
+<pre><code>$Env:ASPNETCORE_ENVIRONMENT = "Staging"
+dotnet run --no-launch-profile</code></pre>
+  <p>预期<strong>两处变化</strong>：</p>
+  <ul class="check-list">
+    <li><code>Hosting environment: Staging</code></li>
+    <li><code>Now listening on: http://localhost:5000</code>——端口变了！因为 <code>applicationUrl</code> 也来自 launchSettings.json，不用它就回到 Kestrel 默认的 5000</li>
+  </ul>
+  <div class="callout callout--warn">
+    <strong>这台机器上 5000 端口会绑定失败</strong>（<code>Failed to bind to address http://localhost:5000 … SocketException (10013)</code>）：
+    Windows 把 4904–5003 保留给了 Hyper-V/WSL（<code>netsh interface ipv4 show excludedportrange protocol=tcp</code> 可见）。
+    用命令行参数换端口——这本身就是本课知识点（<code>--urls</code> 是 <code>ASPNETCORE_URLS</code> 的命令行形式）：
+    <pre><code>dotnet run --no-launch-profile --urls http://localhost:5100</code></pre>
+  </div>
+  <p>访问 <code>http://localhost:5100/env</code> → <code>"environmentName":"Staging"</code>、<code>"greeting":"hi from staging"</code>；访问 <code>/openapi/v1.json</code> → <strong>404</strong>（<code>MapOpenApi</code> 被 <code>IsDevelopment()</code> 挡住了）。</p>
+</div>
+
+<div class="step">
+  <h4>验证 Build 之后的铁律</h4>
+  <p>在 <code>var app = builder.Build();</code> 的<strong>下一行</strong>加 <code>builder.Services.AddSingleton&lt;object&gt;();</code>，运行。预期启动即崩：</p>
+<pre><code>Unhandled exception. System.InvalidOperationException:
+The service collection cannot be modified because it is read-only.
+   at Microsoft.Extensions.DependencyInjection.ServiceCollection.ThrowReadOnlyException()</code></pre>
+  <p>删掉这一行。最后 <code>Remove-Item Env:ASPNETCORE_ENVIRONMENT</code> 清掉环境变量，免得下节课困惑。</p>
+</div>
+
+</div>
+
+<h2>测验</h2>
+
+<div class="callout callout--warn">
+  考的是<strong>机制</strong>，不是"现代框架应该怎么做"的直觉。答之前先回忆本课具体哪一段讲了它。
+</div>
+
+<div class="quiz" id="quiz1"
+     data-feedback-correct="✅ 正确。WebApplicationBuilder 先加载 ASPNETCORE_ 再加载 DOTNET_ 前缀，后者覆盖前者——这是文档明确记录的行为，与老 WebHost 相反。"
+     data-feedback-wrong="❌ 不对。文档原文：使用 WebApplication 时 DOTNET_ENVIRONMENT 优先于 ASPNETCORE_ENVIRONMENT。回看「两个变量都设了？」一节。">
+  <div class="quiz__q">❓ 系统环境变量里同时有 <code>DOTNET_ENVIRONMENT=Staging</code> 和 <code>ASPNETCORE_ENVIRONMENT=Development</code>，用 <code>dotnet HelloApi.dll</code> 启动。<code>app.Environment.EnvironmentName</code> 是？</div>
+  <div class="quiz__opt" data-answer="wrong">Development，因为 ASPNETCORE_ 前缀是 Web 专用、更具体的那个</div>
+  <div class="quiz__opt" data-answer="correct">Staging，因为 DOTNET_ 前缀的变量在其后加载、覆盖了前者</div>
+  <div class="quiz__opt" data-answer="wrong">Production，因为两个变量冲突时框架会退回到默认环境名</div>
+  <div class="quiz__opt" data-answer="wrong">启动失败，因为两个前缀同时设置会被当作配置冲突而报错</div>
+  <div class="quiz__feedback" id="quiz1-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz2"
+     data-feedback-correct="✅ 正确。launchSettings.json 不随发布输出，环境变量又没设，默认就是 Production——所以 MapOpenApi 那段 if 不会执行。"
+     data-feedback-wrong="❌ 不对。launchSettings.json 只被 dotnet run / IDE 读取，dotnet publish 不会带上它；没有任何环境变量时默认是 Production。">
+  <div class="quiz__q">❓ 你 <code>dotnet publish</code> 后把输出目录拷到一台干净的 Linux 机器，直接 <code>dotnet HelloApi.dll</code>。访问 <code>/openapi/v1.json</code> 会得到什么？</div>
+  <div class="quiz__opt" data-answer="wrong">200 并返回文档，因为 launchSettings.json 里设了 Development 环境</div>
+  <div class="quiz__opt" data-answer="correct">404，因为环境默认是 Production，MapOpenApi 那段代码没执行</div>
+  <div class="quiz__opt" data-answer="wrong">500，因为 Production 环境下 OpenAPI 服务未注册导致启动时抛异常</div>
+  <div class="quiz__opt" data-answer="wrong">200 并返回文档，因为 AddOpenApi 已注册、端点映射与环境是无关的</div>
+  <div class="quiz__feedback" id="quiz2-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz3"
+     data-feedback-correct="✅ 正确。有端点时 WebApplication 自动在管道开头插 UseRouting、末尾插 UseEndpoints；只有你显式调用了它才不插。"
+     data-feedback-wrong="❌ 不对。回看「自动中间件」表格：只要有端点被 Map，且用户没自己调 UseRouting，框架就自动补上。">
+  <div class="quiz__q">❓ Program.cs 里只有 <code>app.MapGet("/", () =&gt; "hi")</code>，从未调用 <code>app.UseRouting()</code>。请求 <code>/</code> 会怎样？</div>
+  <div class="quiz__opt" data-answer="wrong">404，因为没有 UseRouting 就没有路由匹配，端点根本不会被命中</div>
+  <div class="quiz__opt" data-answer="wrong">启动时抛异常，提示必须先调用 UseRouting 才能映射任何端点</div>
+  <div class="quiz__opt" data-answer="correct">200 返回 hi，因为框架检测到有端点后自动补上了路由中间件</div>
+  <div class="quiz__opt" data-answer="wrong">200 返回 hi，因为 Minimal API 的端点不经过路由、由 Kestrel 直接分发</div>
+  <div class="quiz__feedback" id="quiz3-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz4"
+     data-feedback-correct="✅ 正确。环境名属于 Host 配置，在 CreateBuilder 内部第一步就读定了，所以 builder.Environment 在 Build 之前完全可用。"
+     data-feedback-wrong="❌ 不对。builder.Environment 是 CreateBuilder 返回时就已填好的属性——环境名是 Host 配置，读得比一切服务注册都早。">
+  <div class="quiz__q">❓ 想在 Development 环境注册 <code>FakeEmailSender</code>，其他环境注册 <code>SmtpEmailSender</code>。下面哪种写法正确？</div>
+  <div class="quiz__opt" data-answer="wrong">必须先 Build 拿到 app.Environment 判断，再回头往 builder.Services 里注册</div>
+  <div class="quiz__opt" data-answer="correct">直接在 Build 之前用 builder.Environment.IsDevelopment() 判断后注册即可</div>
+  <div class="quiz__opt" data-answer="wrong">在 Build 之前读不到环境，只能两个都注册，运行时再按环境名挑一个</div>
+  <div class="quiz__opt" data-answer="wrong">改用 Environment.GetEnvironmentVariable 直接读系统变量，绕过 builder</div>
+  <div class="quiz__feedback" id="quiz4-feedback"></div>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+<h2>速查</h2>
+<p>本课的压缩版在 <a href="../reference/program-cs-quick-reference.html">Program.cs 速查表</a>：三阶段图、CreateBuilder 默认行为、环境变量优先级、文件职责表。以后忘了直接翻它。</p>
+
+<h2>推荐阅读</h2>
+
+<p><strong>首选（30 分钟）：</strong>
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/webapplication">WebApplication and WebApplicationBuilder in ASP.NET Core apps</a>
+  ——官方文档，本课"自动中间件"和端口/环境变量部分全部出自这里。跳过 "Change the content root" 之后的部分。
+</p>
+<p><strong>进阶（想看源码时）：</strong>
+  Andrew Lock, <a href="https://andrewlock.net/exploring-dotnet-6-part-2-comparing-webapplicationbuilder-to-the-generic-host/">Comparing WebApplicationBuilder to the Generic Host</a>
+  和 <a href="https://andrewlock.net/exploring-dotnet-6-part-3-exploring-the-code-behind-webapplicationbuilder/">Exploring the code behind WebApplicationBuilder</a>
+  ——解释 CreateBuilder 内部如何用 BootstrapHostBuilder 桥接 Host 和 Web 两套 builder。
+</p>
+<p><strong>环境：</strong>
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/environments">Use multiple environments in ASP.NET Core</a>
+</p>
+
+<div class="callout callout--info">
+  <strong>有不明白的随时问我。</strong>比如：为什么 <code>builder.Host</code> 和 <code>builder.WebHost</code> 两个都存在？IIS 进程内托管到底是怎么跟 Kestrel 共存的？
+  这些都是本课刻意跳过的，问了我就展开。做完动手练习和测验后告诉我结果，我会据此记学习记录并决定第 2 课的深度。
+</div>
+
+<div class="lesson-nav">
+  <a href="../MISSION.md">← 任务书</a>
+  <a href="0002-kestrel-and-hosting.html">下一课：Kestrel、反向代理与部署 →</a>
+</div>
+
+</body>
+</html>

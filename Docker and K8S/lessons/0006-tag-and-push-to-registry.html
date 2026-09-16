@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 6 课：给镜像一个全名，推到 registry</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/diagram.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="eyebrow">Lesson 06 · 主线 A：构建（收尾）</p>
+  <h1>给镜像一个全名，推到 registry</h1>
+  <p class="subtitle">把 <code>hello-api:1.2</code> 推到一个 registry，删掉本地副本，再让 compose 从 registry 拉回来跑。这是 K8s 的前置条件：集群只认 registry 里的镜像。</p>
+</header>
+
+<p class="lede">
+  到现在为止 <code>hello-api:1.2</code> 只存在于你这台机器的 Docker 里。<code>docker build</code> 出来的镜像别人拿不到，K8s 集群也拿不到。
+  让镜像"离开本机"只有一条路：<strong>推到 registry</strong>。而推之前，镜像得有一个<strong>包含 registry 地址的全名</strong>——这一课的主角就是这个名字。
+</p>
+
+<h2>一、原理：一个镜像名分四段</h2>
+
+<pre><code>localhost:5050 / hello-api : 1.2
+└─ registry ─┘  └─ repo ─┘  └tag┘
+
+docker.io / library / postgres : 17-alpine
+└registry┘  └namespace┘ └ repo ┘  └─ tag ──┘</code></pre>
+
+<table class="defs">
+  <tr><th>段</th><th>省略时默认</th><th>说明</th></tr>
+  <tr><td>registry</td><td><code>docker.io</code>（Docker Hub）</td><td>含 <code>.</code> 或 <code>:</code> 的第一段才被当作 registry 地址。所以 <code>localhost:5050/x</code> 指向本地 registry，<code>myteam/x</code> 仍然指向 Docker Hub</td></tr>
+  <tr><td>namespace</td><td><code>library</code>（Hub 官方镜像）</td><td>Hub 上就是用户名/组织名。<code>postgres</code> 其实是 <code>docker.io/library/postgres</code></td></tr>
+  <tr><td>repo</td><td>—</td><td>镜像名本身</td></tr>
+  <tr><td>tag</td><td><code>latest</code></td><td><strong>一个可移动的指针</strong>，不是版本号。<code>latest</code> 只是默认名字，不代表"最新"，也不会自动存在</td></tr>
+</table>
+
+<p>
+  权威定义：<a href="https://docs.docker.com/reference/cli/docker/image/tag/">docker image tag</a>（"An image name is made up of slash-separated name components, optionally prefixed by a registry hostname"）。
+</p>
+
+<div class="note">
+  <p><strong><code>docker tag</code> 不复制任何东西。</strong>它只是给同一个镜像 ID 再贴一个名字——本课第 3 步你会看到两个名字的 ID 一模一样。
+  真正的内容标识是 <strong>digest</strong>（<code>sha256:…</code>），由内容算出，不可变；tag 只是指向某个 digest 的便签，随时可以被 <code>push</code> 覆盖成指向另一个 digest。
+  见 <a href="https://docs.docker.com/reference/cli/docker/image/pull/#pull-an-image-by-digest-immutable-identifier">Pull an image by digest</a>。</p>
+</div>
+
+<h3>内部机制：push 到底传了什么</h3>
+<p>
+  registry 是一个 HTTP 服务，只有两种东西：<strong>blob</strong>（按 digest 存的层和配置）和 <strong>manifest</strong>（一份 JSON，列出这个 tag 由哪些 blob 组成）。
+  <code>docker push</code> 对每个层先 <code>HEAD /v2/&lt;repo&gt;/blobs/&lt;digest&gt;</code> 问"有没有"，有就跳过（输出 <code>Layer already exists</code>），没有才上传；最后 <code>PUT</code> manifest 把 tag 指过去。
+  所以第二次 push 只改了一层的镜像几秒就完——和 build 缓存是同一个思路：<strong>内容寻址，按 digest 去重</strong>。
+  协议见 <a href="https://distribution.github.io/distribution/spec/api/">Registry HTTP API V2</a>；本课会用 <code>curl</code> 直接戳它两下。
+</p>
+
+<div class="timeline">
+  <div class="phase">
+    <h4>docker tag</h4>
+    <p class="when">本地，零拷贝</p>
+    <ul>
+      <li>同一 image ID</li>
+      <li>多一个名字</li>
+    </ul>
+  </div>
+  <div class="arrow">→<br><small>push</small></div>
+  <div class="phase">
+    <h4>registry</h4>
+    <p class="when">blob 去重 + manifest</p>
+    <ul>
+      <li>层按 digest 存</li>
+      <li>tag → manifest</li>
+    </ul>
+  </div>
+  <div class="arrow">→<br><small>pull</small></div>
+  <div class="phase run">
+    <h4>另一台机 / K8s</h4>
+    <p class="when">按名字取</p>
+    <ul>
+      <li>只认 registry 全名</li>
+      <li>本地 build 的看不到</li>
+    </ul>
+  </div>
+</div>
+
+<h2>二、动手</h2>
+
+<p>在 <code>demo\hello-api</code> 目录下操作。约 12 分钟。用官方 <code>registry:2</code> 镜像在本机跑一个 registry——不需要任何账号，原理和 Docker Hub 完全一样。</p>
+
+<ol class="steps">
+
+<li>
+<p><strong>先看默认值是怎么被补全的。</strong></p>
+<pre><code>docker pull postgres:17-alpine
+<span class="c"># Status: Image is up to date for postgres:17-alpine</span>
+<span class="c"># docker.io/library/postgres:17-alpine      ← 全名在最后一行</span>
+
+docker image inspect postgres:17-alpine --format "{{.RepoDigests}}"
+<span class="c"># [postgres@sha256:…]                        ← 这就是 digest，内容的指纹</span></code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  你写的 <code>postgres:17-alpine</code> 被补成了 <code>docker.io/library/postgres:17-alpine</code>。K8s 的 YAML 里写 <code>image: postgres:17-alpine</code> 也会走同样的补全规则。
+</p>
+</li>
+
+<li>
+<p><strong>起一个本地 registry。</strong></p>
+<pre><code>docker run -d --name registry --restart unless-stopped -p 5050:5000 -v regdata:/var/lib/registry registry:2
+
+curl http://localhost:5050/v2/_catalog
+<span class="c"># {"repositories":[]}                        ← 空的，活着</span></code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  三个参数都是第 4 课的：<code>-p</code> 暴露端口、<code>-v</code> 把镜像数据放进 named volume（否则 <code>rm</code> 容器就没了）、<code>--restart</code> 让它随 Docker Desktop 自启，后面几课一直要用。
+  registry 容器里监听 5000，但<strong>宿主机侧用 5050</strong>：Windows 把 4904–5003 保留给了 Hyper-V（<code>netsh interface ipv4 show excludedportrange protocol=tcp</code> 可查），映射到 5000 会报 <code>bind: An attempt was made to access a socket in a way forbidden</code>。
+  镜像文档：<a href="https://hub.docker.com/_/registry">Docker Hub — registry</a>。
+</p>
+</li>
+
+<li>
+<p><strong>贴全名，推上去。</strong></p>
+<pre><code>docker tag hello-api:1.2 localhost:5050/hello-api:1.2
+
+docker images --format "{{.Repository}}:{{.Tag}}  {{.ID}}" | findstr hello-api
+<span class="c"># localhost:5050/hello-api:1.2  37da9bb747ca     ← 同一个 ID</span>
+<span class="c"># hello-api:1.2                 37da9bb747ca     ← tag 只是加了个名字</span>
+
+docker push localhost:5050/hello-api:1.2
+<span class="c"># 40bf7c125e4b: Pushed</span>
+<span class="c"># …</span>
+<span class="c"># 1.2: digest: sha256:37da9bb7… size: 856</span>
+
+curl http://localhost:5050/v2/_catalog
+<span class="c"># {"repositories":["hello-api"]}</span>
+curl http://localhost:5050/v2/hello-api/tags/list
+<span class="c"># {"name":"hello-api","tags":["1.2"]}</span></code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  名字里的 <code>localhost:5050</code> 就是"推到哪"——<code>docker push</code> 没有 <code>--registry</code> 参数，目的地全靠名字。
+  这个 registry 走 HTTP 不走 HTTPS，Docker 默认只对 <code>localhost</code> 放行明文；换成 IP 或域名就要在 Docker Desktop 设置里加 insecure-registries。
+</p>
+</li>
+
+<li>
+<p><strong>踩坑：<code>latest</code> 不会自动存在。</strong></p>
+<pre><code>docker pull localhost:5050/hello-api
+<span class="c"># Error response from daemon: … localhost:5050/hello-api:latest: not found</span>
+
+docker tag localhost:5050/hello-api:1.2 localhost:5050/hello-api:latest
+docker push localhost:5050/hello-api:latest
+<span class="c"># 40bf7c125e4b: Layer already exists         ← 8 层全部 already exists</span>
+<span class="c"># …</span>
+<span class="c"># latest: digest: sha256:37da9bb7… size: 856  ← 和 1.2 同一个 digest</span>
+
+curl http://localhost:5050/v2/hello-api/tags/list
+<span class="c"># {"name":"hello-api","tags":["1.2","latest"]}</span></code></pre>
+<div class="win">
+  <p>不写 tag 就是 <code>:latest</code>，而 <code>latest</code> 只是一个你得亲手推上去的普通名字。第二次 push 一个字节都没传——registry 按 digest 认出所有层都已经有了，只新建了一份 manifest。</p>
+</div>
+</li>
+
+<li>
+<p><strong>删掉本地副本，让 compose 从 registry 拉。</strong>这一步模拟"另一台机器 / K8s 节点"的视角。</p>
+<pre><code>docker rmi hello-api:1.2 localhost:5050/hello-api:1.2 localhost:5050/hello-api:latest
+docker images | findstr hello-api
+<span class="c"># 只剩 1.0 和 1.1</span></code></pre>
+<p>把 <code>compose.yaml</code> 里 api 的 <code>image:</code> 改成 registry 全名：</p>
+<pre><code>  api:
+    image: localhost:5050/hello-api:1.2</code></pre>
+<pre><code>docker compose pull api
+<span class="c"># Image localhost:5050/hello-api:1.2 Pulled</span>
+docker compose up -d
+curl http://localhost:8080
+<span class="c"># → Hello from .env!</span>
+docker compose ps --format "{{.Service}} {{.Image}} {{.Status}}"
+<span class="c"># api localhost:5050/hello-api:1.2 Up …</span>
+<span class="c"># db  postgres:17-alpine Up … (healthy)</span></code></pre>
+<div class="win">
+  <p>镜像完成了一次"离开本机再回来"的旅程。从现在起 <code>image:</code> 写的是一个<strong>任何机器都能解析的地址</strong>，而不是只有你本机认识的名字——K8s 的 Deployment 里 <code>image:</code> 也将是这一行。</p>
+</div>
+</li>
+
+<li>
+<p><strong>（可选）推到 Docker Hub。</strong>如果你有 Docker Hub 账号，流程完全一样，只是名字里的 registry 段换成你的用户名（省略 = docker.io）：</p>
+<pre><code>docker login
+docker tag localhost:5050/hello-api:1.2 &lt;你的用户名&gt;/hello-api:1.2
+docker push &lt;你的用户名&gt;/hello-api:1.2</code></pre>
+<p style="font-size:.92rem;color:var(--ink-soft)">
+  注意 Hub 上的仓库<strong>默认公开</strong>，含密码/密钥的镜像别推；匿名拉取有<a href="https://docs.docker.com/docker-hub/usage/">速率限制</a>。没账号可以跳过，后面的课都用本地 registry。
+  官方流程：<a href="https://docs.docker.com/get-started/docker-concepts/building-images/build-tag-and-publish-an-image/">Build, tag, and publish an image</a>。
+</p>
+</li>
+
+</ol>
+
+<h2>三、检索练习</h2>
+
+<div class="quiz" data-answer="B">
+  <p class="q">1. <code>docker tag hello-api:1.2 localhost:5050/hello-api:1.2</code> 之后，磁盘上多了什么？</p>
+  <button data-opt="A">一份完整的镜像副本，占用同样大小空间</button>
+  <button data-opt="B">什么都没多，只是同一镜像多了一个名字</button>
+  <button data-opt="C">一份只含差异层的增量镜像和新的元数据</button>
+  <button data-opt="D">一条上传记录，等待下次推送时再去执行</button>
+  <p class="why">两个名字指向同一个 image ID（第 3 步 <code>docker images</code> 可见）。tag 是指针，不是拷贝。</p>
+</div>
+
+<div class="quiz" data-answer="C">
+  <p class="q">2. YAML 里写 <code>image: postgres:17-alpine</code>，引擎实际去哪拉？</p>
+  <button data-opt="A">当前目录下同名的镜像文件或者构建上下文</button>
+  <button data-opt="B">本地缓存，没有就报错，不会去任何远端</button>
+  <button data-opt="C">Docker Hub 上 library 命名空间下的同名仓库</button>
+  <button data-opt="D">环境变量里配置的默认私有仓库服务器地址</button>
+  <p class="why">省略 registry → <code>docker.io</code>；省略 namespace → <code>library</code>。全名 <code>docker.io/library/postgres:17-alpine</code>。第一段含 <code>.</code> 或 <code>:</code> 才算 registry 地址。</p>
+</div>
+
+<div class="quiz" data-answer="D">
+  <p class="q">3. 推了 <code>x:1.2</code>，然后 <code>docker pull localhost:5050/x</code> 报 not found。为什么？</p>
+  <button data-opt="A">本地仓库不支持不带版本号的镜像拉取请求</button>
+  <button data-opt="B">推送尚未完成，清单还在后台写入没有生效</button>
+  <button data-opt="C">拉取必须写全名包括命名空间否则无法解析</button>
+  <button data-opt="D">不写标签就是找最新标签，而它从未被推过</button>
+  <p class="why"><code>latest</code> 是默认 tag 名，不是"最新版本"的别名。你没推它，registry 里就没有。</p>
+</div>
+
+<div class="quiz" data-answer="A">
+  <p class="q">4. 第二次 push 同一镜像的新 tag，输出全是 <code>Layer already exists</code>。registry 靠什么判断？</p>
+  <button data-opt="A">每层内容的哈希值，已有同哈希就跳过上传</button>
+  <button data-opt="B">层的创建时间戳，比仓库里的新才会上传</button>
+  <button data-opt="C">本地记录的上次推送日志，比对后再跳过</button>
+  <button data-opt="D">镜像标签名字，同名仓库下默认共享所有层</button>
+  <p class="why">内容寻址：push 前对每层 <code>HEAD /v2/&lt;repo&gt;/blobs/&lt;digest&gt;</code>。和 build 缓存看内容哈希是同一个思想。</p>
+</div>
+
+<div class="typein" data-answer="docker push localhost:5050/hello-api:1.2" data-hint="目的地在名字里，命令本身没有目的地参数。">
+  <p class="q">5. 镜像已经叫 <code>localhost:5050/hello-api:1.2</code>，写出把它推到本地 registry 的命令。</p>
+</div>
+
+<div class="quiz" data-answer="C">
+  <p class="q">6.（回顾第 5 课）<code>.env</code> 里写了 <code>FOO=bar</code>，<code>compose.yaml</code> 里没有任何 <code>${FOO}</code>。容器里有 <code>FOO</code> 吗？</p>
+  <button data-opt="A">有，同目录环境文件的内容会全部进入容器</button>
+  <button data-opt="B">有，但只在启动时可见，重建之后就会丢失</button>
+  <button data-opt="C">没有，环境文件只参与插值不直接进入容器</button>
+  <button data-opt="D">没有，因为环境文件必须显式用参数才被读取</button>
+  <p class="why"><code>.env</code> 自动被读，但只用来替换 YAML 里的 <code>${…}</code>。要整文件进容器用 <code>env_file:</code>。</p>
+</div>
+
+<div class="recall">
+  <p class="q">7. 不看课文，写出 <code>docker.io/library/postgres:17-alpine</code> 的四段各是什么，以及省略哪几段时会补什么默认值。</p>
+  <div class="a">
+    <p><code>docker.io</code> = registry（默认）；<code>library</code> = namespace（Hub 官方镜像默认）；<code>postgres</code> = repo；<code>17-alpine</code> = tag（省略默认 <code>latest</code>）。
+    只有第一段含 <code>.</code> 或 <code>:</code> 才被当成 registry 地址，否则整个都算 Hub 上的路径。速查见<a href="../reference/image-naming.html">镜像命名与 registry</a>。</p>
+  </div>
+</div>
+
+<h2 id="next">四、下一步</h2>
+
+<p><strong>本课的一手资料</strong>：</p>
+<blockquote>
+  <a href="https://docs.docker.com/get-started/docker-concepts/building-images/build-tag-and-publish-an-image/">Docker Docs — Build, tag, and publish an image</a>（约 6 分钟）<br>
+  tag 的语义、为什么 <code>latest</code> 不可靠、push 到 Hub 的完整流程。<br>
+  想看 registry 的底层：<a href="https://distribution.github.io/distribution/spec/api/">Registry HTTP API V2</a>，只读 "Overview" 和 "Pulling an Image" 两节。
+</blockquote>
+
+<p>新增速查：<a href="../reference/image-naming.html">镜像命名与 registry</a> —— 四段名字与默认值、tag vs digest、tag/push/pull 命令、registry API 探测、Windows 保留端口。</p>
+
+<p>清理：<strong>registry 容器和 <code>regdata</code> 卷留着</strong>，第 7 课 K8s 要从它拉镜像。<code>compose.yaml</code> 也保持指向 <code>localhost:5050/…</code>。</p>
+<pre><code>docker compose down
+docker ps          <span class="c"># 应只剩 registry</span>
+cd ..\..</code></pre>
+
+<p><strong>第 7 课预告：</strong>两条主线汇合——打开 Docker Desktop 自带的 Kubernetes，写第一个 Deployment + Service 的 YAML，
+把 <code>localhost:5050/hello-api:1.2</code> 跑在集群里。你会发现 <code>kubectl apply</code> 和 <code>compose up</code> 是同一个模型：声明期望状态，比对，收敛。</p>
+
+<div class="ask">
+  <strong>随时问我。</strong>本课所有命令已在本机实测（Windows 11 + Docker Desktop），输出注释都是真实结果。
+  push 卡在 <code>Waiting</code> 或报 <code>i/o timeout</code> 多半是 registry 没起来——先 <code>docker ps</code> 看它在不在、端口对不对。
+</div>
+
+<div class="footer">
+  <p>课程：Docker &amp; Kubernetes · 第 6 课 ｜
+  上一课：<a href="0005-compose-app-plus-database.html">一个文件，拉起应用 + 数据库</a> ｜
+  <a href="../reference/GLOSSARY.html">术语表</a> ·
+  <a href="../reference/image-naming.html">镜像命名与 registry</a> ·
+  <a href="../reference/compose-cheatsheet.html">Compose 速查</a></p>
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

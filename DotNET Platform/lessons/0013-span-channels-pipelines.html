@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 13 课：BCL 现代化（下）——Channels、PeriodicTimer、Span I/O 与 Pipelines — .NET 平台基础</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>第 13 课：BCL 现代化（下）——Channels、PeriodicTimer、Span I/O 与 Pipelines</h1>
+<div class="lesson-meta">
+  模块：BCL 现代化（2/2）&nbsp;|&nbsp; 系列最后一课 &nbsp;|&nbsp; 预计阅读/练习时间：35 分钟
+</div>
+
+<p>
+  第 10 课留了一个问题："多个 <code>BackgroundService</code> 之间怎么传数据？" Framework 4.8 时代的答案是
+  <code>BlockingCollection&lt;T&gt;</code> + 一根专用线程，或者 <code>ConcurrentQueue</code> + <code>Timer</code> 轮询。
+  现代 .NET 的答案是 <code>System.Threading.Channels</code>——本课主角。
+  顺带讲三个同一阵营的东西：<code>PeriodicTimer</code>（替代 <code>Task.Delay</code> 循环和 <code>System.Threading.Timer</code>）、
+  <code>Span</code>/<code>Memory</code> 在 I/O API 里的实际用法（第 3 课讲了类型本身，这次讲怎么用），以及
+  <code>System.IO.Pipelines</code> 的定位——知道它是什么、什么时候<strong>不该</strong>用。
+</p>
+
+<div class="summary">
+  <ul>
+    <li>会用 <code>Channel&lt;T&gt;</code> 连接生产者和消费者 <code>BackgroundService</code>，理解 <strong>Bounded vs Unbounded</strong> 和背压</li>
+    <li>知道 Channel 关闭的正确姿势：<code>Writer.Complete()</code> → <code>ReadAllAsync</code> 自然退出，配合第 10 课的 LIFO 关闭顺序</li>
+    <li>会用 <code>PeriodicTimer</code> 写不重叠、可取消的定时循环</li>
+    <li>知道 <code>Stream</code>、<code>Encoding</code>、数字解析等 BCL API 的 <code>Span</code>/<code>Memory</code> 重载，以及 <code>ArrayPool</code> 租用的 <code>try/finally</code> 模式</li>
+    <li>知道 <code>Pipelines</code> 解决什么问题（帧边界 + 缓冲区管理），以及 90% 的应用代码不需要它</li>
+    <li>本系列结束：拿到"Framework 4.8 → 现代 .NET"的完整替代地图</li>
+  </ul>
+</div>
+
+<h2>第一部分：System.Threading.Channels</h2>
+
+<h3>它解决的问题</h3>
+
+<p>
+  一个"数据生产者"和一个"数据消费者"跑在不同的异步循环里，中间需要一条<strong>异步、线程安全、有容量控制</strong>的队列。
+  Framework 4.8 的工具箱里没有满足这三个条件的东西：
+</p>
+
+<table class="tbl">
+  <tr><th>Framework 4.8</th><th>问题</th></tr>
+  <tr><td><code>BlockingCollection&lt;T&gt;</code></td><td><code>Take()</code> <strong>阻塞线程</strong>——消费者必须独占一根线程，无法 <code>await</code></td></tr>
+  <tr><td><code>ConcurrentQueue&lt;T&gt;</code> + 轮询</td><td>没有"等有数据"的原语，要么 <code>Thread.Sleep</code> 轮询，要么自己拿 <code>SemaphoreSlim</code> 拼</td></tr>
+  <tr><td><code>BufferBlock&lt;T&gt;</code>（TPL Dataflow）</td><td>能用，但是重量级流水线框架的一部分，单独用一个队列杀鸡用牛刀</td></tr>
+</table>
+
+<p>
+  <code>Channel&lt;T&gt;</code>（<code>System.Threading.Channels</code>，.NET Core 3.0+ 内置，Framework 4.8 可装同名 NuGet）就是那个"只做队列、全异步"的原语。
+  Stephen Toub 在
+  <a href="https://devblogs.microsoft.com/dotnet/an-introduction-to-system-threading-channels/">An Introduction to System.Threading.Channels</a>
+  里用 20 行代码从零实现了一个，值得读——它本质就是 <code>ConcurrentQueue</code> + 一个可 await 的信号。
+</p>
+
+<div class="diagram"><pre>生产者 BackgroundService                Channel&lt;Job&gt;                    消费者 BackgroundService
+────────────────────────         ──────────────────────────         ───────────────────────────
+await writer.WriteAsync(job) ──→  [ job | job | job | ... ]  ──→  await foreach (var job in
+                                   ↑容量满时 WriteAsync 挂起            reader.ReadAllAsync(ct))
+writer.Complete()            ──→  标记"不再有数据"           ──→  ReadAllAsync 排空后循环自然结束</pre></div>
+
+<h3>三行 API</h3>
+
+<pre><code>// 创建：两种
+var unbounded = Channel.CreateUnbounded&lt;Job&gt;();               // 无上限——生产快于消费时内存无限涨
+var bounded   = Channel.CreateBounded&lt;Job&gt;(new BoundedChannelOptions(capacity: 100)
+{
+    FullMode     = BoundedChannelFullMode.Wait,               // 满了：Wait（背压，默认）/ DropOldest / DropNewest / DropWrite
+    SingleReader = true,                                      // 承诺只有一个消费者 → 内部走无锁快路径
+    SingleWriter = false,
+});
+
+// 写：Writer 一端
+await channel.Writer.WriteAsync(job, ct);                     // 满了就异步等（Wait 模式）
+bool ok = channel.Writer.TryWrite(job);                       // 不等，满了返回 false
+channel.Writer.Complete();                                    // 宣告结束；之后 Write 抛 ChannelClosedException
+channel.Writer.TryComplete(exception);                        // 带错误结束，消费者的 ReadAllAsync 会抛出它
+
+// 读：Reader 一端
+await foreach (var job in channel.Reader.ReadAllAsync(ct))    // 推荐：排空 + Complete 后自动退出
+    await Handle(job);
+
+while (await channel.Reader.WaitToReadAsync(ct))              // 手动版：等到有数据或已 Complete
+    while (channel.Reader.TryRead(out var job)) { ... }       //   然后同步 drain，减少 await 次数
+</code></pre>
+
+<div class="callout callout--warn">
+⚠️ <strong>默认用 Bounded。</strong> Unbounded 的意思是"生产者永远不会被拦"，代价是消费者跟不上时队列吃光内存——生产环境里这是一次事故，不是一个选项。
+Bounded + <code>Wait</code> 就是<strong>背压</strong>：消费者慢下来，生产者自动慢下来。只有确定生产量有天然上限（比如每秒一条心跳）才用 Unbounded。
+官方文档 <a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/channels">Channels</a> 的选项表把四种 <code>FullMode</code> 讲得很清楚。
+</div>
+
+<h3>接进 Host：一个 Channel 连两个 BackgroundService</h3>
+
+<pre><code>// Program.cs —— Channel 本身是 Singleton；把两端拆开注册，让服务只依赖自己需要的那一端
+var channel = Channel.CreateBounded&lt;Job&gt;(new BoundedChannelOptions(100) { SingleReader = true });
+builder.Services.AddSingleton(channel.Reader);
+builder.Services.AddSingleton(channel.Writer);
+
+builder.Services.AddHostedService&lt;JobConsumer&gt;();     // 先注册 → 后关闭（第 10 课 LIFO）
+builder.Services.AddHostedService&lt;JobProducer&gt;();     // 后注册 → 先关闭，关闭时 Complete()
+
+// 生产者：只看得到 Writer
+public sealed class JobProducer(ChannelWriter&lt;Job&gt; writer) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+            while (await timer.WaitForNextTickAsync(stoppingToken))
+                await writer.WriteAsync(new Job(DateTime.UtcNow), stoppingToken);
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            writer.Complete();                             // 关键：告诉消费者"没有了"
+        }
+    }
+}
+
+// 消费者：只看得到 Reader
+public sealed class JobConsumer(ChannelReader&lt;Job&gt; reader, ILogger&lt;JobConsumer&gt; log) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        // 注意：这里故意【不传】stoppingToken——让它把队列里剩下的 job 处理完再退出，
+        // 退出条件是生产者 Complete()。如果你希望关闭时立刻丢弃余量，就传进去。
+        await foreach (var job in reader.ReadAllAsync())
+            log.LogInformation("Handled {JobAt}", job.CreatedAt);
+    }
+}
+</code></pre>
+
+<p>
+  注意关闭顺序怎么和第 10 课接上：Host 按注册倒序关闭 → 先停 <code>JobProducer</code>（它的 <code>finally</code> 调 <code>Complete()</code>）→
+  再停 <code>JobConsumer</code>，此时 <code>ReadAllAsync</code> 已经在排空最后几条，排完自动退出。整个过程不丢数据，也不需要任何锁。
+  如果反过来注册，消费者先被取消，队列里的东西就丢了。这是 <code>HostOptions.ShutdownTimeout</code>（默认 30 秒）要覆盖的时间。
+</p>
+
+<div class="callout callout--info">
+💡 <strong>这就是 ASP.NET Core 里"后台队列"的标准做法。</strong> 官方文档
+<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/host/hosted-services#queued-background-tasks">Queued background tasks</a>
+的 <code>IBackgroundTaskQueue</code> 内部就是一个 <code>Channel&lt;Func&lt;CancellationToken, ValueTask&gt;&gt;</code>：
+Controller 往 Writer 塞工作，一个 <code>BackgroundService</code> 从 Reader 消费。你已经能自己写出来了。
+</div>
+
+<h2>第二部分：PeriodicTimer</h2>
+
+<p>
+  上面生产者里已经用了。它是 .NET 6 加的，专门解决 <code>BackgroundService</code> 里"每 N 秒做一件事"的三个老写法各自的毛病
+  （<a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.periodictimer">API 文档</a>）：
+</p>
+
+<table class="tbl">
+  <tr><th>老写法</th><th>毛病</th></tr>
+  <tr><td><code>while (true) { DoWork(); await Task.Delay(1000, ct); }</code></td><td>周期 = 1 秒 + <code>DoWork</code> 耗时，会漂移；每次 <code>Delay</code> 分配一个 Timer 对象</td></tr>
+  <tr><td><code>new System.Threading.Timer(callback, ...)</code></td><td>回调是同步 <code>void</code>，async 得写 <code>async void</code>；<strong>回调可能重叠</strong>——上一次没跑完下一次就来了</td></tr>
+  <tr><td><code>System.Timers.Timer</code></td><td>Framework 时代 WinForms 味的 API，<code>Elapsed</code> 事件同样重叠、异常被吞</td></tr>
+</table>
+
+<pre><code>using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+while (await timer.WaitForNextTickAsync(stoppingToken))    // 取消时抛 OperationCanceledException；Dispose 后返回 false
+{
+    await DoWorkAsync(stoppingToken);                       // 跑多久都行：下一次 tick 要等这次 await 回到循环头才会被观察到
+}                                                           // → 天然不重叠；如果 DoWork 超过周期，中间错过的 tick 只算一次
+// .NET 8+：timer.Period = TimeSpan.FromSeconds(10);        // 运行中可改周期（比如从 IOptionsMonitor 热重载）
+</code></pre>
+
+<p>
+  规则：<strong>一个 <code>PeriodicTimer</code> 只能有一个等待者</strong>（同时两个 <code>WaitForNextTickAsync</code> 会抛）。它是为"一个循环一个 timer"设计的，不是事件广播器。
+</p>
+
+<h2>第三部分：Span / Memory 在 I/O 里的实际用法</h2>
+
+<p>
+  第 3 课和 <a href="../reference/span-memory-patterns.html">Span 速查</a> 讲了类型本身。这里回答"BCL 里哪些 API 已经吃 Span 了、我该怎么喂"。
+  记一条原则就够：<strong>凡是 Framework 时代接 <code>byte[]</code> + <code>offset</code> + <code>count</code> 三个参数的 API，现代 .NET 都有一个接 <code>Span&lt;byte&gt;</code> / <code>Memory&lt;byte&gt;</code> 的重载；
+  同步用 Span，异步用 Memory</strong>（Span 是 ref struct，不能跨 <code>await</code>）。
+</p>
+
+<pre><code>// 1. Stream：同步 Span，异步 Memory —— 配 ArrayPool 是标准搭配
+byte[] buffer = ArrayPool&lt;byte&gt;.Shared.Rent(4096);          // 拿到的数组 ≥ 4096，可能更大，内容是脏的
+try
+{
+    int n;
+    while ((n = await stream.ReadAsync(buffer.AsMemory(), ct)) &gt; 0)   // Memory 重载，.NET Core 2.1+
+        Process(buffer.AsSpan(0, n));                                    // 只看实际读到的那段
+}
+finally
+{
+    ArrayPool&lt;byte&gt;.Shared.Return(buffer);                   // 必须归还；别在归还后继续用
+}
+
+// 2. 文本编码：Encoding 直接写进 Span，不再 GetBytes() 分配新数组
+Span&lt;byte&gt; utf8 = stackalloc byte[256];                    // 小缓冲区栈上分配，零 GC
+int written = Encoding.UTF8.GetBytes(text.AsSpan(), utf8);
+await stream.WriteAsync(utf8.Slice(0, written).ToArray(), ct);  // ⚠️ 异步边界要么 ToArray，要么一开始就用 ArrayPool + Memory
+
+// 3. 解析：字符串切片不再产生子串
+ReadOnlySpan&lt;char&gt; line = "id=42;name=foo";
+int eq = line.IndexOf('=');
+int semi = line.IndexOf(';');
+int id = int.Parse(line.Slice(eq + 1, semi - eq - 1));      // int.Parse(ReadOnlySpan&lt;char&gt;)，无 Substring
+// .NET 8+：直接从 UTF-8 字节解析——int.Parse(ReadOnlySpan&lt;byte&gt;)（IUtf8SpanParsable），跳过解码
+
+// 4. 构造字符串：string.Create 一次分配、直接写目标内存
+string hex = string.Create(bytes.Length * 2, bytes, static (span, src) =&gt;
+{
+    for (int i = 0; i &lt; src.Length; i++)
+        src[i].TryFormat(span.Slice(i * 2, 2), out _, "x2");
+});
+</code></pre>
+
+<p>
+  这些不是"高性能专家专属"——<code>System.Text.Json</code>、<code>ILogger</code> 源生成、Kestrel、<code>HttpClient</code> 内部全是这套写法，
+  你写应用代码时主要在<strong>热路径</strong>（每请求都跑、大文件、高频循环）上用。冷路径上 <code>Substring</code> 和 <code>ToArray()</code> 完全没问题，别为了 Span 而 Span
+  （<a href="https://learn.microsoft.com/en-us/dotnet/standard/memory-and-spans/memory-t-usage-guidelines">官方使用指南</a>）。
+</p>
+
+<h2>第四部分：System.IO.Pipelines——知道它在哪，别急着用</h2>
+
+<p>
+  上面第 1 段代码有一个隐藏问题：<code>Process(buffer.AsSpan(0, n))</code> 假设一次 <code>ReadAsync</code> 恰好读到一个完整的"消息"。
+  在 TCP 上这从不成立——一条消息可能分两次到，两条消息可能一次到。
+  正确处理需要：跨读取保留半条消息、缓冲区满了扩容、消费完把剩余部分挪到开头……
+  David Fowler 在 <a href="https://learn.microsoft.com/en-us/dotnet/standard/io/pipelines">System.IO.Pipelines 文档</a> 开头写了 40 行"正确的 <code>ReadLine</code>"来说明这有多难写对。
+</p>
+
+<p>
+  <code>Pipelines</code> 就是把这 40 行抽成基础设施：<code>PipeReader</code> 给你一个 <code>ReadOnlySequence&lt;byte&gt;</code>（可能跨多个内存块），你告诉它消费到哪、检查到哪，缓冲区管理、内存池、背压它全包。
+</p>
+
+<pre><code>// 读取 stream 里以 \n 分隔的行——用 Pipelines
+var reader = PipeReader.Create(stream);
+while (true)
+{
+    ReadResult result = await reader.ReadAsync(ct);
+    ReadOnlySequence&lt;byte&gt; buffer = result.Buffer;
+
+    while (TryReadLine(ref buffer, out ReadOnlySequence&lt;byte&gt; line))   // 找 \n，切出一行，推进 buffer
+        ProcessLine(line);
+
+    reader.AdvanceTo(buffer.Start, buffer.End);   // consumed：到这为止的可以丢；examined：到这为止的我看过了，没新数据别叫我
+    if (result.IsCompleted) break;
+}
+await reader.CompleteAsync();
+</code></pre>
+
+<div class="diagram"><pre>什么时候该用哪个？
+
+  拿 byte[] / Span 手工读 ──→ 消息边界固定（定长帧、整个文件一次读完、HTTP 已经帮你切好）
+  Pipelines               ──→ 自己在 socket / 长流上解析协议（Redis、MQTT、自定义 TCP 协议、大文件流式解析）
+  两者都不用             ──→ 你在写普通业务代码。HttpClient、Kestrel、SignalR、gRPC 内部已经用了 Pipelines，你享受结果就行</pre></div>
+
+<p>
+  在本系列的定位里，<code>Pipelines</code> 是"知道它存在、知道 Kestrel 为什么快"的层次。真要用到时再回来看
+  <a href="https://learn.microsoft.com/en-us/shows/on-dotnet/high-performance-io-with-systemiopipelines">David Fowler 的视频</a>。
+</p>
+
+<h2>本课的 Framework → 现代 .NET 替代</h2>
+
+<table class="tbl">
+  <tr><th>Framework 4.8</th><th>现代 .NET</th><th>什么时候</th></tr>
+  <tr><td><code>BlockingCollection&lt;T&gt;</code> / <code>ConcurrentQueue</code> + 轮询</td><td><code>Channel&lt;T&gt;</code>（Bounded 优先）</td><td>异步生产者/消费者、后台任务队列</td></tr>
+  <tr><td><code>Thread</code> + <code>while(true)</code></td><td><code>BackgroundService</code> + <code>Channel</code></td><td>第 10 课 + 本课</td></tr>
+  <tr><td><code>System.Threading.Timer</code> / <code>System.Timers.Timer</code> / <code>Task.Delay</code> 循环</td><td><code>PeriodicTimer</code></td><td><code>BackgroundService</code> 里的周期任务</td></tr>
+  <tr><td><code>Stream.Read(byte[], int, int)</code></td><td><code>Read(Span&lt;byte&gt;)</code> / <code>ReadAsync(Memory&lt;byte&gt;)</code></td><td>热路径 I/O</td></tr>
+  <tr><td><code>new byte[n]</code> 临时缓冲</td><td><code>ArrayPool&lt;byte&gt;.Shared.Rent</code> + <code>try/finally Return</code></td><td>高频、大块（&gt;85KB 会进 LOH，第 3 课）</td></tr>
+  <tr><td><code>Substring</code> / <code>Split</code> 链</td><td><code>AsSpan().Slice()</code> + <code>int.Parse(ReadOnlySpan)</code></td><td>热路径解析</td></tr>
+  <tr><td>手写 socket 帧解析</td><td><code>System.IO.Pipelines</code></td><td>自定义协议</td></tr>
+</table>
+
+<h2>动手：把第 10 课的两个 BackgroundService 用 Channel 连起来</h2>
+
+<div class="steps">
+  <div class="step"><p>在 <code>MinimalHost</code> 里按上面的代码加 <code>JobProducer</code> / <code>JobConsumer</code>，Channel 容量设 <strong>3</strong>，生产周期 1 秒，消费者里 <code>await Task.Delay(3000)</code> 模拟慢处理。观察日志：生产者会被背压卡住（<code>WriteAsync</code> 挂起），不会无限堆积。</p></div>
+  <div class="step"><p>把 <code>FullMode</code> 改成 <code>DropOldest</code>，再观察——生产者不再卡，但会丢数据。想清楚你的业务是"宁可慢"还是"宁可丢"。</p></div>
+  <div class="step"><p>Ctrl+C 关闭。确认消费者把队列里剩余的 job 处理完才退出，进程干净结束。然后<strong>把两个 <code>AddHostedService</code> 的顺序对调</strong>，再 Ctrl+C，看会发生什么（消费者先被取消 → 生产者 <code>Complete()</code> 后没人读 → 数据留在队列里被丢弃）。</p></div>
+  <div class="step"><p>把生产周期改成从 <code>IOptionsMonitor&lt;ProducerOptions&gt;</code> 读，用 <code>OnChange</code> 回调设置 <code>timer.Period</code>（.NET 8+），改 appsettings.json 验证热重载——第 8 课的东西在这里闭环。</p></div>
+</div>
+
+<h2>检查理解</h2>
+
+<div class="callout callout--info" style="margin-bottom:1rem">
+🎯 上一课的教训：这四题考的是<strong>机制</strong>，不是"现代 .NET 大概会怎么做"。答之前回想课文里对应的那段代码或那句话。
+</div>
+
+<div class="quiz" id="quiz1"
+     data-feedback-correct="✅ 正确！Bounded + Wait 模式下，队列满时 WriteAsync 异步挂起，生产者被迫等消费者腾出位置——这就是背压。Unbounded 永远不拦生产者，消费者跟不上时内存无限增长。"
+     data-feedback-wrong="❌ 不对。Channel.CreateBounded(capacity) 默认 FullMode = Wait：队列满时 WriteAsync 返回一个未完成的 ValueTask，生产者异步等待（不阻塞线程、不抛异常、不丢数据），直到消费者读走一条。这就是背压。Unbounded 没有这个机制，是内存风险。">
+  <div class="quiz__q">❓ <code>Channel.CreateBounded&lt;T&gt;(100)</code> 用默认选项，队列满了之后生产者再调 <code>WriteAsync</code> 会怎样？</div>
+  <div class="quiz__opt" data-answer="wrong">抛出 ChannelClosedException，生产者必须先检查 Count 再写入才安全</div>
+  <div class="quiz__opt" data-answer="correct">返回未完成的 ValueTask，生产者异步等待直到消费者读走一条为止</div>
+  <div class="quiz__opt" data-answer="wrong">静默丢弃队列里最旧的一条，然后把新的写入，返回已完成的任务</div>
+  <div class="quiz__opt" data-answer="wrong">阻塞当前线程直到有空位，和 BlockingCollection 的 Add 行为完全一样</div>
+  <div class="quiz__feedback" id="quiz1-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz2" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！Host 按注册倒序关闭。消费者先注册 → 最后关闭；生产者后注册 → 先关闭并在 finally 里 Complete()；消费者的 ReadAllAsync 排空余量后自然退出，不丢数据。"
+     data-feedback-wrong="❌ 不对。回忆第 10 课：IHostedService 按注册顺序启动、倒序（LIFO）关闭。要让生产者先停、消费者排空后再停，消费者必须【先】注册。反过来注册，消费者会先被取消，生产者 Complete() 之后队列里的余量没人读，直接丢失。">
+  <div class="quiz__q">❓ 生产者关闭时调 <code>writer.Complete()</code>，想让消费者把队列排空再退出。两个 <code>AddHostedService</code> 应该怎么排？</div>
+  <div class="quiz__opt" data-answer="wrong">先注册生产者再注册消费者，因为启动顺序决定谁先拿到 Channel 引用</div>
+  <div class="quiz__opt" data-answer="correct">先注册消费者再注册生产者，因为关闭是倒序，生产者要先停下来</div>
+  <div class="quiz__opt" data-answer="wrong">顺序无关，Host 会等所有 BackgroundService 的 ExecuteAsync 都结束再退出</div>
+  <div class="quiz__opt" data-answer="wrong">顺序无关，Complete 之后 Channel 会自动把余量投递给消费者再关闭</div>
+  <div class="quiz__feedback" id="quiz2-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz3" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！WaitForNextTickAsync 只有在循环体 await 完回到循环头时才会被观察到，所以两次执行永远不会重叠；DoWork 超时后错过的 tick 只算一次。这正是它相对 System.Threading.Timer 回调的核心改进。"
+     data-feedback-wrong="❌ 不对。PeriodicTimer 的模型是「一个循环、一个等待者」：只有当你 await WaitForNextTickAsync 时它才交付 tick。DoWork 跑了 12 秒期间产生的两个 tick 会被合并成一个——下一次 await 立即返回 true，之后恢复 5 秒周期。它不会并发启动第二次 DoWork（那是 Timer 回调的问题），也不会抛异常或排队补跑。">
+  <div class="quiz__q">❓ <code>PeriodicTimer(5s)</code> 循环里 <code>DoWorkAsync</code> 某次跑了 12 秒，这期间会发生什么？</div>
+  <div class="quiz__opt" data-answer="wrong">第 5 秒和第 10 秒各再并发启动一次 DoWorkAsync，三次执行同时进行</div>
+  <div class="quiz__opt" data-answer="wrong">错过的两个 tick 会排队，DoWorkAsync 结束后立刻连续补跑两次</div>
+  <div class="quiz__opt" data-answer="correct">不会重叠执行；错过的 tick 合并成一个，结束后下一次等待立即返回</div>
+  <div class="quiz__opt" data-answer="wrong">WaitForNextTickAsync 检测到超过周期，返回 false 并结束这个循环</div>
+  <div class="quiz__feedback" id="quiz3-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz4" style="margin-top:1rem"
+     data-feedback-correct="✅ 正确！Span 是 ref struct，只能活在栈上，不能跨 await 存活——所以异步 API 一律用 Memory。Stream.ReadAsync(Memory) 和 Read(Span) 是同一条原则的两面。"
+     data-feedback-wrong="❌ 不对。规则是：同步用 Span，异步用 Memory。Span 是 ref struct，编译器禁止它跨 await（async 方法的局部变量会被提升到堆上的状态机里）。Stream 同时提供 Read(Span) 和 ReadAsync(Memory) 两个重载，不是谁性能好谁替代谁的关系。">
+  <div class="quiz__q">❓ 为什么 <code>Stream.ReadAsync</code> 的现代重载接 <code>Memory&lt;byte&gt;</code>，而同步的 <code>Read</code> 接 <code>Span&lt;byte&gt;</code>？</div>
+  <div class="quiz__opt" data-answer="wrong">Memory 在异步场景下性能更好，因为它内部做了缓存避免重复分配</div>
+  <div class="quiz__opt" data-answer="correct">Span 是 ref struct 不能跨 await 存活，异步方法只能接受 Memory</div>
+  <div class="quiz__opt" data-answer="wrong">历史原因：ReadAsync 先出现时还没有 Span，后来为了兼容没有改</div>
+  <div class="quiz__opt" data-answer="wrong">两者可以互换，Memory 只是为了让调用方能传 ArrayPool 租来的数组</div>
+  <div class="quiz__feedback" id="quiz4-feedback"></div>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+<h2>关键术语</h2>
+
+<dl>
+  <dt><strong>Channel&lt;T&gt;</strong></dt>
+  <dd><code>System.Threading.Channels</code> 的异步生产者/消费者队列。<code>Writer</code> / <code>Reader</code> 两端可拆开注册到 DI。<code>Complete()</code> 宣告结束，<code>ReadAllAsync</code> 排空后自然退出。</dd>
+  <dt><strong>Bounded / Unbounded / FullMode</strong></dt>
+  <dd>有容量上限 vs 无上限。Bounded 满时的策略：<code>Wait</code>（背压，默认）/ <code>DropOldest</code> / <code>DropNewest</code> / <code>DropWrite</code>。默认选 Bounded。</dd>
+  <dt><strong>背压（Backpressure）</strong></dt>
+  <dd>消费者慢时让生产者自动慢下来的机制。Bounded Channel 的 <code>Wait</code> 模式、Pipelines 的 <code>PauseWriterThreshold</code> 都是它。</dd>
+  <dt><strong>PeriodicTimer</strong></dt>
+  <dd>.NET 6+ 异步周期定时器。<code>await WaitForNextTickAsync(ct)</code> 驱动循环；不重叠、错过的 tick 合并、单等待者；.NET 8+ 可运行时改 <code>Period</code>。</dd>
+  <dt><strong>ArrayPool&lt;T&gt;.Shared</strong></dt>
+  <dd>共享数组池。<code>Rent(n)</code> 返回 ≥ n 的脏数组，<code>Return</code> 必须在 <code>finally</code> 里；归还后不得再用。避免 LOH 分配和 Gen0 压力。</dd>
+  <dt><strong>Span / Memory 重载</strong></dt>
+  <dd>BCL 中 <code>(byte[], offset, count)</code> 三参数 API 的现代对应。同步 <code>Span</code>，异步 <code>Memory</code>——Span 是 ref struct 不能跨 <code>await</code>。</dd>
+  <dt><strong>System.IO.Pipelines</strong></dt>
+  <dd><code>PipeReader</code> / <code>PipeWriter</code>。解决"流上的消息边界 + 缓冲区管理"问题；<code>ReadResult.Buffer</code> 是 <code>ReadOnlySequence&lt;byte&gt;</code>，<code>AdvanceTo(consumed, examined)</code> 推进。Kestrel/SignalR 内部使用；应用代码只在自写协议解析时用。</dd>
+  <dt><strong>ReadOnlySequence&lt;byte&gt;</strong></dt>
+  <dd>可能跨多个不连续内存块的只读字节序列。Pipelines 的缓冲区表示；用 <code>SequenceReader&lt;byte&gt;</code> 或 <code>PositionOf</code> 在其中查找分隔符。</dd>
+</dl>
+
+<h2>推荐阅读</h2>
+
+<p>📖 <strong>主文档：</strong><a href="https://devblogs.microsoft.com/dotnet/an-introduction-to-system-threading-channels/">An Introduction to System.Threading.Channels</a>（Stephen Toub）— 从 20 行自制 Channel 讲到完整 API 设计，读完你不会再把它当黑盒</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/channels">Channels (.NET)</a> — 官方文档，Bounded 选项表 + 生产者/消费者示例</p>
+
+<p>🎥 <a href="https://learn.microsoft.com/en-us/shows/on-dotnet/working-with-channels-in-net">Working with Channels in .NET</a>（Stephen Toub）— 视频版</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.periodictimer">PeriodicTimer</a> — API 文档，注意 Remarks 里的单等待者和 tick 合并语义</p>
+
+<p>📖 <a href="https://learn.microsoft.com/en-us/dotnet/standard/io/pipelines">System.IO.Pipelines</a> — 开头那 40 行"正确的 ReadLine"就是它存在的理由</p>
+
+<p>📖 <strong>本课速查：</strong><a href="../reference/channels-timer-io-quick-reference.html">Channels / PeriodicTimer / Span I/O 速查</a> &nbsp;|&nbsp; 复习：<a href="../reference/span-memory-patterns.html">Span / Memory 速查</a></p>
+
+<h2>系列结束：你现在有什么</h2>
+
+<p>
+  回头看 <code>MISSION.md</code> 的七条"Success looks like"：运行时架构（2–3 课）、DI（4–6 课）、配置 + Options（7–8 课）、Generic Host（9–10 课）、
+  结构化日志（11 课）、Framework API 替代清单（12–13 课）、以及贯穿始终的 <code>MinimalHost</code>——一个拥有和 ASP.NET Core 完全相同基础设施的控制台应用。
+  全部覆盖。
+</p>
+
+<p>
+  接下来进入 <strong>ASP.NET Core 系列</strong>。你会发现 <code>WebApplication.CreateBuilder</code> 就是 <code>Host.CreateApplicationBuilder</code> + Kestrel + 中间件；
+  <code>IHttpClientFactory</code> 的 <code>DelegatingHandler</code> 和入站中间件是镜像；Minimal API 的 JSON 绑定就是 <code>JsonSerializerDefaults.Web</code>；
+  后台队列就是本课的 Channel。平台基础扎实了，那个系列会走得很快。
+</p>
+
+<div class="callout callout--info">
+💬 <strong>有问题？</strong> 直接问我！比如 "Channel 和 TPL Dataflow 什么时候选后者？"
+或 "多个消费者并行消费一个 Channel 怎么写、顺序保证吗？"
+或 "<code>SequenceReader&lt;byte&gt;</code> 怎么用来解析一行？"
+</div>
+
+<div class="lesson-nav">
+  <a href="0012-httpclientfactory-system-text-json.html">← 上一课：IHttpClientFactory 与 System.Text.Json</a>
+  <a href="../MISSION.md">系列结束 · 回到任务书 →</a>
+</div>
+
+</body>
+</html>

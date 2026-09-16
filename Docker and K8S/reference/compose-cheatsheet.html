@@ -18,7 +18,7 @@
   <tr><th><code>docker run</code></th><th><code>compose.yaml</code>（在某个 service 下）</th><th>备注</th></tr>
   <tr><td><code>--name x</code></td><td>服务键名 <code>x:</code></td><td>实际容器名 <code>项目名-x-1</code>；服务名即 DNS 名</td></tr>
   <tr><td><code>镜像名</code></td><td><code>image: nginx:alpine</code></td><td>要现场构建：<code>build: .</code>（可与 <code>image:</code> 同时写，用作 tag）</td></tr>
-  <tr><td><code>-p 80:8080</code></td><td><code>ports:</code><br><code>&nbsp;&nbsp;- "80:8080"</code></td><td><strong>加引号</strong>，YAML 会把 <code>a:b</code> 数字对当六十进制</td></tr>
+  <tr><td><code>-p 80:8080</code></td><td><code>ports:</code><br><code>&nbsp;&nbsp;- "80:8080"</code></td><td><strong>加引号</strong>，避免 YAML 1.1 解析器把 <code>a:b</code> 数字对当六十进制（见 <a href="yaml-basics.html">YAML 基础</a>）</td></tr>
   <tr><td><code>-e K=V</code></td><td><code>environment:</code><br><code>&nbsp;&nbsp;K: V</code>&nbsp;&nbsp;或&nbsp;&nbsp;<code>- K=V</code></td><td>值含 <code>:</code>、<code>#</code>、<code>*</code> 等符号时加引号。布尔要写 <code>"true"</code></td></tr>
   <tr><td><code>--env-file app.env</code></td><td><code>env_file: app.env</code></td><td>整文件喂进容器。<code>environment:</code> 里的同名键优先</td></tr>
   <tr><td><code>-v pgdata:/data</code></td><td><code>volumes:</code><br><code>&nbsp;&nbsp;- type: volume</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;source: pgdata</code><br><code>&nbsp;&nbsp;&nbsp;&nbsp;target: /data</code></td><td>再在<strong>顶层</strong> <code>volumes:</code> 写 <code>pgdata:</code>。短格式 <code>- pgdata:/data</code> 也行，长格式意图更清楚</td></tr>

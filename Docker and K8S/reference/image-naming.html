@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查：镜像命名与 registry</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<header class="masthead">
+  <p class="eyebrow">Reference · Image naming &amp; registry</p>
+  <h1>镜像命名与 registry</h1>
+  <p class="subtitle">名字决定镜像从哪来、推到哪去。K8s 的 <code>image:</code> 字段用的也是这套规则。</p>
+</header>
+
+<h2>四段名字</h2>
+<pre><code>[registry/][namespace/]repo[:tag][@sha256:digest]
+
+docker.io/library/postgres:17-alpine
+localhost:5050/hello-api:1.2
+ghcr.io/myorg/api:2.0
+myuser/api:2.0                 ← 没有 registry 段 → docker.io/myuser/api:2.0
+api@sha256:37da9bb7…           ← 按 digest 取，不可变</code></pre>
+<table class="defs">
+  <tr><th>段</th><th>省略默认</th><th>识别规则</th></tr>
+  <tr><td>registry</td><td><code>docker.io</code></td><td>第一段含 <code>.</code> 或 <code>:</code>，或等于 <code>localhost</code>，才算 registry</td></tr>
+  <tr><td>namespace</td><td><code>library</code>（仅 Hub）</td><td>Hub 上 = 用户名或组织名；私有 registry 可无</td></tr>
+  <tr><td>repo</td><td>—</td><td>小写字母、数字、<code>-</code> <code>_</code> <code>.</code> <code>/</code></td></tr>
+  <tr><td>tag</td><td><code>latest</code></td><td>最长 128 字符；<code>latest</code> 只是默认名，不自动存在、不代表最新</td></tr>
+</table>
+
+<h2>tag vs digest</h2>
+<table class="defs">
+  <tr><th></th><th>tag</th><th>digest</th></tr>
+  <tr><td>是什么</td><td>可移动的指针</td><td>内容的 SHA256，不可变</td></tr>
+  <tr><td>谁决定</td><td>你，<code>docker tag</code> / <code>push</code></td><td>内容算出来的</td></tr>
+  <tr><td>能被覆盖</td><td>能，再 push 同名就指向新 digest</td><td>不能</td></tr>
+  <tr><td>查看</td><td><code>docker images</code></td><td><code>docker images --digests</code>；<code>docker image inspect x --format "{{.RepoDigests}}"</code></td></tr>
+  <tr><td>用途</td><td>日常引用</td><td>生产锁版本：<code>image: repo@sha256:…</code></td></tr>
+</table>
+
+<h2>命令</h2>
+<table class="defs">
+  <tr><th>命令</th><th>做什么</th></tr>
+  <tr><td><code>docker tag src dst</code></td><td>给同一 image ID 加名字。零拷贝</td></tr>
+  <tr><td><code>docker push name</code></td><td>推到名字里的 registry。没有 <code>--registry</code> 参数</td></tr>
+  <tr><td><code>docker pull name</code></td><td>拉取；已有则 <code>Image is up to date</code></td></tr>
+  <tr><td><code>docker compose pull [svc]</code></td><td>按 compose 文件里的 <code>image:</code> 拉</td></tr>
+  <tr><td><code>docker login [registry]</code></td><td>不写 registry = Docker Hub。凭据存 Windows 凭据管理器</td></tr>
+  <tr><td><code>docker rmi name</code></td><td>删一个名字；同 ID 的其他名字还在，最后一个名字删掉才删层</td></tr>
+  <tr><td><code>docker image ls --digests</code></td><td>列出每个 tag 对应的 digest</td></tr>
+</table>
+
+<h2>本地 registry</h2>
+<pre><code>docker run -d --name registry --restart unless-stopped -p 5050:5000 -v regdata:/var/lib/registry registry:2
+
+curl http://localhost:5050/v2/_catalog              <span class="c"># 有哪些 repo</span>
+curl http://localhost:5050/v2/hello-api/tags/list   <span class="c"># 某 repo 有哪些 tag</span>
+curl -I http://localhost:5050/v2/hello-api/manifests/1.2   <span class="c"># Docker-Content-Digest 头</span></code></pre>
+<ul>
+  <li>明文 HTTP 只对 <code>localhost</code> 放行；用 IP/域名要在 Docker Desktop → Settings → Docker Engine 加 <code>"insecure-registries": ["host:port"]</code>。</li>
+  <li>数据在 <code>/var/lib/registry</code>，不挂卷则 <code>rm</code> 容器即丢。</li>
+  <li>删 tag 不在 API 默认开放范围，本地练习直接 <code>docker volume rm regdata</code> 重来。</li>
+</ul>
+
+<h2>push 内部流程</h2>
+<ol>
+  <li>对每一层：<code>HEAD /v2/&lt;repo&gt;/blobs/&lt;digest&gt;</code> → 200 则 <code>Layer already exists</code>，404 则上传。</li>
+  <li>上传 config blob（镜像元数据 JSON）。</li>
+  <li><code>PUT /v2/&lt;repo&gt;/manifests/&lt;tag&gt;</code>：manifest 列出所有 blob 的 digest，tag 指向它。</li>
+</ol>
+<p>推论：同一镜像推 N 个 tag，层只传一次；两个 tag 指向同一 digest 就是同一个东西。</p>
+
+<h2>Windows 保留端口</h2>
+<p><code>bind: An attempt was made to access a socket in a way forbidden by its access permissions</code> = 端口被 Windows/Hyper-V 保留。查：</p>
+<pre><code>netsh interface ipv4 show excludedportrange protocol=tcp</code></pre>
+<p>本机 4904–5003 被占，所以 registry 映射到 5050 而不是 5000。换端口即可，没必要解除保留。</p>
+
+<h2>权威参考</h2>
+<ul>
+  <li><a href="https://docs.docker.com/reference/cli/docker/image/tag/">docker image tag</a> — 名字格式的权威定义</li>
+  <li><a href="https://docs.docker.com/reference/cli/docker/image/pull/#pull-an-image-by-digest-immutable-identifier">Pull by digest</a></li>
+  <li><a href="https://hub.docker.com/_/registry">registry 官方镜像</a> · <a href="https://distribution.github.io/distribution/spec/api/">Registry HTTP API V2</a></li>
+  <li><a href="https://docs.docker.com/docker-hub/usage/">Docker Hub 速率限制</a></li>
+</ul>
+
+<div class="footer">
+  <p>课程：Docker &amp; Kubernetes · 参考 ｜
+  <a href="GLOSSARY.html">术语表</a> ·
+  <a href="compose-cheatsheet.html">Compose 速查</a> ·
+  <a href="../lessons/0006-tag-and-push-to-registry.html">第 6 课</a></p>
+</div>
+</body>
+</html>

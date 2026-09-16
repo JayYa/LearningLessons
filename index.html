@@ -123,6 +123,19 @@
   </header>
 
   <div class="course-card">
+    <h2>ASP.NET Core</h2>
+    <ol>
+      <li><a href="ASP.NET%20Core/lessons/0001-program-cs-anatomy.html">第 1 课：Program.cs 解剖——从 Global.asax 到 WebApplication</a></li>
+    </ol>
+    <div class="ref-section">
+      <h3>参考资料</h3>
+      <ul>
+        <li><a href="ASP.NET%20Core/reference/program-cs-quick-reference.html">Program.cs 速查表</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="course-card">
     <h2>Docker and K8S</h2>
     <ol>
       <li><a href="Docker%20and%20K8S/lessons/0001-build-your-first-image.html">第 1 课：构建你的第一个镜像</a></li>
@@ -130,6 +143,7 @@
       <li><a href="Docker%20and%20K8S/lessons/0003-dotnet-multi-stage-build.html">第 3 课：.NET 多阶段构建</a></li>
       <li><a href="Docker%20and%20K8S/lessons/0004-configure-without-rebuilding.html">第 4 课：不改镜像，只改配置</a></li>
       <li><a href="Docker%20and%20K8S/lessons/0005-compose-app-plus-database.html">第 5 课：一个文件，拉起应用 + 数据库</a></li>
+      <li><a href="Docker%20and%20K8S/lessons/0006-tag-and-push-to-registry.html">第 6 课：给镜像一个全名，推到 registry</a></li>
     </ol>
     <div class="ref-section">
       <h3>参考资料</h3>
@@ -138,7 +152,9 @@
         <li><a href="Docker%20and%20K8S/reference/compose-cheatsheet.html">速查：Docker Compose</a></li>
         <li><a href="Docker%20and%20K8S/reference/dockerfile-instruction-timing.html">速查：Dockerfile 指令 —— 构建期还是运行期？</a></li>
         <li><a href="Docker%20and%20K8S/reference/dotnet-multistage-dockerfile.html">速查：.NET 多阶段 Dockerfile 模板</a></li>
+        <li><a href="Docker%20and%20K8S/reference/image-naming.html">速查：镜像命名与 registry</a></li>
         <li><a href="Docker%20and%20K8S/reference/runtime-config.html">速查：运行期配置 —— -e / -v / -p</a></li>
+        <li><a href="Docker%20and%20K8S/reference/yaml-basics.html">速查：YAML 基础语法</a></li>
       </ul>
     </div>
   </div>
@@ -157,12 +173,14 @@
       <li><a href="BeiGene/lessons/0009-async-await-state-machine.html">Lesson 09 · await 那一行到底发生了什么</a></li>
       <li><a href="BeiGene/lessons/0010-middleware-pipeline-and-di-lifetimes.html">Lesson 10 · 一个请求穿过管道时到底发生了什么</a></li>
       <li><a href="BeiGene/lessons/0011-transaction-isolation-and-usage.html">Lesson 11 · 隔离级别只决定一件事：你看的是哪一刻的快照</a></li>
+      <li><a href="BeiGene/lessons/0012-authentication-and-authorization.html">Lesson 12 · 认证只产出一样东西：一张 ClaimsPrincipal</a></li>
     </ol>
     <div class="ref-section">
       <h3>参考资料</h3>
       <ul>
         <li><a href="BeiGene/reference/algo-cheatsheet.html">速查表 · 排序、选择、Top-K 与外部排序（C#）</a></li>
         <li><a href="BeiGene/reference/async-cheatsheet.html">速查表 · async / await 状态机</a></li>
+        <li><a href="BeiGene/reference/auth-cheatsheet.html">速查表 · 认证与授权</a></li>
         <li><a href="BeiGene/reference/claim-patterns-cheatsheet.html">速查表 · 并发抢单与审批流</a></li>
         <li><a href="BeiGene/reference/db-index-cheatsheet.html">Reference · 索引与 SQL 优化速查表</a></li>
         <li><a href="BeiGene/reference/di-middleware-cheatsheet.html">速查表 · 中间件管道与 DI 生命周期</a></li>
@@ -188,10 +206,12 @@
       <li><a href="DotNET%20Platform/lessons/0010-hosted-services-lifecycle.html">第 10 课：IHostedService 与生命周期——后台任务、启动顺序、优雅关闭 — .NET 平台基础</a></li>
       <li><a href="DotNET%20Platform/lessons/0011-logging-structured.html">第 11 课：ILogger 与结构化日志——从"拼字符串"到"记事件" — .NET 平台基础</a></li>
       <li><a href="DotNET%20Platform/lessons/0012-httpclientfactory-system-text-json.html">第 12 课：BCL 现代化（上）——IHttpClientFactory 与 System.Text.Json — .NET 平台基础</a></li>
+      <li><a href="DotNET%20Platform/lessons/0013-span-channels-pipelines.html">第 13 课：BCL 现代化（下）——Channels、PeriodicTimer、Span I/O 与 Pipelines — .NET 平台基础</a></li>
     </ol>
     <div class="ref-section">
       <h3>参考资料</h3>
       <ul>
+        <li><a href="DotNET%20Platform/reference/channels-timer-io-quick-reference.html">参考：Channels / PeriodicTimer / Span I/O 速查 — .NET 平台基础</a></li>
         <li><a href="DotNET%20Platform/reference/configuration-quick-reference.html">参考：配置系统速查 — .NET 平台基础</a></li>
         <li><a href="DotNET%20Platform/reference/di-lifetime-reference.html">参考：DI 生命周期与注册速查 — .NET 平台基础</a></li>
         <li><a href="DotNET%20Platform/reference/host-quick-reference.html">参考：Host 模型速查 — .NET 平台基础</a></li>
