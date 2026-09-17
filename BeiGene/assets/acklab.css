@@ -1,0 +1,85 @@
+/* Styles for the acklab.js component (RabbitMQ ack / nack / crash / timeout lab). Load after lesson.css. */
+
+.acklab {
+  border: 1px solid var(--rule);
+  background: #fff;
+  padding: 1.2rem 1.4rem 1rem;
+  margin: 1.5rem 0 2rem;
+  font-size: 0.9rem;
+}
+
+.al-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.8rem;
+}
+.al-head .label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.al-clock { font-family: var(--mono); font-size: 0.75rem; color: var(--ink-soft); }
+
+.al-modes { display: flex; gap: 0.5rem; margin-bottom: 0.9rem; }
+.al-mode {
+  font-family: var(--mono); font-size: 0.75rem;
+  padding: 0.3rem 0.7rem; border: 1px solid var(--rule); background: var(--code-bg); cursor: pointer;
+}
+.al-mode.on { border-color: var(--ink); background: var(--ink); color: #fff; }
+
+.al-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.9rem; }
+@media (max-width: 720px) { .al-cols { grid-template-columns: 1fr; } }
+.al-col { border: 1px dashed var(--rule); padding: 0.5rem 0.6rem; min-height: 6rem; }
+.al-col h4 {
+  margin: 0 0 0.4rem;
+  font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.al-count { display: inline-block; min-width: 1.3em; text-align: center; background: var(--code-bg); border-radius: 2px; padding: 0 0.3em; color: var(--ink); }
+.al-empty { color: var(--ink-soft); font-style: italic; font-size: 0.8rem; }
+
+.al-msg {
+  font-size: 0.82rem; padding: 0.3rem 0.45rem; margin: 0.25rem 0;
+  background: var(--code-bg); border-left: 3px solid var(--rule);
+}
+.al-msg.redelivered { border-left-color: #b8860b; }
+.al-id { font-family: var(--mono); font-weight: bold; }
+.al-tag { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-soft); }
+.al-badge { font-family: var(--mono); font-size: 0.66rem; background: #fff3d6; color: #7a5a00; padding: 0 0.3em; border-radius: 2px; }
+.al-proc { font-family: var(--mono); font-size: 0.7rem; color: var(--good); }
+.al-proc.dup { color: var(--bad); font-weight: bold; }
+
+.al-stats { margin: 0.7rem 0 0.4rem; font-size: 0.82rem; color: var(--ink-soft); }
+.al-stats .bad { color: var(--bad); }
+
+.al-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 0.9rem; }
+.al-btn {
+  font-family: var(--mono); font-size: 0.74rem;
+  padding: 0.35rem 0.7rem; border: 1px solid var(--ink); background: #fff; cursor: pointer;
+}
+.al-btn:hover { background: var(--code-bg); }
+
+.al-log { border-top: 1px solid var(--rule); padding-top: 0.5rem; max-height: 14rem; overflow-y: auto; }
+.al-line { font-size: 0.8rem; padding: 0.15rem 0; color: var(--ink); }
+.al-line .al-t { font-family: var(--mono); font-size: 0.68rem; color: var(--ink-soft); margin-right: 0.3rem; }
+.al-line.good { color: var(--good); }
+.al-line.bad { color: var(--bad); }
+.al-line.warn { color: #7a5a00; }
+
+.al-scenarios { margin-top: 1rem; border-top: 1px solid var(--rule); padding-top: 0.6rem; }
+.al-scn { margin: 0.4rem 0; }
+.al-scn summary { cursor: pointer; font-weight: bold; font-size: 0.88rem; }
+.al-scn ol { margin: 0.4rem 0 0.3rem; padding-left: 1.4rem; font-size: 0.85rem; }
+.al-scn li { margin: 0.2rem 0; }
+.al-guess { font-size: 0.85rem; color: var(--accent); margin: 0.2rem 0 0.4rem; font-style: italic; }
+
+@media print {
+  .al-actions, .al-modes { display: none; }
+  .al-scn { break-inside: avoid; }
+  .al-scn[open] summary, .al-scn summary { list-style: none; }
+}

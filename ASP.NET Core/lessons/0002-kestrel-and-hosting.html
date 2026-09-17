@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 2 课：Kestrel、反向代理与容器部署 — ASP.NET Core</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>第 2 课：Kestrel、反向代理与容器部署</h1>
+<div class="lesson-meta">
+  模块：Kestrel &amp; 部署（1/1）&nbsp;|&nbsp; 预计阅读/练习时间：40 分钟 &nbsp;|&nbsp; 前置：<a href="0001-program-cs-anatomy.html">第 1 课</a>、Docker Desktop（动手第 4 步）
+</div>
+
+<p>
+  Web API 2 时代，"Web 服务器"这个词几乎等于 IIS：它监听端口、解析 HTTP、终止 TLS、做 URL 重写、跑认证模块、
+  再把请求塞进 <code>System.Web</code> 管道——所有层次糊在一个进程里。
+  ASP.NET Core 把它拆成了<strong>三层各司其职</strong>，而第 1 课测验第 3 题你答错的地方，正是这三层的边界。
+</p>
+
+<div class="summary">
+  <ul>
+    <li>画清 <strong>Kestrel → 中间件管道 → 端点</strong> 三层，每层只做什么、不做什么</li>
+    <li>知道 Kestrel 监听地址的 4 种设置方式和优先级，以及容器里 <strong>8080</strong> 这个默认值从哪来</li>
+    <li>理解反向代理为什么会"弄丢"客户端 IP 和 HTTPS，以及 <code>UseForwardedHeaders</code> 如何找回来——含一个必踩的死循环坑</li>
+    <li>不写 Dockerfile，用 <code>dotnet publish /t:PublishContainer</code> 把 HelloApi 打成镜像并跑起来（任务书目标：部署到 Linux 容器）</li>
+  </ul>
+</div>
+
+<h2>三层模型：Kestrel 只做一件事</h2>
+
+<div class="diagram">
+<pre>
+        网络字节流（TCP / TLS）
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ ① Kestrel（IServer）                                        │
+│    监听 socket · 解析 HTTP/1.1、HTTP/2、HTTP/3 · 终止 TLS    │
+│    把每个请求变成一个 HttpContext，然后调用 ↓                 │
+│    <span class="hl">它不认识 URL 和端点的对应关系，也不认识中间件</span>              │
+└─────────────────────────────────────────────────────────────┘
+              │  RequestDelegate（整条管道被编译成一个委托）
+              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ ② 中间件管道（IApplicationBuilder 串起来的）                 │
+│    ForwardedHeaders → 异常页 → HTTPS 重定向 → <span class="hl">Routing</span> →     │
+│    认证 → 授权 → … → <span class="hl">Endpoint 执行</span>                            │
+└─────────────────────────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ ③ 端点（Endpoint）                                           │
+│    MapGet 的 lambda  或  Controller 的 Action —— 同一种东西   │
+└─────────────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<div class="rule">
+  <div class="rule__num">Rule</div>
+  <h4>Kestrel 到 <code>HttpContext</code> 为止；从 URL 找端点是 ② 层里 <code>UseRouting</code> 的活</h4>
+  <p>
+    <code>IServer</code> 接口只有一个核心方法：<code>StartAsync&lt;TContext&gt;(IHttpApplication&lt;TContext&gt; application, …)</code>——
+    服务器拿到的是<strong>整条管道打包成的一个应用委托</strong>，对里面的中间件、路由、Minimal API 还是 Controller 一无所知。
+    这就是为什么第 1 课里"没有 <code>UseRouting</code>"的正确答案是"框架自动补上"而不是"Kestrel 直接分发"：路由匹配发生在 ②，不在 ①。
+  </p>
+</div>
+
+<table class="tbl">
+  <tr><th>Web API 2 / IIS 做的事</th><th>ASP.NET Core 里由谁做</th></tr>
+  <tr><td>监听端口、解析 HTTP、TLS</td><td><strong>Kestrel</strong>（①）</td></tr>
+  <tr><td>URL Rewrite 模块的 HTTPS 强制</td><td><code>UseHttpsRedirection</code> 中间件（②）</td></tr>
+  <tr><td>Windows 认证 / Forms 认证模块</td><td><code>UseAuthentication</code> 中间件（②）</td></tr>
+  <tr><td>路由表（<code>RouteTable</code> / <code>HttpRouteCollection</code>）</td><td><code>UseRouting</code> 中间件（②）</td></tr>
+  <tr><td>静态文件由 IIS 直接返回</td><td><code>UseStaticFiles</code> 中间件（②）</td></tr>
+  <tr><td>应用池回收、多站点共享 80 端口、进程守护</td><td><strong>不再有</strong>——交给反向代理 / 容器编排（本课下半）</td></tr>
+</table>
+
+<div class="callout callout--info">
+  <strong>IIS 还在吗？</strong>在。Windows 上 IIS 可以作为反向代理（ANCM 进程外模式）或直接在 IIS 工作进程里加载 Kestrel 的替代品（进程内模式，.NET Core 3+ 默认）。
+  但两种模式下 IIS 都只是①层的替身或前置，②③层完全一样。本系列聚焦 Linux 容器，IIS 细节见
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/iis/">官方 IIS 托管文档</a>。
+</div>
+
+<h2>Kestrel 监听哪里：4 种设置方式</h2>
+
+<p>
+  按 <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/kestrel#endpoint-configuration">Kestrel 文档</a>，
+  什么都不设时默认 <code>http://localhost:5000</code>（有开发证书时再加 <code>https://localhost:5001</code>）。改它有 4 条路，都汇入第 1 课讲的配置链：
+</p>
+
+<table class="tbl">
+  <tr><th>方式</th><th>示例</th><th>典型场景</th></tr>
+  <tr>
+    <td><code>ASPNETCORE_URLS</code> 环境变量</td>
+    <td><code>http://+:8080;https://+:8443</code></td>
+    <td>容器、systemd、云平台。<code>+</code> / <code>*</code> = 所有网卡</td>
+  </tr>
+  <tr>
+    <td><code>ASPNETCORE_HTTP_PORTS</code> / <code>HTTPS_PORTS</code></td>
+    <td><code>8080</code>（只写端口，分号分隔）</td>
+    <td>.NET 8 新增的简化版；<strong>官方 aspnet 镜像里预设了 <code>ASPNETCORE_HTTP_PORTS=8080</code></strong></td>
+  </tr>
+  <tr>
+    <td><code>--urls</code> 命令行</td>
+    <td><code>dotnet run --urls http://localhost:5100</code></td>
+    <td>本机临时换端口（第 1 课已用过）</td>
+  </tr>
+  <tr>
+    <td><code>appsettings.json</code> 的 <code>Kestrel:Endpoints</code> 节</td>
+    <td>见下方</td>
+    <td>需要按端点配证书、协议（HTTP/2 only 等）时</td>
+  </tr>
+</table>
+
+<pre><code>// appsettings.json —— 最完整的方式，可以按端点指定证书和协议
+"Kestrel": {
+  "Endpoints": {
+    "Http":  { "Url": "http://*:8080" },
+    "Https": { "Url": "https://*:8443",
+               "Certificate": { "Path": "cert.pfx", "Password": "…" } }
+  }
+}</code></pre>
+
+<div class="callout callout--warn">
+  <strong>为什么容器默认是 8080 而不是 80？</strong>
+  .NET 8 起官方镜像以<strong>非 root 用户 <code>app</code></strong> 运行，Linux 非特权用户不能绑 1024 以下端口，所以默认从 80 改成了 8080
+  （<a href="https://learn.microsoft.com/en-us/dotnet/core/compatibility/containers/8.0/aspnet-port">破坏性变更公告</a>）。
+  <code>docker run -p 8000:80</code> 会连不上——要写 <code>-p 8000:8080</code>。这是从 .NET 6/7 迁移时最常见的"容器起来了但访问不到"。
+</div>
+
+<p>
+  代码里也能配（<code>builder.WebHost.ConfigureKestrel(o =&gt; o.ListenAnyIP(8080))</code>），但会<strong>覆盖</strong>上面所有配置来源——
+  运维就改不了端口了。规则：<strong>地址用配置，限额用代码</strong>。限额的例子（数值来自
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/kestrel/options">Kestrel options 文档</a>）：
+</p>
+
+<pre><code>builder.WebHost.ConfigureKestrel(o =&gt;
+{
+    o.Limits.MaxRequestBodySize = 10 * 1024 * 1024;   // 默认 30,000,000 字节 ≈ 28.6 MB
+    o.Limits.KeepAliveTimeout   = TimeSpan.FromMinutes(2);  // 默认 130 秒
+    o.AddServerHeader = false;                          // 不发 Server: Kestrel
+});</code></pre>
+
+<h2>反向代理：为什么需要、它弄丢了什么</h2>
+
+<p>
+  Kestrel 可以直接面对互联网（官方支持的部署方式），但
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/kestrel#when-to-use-kestrel-with-a-reverse-proxy">文档</a>
+  列了四个理由让你在前面放一层 Nginx / YARP / 云负载均衡：缩小暴露面、多一层防御、融入现有基础设施、
+  <strong>集中做 TLS 和负载均衡</strong>（只有代理需要证书，代理到 Kestrel 之间走明文 HTTP）。
+  还有一条硬限制：<strong>Kestrel 不能多个进程共享同一个端口</strong>——它不看 <code>Host</code> 头分流。IIS 时代一台机器上靠主机名绑几十个站点的玩法，Core 里必须靠代理。
+</p>
+
+<div class="diagram">
+<pre>
+浏览器 ──HTTPS──▶ Nginx/YARP（终止 TLS）──HTTP──▶ Kestrel :8080
+    203.0.113.9              10.0.0.5                   ▲
+                                                         │ Kestrel 看到的：
+                                                         │   Scheme    = http      ✘（原本是 https）
+                                                         │   RemoteIp  = 10.0.0.5  ✘（原本是 203.0.113.9）
+                                                         │   Host      = 内网地址  ✘
+</pre>
+</div>
+
+<p>
+  代理把真实信息塞在约定的请求头里带过来（<a href="https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer#forwarded-headers">文档</a>）：
+</p>
+
+<table class="tbl">
+  <tr><th>请求头</th><th>内容</th><th>中间件写回到</th></tr>
+  <tr><td><code>X-Forwarded-For</code></td><td>原始客户端 IP（链式代理时逗号分隔）</td><td><code>HttpContext.Connection.RemoteIpAddress</code></td></tr>
+  <tr><td><code>X-Forwarded-Proto</code></td><td>原始 scheme：<code>https</code></td><td><code>HttpContext.Request.Scheme</code></td></tr>
+  <tr><td><code>X-Forwarded-Host</code></td><td>原始 <code>Host</code> 头</td><td><code>HttpContext.Request.Host</code></td></tr>
+  <tr><td><code>X-Forwarded-Prefix</code></td><td>原始路径前缀（代理把 <code>/api</code> 剥掉时用）</td><td><code>HttpContext.Request.PathBase</code></td></tr>
+</table>
+
+<p>但请求头是任何人都能伪造的，所以 ASP.NET Core <strong>默认不信任它们</strong>。你要显式启用，并且告诉它信任谁：</p>
+
+<pre><code>using Microsoft.AspNetCore.HttpOverrides;
+
+builder.Services.Configure&lt;ForwardedHeadersOptions&gt;(o =&gt;
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // 默认只信任 loopback（同机代理）。代理在别的机器/容器时必须加：
+    // o.KnownProxies.Add(IPAddress.Parse("10.0.0.5"));
+    // 或 o.KnownNetworks.Add(new IPNetwork(IPAddress.Parse("10.0.0.0"), 8));
+});
+
+var app = builder.Build();
+app.UseForwardedHeaders();      // ← 尽量放最前面，至少在 UseHttpsRedirection / UseHsts / 认证之前</code></pre>
+
+<div class="rule">
+  <div class="rule__num">Rule</div>
+  <h4>三个默认值决定了它是否生效</h4>
+  <ul>
+    <li><code>ForwardedHeaders</code> 默认 <code>None</code>——不设等于没启用，中间件跑了也什么都不改</li>
+    <li><code>KnownProxies</code> / <code>KnownNetworks</code> 默认只有 <strong>loopback</strong>——来自非本机地址的请求头会被<strong>静默忽略</strong>，不报错</li>
+    <li><code>ForwardLimit</code> 默认 <strong>1</strong>——链式代理只处理最右边一跳</li>
+  </ul>
+  <p>"部署到 Nginx 后 <code>RemoteIpAddress</code> 还是 127.0.0.1 / 10.x"，十有八九是第二条。</p>
+</div>
+
+<div class="callout callout--warn">
+  <strong>必踩坑：HTTPS 重定向死循环。</strong>
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer#troubleshoot">文档原话</a>：
+  应用调用了 <code>UseHttpsRedirection</code>，部署到 Nginx / Azure Linux / 任何非 IIS 的代理后面，代理终止 TLS，Kestrel 看到的永远是 <code>http</code>，
+  于是每次都 301 到 https → 代理再转成 http 过来 → 再 301……浏览器报 <code>ERR_TOO_MANY_REDIRECTS</code>。OAuth/OIDC 回调地址也会生成错的 <code>http://</code>。
+  解法就是上面的 <code>UseForwardedHeaders</code>，或者环境变量 <code>ASPNETCORE_FORWARDEDHEADERS_ENABLED=true</code>（云平台常用，但它<strong>清空</strong>了 KnownProxies 限制，只能在网络已隔离时用）。
+  <strong>IIS 进程外模式是唯一自动配好的场景</strong>——所以从 IIS 迁到 Linux 时这个坑几乎必中。
+</div>
+
+<h2>容器：不写 Dockerfile 的打包方式</h2>
+
+<p>
+  .NET SDK 内置了容器构建（Web SDK 无需额外包，
+  <a href="https://learn.microsoft.com/en-us/dotnet/core/containers/sdk-publish">官方教程</a>）。一条命令：
+</p>
+
+<pre><code>dotnet publish --os linux --arch x64 /t:PublishContainer</code></pre>
+
+<p>它按项目类型<strong>推断</strong>一切（<a href="https://learn.microsoft.com/en-us/dotnet/core/containers/publish-configuration">配置参考</a>），你需要知道的默认值：</p>
+
+<table class="tbl">
+  <tr><th>项</th><th>默认</th><th>MSBuild 属性（要改时）</th></tr>
+  <tr><td>基础镜像</td><td><code>mcr.microsoft.com/dotnet/aspnet:10.0</code>（Web SDK 项目）</td><td><code>ContainerBaseImage</code> / <code>ContainerFamily</code>（如 <code>alpine</code>）</td></tr>
+  <tr><td>镜像名 : 标签</td><td><code>helloapi:latest</code>（AssemblyName 小写）</td><td><code>ContainerRepository</code> / <code>ContainerImageTag</code></td></tr>
+  <tr><td>监听端口</td><td>8080（从基础镜像的 <code>ASPNETCORE_HTTP_PORTS</code> 推断）</td><td><code>ContainerPort</code></td></tr>
+  <tr><td>运行用户</td><td><code>app</code>（非 root，UID 由 <code>APP_UID</code> 给出）</td><td><code>ContainerUser</code></td></tr>
+  <tr><td>工作目录 / 入口</td><td><code>/app</code> · <code>dotnet HelloApi.dll</code></td><td><code>ContainerWorkingDirectory</code> / <code>ContainerAppCommand</code></td></tr>
+  <tr><td>推送目标</td><td>本机 Docker daemon</td><td><code>ContainerRegistry</code>（远程仓库）/ <code>ContainerArchiveOutputPath</code>（tar.gz）</td></tr>
+</table>
+
+<div class="callout callout--info">
+  <strong>什么时候还是要写 Dockerfile？</strong>需要 <code>RUN</code> 指令的时候（apt 装包、建用户、跑脚本）——SDK 方式无法模拟 <code>RUN</code>。
+  绝大多数 API 项目不需要。另外注意 <code>ASPNETCORE_ENVIRONMENT</code> 在镜像里<strong>没有</strong>设置，所以容器里跑的就是 Production——和第 1 课"部署后默认 Production"一致。
+</div>
+
+<h2>动手：验证三层边界 → 找回 HTTPS → 进容器</h2>
+
+<p>沿用第 1 课的 <code>playground\HelloApi</code>（没有就 <code>dotnet new webapi -n HelloApi -o playground\HelloApi</code>）。全程 PowerShell。</p>
+
+<div class="steps">
+
+<div class="step">
+  <h4>加一个"我看到了什么"端点</h4>
+  <p>在 <code>app.UseHttpsRedirection();</code> 之后加：</p>
+<pre><code>app.MapGet("/whoami", (HttpContext ctx) =&gt; new
+{
+    ctx.Request.Scheme,
+    Host = ctx.Request.Host.Value,
+    RemoteIp = ctx.Connection.RemoteIpAddress?.ToString(),
+    ctx.Request.Protocol,
+    XForwardedFor = ctx.Request.Headers["X-Forwarded-For"].ToString(),
+    User = Environment.UserName
+});</code></pre>
+  <p>运行并探测（用 <code>--urls</code> 绕开第 1 课提到的 5000 端口保留问题）：</p>
+<pre><code>dotnet run --no-launch-profile --urls http://localhost:5100
+# 另开一个终端：
+Invoke-RestMethod http://localhost:5100/whoami | ConvertTo-Json -Compress</code></pre>
+  <p>预期：</p>
+<pre><code>{"scheme":"http","host":"localhost:5100","remoteIp":"127.0.0.1","protocol":"HTTP/1.1","xForwardedFor":"","user":"xiaos"}</code></pre>
+</div>
+
+<div class="step">
+  <h4>扮演代理：手动塞转发头</h4>
+<pre><code>Invoke-RestMethod http://localhost:5100/whoami -Headers @{
+  'X-Forwarded-Proto' = 'https'
+  'X-Forwarded-For'   = '203.0.113.9'
+} | ConvertTo-Json -Compress</code></pre>
+  <p>预期——<strong>头到了，但什么都没变</strong>：</p>
+<pre><code>{"scheme":"http","host":"localhost:5100","remoteIp":"127.0.0.1","protocol":"HTTP/1.1","xForwardedFor":"203.0.113.9","user":"xiaos"}</code></pre>
+  <p>这就是生产上的死循环起点：代理明明说了 https，应用视而不见。</p>
+</div>
+
+<div class="step">
+  <h4>启用 ForwardedHeaders 中间件</h4>
+  <p>文件顶部加 <code>using Microsoft.AspNetCore.HttpOverrides;</code>；<code>Build()</code> 前后各加一段：</p>
+<pre><code>builder.Services.Configure&lt;ForwardedHeadersOptions&gt;(o =&gt;
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
+
+var app = builder.Build();
+
+app.UseForwardedHeaders();</code></pre>
+  <p>重启，重复第 2 步的带头请求。预期：</p>
+<pre><code>{"scheme":"https","host":"localhost:5100","remoteIp":"203.0.113.9","protocol":"HTTP/1.1","xForwardedFor":"","user":"xiaos"}</code></pre>
+  <ul class="check-list">
+    <li><code>scheme</code> 变成 https，<code>remoteIp</code> 变成伪造的公网 IP——中间件把头"写回"了 <code>HttpContext</code></li>
+    <li><code>xForwardedFor</code> 变<strong>空</strong>了——被消费的值会从头里移除，原值搬到 <code>X-Original-For</code>，防止下游重复处理</li>
+  </ul>
+  <p>
+    <strong>可选加深：</strong>把请求改成从非 loopback 地址发（比如 <code>--urls http://0.0.0.0:5100</code> 然后用本机局域网 IP 访问），
+    你会看到 scheme 又回到 http——因为来源不在 <code>KnownProxies</code> 里，头被静默忽略。这就是上面 Rule 的第二条。
+  </p>
+</div>
+
+<div class="step">
+  <h4>打成容器镜像并运行</h4>
+  <p>先确认 Docker Desktop 已启动（<code>docker info</code> 不报错）。然后：</p>
+<pre><code>dotnet publish --os linux --arch x64 /t:PublishContainer</code></pre>
+  <p>预期输出末尾（首次会拉取基础镜像，慢一些）：</p>
+<pre><code>在基本映像"mcr.microsoft.com/dotnet/aspnet:10.0"顶部构建标记为"latest"的映像"helloapi"。
+将映像"helloapi"推送到本地注册表 …</code></pre>
+  <div class="callout callout--warn">
+    看到 <code>error CONTAINER1012: 本地注册表不可用</code> / <code>Cannot find docker/podman executable</code> —— 是 Docker daemon 没在跑，不是项目问题。启动 Docker Desktop 再来。
+  </div>
+  <p>运行——注意端口映射到 <strong>8080</strong>，并把环境切到 Staging 复习第 1 课：</p>
+<pre><code>docker run --rm -p 8000:8080 -e ASPNETCORE_ENVIRONMENT=Staging helloapi
+# 另一个终端：
+Invoke-RestMethod http://localhost:8000/whoami | ConvertTo-Json -Compress</code></pre>
+  <p>预期：</p>
+<pre><code>{"scheme":"http","host":"localhost:8000","remoteIp":"172.17.0.1","protocol":"HTTP/1.1","xForwardedFor":"","user":"app"}</code></pre>
+  <ul class="check-list">
+    <li><code>user</code> 是 <code>app</code>，不是 root</li>
+    <li><code>remoteIp</code> 是 Docker 网桥地址（172.17.0.1 或类似），不是 127.0.0.1——<strong>Docker 的端口转发本身就是一层"代理"</strong>，真实客户端 IP 已经丢了</li>
+    <li>容器日志里 <code>Hosting environment: Staging</code>、<code>Now listening on: http://[::]:8080</code></li>
+  </ul>
+  <p>试一下反例，确认 80 端口的坑是真的：<code>docker run --rm -p 8000:80 helloapi</code> → 访问 8000 会被拒绝连接。</p>
+</div>
+
+</div>
+
+<h2>测验</h2>
+
+<div class="callout callout--warn">
+  考的是<strong>哪一层负责</strong>和<strong>默认值</strong>。答之前先想本课哪张表/哪条 Rule 讲了它。
+</div>
+
+<div class="quiz" id="quiz1"
+     data-feedback-correct="✅ 正确。Kestrel 拿到的是整条管道编译成的一个 RequestDelegate，URL→端点的匹配是 UseRouting 中间件在②层做的事。"
+     data-feedback-wrong="❌ 不对。回看「三层模型」：Kestrel 到 HttpContext 为止，路由匹配是中间件管道里 UseRouting 的工作，Minimal API 和 Controller 走同一条路。">
+  <div class="quiz__q">❓ 一个请求 <code>GET /orders/42</code> 到达。"决定它由哪个 <code>MapGet</code> lambda 处理"这件事发生在哪一层？</div>
+  <div class="quiz__opt" data-answer="wrong">Kestrel 解析完请求行后按路径表直接挑出端点</div>
+  <div class="quiz__opt" data-answer="correct">中间件管道中的路由中间件在匹配后挂到上下文</div>
+  <div class="quiz__opt" data-answer="wrong">端点自身在被调用时检查路径是否与自己匹配</div>
+  <div class="quiz__opt" data-answer="wrong">反向代理按路径规则转发到对应的端点上去</div>
+  <div class="quiz__feedback" id="quiz1-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz2"
+     data-feedback-correct="✅ 正确。.NET 8+ 镜像以非 root 用户 app 运行，绑不了特权端口，所以默认改成 ASPNETCORE_HTTP_PORTS=8080；容器内没人在 80 监听。"
+     data-feedback-wrong="❌ 不对。回看「为什么容器默认是 8080」：.NET 8 起镜像预设 ASPNETCORE_HTTP_PORTS=8080 且以非 root 运行，容器内 80 端口没有任何进程在听。">
+  <div class="quiz__q">❓ <code>docker run -p 8000:80 helloapi</code> 后访问 <code>localhost:8000</code> 被拒绝连接，容器日志正常。最可能的原因？</div>
+  <div class="quiz__opt" data-answer="wrong">非 root 用户没有权限接受来自宿主机的网络连接</div>
+  <div class="quiz__opt" data-answer="correct">镜像预设监听 8080，容器内的 80 端口无进程在听</div>
+  <div class="quiz__opt" data-answer="wrong">未设置 ASPNETCORE_ENVIRONMENT 时 Kestrel 拒绝启动</div>
+  <div class="quiz__opt" data-answer="wrong">缺少 HTTPS 证书导致 Kestrel 关闭了全部 HTTP 端点</div>
+  <div class="quiz__feedback" id="quiz2-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz3"
+     data-feedback-correct="✅ 正确。KnownProxies/KnownNetworks 默认只信任 loopback；来自 10.0.0.5 的转发头会被静默忽略，必须把代理地址加进去。"
+     data-feedback-wrong="❌ 不对。中间件确实启用了、头也到了——问题在信任列表：KnownProxies 默认只有 loopback，非本机代理发来的转发头会被静默丢弃。回看 Rule「三个默认值」。">
+  <div class="quiz__q">❓ 已配置 <code>ForwardedHeaders = XForwardedFor | XForwardedProto</code> 并调用 <code>UseForwardedHeaders()</code>。Nginx 跑在另一台机器 10.0.0.5 上，正确发送了两个头，但应用里 <code>RemoteIpAddress</code> 仍是 10.0.0.5。原因？</div>
+  <div class="quiz__opt" data-answer="wrong">ForwardLimit 默认为一，链式代理时需要调大才行</div>
+  <div class="quiz__opt" data-answer="wrong">UseForwardedHeaders 必须放在 UseRouting 之后才生效</div>
+  <div class="quiz__opt" data-answer="correct">代理地址不在 KnownProxies 中，转发头被静默忽略</div>
+  <div class="quiz__opt" data-answer="wrong">Nginx 传的头名不同，需要改 ForwardedForHeaderName</div>
+  <div class="quiz__feedback" id="quiz3-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz4"
+     data-feedback-correct="✅ 正确。代理终止 TLS 后 Kestrel 只看到 http；UseHttpsRedirection 每次都 301 到 https，代理再转成 http 回来——无限循环。IIS 进程外是唯一自动配好转发头的场景。"
+     data-feedback-wrong="❌ 不对。回看「必踩坑：HTTPS 重定向死循环」：非 IIS 代理终止 TLS 后，Kestrel 看到的 scheme 永远是 http，UseHttpsRedirection 会无限重定向。">
+  <div class="quiz__q">❓ 一个在 IIS 下运行良好的 API 原样部署到 Nginx 后面（Nginx 终止 TLS），浏览器报 <code>ERR_TOO_MANY_REDIRECTS</code>。哪个中间件是直接原因？</div>
+  <div class="quiz__opt" data-answer="wrong">UseHsts 在响应头里要求浏览器永久改用 HTTPS 访问</div>
+  <div class="quiz__opt" data-answer="correct">UseHttpsRedirection 看到 http 就重定向，代理又转回来</div>
+  <div class="quiz__opt" data-answer="wrong">UseRouting 因路径前缀被代理剥掉而反复匹配失败重试</div>
+  <div class="quiz__opt" data-answer="wrong">UseAuthentication 因证书未转发而反复跳转到登录页</div>
+  <div class="quiz__feedback" id="quiz4-feedback"></div>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+<h2>速查</h2>
+<p>本课压缩版在 <a href="../reference/kestrel-hosting-quick-reference.html">Kestrel 与托管速查表</a>：三层图、地址配置优先级、ForwardedHeaders 默认值、容器发布属性表。</p>
+
+<h2>推荐阅读</h2>
+
+<p><strong>首选（25 分钟）：</strong>
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer">Configure ASP.NET Core to work with proxy servers and load balancers</a>
+  ——Chris Ross（Kestrel 核心开发者）写的官方文档，本课反向代理部分全部出自这里。重点读 "Forwarded headers"、"Forwarded headers middleware order"、"Troubleshoot" 三节。
+</p>
+<p><strong>Kestrel 本身：</strong>
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/kestrel">Kestrel web server in ASP.NET Core</a>
+  ——读到 "Endpoint configuration" 即可，HTTP/2、HTTP/3 细节暂时跳过。
+</p>
+<p><strong>容器：</strong>
+  <a href="https://learn.microsoft.com/en-us/dotnet/core/containers/sdk-publish">Containerize an app with dotnet publish</a>
+  和 <a href="https://learn.microsoft.com/en-us/dotnet/core/containers/publish-configuration">配置参考</a>。
+</p>
+
+<div class="callout callout--info">
+  <strong>有不明白的随时问我。</strong>比如：YARP 和 Nginx 怎么选？IIS 进程内模式下 Kestrel 到底还在不在？<code>ListenAnyIP</code> 和 <code>ASPNETCORE_URLS</code> 同时存在谁赢？
+  这些都是本课刻意跳过的。做完动手和测验后告诉我结果——尤其第 4 步容器那部分，我这台机器上没能实际跑通（Docker daemon 未启动），你的输出会用来校正课文。
+</div>
+
+<div class="lesson-nav">
+  <a href="0001-program-cs-anatomy.html">← 第 1 课：Program.cs 解剖</a>
+  <a href="0003-middleware-pipeline.html">下一课：中间件管道——顺序、短路与 OWIN 的血缘 →</a>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kestrel 与托管速查表 — ASP.NET Core</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>Kestrel 与托管速查表</h1>
+<div class="lesson-meta">参考文档 · 来源：<a href="../lessons/0002-kestrel-and-hosting.html">第 2 课</a> · 基于 .NET 10</div>
+
+<h2>三层</h2>
+<div class="diagram">
+<pre>
+① Kestrel（IServer）      监听 · 解析 HTTP/1.1/2/3 · TLS · 产出 HttpContext   —— 不认识 URL/端点/中间件
+② 中间件管道              ForwardedHeaders → 异常 → HTTPS 重定向 → Routing → 认证 → 授权 → Endpoint
+③ 端点（Endpoint）        MapGet lambda ≡ Controller Action，同一种东西
+</pre>
+</div>
+
+<h2>监听地址（都进配置链，后者覆盖前者）</h2>
+<table class="tbl">
+  <tr><th>方式</th><th>写法</th></tr>
+  <tr><td>默认</td><td><code>http://localhost:5000</code>（+ <code>https://localhost:5001</code> 若有开发证书）</td></tr>
+  <tr><td><code>ASPNETCORE_URLS</code></td><td><code>http://+:8080;https://+:8443</code></td></tr>
+  <tr><td><code>ASPNETCORE_HTTP_PORTS</code> / <code>HTTPS_PORTS</code></td><td><code>8080</code>（.NET 8+；官方 aspnet 镜像预设 8080）</td></tr>
+  <tr><td>命令行</td><td><code>--urls http://localhost:5100</code></td></tr>
+  <tr><td>appsettings</td><td><code>"Kestrel": { "Endpoints": { "Https": { "Url": "…", "Certificate": { "Path": "…", "Password": "…" } } } }</code></td></tr>
+  <tr><td>代码（覆盖以上全部）</td><td><code>builder.WebHost.ConfigureKestrel(o =&gt; o.ListenAnyIP(8080))</code></td></tr>
+</table>
+<p>规则：<strong>地址用配置，限额用代码</strong>。</p>
+
+<h2>Kestrel 限额默认值</h2>
+<table class="tbl">
+  <tr><th><code>o.Limits.…</code></th><th>默认</th></tr>
+  <tr><td><code>MaxRequestBodySize</code></td><td>30,000,000 字节 ≈ 28.6 MB（<code>null</code> = 不限）</td></tr>
+  <tr><td><code>KeepAliveTimeout</code></td><td>130 秒</td></tr>
+  <tr><td><code>RequestHeadersTimeout</code></td><td>30 秒</td></tr>
+  <tr><td><code>MaxConcurrentConnections</code></td><td><code>null</code>（不限）</td></tr>
+  <tr><td><code>MaxRequestHeadersTotalSize</code></td><td>32 KB</td></tr>
+</table>
+<p>单请求覆盖：<code>ctx.Features.Get&lt;IHttpMaxRequestBodySizeFeature&gt;().MaxRequestBodySize = …</code>（须在读 body 前）。</p>
+
+<h2>反向代理 → 转发头</h2>
+<table class="tbl">
+  <tr><th>头</th><th>写回</th></tr>
+  <tr><td><code>X-Forwarded-For</code></td><td><code>Connection.RemoteIpAddress</code></td></tr>
+  <tr><td><code>X-Forwarded-Proto</code></td><td><code>Request.Scheme</code></td></tr>
+  <tr><td><code>X-Forwarded-Host</code></td><td><code>Request.Host</code></td></tr>
+  <tr><td><code>X-Forwarded-Prefix</code></td><td><code>Request.PathBase</code></td></tr>
+</table>
+<p>消费后的值从头里移除，原值搬到 <code>X-Original-*</code>。</p>
+
+<pre><code>using Microsoft.AspNetCore.HttpOverrides;
+
+builder.Services.Configure&lt;ForwardedHeadersOptions&gt;(o =&gt;
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.KnownProxies.Add(IPAddress.Parse("10.0.0.5"));                          // 或
+    o.KnownNetworks.Add(new IPNetwork(IPAddress.Parse("10.0.0.0"), 8));
+});
+var app = builder.Build();
+app.UseForwardedHeaders();   // 最前面；必须在 UseHttpsRedirection / UseHsts / 认证之前</code></pre>
+
+<table class="tbl">
+  <tr><th><code>ForwardedHeadersOptions</code></th><th>默认</th><th>后果</th></tr>
+  <tr><td><code>ForwardedHeaders</code></td><td><code>None</code></td><td>不设 = 未启用</td></tr>
+  <tr><td><code>KnownProxies</code> / <code>KnownNetworks</code></td><td>仅 loopback</td><td>非本机代理的头被<strong>静默忽略</strong></td></tr>
+  <tr><td><code>ForwardLimit</code></td><td>1</td><td>只处理最右一跳</td></tr>
+  <tr><td><code>AllowedHosts</code></td><td>空 = 全放行</td><td>生产应限制，防 Host 伪造</td></tr>
+</table>
+<p>
+  <code>ASPNETCORE_FORWARDEDHEADERS_ENABLED=true</code>：启用 For+Proto 并<strong>清空</strong> KnownProxies/KnownNetworks——仅限网络已隔离的云环境。
+</p>
+
+<div class="callout callout--warn">
+  <strong>死循环：</strong>非 IIS 代理终止 TLS + 应用有 <code>UseHttpsRedirection</code> + 没配转发头 → <code>ERR_TOO_MANY_REDIRECTS</code>。IIS 进程外是唯一自动配好的场景。
+</div>
+
+<h2>容器（SDK 内置，无需 Dockerfile）</h2>
+<pre><code>dotnet publish --os linux --arch x64 /t:PublishContainer
+dotnet publish --os linux --arch x64 /t:PublishContainer -p ContainerArchiveOutputPath=./img.tar.gz   # 不需要 daemon
+dotnet publish --os linux --arch x64 /t:PublishContainer -p ContainerRegistry=ghcr.io               # 推远程
+
+docker run --rm -p 8000:8080 -e ASPNETCORE_ENVIRONMENT=Staging helloapi</code></pre>
+
+<table class="tbl">
+  <tr><th>MSBuild 属性</th><th>默认（Web SDK，.NET 8+）</th></tr>
+  <tr><td><code>ContainerBaseImage</code></td><td><code>mcr.microsoft.com/dotnet/aspnet:{TFM}</code></td></tr>
+  <tr><td><code>ContainerFamily</code></td><td>—（可设 <code>alpine</code>）</td></tr>
+  <tr><td><code>ContainerRepository</code> : <code>ContainerImageTag</code></td><td>AssemblyName 小写 : <code>latest</code></td></tr>
+  <tr><td><code>ContainerPort</code></td><td>从 <code>ASPNETCORE_HTTP_PORTS</code> 推断 → 8080</td></tr>
+  <tr><td><code>ContainerUser</code></td><td><code>app</code>（非 root；UID 来自 <code>APP_UID</code>）</td></tr>
+  <tr><td><code>ContainerWorkingDirectory</code></td><td><code>/app</code></td></tr>
+  <tr><td><code>ContainerEnvironmentVariable</code></td><td>—（<code>ASPNETCORE_ENVIRONMENT</code> 未设 → Production）</td></tr>
+</table>
+<p>需要 <code>RUN</code>（apt、建用户）→ 写 Dockerfile；否则 SDK 方式够用。</p>
+
+<h2>Web API 2 对照</h2>
+<table class="tbl">
+  <tr><th>IIS + System.Web</th><th>ASP.NET Core</th></tr>
+  <tr><td>监听 / HTTP 解析 / TLS</td><td>Kestrel</td></tr>
+  <tr><td>URL Rewrite 强制 HTTPS</td><td><code>UseHttpsRedirection</code></td></tr>
+  <tr><td>认证模块</td><td><code>UseAuthentication</code></td></tr>
+  <tr><td>路由表</td><td><code>UseRouting</code></td></tr>
+  <tr><td>多站点共享 80 / 应用池回收 / 进程守护</td><td>反向代理 + 容器编排</td></tr>
+</table>
+
+</body>
+</html>

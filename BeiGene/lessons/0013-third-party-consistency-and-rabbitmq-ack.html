@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 13 · 跨系统的调用有三种结果，不是两种</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/callchain.css">
+<link rel="stylesheet" href="../assets/acklab.css">
+<link rel="stylesheet" href="../assets/binsort.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 13 · 第三方交互与数据一致性 · RabbitMQ · BeiGene 面试备战 · 交互课</p>
+  <h1>跨系统的调用有三种结果，<br>不是两种<br><span style="font-size:0.62em;color:var(--ink-soft);">成功、失败、不知道——一致性设计全是为第三种做的</span></h1>
+  <p class="standfirst">题库第十、十一节六问：「和第三方的交互怎么实现、怎么保证一致性」「我方成功对方失败 / 我方失败对方成功怎么办」「操作成功后怎么通知用户」「RabbitMQ 队列多大」「怎么消费」「ACK 机制和实现」。前三问和后三问看起来是两个话题，其实是<strong>同一个机制的两个现场</strong>：一次跨系统的动作发出去之后，你拿到的回音可能是「成了」「没成」，也可能是<strong>「不知道」</strong>。HTTP 那边的「不知道」叫超时，MQ 那边的「不知道」叫 ACK 没送到。<a href="0004-microservices-what-actually-changes.html">Lesson 04</a> 讲过这三种结果长得一样；这一课讲<strong>为它们设计</strong>——然后让你在浏览器里亲手把一条消息弄丢、弄重复、弄进死信。</p>
+</header>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>约 35 分钟。<a href="#s2">第二节</a>的故障探索器和<a href="#s5">第五节</a>的 ACK 实验室都是<strong>点之前先猜</strong>。这一课的动手交付物只有一个数字：ACK 实验室场景 ③ 结束时，<code>m1</code> 那条消息的「已写库 ×几」。</p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">先破一个错觉</a> <span class="depth">— 题目里那个 2×2 少了一行一列</span></li>
+    <li><a href="#s2">先写库还是先调对方</a> <span class="depth">— 中间态是一切恢复的锚</span></li>
+    <li><a href="#s3">把「不知道」变成「知道」</a> <span class="depth">— 幂等重试 / 查询 / 对账</span></li>
+    <li><a href="#s4">操作成功后怎么通知用户</a> <span class="depth">— 通知也是一次跨系统调用</span></li>
+    <li><a href="#s5">ACK 实验室</a> <span class="depth">— 亲手丢一条、重复一条、死信一条</span></li>
+    <li><a href="#s6">RabbitMQ 三问</a> <span class="depth">— 队列大小 / 如何消费 / ACK 机制与 C# 实现</span></li>
+    <li><a href="#s7">归类练习</a> <span class="depth">— 这种情况该做什么</span></li>
+    <li><a href="#s8">话术</a> <span class="depth">— 三段</span></li>
+    <li><a href="#s9">检验一下</a> <span class="depth">— 6 题</span></li>
+    <li><a href="#s10">下一课</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、先破一个错觉</h2>
+
+<p>题目原话：「如果我方更新数据成功第三方返回的 response 失败，或者我方更新数据失败第三方返回的 response 成功，怎么处理」。这句话画出来是一个 2×2：我方 {成功, 失败} × 对方 {成功, 失败}。大多数人顺着这张表答：「成功-失败就回滚我方，失败-成功就调对方的撤销接口」。答完了，面试官追一句：<strong>「对方超时了呢？」</strong>——表上没有这一列。</p>
+
+<p>这不是刁难。RabbitMQ 官方的可靠性指南把同一件事说得很直白（<a href="https://www.rabbitmq.com/docs/reliability">Reliability Guide</a>）：<q>When a connection fails, messages may be in transit between client and server ... In such events messages in transit will not be delivered — they will need to be retransmitted.</q> 连接断的那一刻，你不知道那条消息到没到。HTTP 一模一样：超时异常抛出来的时候，对方可能没收到、可能收到没执行、可能执行了响应没回来。</p>
+
+<div class="callout">
+  <span class="label">这一课唯一必须记死的一句</span>
+  <p><strong>跨系统的每一步都有三种结果：成功、失败、不知道。前两种一句 if 就能处理；一致性设计里所有看起来复杂的东西——中间态、幂等键、查询接口、对账任务、手动 ACK、去重表——全是为第三种做的。</strong></p>
+</div>
+
+<p>所以那张 2×2 要改成 3×3，而且真正难的格子只有含「不知道」的那几个。面试里先把这句话说出来，再答具体做法，面试官就知道你不是在背「回滚 + 撤销」。下面按流水线的顺序把三种结果各自的处理立起来：先看顺序，再看「不知道」怎么消解，最后看 MQ 上同一件事叫什么名字。</p>
+
+<h2 id="s2">二、先写库还是先调对方：中间态是一切恢复的锚</h2>
+
+<p>「交互怎么实现」这道题的第一个取舍是<strong>顺序</strong>。三种写法：</p>
+
+<table>
+  <thead><tr><th>顺序</th><th>对方成功、我方写库失败时</th><th>对方超时时</th><th>判定</th></tr></thead>
+  <tbody>
+    <tr><td><strong>先调对方，再写库</strong></td><td>对方做了，我方<strong>一条记录都没有</strong>。没有任何东西告诉你这笔交易存在过——只能等对方的账单来揭发。这就是题里「我方失败对方成功」的最坏形态：<em>幽灵交易</em></td><td>同样无记录</td><td>✗ 永远别这么写</td></tr>
+    <tr><td><strong>先写终态，再调对方</strong></td><td>不会发生（我方已写）</td><td>库里写着「已支付」，对方可能根本没收到。要么回滚、要么补偿，而两者都要先知道对方到底做没做——你不知道</td><td>△ 常见，但终态是假的</td></tr>
+    <tr><td><strong>先写中间态（PENDING），调对方，再推进终态</strong></td><td>记录停在 PENDING。后台任务扫到超时的 PENDING → 查对方 → 推进到 CONFIRMED。没有幽灵</td><td>同样停在 PENDING，同样的恢复路径</td><td>✓ 标准做法</td></tr>
+  </tbody>
+</table>
+
+<p>第三种写法的价值在于：<strong>不管后面发生什么，本地永远有一条带业务 id、带时间戳、带状态的记录。</strong>它是所有恢复动作的锚——重试拿它当幂等键，查询拿它当查询参数，对账拿它当比对基准。没有它，「不知道」就没有办法变成「知道」。</p>
+
+<p>你已经见过这个东西三次了：<a href="0005-saga-and-choreography.html">Lesson 05</a> 叫它<strong>语义锁</strong>（订单先进「处理中」），<a href="0007-claiming-a-ticket.html">Lesson 07</a> 的抢单先写 <code>reviewing</code> 再干活，<a href="0012-authentication-and-authorization.html#s7">Lesson 12</a> 的两步登录先发「半张票」。<strong>多步流程里，每一步只把状态推进到「刚好能证明走到了这里」，不提前写终态。</strong></p>
+
+<p>现在把这个模型放进故障探索器。我方已经写了 PENDING，正在调第三方支付。四种真相，一个个点：</p>
+
+<div class="callchain" data-callchain='{
+  "title": "我方已写 PENDING，正在调第三方 · 四种真相",
+  "nodes": ["用户", "我方服务（已写 PENDING）", "第三方支付"],
+  "focus": 1,
+  "label": "POST /pay  (Idempotency-Key = 本地 biz_id)",
+  "modes": [
+    {"id":"ok","label":"对方 200","tone":"good",
+     "seen":"HTTP 200，带对方的交易号。",
+     "state":"我方 UPDATE PENDING → CONFIRMED，记下对方交易号。两边一致。",
+     "fix":"理想路径。但注意这句 UPDATE <strong>也可能失败</strong>（库正好抖一下）——那就变成第四种真相。所以推进终态的语句要能重试，而且要写成条件更新：<code>WHERE state = &#39;PENDING&#39;</code>，重复推进不会出错。"},
+    {"id":"fail","label":"对方 4xx 明确拒绝","tone":"bad",
+     "seen":"HTTP 400 / 422，业务错误码：余额不足。",
+     "state":"对方<strong>没有执行</strong>。我方 PENDING → FAILED。不需要任何补偿，因为对方那边什么都没发生。",
+     "fix":"这是题里「我方成功对方失败」在正确顺序下的样子：因为我方写的是 PENDING 不是终态，所以<strong>没有东西需要回滚</strong>。只有先写终态的人才需要回滚。"},
+    {"id":"timeout","label":"对方超时","tone":"bad",
+     "seen":"HttpRequestException: 超时。<strong>不知道对方做没做。</strong>",
+     "state":"我方停在 PENDING。对方三种可能：没收到 / 收到没做 / 做了响应丢了。",
+     "fix":"<strong>不要判成失败，也不要判成成功</strong>——停在 PENDING 是唯一诚实的状态。然后按第三节的三条路把它变成「知道」：带同一个幂等键重试 → 或调对方的查询接口 → 或等对账。记录本身不动，直到拿到确定答案。",
+     "retry":"带同一个 Idempotency-Key 重试才安全：对方若已执行，返回第一次的结果；若没执行，这次执行。没有幂等键就不能重试，只能查询。"},
+    {"id":"local-fail","label":"对方 200，我方推进终态失败","tone":"bad",
+     "seen":"HTTP 200 收到了；接着 UPDATE 抛异常（连接池耗尽 / 主库切换）。",
+     "state":"对方已执行，我方停在 PENDING。<strong>这就是题里「我方失败、对方成功」</strong>——在正确顺序下它不是幽灵，只是一条超时的 PENDING。",
+     "fix":"和「对方超时」<strong>落在同一个状态</strong>，所以走同一条恢复路径：后台任务扫超时 PENDING → 查对方 → 发现已成功 → 推进 CONFIRMED。你不需要为这一格单独写代码。这是「先写中间态」最大的好处：四种真相收敛成两种本地状态。",
+     "retry":"重试的是本地 UPDATE，不是再调一次对方。若拿到 200 时把对方交易号先写进内存再重试 UPDATE，多数情况下当场就能修好。"}
+  ]
+}'></div>
+
+<div class="callout">
+  <span class="label">四个模式，一个结论</span>
+  <p>先写 PENDING 之后，题目里的 2×2 塌缩了：<strong>对方明确失败 → FAILED；对方明确成功 → CONFIRMED；其余一切（超时、我方推进失败、进程被杀）→ 停在 PENDING，由同一条恢复路径处理。</strong>面试里把这句说出来，比逐格答「回滚 / 撤销」强得多——它说明你的设计不依赖于知道对方的结果。</p>
+</div>
+
+<h2 id="s3">三、把「不知道」变成「知道」：三条路</h2>
+
+<p>停在 PENDING 的记录不能停一辈子。三条路把它推进到终态，按成本从低到高：</p>
+
+<table>
+  <thead><tr><th>#</th><th>路</th><th>前提</th><th>怎么做</th><th>什么时候够用</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>幂等重试</strong></td><td>对方接口支持幂等键</td><td>带<strong>同一个</strong> key 再发一次。对方若已执行，返回第一次的结果；若没执行，这次执行。我方拿到确定答案</td><td>大多数超时。Stripe 的做法是行业标准：<q>if a connection error occurs, you can safely repeat the request without risk of creating a second object or performing the update twice</q>（<a href="https://docs.stripe.com/api/idempotent_requests">Stripe — Idempotent requests</a>）</td></tr>
+    <tr><td>2</td><td><strong>查询接口</strong></td><td>对方提供按业务号查状态的接口</td><td>后台任务扫 <code>PENDING AND created_at &lt; now() - 2min</code>，逐条查对方，按结果推进</td><td>对方不支持幂等键（国内很多支付 / 物流接口是这个形态：下单不幂等，但有 query 接口）</td></tr>
+    <tr><td>3</td><td><strong>对账</strong></td><td>对方定期给账单文件 / 批量查询接口</td><td>每天（或每小时）拉对方的全量记录，和我方 CONFIRMED / PENDING 比对，差异进人工处理队列</td><td><strong>兜底，永远要有。</strong>前两条覆盖不到的：对方回调没送到、我方进程在 PENDING 和对方成功之间被杀、对方内部改了状态</td></tr>
+  </tbody>
+</table>
+
+<p>三条路不是三选一，是<strong>三层</strong>：重试解决 95%，查询解决剩下的绝大多数，对账兜住最后的零头并且顺便验证前两层没出 bug。面试里说「我们有对账」，比说任何单一机制都让人放心——它意味着你承认前面的机制会漏。</p>
+
+<div class="callout ext">
+  <span class="label">扩展 · 幂等键的三个细节，追问时用</span>
+  <ul>
+    <li><strong>key 按什么粒度做？</strong>按<strong>业务动作</strong>做：「订单 1001 的这次支付」= 本地 biz_id。不要用随机 UUID 每次重新生成——那就不是同一个 key，重试等于发两笔。这和 <a href="0012-authentication-and-authorization.html#s4">Lesson 12</a> 黑名单「按 token 还是按用户做 key」是同一类判断：<strong>先问要去重的是什么，再定 key。</strong></li>
+    <li><strong>对方怎么实现的？</strong>Stripe 原文：<q>saving the resulting status code and body of the first request made for any given idempotency key, regardless of whether it succeeds or fails ... Subsequent requests with the same key return the same result, including 500 errors.</q> 你自己作为被调方时也这么做——就是 <a href="0005-saga-and-choreography.html#s4">Lesson 05</a> 那张 <code>tx_log(biz_id, state)</code> 表再加一列存响应。</li>
+    <li><strong>同 key 不同参数？</strong>Stripe：<q>compares incoming parameters to those of the original request and errors if they are not the same</q>。你的实现也该报错，不然一次重试悄悄改了金额。</li>
+  </ul>
+</div>
+
+<h2 id="s4">四、操作成功后怎么通知用户</h2>
+
+<p>题「数据操作成功后怎么通知用户」看起来是前端题，出题人想听的是两件事：<strong>通知由什么触发</strong>，以及<strong>通知自己丢了怎么办</strong>。</p>
+
+<p><strong>触发点：状态推进的那一刻，不是请求线程。</strong>用户点「支付」那个 HTTP 请求回来的时候，记录多半还是 PENDING——通知不能在那里发。正确的挂点是 PENDING → CONFIRMED 那条 UPDATE 提交之后，而这条 UPDATE 可能由请求线程执行、也可能由后台查询任务或对账任务执行。所以通知要挂在<strong>状态机的转换</strong>上，谁推进了状态谁发通知——最省事的办法是推进状态和写 outbox 消息放同一个事务，通知服务消费 outbox。</p>
+
+<table>
+  <thead><tr><th>渠道</th><th>机制</th><th>适合</th><th>丢了怎么办</th></tr></thead>
+  <tbody>
+    <tr><td><strong>页面实时推送</strong></td><td>SignalR（WebSocket，降级 SSE / 长轮询）。服务端 <code>hub.Clients.User(userId).SendAsync(...)</code></td><td>用户还停在页面上等结果</td><td>连接断了就丢。所以页面<strong>重连后主动拉一次状态</strong>；推送只是加速，不是唯一来源</td></tr>
+    <tr><td><strong>轮询 / 回到页面刷新</strong></td><td>前端每 N 秒 <code>GET /orders/{id}</code>，或页面可见时拉一次</td><td>结果几秒到几分钟内出来</td><td>天然不丢：读的是库里的状态</td></tr>
+    <tr><td><strong>站内信 / 邮件 / 短信 / 企业微信</strong></td><td>状态推进时写 outbox → MQ → 通知服务发送</td><td>用户已经离开，或者结果要很久</td><td>通知服务对第三方（短信网关）的调用又是一次跨系统调用——<strong>三种结果</strong>，同一套处理：至少一次 + 幂等（同一条通知发两次可以接受，发零次不行）</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="label">一句可以直接说的判断</span>
+  <p><strong>「通知挂在状态转换上，走 outbox 至少一次投递；实时推送只做加速，页面重连后一定回源拉一次状态。」</strong>——这句同时回答了「怎么通知」和「通知丢了怎么办」。</p>
+</div>
+
+<h2 id="s5">五、ACK 实验室：亲手丢一条、重复一条、死信一条</h2>
+
+<p>换到 MQ 现场。这里「不知道」的形态是：<strong>消费者处理完了，但 broker 不知道</strong>——ACK 没送到。RabbitMQ 靠一套确认协议处理它，官方定义（<a href="https://www.rabbitmq.com/docs/confirms">Consumer Acknowledgements</a>）：</p>
+
+<ul>
+  <li>自动 ACK：<q>a message is considered to be successfully delivered immediately after it is sent</q>，官方直接说它 <q>should be considered unsafe</q>。</li>
+  <li>手动 ACK 下的崩溃：<q>any delivery (message) that was not acked is automatically requeued when the channel (or connection) on which the delivery happened is closed</q>，并且 <q>Redeliveries will have a special boolean property, redeliver, set to true</q>。</li>
+  <li>结果就是（<a href="https://www.rabbitmq.com/docs/reliability">Reliability Guide</a>）：<q>Use of acknowledgements guarantees at least once delivery. Without acknowledgements, message loss is possible ... and only at most once delivery is guaranteed.</q></li>
+</ul>
+
+<p>下面这个实验室有队列、一个消费者、死信队列，和协议给你的每一个按钮。<strong>四个场景依次做，点之前先猜。</strong>队列里是三条「订单已支付」消息，消费者的业务是写库。</p>
+
+<div class="acklab" data-acklab='{
+  "label": "ACK 实验室 · order.paid 队列，消费者负责写库",
+  "prefetch": 1,
+  "ackTimeoutMin": 30,
+  "dlx": true,
+  "messages": ["订单 1001 已支付", "订单 1002 已支付", "订单 1003 已支付"],
+  "scenarios": [
+    {"title":"场景 ① 自动 ACK，处理到一半崩溃",
+     "steps":["切到「自动 ACK」。点「投递下一条」——看 m1 去了哪个框、队列计数变成几。",
+              "<strong>不要</strong>点「处理完成」。直接点「消费者崩溃」。",
+              "看「永久丢失」计数。"],
+     "guess":"m1 会回到队列吗？"},
+    {"title":"场景 ② 手动 ACK，处理到一半崩溃",
+     "steps":["点「重置」，切到「手动 ACK」。点「投递下一条」——m1 在「消费者手里 · Unacked」框，broker 记着。",
+              "不点「处理完成」，直接「消费者崩溃」。",
+              "看 m1 现在在哪，身上多了什么标记。"],
+     "guess":"和场景 ① 的区别在哪一个框？"},
+    {"title":"场景 ③ 手动 ACK，处理完了、ACK 之前崩溃 —— 本课要你报的数字在这里",
+     "steps":["点「投递下一条」（m1 带着 redelivered 又来了）。点「处理完成（写库）」——已写库 ×1。",
+              "<strong>不点 ACK</strong>，点「消费者崩溃」。",
+              "再点「投递下一条」，再点「处理完成（写库）」。看 m1 的「已写库 ×几」。然后点 ACK。"],
+     "guess":"m1 被写库几次？这就是「至少一次」的代价。你的写库语句怎么写才能让第二次变成空操作？"},
+    {"title":"场景 ④ NACK 的两个方向，以及忘了 ACK",
+     "steps":["「投递下一条」拿到 m2。点「NACK · requeue」——看它回到队列的<strong>哪一头</strong>。",
+              "再「投递下一条」（还是 m2），这次点「NACK · 不 requeue」——看它去了哪。",
+              "「投递下一条」拿到 m3，「处理完成」，然后什么都不点，直接「时钟 +31 min」。"],
+     "guess":"requeue=true 的消息若处理必然失败，会发生什么？超时后 broker 做了什么？"}
+  ]
+}'></div>
+
+<div class="callout">
+  <span class="label">四个场景，四个结论</span>
+  <ol>
+    <li><strong>自动 ACK = 发出即删。</strong>消费者崩溃，消息永久丢失，broker 无从得知。这就是官方说 unsafe 的全部含义。日志、缓存失效通知可以用它；业务消息不行。</li>
+    <li><strong>手动 ACK 下 broker 替你记着「谁还没确认」。</strong>channel 一断，Unacked 全部回队列，redelivered=true。丢失变成了重投。</li>
+    <li><strong>重投的代价是重复。</strong>处理完、ACK 前崩溃，同一条会被处理两次——broker 无法区分「没处理」和「处理了没告诉我」，这正是「不知道」。所以消费者必须幂等：按消息 id 或业务键去重，第二次写库变成空操作。<strong>手动 ACK 只把「丢」换成了「重」，幂等才把「重」消掉。</strong></li>
+    <li><strong>NACK 要选方向。</strong>requeue=true 回到队列头部，处理必然失败的消息会无限循环；requeue=false 进死信队列等人工。超时未 ACK（默认 30 分钟）broker 会关掉 channel 并重投——长任务要么拆小，要么调 <code>consumer_timeout</code>。</li>
+  </ol>
+</div>
+
+<h2 id="s6">六、RabbitMQ 三问：队列大小 / 如何消费 / ACK 机制与 C# 实现</h2>
+
+<p><strong>「RabbitMQ 一个队列的大小？」</strong>——这是道陷阱题，标准答案是「没有固定大小」：队列长度只受节点内存和磁盘约束，官方文档只说 <q>You can set a maximum length on a queue</q>（<a href="https://www.rabbitmq.com/docs/maxlength">Queue Length Limit</a>），默认不设。面试官想听的是你知道<strong>可以设、怎么设、满了怎么办</strong>：</p>
+
+<table>
+  <thead><tr><th>参数</th><th>含义</th><th>原文</th></tr></thead>
+  <tbody>
+    <tr><td><code>x-max-length</code></td><td>最多多少条</td><td><q>the x-max-length queue declaration argument with a non-negative integer value</q></td></tr>
+    <tr><td><code>x-max-length-bytes</code></td><td>最多多少字节</td><td>两者都设时 <q>whichever limit is hit first will be enforced</q></td></tr>
+    <tr><td><code>x-overflow</code> = <code>drop-head</code>（默认）</td><td>满了<strong>丢队头</strong>（最老的）</td><td><q>The default behaviour ... is to drop or dead-letter messages from the front of the queue</q></td></tr>
+    <tr><td><code>x-overflow</code> = <code>reject-publish</code></td><td>满了<strong>拒绝新的</strong>，生产者拿到 nack</td><td><q>the most recently published messages will be discarded</q></td></tr>
+    <tr><td><code>x-overflow</code> = <code>reject-publish-dlx</code></td><td>拒绝新的，且被拒的进死信</td><td><q>reject-publish-dlx also dead-letters rejected messages</q></td></tr>
+  </tbody>
+</table>
+
+<p>选哪个：<strong>业务消息用 <code>reject-publish</code></strong>（宁可生产者报错也不能悄悄丢老消息），<strong>日志 / 指标用 <code>drop-head</code></strong>（旧的不值钱）。再往上一层，内存到阈值时 broker 会触发 memory alarm 阻塞所有生产者——这就是「队列大小」在生产上真正的形态：不是队列满，是节点满。</p>
+
+<p><strong>「RabbitMQ 如何进行消费？」</strong>——两种 API，一个几乎不用：</p>
+<ul>
+  <li><strong>推（<code>basic.consume</code>）</strong>：注册一个长期消费者，broker 主动把消息推过来。正常都用这个。</li>
+  <li><strong>拉（<code>basic.get</code>）</strong>：每次去问一条。官方（<a href="https://www.rabbitmq.com/docs/consumers">Consumers</a>）：<q>Fetching messages one by one is highly discouraged as it is very inefficient compared to regular long-lived consumers</q>。只在脚本 / 排障里用。</li>
+  <li><strong>prefetch（<code>basic.qos</code>）</strong>：<q>defines the max number of unacknowledged deliveries that are permitted on a channel</q>。它是消费者的背压阀：不设 = broker 把整个队列灌给第一个上线的消费者；设 1 = 严格一条一条；设 10–50 = 吞吐和公平的常用折中。</li>
+</ul>
+
+<p><strong>「ACK 的机制和实现？」</strong>——机制在第五节已经亲手做过了，这里补协议细节和 C#。协议层四个动作：</p>
+
+<table>
+  <thead><tr><th>方法</th><th>含义</th><th>细节</th></tr></thead>
+  <tbody>
+    <tr><td><code>basic.ack</code></td><td>处理成功，broker 删除</td><td><code>multiple=true</code> 时 <q>acknowledge all outstanding delivery tags up to and including the tag specified</q>——批量确认省往返</td></tr>
+    <tr><td><code>basic.nack</code></td><td>处理失败</td><td><code>requeue=true</code> 回队头；<code>false</code> 进 DLX 或丢弃。支持 multiple</td></tr>
+    <tr><td><code>basic.reject</code></td><td>同上，AMQP 原生</td><td>不支持 multiple；<code>basic.nack</code> 是 RabbitMQ 扩展</td></tr>
+    <tr><td>delivery tag</td><td>每次投递的编号</td><td><q>scoped per channel</q>，<q>deliveries must be acknowledged on the same channel they were received on</q>——换 channel ACK 会报错</td></tr>
+  </tbody>
+</table>
+
+<p>C#（<code>RabbitMQ.Client</code> 7.x，全异步 API）：</p>
+
+<pre><code><span class="cm">// 声明队列：有上限、满了拒绝新消息、失败进死信</span>
+<span class="kw">await</span> channel.QueueDeclareAsync(<span class="st">"order.paid"</span>, durable: <span class="kw">true</span>, exclusive: <span class="kw">false</span>, autoDelete: <span class="kw">false</span>,
+    arguments: <span class="kw">new</span> Dictionary&lt;<span class="kw">string</span>, <span class="kw">object</span>?&gt; {
+        [<span class="st">"x-max-length"</span>] = 100_000,
+        [<span class="st">"x-overflow"</span>] = <span class="st">"reject-publish"</span>,
+        [<span class="st">"x-dead-letter-exchange"</span>] = <span class="st">"order.dlx"</span>
+    });
+
+<span class="cm">// 背压：手里最多 20 条未确认</span>
+<span class="kw">await</span> channel.BasicQosAsync(prefetchSize: 0, prefetchCount: 20, global: <span class="kw">false</span>);
+
+<span class="kw">var</span> consumer = <span class="kw">new</span> AsyncEventingBasicConsumer(channel);
+consumer.ReceivedAsync += <span class="kw">async</span> (_, ea) =&gt;
+{
+    <span class="kw">try</span>
+    {
+        <span class="cm">// 幂等在这里面：INSERT ... ON CONFLICT (message_id) DO NOTHING，或 tx_log 查重</span>
+        <span class="kw">await</span> handler.HandleAsync(ea.Body, ea.BasicProperties.MessageId, ea.Redelivered);
+        <span class="kw">await</span> channel.BasicAckAsync(ea.DeliveryTag, multiple: <span class="kw">false</span>);          <span class="cm">// 处理完才 ACK</span>
+    }
+    <span class="kw">catch</span> (TransientException)                                                <span class="cm">// 库抖了一下</span>
+    {
+        <span class="kw">await</span> channel.BasicNackAsync(ea.DeliveryTag, multiple: <span class="kw">false</span>, requeue: <span class="kw">true</span>);
+    }
+    <span class="kw">catch</span> (Exception)                                                         <span class="cm">// 数据本身有问题，重试没用</span>
+    {
+        <span class="kw">await</span> channel.BasicNackAsync(ea.DeliveryTag, multiple: <span class="kw">false</span>, requeue: <span class="kw">false</span>);  <span class="cm">// → DLX</span>
+    }
+};
+<span class="kw">await</span> channel.BasicConsumeAsync(<span class="st">"order.paid"</span>, autoAck: <span class="kw">false</span>, consumer);   <span class="cm">// 手动 ACK</span></code></pre>
+
+<div class="callout ext">
+  <span class="label">扩展 · 生产者那一侧也有「不知道」：Publisher Confirms</span>
+  <p>ACK 是消费者对 broker 说「我做完了」；对称地，<strong>publisher confirm 是 broker 对生产者说「我收下了」</strong>。原文：<q>For routable messages, the basic.ack is sent when a message has been accepted by all the queues. For persistent messages routed to durable queues, this means persisting to disk.</q> 没开 confirm 就 <code>BasicPublish</code>，等于把消息扔进网络就走——和自动 ACK 是同一种不安全。所以 <a href="0004-microservices-what-actually-changes.html#s4">Lesson 04</a> 的 outbox 后台任务在「标记已发」之前要等 confirm。<strong>两侧各一个确认，中间 durable 队列 + persistent 消息</strong>，这三样凑齐才叫可靠投递。而 requeue=true 那个无限循环的解法，是给消息加重试计数头（<code>x-death</code> 里有），超过 N 次改 requeue=false。</p>
+</div>
+
+<h2 id="s7">七、归类练习：这种情况该做什么</h2>
+
+<p>判据一条：<strong>你现在知道对方的结果吗？知道成功 → 推进；知道失败 → 标失败或补偿；不知道 → 先别动状态，去问。</strong>而「怎么问」取决于对方给了你什么工具。</p>
+
+<div class="binsort" data-binsort='{
+  "label": "归类练习 · 这种情况下一步做什么",
+  "bins": [{"id":"retry","label":"带同一幂等键重试","tone":"good"},
+           {"id":"query","label":"查询 / 等对账，状态不动","tone":"good"},
+           {"id":"comp","label":"补偿 / 标记失败","tone":"good"},
+           {"id":"dlx","label":"进死信，人工处理","tone":"good"}],
+  "items": [
+    {"text":"调支付接口超时，对方文档写明支持 Idempotency-Key","bin":"retry",
+     "why":"有幂等键就用同一个 key 再发：对方已执行会返回第一次结果，没执行就这次执行。这是把「不知道」变「知道」最便宜的路。"},
+    {"text":"调物流下单接口超时，对方只有 query 接口、下单不幂等","bin":"query",
+     "why":"没有幂等键不能重试——可能下两单。记录停在 PENDING，后台任务调 query 按业务号问结果，再推进状态。"},
+    {"text":"对方返回 422 余额不足，我方记录还是 PENDING","bin":"comp",
+     "why":"明确失败，对方没执行。PENDING → FAILED 即可，没有东西需要撤销——这正是先写中间态的好处。"},
+    {"text":"MQ 消息的 JSON 缺少必填字段，反序列化抛异常","bin":"dlx",
+     "why":"数据本身有问题，重试一万次也一样。NACK requeue=false 进死信队列，告警，人工看。requeue=true 会让它无限循环占住消费者。"},
+    {"text":"对方 200 已收到，我方 UPDATE 终态时连接池耗尽抛异常","bin":"query",
+     "why":"对方已成功，我方停在 PENDING。它和「对方超时」落在同一个本地状态，走同一条恢复路径：扫超时 PENDING → 查对方 → 推进。不要再调一次对方。"},
+    {"text":"消费者写库时数据库正在主从切换，连接被拒绝","bin":"retry",
+     "why":"瞬时故障，消息本身没问题。NACK requeue=true 让它稍后重来；消费是幂等的所以安全。若一直失败，靠 x-death 计数超过 N 次转死信。"},
+    {"text":"Saga 第三步失败，第二步已经在对方执行成功了","bin":"comp",
+     "why":"对方的结果是确定的（成功），但整体流程要撤。走 Lesson 05 的补偿：补偿意图落库、后台重试、对方回退接口要幂等。"},
+    {"text":"对账发现对方账单里有一笔我方库里完全没有记录的交易","bin":"dlx",
+     "why":"这是幽灵交易——只会在「先调对方后写库」的顺序下出现，或者 PENDING 都没写成功。程序无法自动判断该补录还是该退款，进差异队列人工处理，并查为什么会有这种顺序。"}
+  ]
+}'></div>
+
+<h2 id="s8">八、话术</h2>
+
+<div class="script">
+  <span class="label">话术 A · 对应题「和第三方的交互怎么实现、怎么保证一致性」「我方成功对方失败 / 我方失败对方成功怎么办」</span>
+  <p><strong>先把框架说破：</strong><q>跨系统调用有三种结果：成功、失败、不知道。前两种好办，一致性设计全是为第三种做的。所以我们的做法不是「成功-失败就回滚、失败-成功就撤销」，而是让设计不依赖于知道对方的结果。</q></p>
+  <p><strong>再给机制：</strong><q>顺序上先在自己库里写一条中间态记录——PENDING，带业务 id 和时间——再调对方，拿到明确结果才推进到 CONFIRMED 或 FAILED。对方明确拒绝就标 FAILED，没有东西需要回滚，因为我写的不是终态；对方成功但我推进终态失败，或者对方超时，都停在 PENDING，走同一条恢复路径：后台任务扫超时的 PENDING，对方支持幂等键就带同一个 key 重试，不支持就调查询接口，最后每天对账兜底，差异进人工队列。</q></p>
+  <p><strong>接真实经历：</strong><q>我做过的那次对接是对方提供回退接口的编排式 Saga，正向失败逆序撤销——那是「知道失败」的处理；「不知道」的处理靠的是补偿意图落库加后台重试，回退接口必须幂等。</q>（这句把 Lesson 05 的经历接进来，用词是「知道 / 不知道」的框架。）</p>
+</div>
+
+<div class="script">
+  <span class="label">话术 B · 对应题「数据操作成功后怎么通知用户」</span>
+  <p><q>通知挂在状态转换上，不挂在请求线程上——因为用户点按钮那个请求返回时记录多半还是 PENDING，真正成功可能是后台查询任务或对账任务推进的。推进状态和写一条 outbox 通知放同一个事务，通知服务消费 outbox 去发。渠道上，用户还在页面就用 SignalR 推，但推送只做加速，页面重连后一定回源拉一次状态；用户已经离开就走站内信、邮件、短信。发短信又是一次跨系统调用，同样至少一次加幂等——同一条通知发两遍可以接受，发零遍不行。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 C · 对应题「RabbitMQ 队列大小」「如何消费」「ACK 机制和实现」</span>
+  <p><strong>队列大小：</strong><q>没有固定大小，只受节点内存和磁盘限制。可以用 x-max-length 或 x-max-length-bytes 设上限，满了的行为由 x-overflow 决定：默认 drop-head 丢最老的，业务队列我会改成 reject-publish 让生产者报错，宁可失败也不悄悄丢。真正的生产问题通常不是队列满而是节点内存告警把所有生产者阻塞住。</q></p>
+  <p><strong>如何消费：</strong><q>用 basic.consume 注册长期消费者让 broker 推，basic.get 轮询官方明确不推荐。配 prefetch 做背压，不然 broker 会把整个队列灌给第一个上线的消费者；一般设 10 到 50。</q></p>
+  <p><strong>ACK 机制：</strong><q>自动 ACK 是发出即删，消费者崩溃消息就丢，官方说它 unsafe；业务消息一律手动 ACK，处理完写库成功再 ack，失败按原因分：瞬时故障 nack requeue 回队列，数据本身错的 nack 不 requeue 进死信队列人工处理。手动 ACK 下 channel 断开，broker 会把未确认的自动重投并打上 redelivered。代价是处理完、ACK 前崩溃的消息会被处理两次——broker 分不清「没处理」和「处理了没告诉我」——所以消费者必须幂等，按消息 id 去重。手动 ACK 把丢换成了重，幂等把重消掉。我自己项目里 RabbitMQ 用在日志和缓存失效通知，那两个场景丢一条不致命，所以当时用的自动 ACK 是合理取舍；业务消息就必须是上面这套。</q></p>
+</div>
+
+<h2 id="s9">九、检验一下</h2>
+
+<p>先在心里说出理由再选。第 6 题是 Lesson 07 的回炉。</p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "调第三方接口抛出超时异常。按本课的框架，此刻正确的做法是：",
+    "options": [
+      "视为失败，把本地记录标成失败并通知用户重试",
+      "视为成功，先推进终态，等对账发现问题再回退",
+      "本地记录停在中间态，去问对方或等对账再推进",
+      "立即再发一次请求，用新的随机键避免和前次冲突"
+    ],
+    "answer": 2,
+    "why": "超时是「不知道」，判成功或失败都是猜。停在 PENDING 是唯一诚实的状态，然后用幂等重试 / 查询 / 对账把它变成「知道」。选项 D 用新键重试等于发两笔——键必须和第一次相同。"
+  },
+  {
+    "q": "为什么要先写 PENDING 再调对方，而不是先调对方再写库？",
+    "options": [
+      "先写库能让本地事务把对方的调用一起回滚掉",
+      "先调对方再写库时，我方写库失败会留下无记录的幽灵交易",
+      "先写库能减少一次网络往返，整体延迟会更低",
+      "对方接口通常要求请求里带上我方已生成的主键"
+    ],
+    "answer": 1,
+    "why": "先调后写，对方成功而我方 INSERT 失败 → 本地没有任何记录，只能等对方账单揭发。先写 PENDING 保证不管后面发生什么，本地永远有一条带 biz_id 的锚，恢复动作才有依据。本地事务无法回滚对方（选项 A 错）。"
+  },
+  {
+    "q": "第五节场景 ①：自动 ACK 模式下消费者处理到一半崩溃，那条消息：",
+    "options": [
+      "回到队列头部并带上 redelivered 标记",
+      "永久丢失，broker 在发出时就已删除它",
+      "进入死信队列，等待人工确认后再重投",
+      "停留在消费者手里直到超时后重新投递"
+    ],
+    "answer": 1,
+    "why": "官方：a message is considered to be successfully delivered immediately after it is sent。broker 发出即删，之后的崩溃它无从得知。这就是 unsafe 的全部含义。"
+  },
+  {
+    "q": "第五节场景 ③：手动 ACK，处理完成但 ACK 之前崩溃。这暴露了什么？",
+    "options": [
+      "手动 ACK 也会丢消息，所以还需要 publisher confirm",
+      "重投导致同一条被处理两次，所以消费者必须幂等",
+      "broker 应该在投递时就记录处理状态避免重复投递",
+      "prefetch 设得太大，导致崩溃时手里积压了多条消息"
+    ],
+    "answer": 1,
+    "why": "broker 分不清「没处理」和「处理了但没告诉我」——这就是 MQ 现场的「不知道」。它只能选重投，于是至少一次投递必然带来重复。手动 ACK 把丢换成重，幂等把重消掉。"
+  },
+  {
+    "q": "队列设了 x-max-length 但没设 x-overflow，队列满了之后：",
+    "options": [
+      "生产者收到 nack，新消息被拒绝进入队列",
+      "队头最老的消息被丢弃或死信，给新消息腾位",
+      "broker 触发内存告警并阻塞所有生产者的连接",
+      "队列自动扩容到磁盘，长度限制只对内存生效"
+    ],
+    "answer": 1,
+    "why": "官方：The default behaviour ... is to drop or dead-letter messages from the front of the queue。默认 drop-head。业务队列要显式改成 reject-publish，否则最老的业务消息会被悄悄丢掉。"
+  },
+  {
+    "q": "回炉 Lesson 07：抢单用 UPDATE ... WHERE status = 待处理 的条件更新，为什么不需要把隔离级别升到 Repeatable Read？",
+    "options": [
+      "因为 PostgreSQL 的默认级别已经足够阻止一切并发异常",
+      "因为条件更新在行锁上串行化，后到的事务重读行后条件不成立",
+      "因为抢单只涉及一行，单行操作在任何级别下都是原子的",
+      "因为 Repeatable Read 会让后到的事务报错，体验反而更差"
+    ],
+    "answer": 1,
+    "why": "Read Committed 下 UPDATE 会在行锁释放后重新读取该行的最新版本再判 WHERE：先到的事务把 status 改掉并提交，后到的重读发现条件不成立，影响 0 行。check-then-act 的缝被 UPDATE 自身的锁 + 重判封住了，不需要更高隔离级别。"
+  }
+]'></div>
+
+<h2 id="s10">十、下一课</h2>
+
+<p>到这一课，微服务 / 分布式板块的三条线收束了：<a href="0004-microservices-what-actually-changes.html">04</a> 说三种失败长得一样 → <a href="0005-saga-and-choreography.html">05</a> 说「知道失败」怎么撤 → 13 说「不知道」怎么变成「知道」，以及 MQ 上同一件事的实现。题库第十、十一节六问全部有了话术。</p>
+
+<p>下一课候选：<strong>(b) 日志、监控与「用户访问慢怎么排查」</strong>——题库第七节，Lesson 09 的线程池饥饿画像升级成一套排查流程，Lesson 04 的 TraceId 在这里落地；<strong>(c) Git flow + 单元测试 + Code Review + Azure DevOps</strong>——题库第八、十二、十三节，流程题，轻，Azure 无经历走「可迁移能力」路线；<strong>(d) 前端题：React / Ant Design / 下拉联动 / 大表格性能</strong>——题库里还没碰过的板块。回复一个字母即可。</p>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（只看一个的话，看这个）：</strong><br>
+  <a href="https://www.rabbitmq.com/docs/confirms">RabbitMQ Docs — Consumer Acknowledgements and Publisher Confirms</a>。15 分钟读完，第五、六节的每一句引文都出自这里；重点看 Automatic Requeueing、Negative Acknowledgement、Channel Prefetch 三个小节。<br>
+  想再深一层：<a href="https://www.rabbitmq.com/docs/reliability">RabbitMQ — Reliability Guide</a>（at-least-once 与 at-most-once 的原文定义）、<a href="https://www.rabbitmq.com/docs/maxlength">Queue Length Limit</a>（三种 overflow）、<a href="https://www.rabbitmq.com/docs/consumers">Consumers</a>（推 vs 拉、ack 超时 30 分钟）、<a href="https://docs.stripe.com/api/idempotent_requests">Stripe — Idempotent requests</a>（幂等键的行业标准实现，一页讲清）。</p>
+
+  <p><strong>社区（获取智慧，不是知识）：</strong><a href="https://www.reddit.com/r/microservices/">r/microservices</a> 搜 <q>reconciliation</q> 或 <q>idempotency key</q>——看别人对账时发现的幽灵交易是怎么来的；<a href="https://stackoverflow.com/questions/tagged/rabbitmq+c%23">Stack Overflow 的 <code>rabbitmq</code> + <code>c#</code> 标签</a> 搜 <q>redelivered</q>，几乎每个提问者都在第五节场景 ③ 里。</p>
+
+  <div class="nav-links">
+    <a href="0004-microservices-what-actually-changes.html">← Lesson 04：四笔开销</a>
+    <a href="0005-saga-and-choreography.html">← Lesson 05：Saga</a>
+    <a href="0012-authentication-and-authorization.html">← Lesson 12：认证授权</a>
+    <a href="../reference/consistency-mq-cheatsheet.html">→ 速查表：一致性与 MQ</a>
+    <a href="../reference/microservices-cheatsheet.html">→ 速查表：微服务</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练，有任何不清楚的直接问我。</strong>这一课只收一样：<a href="#s5">第五节</a>场景 ③ 结束时 <code>m1</code> 的<strong>「已写库 ×几」</strong>（一个数字）。<br>
+    另外回我一个字母：下一课走 <strong>(b) 日志监控与慢排查</strong>、<strong>(c) Git / 测试 / Code Review / DevOps</strong>，还是 <strong>(d) 前端板块</strong>。
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+<script src="../assets/callchain.js"></script>
+<script src="../assets/acklab.js"></script>
+<script src="../assets/binsort.js"></script>
+</body>
+</html>

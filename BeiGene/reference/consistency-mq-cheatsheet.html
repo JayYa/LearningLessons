@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查表 · 跨系统一致性与 RabbitMQ</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Reference · 第三方交互与数据一致性 · RabbitMQ · BeiGene 面试备战</p>
+  <h1>跨系统一致性<br>＋ RabbitMQ 消费与 ACK</h1>
+  <p class="standfirst">压缩自 <a href="../lessons/0013-third-party-consistency-and-rabbitmq-ack.html">Lesson 13</a>，接 <a href="microservices-cheatsheet.html">微服务速查表</a> 第 8、9 节。面试前 10 分钟只看这一页。</p>
+</header>
+
+<h2>0 · 一句话判据</h2>
+
+<p><strong>跨系统的每一步都有三种结果：成功、失败、不知道。</strong>前两种一句 if；中间态、幂等键、查询、对账、手动 ACK、去重表——全是为「不知道」做的。HTTP 的「不知道」叫超时，MQ 的「不知道」叫 ACK 没送到。</p>
+
+<h2>1 · 顺序：先写中间态</h2>
+
+<table>
+  <thead><tr><th>顺序</th><th>问题</th><th>判定</th></tr></thead>
+  <tbody>
+    <tr><td>先调对方，再写库</td><td>对方成功、我方写库失败 → <strong>无记录的幽灵交易</strong></td><td>✗</td></tr>
+    <tr><td>先写终态，再调对方</td><td>超时后终态是假的，回滚 / 补偿都要先知道对方结果</td><td>△</td></tr>
+    <tr><td><strong>先写 PENDING → 调对方 → 推进终态</strong></td><td>不管发生什么，本地永远有 biz_id + 时间 + 状态的锚</td><td>✓</td></tr>
+  </tbody>
+</table>
+
+<p>塌缩规则：<strong>对方明确失败 → FAILED（无需回滚）；明确成功 → CONFIRMED；其余一切（超时 / 我方推进失败 / 进程被杀）→ 停在 PENDING，同一条恢复路径。</strong>推进终态写成条件更新 <code>WHERE state = 'PENDING'</code>，可重复执行。</p>
+
+<h2>2 · 把「不知道」变「知道」：三层</h2>
+
+<table>
+  <thead><tr><th>#</th><th>路</th><th>前提</th><th>覆盖</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>幂等重试</strong>：带<strong>同一个</strong> key 再发</td><td>对方支持 Idempotency-Key</td><td>~95% 的超时</td></tr>
+    <tr><td>2</td><td><strong>查询接口</strong>：后台扫超时 PENDING，按业务号问</td><td>对方有 query 接口</td><td>对方不幂等时</td></tr>
+    <tr><td>3</td><td><strong>对账</strong>：定期拉对方全量，比对，差异进人工队列</td><td>对方给账单 / 批量查询</td><td><strong>兜底，永远要有</strong></td></tr>
+  </tbody>
+</table>
+
+<p>幂等键三细节：按<strong>业务动作</strong>做 key（= 本地 biz_id），不是每次随机；被调方存第一次的<strong>状态码 + 响应体</strong>（含 500）原样返回；同 key 不同参数要<strong>报错</strong>。（<a href="https://docs.stripe.com/api/idempotent_requests">Stripe</a>）</p>
+
+<h2>3 · 通知用户</h2>
+
+<p><strong>挂在状态转换上，不挂在请求线程上</strong>（真正成功可能由后台任务推进）。推进状态 + 写 outbox 通知同一事务；通知服务消费 outbox。SignalR 推送只做<strong>加速</strong>，页面重连后回源拉状态；离线走站内信 / 邮件 / 短信——又是跨系统调用，至少一次 + 幂等（发两次可接受，发零次不行）。</p>
+
+<h2>4 · RabbitMQ 三问</h2>
+
+<table>
+  <thead><tr><th>题</th><th>答</th></tr></thead>
+  <tbody>
+    <tr><td><strong>队列大小</strong></td><td>无固定大小，只受节点内存 / 磁盘限制。<code>x-max-length</code> / <code>x-max-length-bytes</code> 设上限；<code>x-overflow</code>：<code>drop-head</code>（<strong>默认</strong>，丢最老）/ <code>reject-publish</code>（拒新，生产者 nack，<strong>业务队列用这个</strong>）/ <code>reject-publish-dlx</code>（拒新且进死信）。生产上真正的问题是内存告警阻塞生产者。</td></tr>
+    <tr><td><strong>如何消费</strong></td><td>推：<code>basic.consume</code> 长期消费者（正常用）。拉：<code>basic.get</code> 官方 <q>highly discouraged</q>。<code>basic.qos</code> prefetch = 未确认上限 = 背压阀，一般 10–50。</td></tr>
+    <tr><td><strong>ACK 机制</strong></td><td>自动 ACK = 发出即删，崩溃就丢，官方 <q>unsafe</q>。手动：处理完再 <code>basic.ack</code>；失败 <code>basic.nack</code>，<code>requeue=true</code> 回队头（瞬时故障）/ <code>false</code> 进 DLX（数据本身错）。channel 断 → 未确认全部重投，<code>redelivered=true</code>。未 ACK 超 30 分钟 → <code>PRECONDITION_FAILED</code> 关 channel。delivery tag 按 channel 作用域，必须在原 channel 上 ACK。</td></tr>
+  </tbody>
+</table>
+
+<p><strong>至少一次的代价：</strong>处理完、ACK 前崩溃 → 同一条处理两次。broker 分不清「没处理」和「处理了没告诉我」。<strong>手动 ACK 把丢换成重，幂等把重消掉</strong>（按 messageId / 业务键去重）。</p>
+
+<p><strong>对称的另一侧：</strong>publisher confirm = broker 对生产者说「收下了」；durable 队列 + persistent 消息时 <q>means persisting to disk</q>。可靠投递三件套：confirm + durable/persistent + 手动 ACK。</p>
+
+<h2>5 · C# 骨架（RabbitMQ.Client 7.x）</h2>
+
+<pre><code>await channel.QueueDeclareAsync("order.paid", durable: true, exclusive: false, autoDelete: false,
+    arguments: new Dictionary&lt;string, object?&gt; {
+        ["x-max-length"] = 100_000, ["x-overflow"] = "reject-publish", ["x-dead-letter-exchange"] = "order.dlx" });
+await channel.BasicQosAsync(0, prefetchCount: 20, global: false);
+var consumer = new AsyncEventingBasicConsumer(channel);
+consumer.ReceivedAsync += async (_, ea) =&gt; {
+    try { await handler.HandleAsync(ea.Body, ea.BasicProperties.MessageId, ea.Redelivered);   // 幂等在里面
+          await channel.BasicAckAsync(ea.DeliveryTag, multiple: false); }
+    catch (TransientException) { await channel.BasicNackAsync(ea.DeliveryTag, false, requeue: true); }
+    catch (Exception)          { await channel.BasicNackAsync(ea.DeliveryTag, false, requeue: false); } // → DLX
+};
+await channel.BasicConsumeAsync("order.paid", autoAck: false, consumer);</code></pre>
+
+<h2>6 · 归类判据</h2>
+
+<ul>
+  <li>知道成功 → 推进；知道失败 → 标 FAILED / 补偿（Saga）；<strong>不知道 → 状态不动，去问</strong>。</li>
+  <li>有幂等键 → 同 key 重试；只有 query → 查询；都没有 → 对账。</li>
+  <li>MQ：瞬时故障 → nack requeue；数据本身错 → nack 进 DLX；requeue 循环 → 看 <code>x-death</code> 计数转 DLX。</li>
+  <li>幽灵交易（对方有、我方无）→ 人工，且查顺序为什么反了。</li>
+</ul>
+
+<h2>7 · 话术骨架</h2>
+
+<ul>
+  <li><strong>一致性：</strong>三种结果 → 先写 PENDING → 明确结果推进、不明确停住 → 幂等重试 / 查询 / 对账三层 → 接 Saga 经历（「知道失败」的处理）。</li>
+  <li><strong>通知：</strong>挂状态转换、走 outbox、推送只加速、重连回源。</li>
+  <li><strong>RabbitMQ：</strong>无固定大小 + overflow 选 reject-publish；consume 推 + prefetch 背压；手动 ACK 把丢换成重、幂等消重；自己项目日志 / 缓存通知用自动 ACK 是合理取舍。</li>
+</ul>
+
+<footer class="footer">
+  <div class="nav-links">
+    <a href="../lessons/0013-third-party-consistency-and-rabbitmq-ack.html">← Lesson 13</a>
+    <a href="microservices-cheatsheet.html">→ 速查表：微服务</a>
+    <a href="claim-patterns-cheatsheet.html">→ 速查表：抢单写法</a>
+    <a href="auth-cheatsheet.html">→ 速查表：认证与授权</a>
+  </div>
+</footer>
+</body>
+</html>

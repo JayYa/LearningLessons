@@ -9,8 +9,10 @@
 | # | 课程 | 描述 |
 |---|------|------|
 | 1 | [第 1 课：Program.cs 解剖——从 Global.asax 到 WebApplication](https://JayYa.github.io/LearningLessons/ASP.NET%20Core/lessons/0001-program-cs-anatomy.html) | 逐行拆解 Program.cs，对照 Global.asax 理解 WebApplication 的 builder、服务注册与管道装配 |
+| 2 | [第 2 课：Kestrel、反向代理与容器部署](https://JayYa.github.io/LearningLessons/ASP.NET%20Core/lessons/0002-kestrel-and-hosting.html) | 讲清 Kestrel 作为内置服务器的定位，为什么前面还要放反向代理，以及容器部署时端口、HTTPS 与转发头的处理 |
 
 **参考资料：**
+- [Kestrel 与托管速查表](https://JayYa.github.io/LearningLessons/ASP.NET%20Core/reference/kestrel-hosting-quick-reference.html) — Kestrel 端点配置、反向代理转发头与容器托管常用设置速查
 - [Program.cs 速查表](https://JayYa.github.io/LearningLessons/ASP.NET%20Core/reference/program-cs-quick-reference.html) — WebApplication 启动流程各阶段常用 API 速查
 
 ## Docker and K8S
@@ -50,12 +52,14 @@
 | 10 | [Lesson 10 · 一个请求穿过管道时到底发生了什么](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0010-middleware-pipeline-and-di-lifetimes.html) | 跟随一次 HTTP 请求穿过 ASP.NET Core 中间件管道，串起 DI 的 Transient、Scoped、Singleton 三种生命周期 |
 | 11 | [Lesson 11 · 隔离级别只决定一件事：你看的是哪一刻的快照](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0011-transaction-isolation-and-usage.html) | 用「快照时刻」一个视角讲清四种事务隔离级别的差异，以及 .NET 中事务的实际用法 |
 | 12 | [Lesson 12 · 认证只产出一样东西：一张 ClaimsPrincipal](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0012-authentication-and-authorization.html) | 把认证与授权拆开看：认证只负责产出 ClaimsPrincipal，授权基于它做策略判断，串起 Cookie/JWT 与 ASP.NET Core 的 Authorize 机制 |
+| 13 | [Lesson 13 · 跨系统的调用有三种结果，不是两种](https://JayYa.github.io/LearningLessons/BeiGene/lessons/0013-third-party-consistency-and-rabbitmq-ack.html) | 第三方调用除成功与失败外还有「不知道」这第三种结果，由此引出幂等、对账与 RabbitMQ 手动 ack 的一致性保障 |
 
 **参考资料：**
 - [速查表 · 排序、选择、Top-K 与外部排序（C#）](https://JayYa.github.io/LearningLessons/BeiGene/reference/algo-cheatsheet.html) — 排序、选择、Top-K 与外部排序算法速查
 - [速查表 · async / await 状态机](https://JayYa.github.io/LearningLessons/BeiGene/reference/async-cheatsheet.html) — async/await 状态机结构、续延调度与常见陷阱速查
 - [速查表 · 认证与授权](https://JayYa.github.io/LearningLessons/BeiGene/reference/auth-cheatsheet.html) — Cookie 与 JWT 认证配置、ClaimsPrincipal 结构与授权策略写法速查
 - [速查表 · 并发抢单与审批流](https://JayYa.github.io/LearningLessons/BeiGene/reference/claim-patterns-cheatsheet.html) — 并发抢单的原子更新写法与审批流状态流转速查
+- [速查表 · 跨系统一致性与 RabbitMQ](https://JayYa.github.io/LearningLessons/BeiGene/reference/consistency-mq-cheatsheet.html) — 跨系统调用的三种结果处理、幂等与对账策略，以及 RabbitMQ ack/nack/重投递速查
 - [Reference · 索引与 SQL 优化速查表](https://JayYa.github.io/LearningLessons/BeiGene/reference/db-index-cheatsheet.html) — 数据库索引设计与 SQL 优化常用手法速查
 - [速查表 · 中间件管道与 DI 生命周期](https://JayYa.github.io/LearningLessons/BeiGene/reference/di-middleware-cheatsheet.html) — 中间件注册顺序、短路规则与 DI 三种生命周期的行为对照速查
 - [速查表 · .NET 锁的种类](https://JayYa.github.io/LearningLessons/BeiGene/reference/dotnet-locks-cheatsheet.html) — lock、Monitor、SemaphoreSlim 等 .NET 各类锁的适用场景与取舍速查

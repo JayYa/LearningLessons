@@ -83,6 +83,37 @@ await Task.WhenAll(workers);
 // 要保序 → 一个消费者；要保序又要并行 → 按 key 分片到多个 Channel
 </code></pre>
 
+<h2>Go channel ↔ .NET Channel 映射</h2>
+
+<table class="tbl">
+  <tr><th>Go</th><th>.NET</th><th>备注</th></tr>
+  <tr><td><code>make(chan T)</code> 无缓冲</td><td>—</td><td>无会合语义（容量最小 1）；信号用 <code>TaskCompletionSource</code>，确认用消息内嵌 TCS，互斥用 <code>SemaphoreSlim</code></td></tr>
+  <tr><td><code>make(chan T, n)</code></td><td><code>CreateBounded&lt;T&gt;(n)</code></td><td></td></tr>
+  <tr><td>—</td><td><code>CreateUnbounded&lt;T&gt;()</code></td><td>Go 无无上限 channel</td></tr>
+  <tr><td><code>ch &lt;- v</code></td><td><code>await writer.WriteAsync(v, ct)</code></td><td></td></tr>
+  <tr><td><code>select { case ch &lt;- v: default: }</code></td><td><code>writer.TryWrite(v)</code></td><td></td></tr>
+  <tr><td><code>v := &lt;-ch</code></td><td><code>await reader.ReadAsync(ct)</code></td><td>关闭后：Go 返回零值，.NET 抛 <code>ChannelClosedException</code></td></tr>
+  <tr><td><code>v, ok := &lt;-ch</code></td><td><code>reader.TryRead(out v)</code></td><td><code>ok</code> 含义不同：Go = 未关闭，.NET = 当前有数据</td></tr>
+  <tr><td><code>for v := range ch</code></td><td><code>await foreach (var v in reader.ReadAllAsync(ct))</code></td><td></td></tr>
+  <tr><td><code>close(ch)</code></td><td><code>writer.Complete()</code> / <code>TryComplete(ex)</code></td><td>.NET 可带错误，消费者读到时抛出；Go 需另开 <code>errc</code> 或 errgroup</td></tr>
+  <tr><td><code>chan&lt;- T</code> / <code>&lt;-chan T</code></td><td><code>ChannelWriter&lt;T&gt;</code> / <code>ChannelReader&lt;T&gt;</code></td><td>单向视图，DI 拆开注册</td></tr>
+  <tr><td><code>select</code> + <code>ctx.Done()</code></td><td><code>CancellationToken</code> 参数</td><td></td></tr>
+  <tr><td><code>select</code> + <code>time.After</code></td><td><code>CancellationTokenSource.CancelAfter</code></td><td></td></tr>
+  <tr><td><code>select</code> 多路读</td><td><code>Task.WhenAny(WaitToReadAsync…)</code> + 各路 <code>TryRead</code></td><td>非原子；优先改为多生产者写同一 Channel（写端 fan-in）</td></tr>
+  <tr><td>nil channel 永久阻塞</td><td>—</td><td>无"禁用一路"技巧</td></tr>
+  <tr><td><code>len(ch)</code></td><td><code>reader.Count</code>（查 <code>CanCount</code>）</td><td></td></tr>
+  <tr><td>—</td><td><code>FullMode</code> Drop 系列、<code>SingleReader/Writer</code>、<code>Reader.Completion</code>、<code>TryPeek</code></td><td>.NET 独有选项</td></tr>
+</table>
+
+<table class="tbl">
+  <tr><th>关闭后</th><th>Go</th><th>.NET</th></tr>
+  <tr><td>再发送</td><td>panic</td><td><code>WriteAsync</code> 抛；<code>TryWrite</code> 返回 false</td></tr>
+  <tr><td>重复关闭</td><td>panic</td><td><code>Complete()</code> 抛；<code>TryComplete()</code> 返回 false</td></tr>
+  <tr><td>排空后接收</td><td>零值，<code>ok == false</code></td><td><code>ReadAsync</code> 抛；<code>WaitToReadAsync</code> false；<code>ReadAllAsync</code> 结束</td></tr>
+</table>
+
+<p>阻塞模型：Go 阻塞 goroutine（便宜）；.NET 挂起状态机，<strong>无同步阻塞 API</strong>，只能在 async 里用。</p>
+
 <h2>PeriodicTimer</h2>
 
 <pre><code>using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
@@ -170,6 +201,7 @@ if (pos != null) { line = buf.Slice(0, pos.Value); buf = buf.Slice(buf.GetPositi
 <h2>官方文档</h2>
 <ul>
   <li><a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/channels">Channels</a> · <a href="https://devblogs.microsoft.com/dotnet/an-introduction-to-system-threading-channels/">Toub: An Introduction to System.Threading.Channels</a></li>
+  <li>Go 侧：<a href="https://go.dev/ref/spec#Channel_types">语言规范 · Channel types / Select</a> · <a href="https://go.dev/ref/mem#chan">内存模型 · Channel</a> · <a href="https://go.dev/blog/pipelines">Pipelines and cancellation</a></li>
   <li><a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.periodictimer">PeriodicTimer</a></li>
   <li><a href="https://learn.microsoft.com/en-us/dotnet/standard/memory-and-spans/memory-t-usage-guidelines">Memory&lt;T&gt; and Span&lt;T&gt; usage guidelines</a> · <a href="https://learn.microsoft.com/en-us/dotnet/api/system.buffers.arraypool-1">ArrayPool&lt;T&gt;</a></li>
   <li><a href="https://learn.microsoft.com/en-us/dotnet/standard/io/pipelines">System.IO.Pipelines</a></li>
