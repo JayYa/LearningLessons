@@ -1,0 +1,128 @@
+/* Styles for the waterfall.js component. Load after lesson.css. */
+
+.waterfall {
+  border: 1px solid var(--rule);
+  background: #fff;
+  padding: 1.2rem 1.4rem 1rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.wf-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.wf-head .label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.wf-score { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-soft); }
+
+.wf-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.8rem; }
+.wf-tab {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+.wf-tab.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+.wf-intro { margin: 0.2rem 0 0.8rem; font-size: 0.95rem; }
+
+.wf-metrics { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.9rem; }
+.wf-tile {
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  padding: 0.35rem 0.6rem;
+  min-width: 6.5rem;
+  display: flex;
+  flex-direction: column;
+}
+.wf-tile.bad { border-color: var(--bad); background: var(--bad-soft); }
+.wf-tile.good { border-color: var(--good); background: var(--good-soft); }
+.wf-k { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.wf-v { font-family: var(--mono); font-size: 0.95rem; }
+
+.wf-scale {
+  position: relative;
+  height: 1.1rem;
+  margin-left: 13rem;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--ink-soft);
+}
+.wf-tick { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.wf-tick:first-child { transform: none; }
+.wf-tick:last-child { transform: translateX(-100%); }
+
+.wf-chart { margin: 0.3rem 0 0.6rem; }
+.wf-row { display: flex; align-items: center; height: 1.7rem; border-bottom: 1px dotted var(--rule); }
+.wf-name {
+  flex: 0 0 13rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+.wf-track { flex: 1; position: relative; height: 1.1rem; }
+.wf-bar {
+  position: absolute;
+  top: 0;
+  height: 1.1rem;
+  border: 1px solid #6b6b6b;
+  background: #c9c4b8;
+  cursor: pointer;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+}
+.wf-bar.good { background: #cfe3d6; border-color: var(--good); }
+.wf-bar.warn { background: #f1dfb3; border-color: #9a7a1c; }
+.wf-bar.gap { background: transparent; border-style: dashed; }
+.wf-bar:hover:not(.locked) { outline: 2px solid var(--ink); }
+.wf-bar.locked { cursor: default; }
+.wf-bar.hit { background: var(--good); border-color: var(--good); }
+.wf-bar.hit .wf-dur { color: #fff; }
+.wf-bar.miss { background: var(--bad-soft); border-color: var(--bad); }
+.wf-dur {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  padding-left: 0.3rem;
+  white-space: nowrap;
+  line-height: 1.1rem;
+  color: var(--ink);
+}
+
+.wf-ask { font-style: italic; color: var(--ink-soft); margin: 0.4rem 0 0.4rem; font-size: 0.92rem; }
+
+.wf-verdict { margin: 0.4rem 0 0; font-size: 0.95rem; }
+.wf-verdict p { margin: 0.4rem 0; }
+.wf-verdict .wf-tag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid;
+}
+.wf-verdict.good .wf-tag { color: var(--good); border-color: var(--good); background: var(--good-soft); }
+.wf-verdict.bad .wf-tag { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
+.wf-next { border-left: 3px solid var(--accent); padding-left: 0.6rem; }
+
+@media print {
+  .wf-tabs { display: none; }
+  .wf-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

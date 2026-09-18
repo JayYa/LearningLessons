@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 14 · 「慢」是症状，不是问题</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/quiz.css">
+<link rel="stylesheet" href="../assets/decision.css">
+<link rel="stylesheet" href="../assets/waterfall.css">
+<link rel="stylesheet" href="../assets/binsort.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Lesson 14 · 日志、监控与性能排查 · BeiGene 面试备战 · 交互课</p>
+  <h1>「慢」是症状，不是问题<br><span style="font-size:0.62em;color:var(--ink-soft);">先找到时间花在哪一跳，再问它为什么慢</span></h1>
+  <p class="standfirst">题库第七节五问：「用过哪些日志服务」「用过哪些检测服务」「用户遇到访问慢如何排查」「排除性能问题用过哪些工具」「如何提升系统吞吐率」。五问的中心是第三问，它是一道<strong>流程题</strong>：面试官不在乎你猜中原因，在乎你有没有一套<strong>不靠猜</strong>的办法。这一课给你那套办法，然后把 <a href="0009-async-await-state-machine.html">Lesson 09</a> 的线程池饥饿画像、<a href="0004-microservices-what-actually-changes.html#s3">Lesson 04</a> 的 TraceId、<a href="0001-composite-index-leftmost-prefix.html">Lesson 01</a> 的 EXPLAIN 全部接进这套流程——它们本来就是同一件事的三个工具。</p>
+</header>
+
+<div class="callout">
+  <span class="label">怎么用这一课</span>
+  <p>约 35 分钟。<a href="#s2">第二节</a>的决策树和<a href="#s3">第三节</a>的排查实验室都要<strong>先点再看</strong>。这一课的交付物是一个数字：实验室场景 ③ 里<strong>那段空白的毫秒数</strong>。</p>
+</div>
+
+<nav class="toc">
+  <span class="label">目录</span>
+  <ol>
+    <li><a href="#s1">先破一个错觉</a> <span class="depth">— 「为什么慢」不是第一个问题</span></li>
+    <li><a href="#s2">三个二分问题</a> <span class="depth">— 决策树：先把范围缩到一层</span></li>
+    <li><a href="#s3">排查实验室</a> <span class="depth">— 五张追踪图，点出时间去哪了</span></li>
+    <li><a href="#s4">三根支柱各答一个问题</a> <span class="depth">— 指标 / 追踪 / 日志 + 四个黄金信号</span></li>
+    <li><a href="#s5">定位到「跳」之后</a> <span class="depth">— 每一层的工具</span></li>
+    <li><a href="#s6">日志怎么打才能排查</a> <span class="depth">— 结构化 / 级别 / TraceId 自动附加</span></li>
+    <li><a href="#s7">提升吞吐率</a> <span class="depth">— 三个杠杆，一个前提</span></li>
+    <li><a href="#s8">归类练习</a> <span class="depth">— 这个问题该问哪根支柱</span></li>
+    <li><a href="#s9">话术</a> <span class="depth">— 三段</span></li>
+    <li><a href="#s10">检验一下</a> <span class="depth">— 6 题</span></li>
+    <li><a href="#s11">下一课</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1">一、先破一个错觉</h2>
+
+<p>「用户遇到访问慢，如何排查」——大多数人的第一反应是列原因：SQL 没走索引、代码里有 <code>.Result</code>、第三方接口慢、网络不好……然后面试官听到的是一张猜测清单。清单再长也是猜，而且面试官随便追一句「你怎么知道是哪一个」就没了。</p>
+
+<p>Google SRE 那本书把监控要回答的问题压成了一句（<a href="https://sre.google/sre-book/monitoring-distributed-systems/">Monitoring Distributed Systems</a>）：<q>what&#39;s broken, and why?</q>——<strong>前半句是症状，后半句是原因；先答前半句。</strong>「慢」是症状。一次请求的时间总是花在某个具体的地方：某条 SQL、某次下游调用、某段等线程池的空白、某个 4 MB 的响应体在用户的 4G 上下载。排查的本质不是猜原因，是<strong>把「慢」定位到那个地方</strong>，定位到了，原因通常就是显然的。</p>
+
+<div class="callout">
+  <span class="label">这一课唯一必须记死的一句</span>
+  <p><strong>先定位，再解释：一次慢请求的时间一定花在某一跳上，先用指标缩小到哪一层、用追踪找到哪一跳，再用日志和 profiler 问它为什么慢。</strong></p>
+</div>
+
+<p>下面按这个顺序走：第二节用三个二分问题把范围缩到一层，第三节在追踪图上找那一跳，第四、五节把工具挂到每一层，第六节讲日志要怎么打才能在第三步派上用场，第七节回答吞吐率。</p>
+
+<h2 id="s2">二、三个二分问题：先把范围缩到一层</h2>
+
+<p>「用户说慢」这句话信息量为零，前三句反问就把它变成有信息的：<strong>一个人慢还是很多人慢？所有接口慢还是某个接口慢？一直慢还是最近开始慢？</strong>每一问都把可能的层砍掉一半。走一遍：</p>
+
+<div class="decision" data-decision='{
+  "start": {"q":"反馈慢的是一个用户，还是很多用户？",
+    "options":[{"label":"一个用户","next":"one"},{"label":"很多用户","next":"many"}]},
+  "one": {"q":"这个用户的数据量和别人一样吗？（比如他名下有 50 万条记录）",
+    "options":[{"label":"一样，数据不特殊","next":"one-client"},{"label":"不一样，他的数据量特别大","next":"one-data"}]},
+  "one-client": {"result":"问题多半在他那一端：网络、浏览器、地域、VPN。服务端指标应该是绿的。",
+    "detail":"让他打开浏览器 DevTools 的 Network 面板看瀑布图：DNS / TLS / 等待服务器（TTFB）/ 内容下载各占多少。TTFB 小、下载长 = 响应体太大或带宽差。第三节场景 ⑤ 就是这个形态。",
+    "tag":"客户端 / 网络"},
+  "one-data": {"result":"同一条 SQL 在他的数据上走了不同的路：索引选择性、全表扫描、内存排序溢出。",
+    "detail":"拿他的参数跑 EXPLAIN (ANALYZE, BUFFERS)，和普通用户的对比。这是 Lesson 01 的三档模型：Index Only → Index + 回表 → Seq Scan。数据量大的用户常常掉到第三档。",
+    "tag":"数据分布"},
+  "many": {"q":"是所有接口都慢，还是某一个接口慢？",
+    "options":[{"label":"所有接口都慢","next":"all"},{"label":"某一个接口慢","next":"single"}]},
+  "all": {"q":"服务器 CPU 是高还是低？",
+    "options":[{"label":"CPU 很高（接近打满）","next":"all-cpu"},{"label":"CPU 很低（20% 以下）","next":"all-wait"}]},
+  "all-cpu": {"result":"算力瓶颈：某处在烧 CPU——热点代码、序列化、正则、GC 频繁。",
+    "detail":"用 dotnet-trace 或 PerfView 抓 CPU 采样，看火焰图哪个方法占比最高；同时看 GC 计数——Gen2 频繁说明大对象分配。CPU 高是「诚实」的慢：它至少在干活。",
+    "tag":"CPU 采样 → 热点"},
+  "all-wait": {"result":"等待瓶颈：线程在等什么——线程池饥饿、DB 连接池耗尽、下游慢、锁竞争。",
+    "detail":"Lesson 09 的画像：全站慢 + CPU 低 + 线程数缓慢上涨 = 线程池饥饿。dotnet-counters 看 thread_pool.thread.count 和 queue.length；dotnet-stack 抓栈看线程堵在哪个 .Result / .Wait 上。CPU 低是「撒谎」的慢：机器闲着，请求却在排队。",
+    "tag":"共享资源在等"},
+  "single": {"q":"这个接口是一直慢，还是最近才开始慢？",
+    "options":[{"label":"一直这么慢","next":"single-design"},{"label":"最近才开始慢","next":"single-change"}]},
+  "single-design": {"result":"接口本身的设计问题：一条重 SQL、N+1、返回太多数据、同步调下游。",
+    "detail":"看这个接口的一条追踪（trace）：时间花在哪一跳。第三节的五张图就是五种典型形态。这类问题不紧急，但每次都在发生。",
+    "tag":"看一条 trace"},
+  "single-change": {"result":"什么变了？发布、数据量涨过某个阈值、下游变慢、统计信息过期。",
+    "detail":"把 p99 时间线和发布记录对齐：拐点和某次上线重合就回滚那次；不重合就看数据量——索引在 10 万行时够用、100 万行时优化器换了计划。pg_stat_statements 里同一条语句的 mean_exec_time 前后对比能直接证明。",
+    "tag":"对比拐点"}
+}'></div>
+
+<p>注意这棵树的每个叶子都<strong>不是原因，是「下一步看什么」</strong>。面试里把这三问说出来，面试官就知道你是在缩小范围，不是在猜。</p>
+
+<h2 id="s3">三、排查实验室：五张追踪图，点出时间去哪了</h2>
+
+<p>范围缩到一层之后，下一步是找<strong>那一跳</strong>。工具是分布式追踪（trace）：一次请求经过的每一段——中间件、SQL、下游 HTTP、序列化——各自记一个 span，带开始时间和时长，画出来就是瀑布图。<a href="0004-microservices-what-actually-changes.html#s3">Lesson 04</a> 讲过它靠 <code>traceparent</code> 头跨进程，.NET 的 <code>Activity</code> 自动产生。这里直接看图。</p>
+
+<p>五个场景，每个都是一条真实形态的慢请求，上方是当时仪表盘上的几个数。<strong>先点你认为的瓶颈那一段，再看判定。</strong>点错也有提示。</p>
+
+<div class="waterfall" data-waterfall='{
+  "label": "排查实验室 · 时间去哪了",
+  "cases": [
+    {"title":"一条 SQL",
+     "intro":"接口 GET /api/orders?customerId=… 一直很慢。仪表盘：",
+     "total":2100,
+     "metrics":[{"k":"CPU","v":"18%"},{"k":"线程池线程","v":"24"},{"k":"本接口 p99","v":"2.3 s","tone":"bad"},{"k":"DB 活跃连接","v":"3"}],
+     "spans":[
+       {"id":"web","name":"GET /api/orders","start":0,"dur":2100,"depth":0,"hint":"这是整条请求，它当然等于总时长。要找的是它<strong>下面</strong>哪一段占了大头。"},
+       {"id":"auth","name":"Authorize 中间件","start":5,"dur":20,"depth":1,"hint":"20 ms，1% 都不到。"},
+       {"id":"db","name":"SELECT … FROM orders WHERE customer_id = $1","start":40,"dur":1920,"depth":1,"culprit":true},
+       {"id":"ser","name":"JSON 序列化","start":1970,"dur":120,"depth":1,"hint":"120 ms 的序列化不小，但旁边有个 1920 ms 的。先打大的。"}
+     ],
+     "ask":"哪一段是瓶颈？",
+     "verdict":"总时长 2100 ms，一条 SQL 占 1920 ms（91%）。这是最常见也最好办的形态：<strong>问题被追踪图直接指出来了</strong>，不需要猜。",
+     "next":"拿这条语句去 <code>pg_stat_statements</code> 看 <code>calls</code> / <code>mean_exec_time</code> 确认它是不是常态，再 <code>EXPLAIN (ANALYZE, BUFFERS)</code>——回到 <a href=\"0001-composite-index-leftmost-prefix.html#s4\">Lesson 01 的三档</a>：走到了 Seq Scan 还是回表太多。"},
+
+    {"title":"N+1",
+     "intro":"接口 GET /api/orders（列表页，每页 50 条）。仪表盘：",
+     "total":1650,
+     "metrics":[{"k":"CPU","v":"22%"},{"k":"DB 活跃连接","v":"8"},{"k":"本接口 p99","v":"1.8 s","tone":"bad"},{"k":"每请求 SQL 数","v":"51","tone":"bad"}],
+     "spans":[
+       {"id":"web","name":"GET /api/orders","start":0,"dur":1650,"depth":0,"hint":"整条请求。看下面。"},
+       {"id":"list","name":"SELECT … FROM orders LIMIT 50","start":30,"dur":60,"depth":1,"hint":"60 ms，正常。它拿回了 50 行——然后看它后面发生了什么。"},
+       {"id":"q1","name":"SELECT … FROM customers WHERE id = $1","start":100,"dur":30,"depth":1,"hint":"单条只有 30 ms，不慢。慢的不是这一条，是<strong>它出现了 50 次</strong>——把它们加起来。"},
+       {"id":"q2","name":"SELECT … FROM customers WHERE id = $1","start":132,"dur":30,"depth":1,"hint":"和上一条一模一样的语句，只是参数不同。数一数这样的行有多少。"},
+       {"id":"q3","name":"SELECT … FROM customers WHERE id = $1","start":164,"dur":30,"depth":1,"hint":"第三条一样的。往下看。"},
+       {"id":"rest","name":"… 同样的语句还有 47 条","start":196,"dur":1404,"depth":1,"culprit":true},
+       {"id":"ser","name":"JSON 序列化","start":1605,"dur":40,"depth":1,"hint":"40 ms。"}
+     ],
+     "ask":"哪一段是瓶颈？",
+     "verdict":"没有任何一条 SQL 慢，但有 51 条。列表查了 50 个订单，然后<strong>每个订单单独查一次客户</strong>——这就是 N+1，ORM 延迟加载最常见的产物。仪表盘上「每请求 SQL 数 = 51」已经把它说出来了。",
+     "next":"一条 JOIN 或一次 <code>WHERE id = ANY($1)</code> 批量查，51 次往返变 2 次。Microsoft 的原话：<q>Do minimize network round trips. The goal is to retrieve the required data in a single call rather than several calls.</q>（<a href=\"https://learn.microsoft.com/en-us/aspnet/core/fundamentals/best-practices#optimize-data-access-and-io\">ASP.NET Core Best Practices</a>）"},
+
+    {"title":"空白 —— 本课要你报的数字在这里",
+     "intro":"<strong>所有</strong>接口都慢，不只这一个。仪表盘：",
+     "total":3400,
+     "metrics":[{"k":"CPU","v":"9%","tone":"bad"},{"k":"线程池线程","v":"212 ↑ 还在涨","tone":"bad"},{"k":"线程池队列长度","v":"340","tone":"bad"},{"k":"全站 p99","v":"3.1 s","tone":"bad"},{"k":"DB 平均耗时","v":"45 ms","tone":"good"}],
+     "spans":[
+       {"id":"web","name":"Kestrel 收到请求","start":0,"dur":3400,"depth":0,"hint":"整条请求。看下面：把每一段加起来，和 3400 比。"},
+       {"id":"auth","name":"Authorize 中间件","start":2660,"dur":20,"depth":1,"hint":"20 ms。注意它<strong>什么时候才开始</strong>：2660 ms。请求到了 2.6 秒之后，第一个中间件才跑起来。"},
+       {"id":"db","name":"SELECT … FROM tickets WHERE id = $1","start":2690,"dur":60,"depth":1,"hint":"60 ms，和仪表盘上「DB 平均 45 ms」一致。数据库是无辜的。"},
+       {"id":"ser","name":"JSON 序列化","start":2760,"dur":40,"depth":1,"hint":"40 ms。"}
+     ],
+     "gaps":[
+       {"id":"gap","name":"？没有任何 span 的空白","start":10,"dur":2640,"depth":1,"culprit":true}
+     ],
+     "ask":"哪一段是瓶颈？",
+     "verdict":"三个 span 加起来 120 ms，总时长 3400 ms——<strong>时间花在没人计时的地方</strong>：请求已经到了进程，但在等一个线程池线程来跑它。配合仪表盘：CPU 9%、线程数 212 还在缓慢上涨、队列 340——这正是 <a href=\"0009-async-await-state-machine.html#s3\">Lesson 09</a> 的画像，线程池饥饿。Microsoft 原文：<q>The key signals that ThreadPool starvation is currently a performance bottleneck are the slow and steady increase of ThreadPool threads and CPU Usage much less than 100%.</q>（<a href=\"https://learn.microsoft.com/en-us/dotnet/core/diagnostics/debug-threadpool-starvation\">Debug ThreadPool starvation</a>）——线程池线程数缓慢而持续地上涨、CPU 远低于 100%，是饥饿的两个关键信号。",
+     "next":"<code>dotnet-counters monitor</code> 看 <code>thread_pool.thread.count</code> 是否还在涨以确认；<code>dotnet-stack report</code> 抓所有线程的栈，找栈顶是 <code>Task.Wait</code> / <code>GetResultCore</code> 的那些——它们指向的业务方法就是那个 <code>.Result</code>。这个数字（空白 2640 ms）是本课要你报回的。"},
+
+    {"title":"下游",
+     "intro":"接口 POST /api/pay，调第三方支付。仪表盘：",
+     "total":2900,
+     "metrics":[{"k":"CPU","v":"15%"},{"k":"我方 DB 平均","v":"12 ms","tone":"good"},{"k":"第三方 p99","v":"2.7 s","tone":"bad"},{"k":"错误率","v":"0.2%"}],
+     "spans":[
+       {"id":"web","name":"POST /api/pay","start":0,"dur":2900,"depth":0,"hint":"整条请求。"},
+       {"id":"ins","name":"INSERT payment (PENDING)","start":20,"dur":25,"depth":1,"hint":"25 ms。Lesson 13 的中间态，写得很快。"},
+       {"id":"http","name":"HTTP POST 第三方 /pay","start":60,"dur":2800,"depth":1,"tone":"warn","culprit":true},
+       {"id":"upd","name":"UPDATE payment → CONFIRMED","start":2865,"dur":25,"depth":1,"hint":"25 ms。"}
+     ],
+     "ask":"哪一段是瓶颈？",
+     "verdict":"我方代码总共 100 ms，2800 ms 在别人家。这一段你<strong>修不了</strong>，但要做三件事：给它设超时（不能让一个慢下游拖住你的线程）、熔断（对方持续慢时快速失败）、把仪表盘上「第三方 p99」这个数拿去找对方要 SLA。",
+     "next":"超时 + 熔断 + 重试预算是 <a href=\"0004-microservices-what-actually-changes.html#s2\">Lesson 04</a> 的 Polly 那一套；更根本的解法是<strong>异步化</strong>：写完 PENDING 就返回，结果用 <a href=\"0013-third-party-consistency-and-rabbitmq-ack.html#s4\">Lesson 13 第四节</a>的通知机制推给用户——用户看到的延迟从 2.9 s 变成 50 ms。"},
+
+    {"title":"服务器不慢",
+     "intro":"只有一个用户（外地、4G）反馈慢。服务端指标全绿。下面是<strong>他的浏览器</strong>里的瀑布图：",
+     "total":4200,
+     "metrics":[{"k":"服务端 p99","v":"110 ms","tone":"good"},{"k":"响应体大小","v":"4.8 MB","tone":"bad"},{"k":"用户网络","v":"4G"},{"k":"受影响用户","v":"1"}],
+     "spans":[
+       {"id":"dns","name":"DNS 解析","start":0,"dur":30,"depth":0,"hint":"30 ms。"},
+       {"id":"tls","name":"TCP + TLS 握手","start":30,"dur":110,"depth":0,"hint":"110 ms，4G 上正常。"},
+       {"id":"ttfb","name":"等待服务器（TTFB）","start":140,"dur":90,"depth":0,"tone":"good","hint":"90 ms——这是服务器真正干活的时间，和服务端 p99 对得上。服务器不慢。"},
+       {"id":"dl","name":"内容下载 4.8 MB","start":230,"dur":3670,"depth":0,"culprit":true},
+       {"id":"js","name":"前端渲染 5000 行表格","start":3900,"dur":300,"depth":0,"hint":"300 ms 的渲染也值得改（虚拟列表），但先看它前面那 3.6 秒。"}
+     ],
+     "ask":"哪一段是瓶颈？",
+     "verdict":"服务器 90 ms 就把响应交出去了，剩下 3.6 秒是 4.8 MB 在 4G 上下载。<strong>「用户访问慢」≠「服务器慢」</strong>——这是第二节决策树「一个用户慢」那一支的典型形态，也是为什么排查要从客户端瀑布图开始，而不是从服务器日志开始。",
+     "next":"三件事：分页（一次不该返回 5000 行）、只返回列表需要的字段（Microsoft：<q>Do not retrieve more data than is necessary</q>）、开响应压缩（gzip / brotli，JSON 通常压到 1/5 以下）。这道题会在前端板块「下拉框数据量大」那一课再遇到。"}
+  ]
+}'></div>
+
+<div class="callout">
+  <span class="label">五张图，一个规律</span>
+  <p>追踪图回答的只有一个问题：<strong>时间在哪</strong>。它给出四种答案——在某一段里（① ④）、在某一段的<em>次数</em>里（②）、在没有段的空白里（③）、根本不在服务器上（⑤）。第三种最容易被忽略：<strong>span 加起来远小于总时长，本身就是发现</strong>——差额是排队、等线程、GC 暂停这些没人打点的东西。</p>
+</div>
+
+<h2 id="s4">四、三根支柱各答一个问题：指标 / 追踪 / 日志</h2>
+
+<p>前两节用了两样东西：仪表盘上的几个数（指标）和瀑布图（追踪）。第三样是日志。Microsoft 把这三样叫可观测性的三根支柱（<a href="https://learn.microsoft.com/en-us/dotnet/core/diagnostics/observability-with-otel">.NET Observability with OpenTelemetry</a>），各自的定义：</p>
+
+<table>
+  <thead><tr><th>支柱</th><th>原文定义</th><th>它回答的问题</th><th>.NET 里的 API</th></tr></thead>
+  <tbody>
+    <tr><td><strong>指标 Metrics</strong></td><td><q>measuring counters and gauges such as number of completed requests, active requests ... or a histogram of the request latency</q>——计数器、仪表和直方图：完成了多少请求、活跃多少、延迟分布</td><td><strong>什么时候开始的、多严重、影响多大范围</strong>。便宜、可长期存、可告警</td><td><code>System.Diagnostics.Metrics.Meter</code></td></tr>
+    <tr><td><strong>追踪 Tracing</strong></td><td><q>tracks requests and activities across components in a distributed system so that you can see where time is spent</q>——跨组件跟踪一次请求，看时间花在哪</td><td><strong>这一次请求的时间在哪一跳</strong>。第三节的图</td><td><code>System.Diagnostics.Activity</code> / <code>ActivitySource</code></td></tr>
+    <tr><td><strong>日志 Logs</strong></td><td><q>record individual operations, such as an incoming request, a failure in a specific component</q>——记录单个操作：一次请求、某个组件的一次失败</td><td><strong>那一跳里到底发生了什么</strong>：参数、异常、分支。最贵、最细</td><td><code>ILogger&lt;T&gt;</code></td></tr>
+  </tbody>
+</table>
+
+<p>三者的顺序就是排查的顺序：<strong>指标告诉你去看哪里，追踪告诉你看哪一跳，日志告诉你那一跳里发生了什么。</strong>反过来用（从日志开始翻）是新手最常见的浪费——日志最多、最乱、最没有方向。</p>
+
+<p><strong>指标看哪几个？</strong>SRE 书给了四个，叫黄金信号（<a href="https://sre.google/sre-book/monitoring-distributed-systems/">同上</a>）：</p>
+
+<table>
+  <thead><tr><th>信号</th><th>原文</th><th>中译与要点</th></tr></thead>
+  <tbody>
+    <tr><td><strong>延迟 Latency</strong></td><td><q>The time it takes to service a request.</q> ... <q>a slow error is even worse than a fast error</q></td><td>服务一次请求的时间。<strong>成功和失败要分开算</strong>——慢的错误比快的错误更糟。而且看 p99 不看平均：书里的例子是平均 100 ms 时最慢的 1% 可能要 5 秒，<q>the 99th percentile of one backend can easily become the median response of your frontend</q>——后端的 p99 会变成前端的中位数，因为一个页面要调很多次后端</td></tr>
+    <tr><td><strong>流量 Traffic</strong></td><td><q>A measure of how much demand is being placed on your system</q></td><td>系统承受的需求量：每秒请求数。用来判断「慢」是不是因为「多」</td></tr>
+    <tr><td><strong>错误 Errors</strong></td><td><q>The rate of requests that fail, either explicitly (e.g., HTTP 500s), implicitly (for example, an HTTP 200 success response, but coupled with the wrong content), or by policy</q></td><td>失败率：显式的 500、隐式的「200 但内容错」、或按策略（超过 1 秒也算失败）</td></tr>
+    <tr><td><strong>饱和度 Saturation</strong></td><td><q>How &quot;full&quot; your service is ... emphasizing the resources that are most constrained</q></td><td>最紧张的那个资源用满了多少：线程池、连接池、CPU、内存、磁盘。<strong>第三节场景 ③ 的「线程数 212、队列 340」就是饱和度指标</strong></td></tr>
+  </tbody>
+</table>
+
+<div class="callout ext">
+  <span class="label">扩展 · OpenTelemetry 是什么，以及「用过哪些检测服务」怎么答</span>
+  <p>三根支柱各有一堆后端：指标常见 Prometheus + Grafana，追踪常见 Jaeger / Zipkin，日志常见 ELK / Seq；Azure 上三样合一叫 Application Insights。以前每家有自己的 SDK，换后端要改代码。<strong>OpenTelemetry（OTel）</strong>把采集标准化了：<q>a cross-platform, open standard for collecting and emitting telemetry data</q>，应用只对着 OTel 的 API 写（.NET 里就是上表那三个自带 API），用 OTLP 协议发给任意后端。Microsoft 的原话：<q>Using OTel means that applications don&#39;t need to use APM-specific APIs or data structures; they work against the OTel standard.</q>——用了 OTel，应用不再依赖任何一家 APM 的 API。所以「用过哪些检测服务」这题的好答法不是报产品名，是<strong>先说三根支柱各自回答什么问题，再说采集走 OTel、后端可换</strong>——然后接你真用过的那一两个。</p>
+</div>
+
+<h2 id="s5">五、定位到「跳」之后：每一层的工具</h2>
+
+<p>追踪图告诉你在哪一跳，下一步是那一层自己的工具。「排除性能问题用过哪些工具」这道题的答法就是这张表——<strong>按层报，不按名字报</strong>：</p>
+
+<table>
+  <thead><tr><th>时间在……</th><th>工具</th><th>看什么</th><th>接哪一课</th></tr></thead>
+  <tbody>
+    <tr><td><strong>一条 SQL</strong></td><td><code>pg_stat_statements</code>；<code>EXPLAIN (ANALYZE, BUFFERS)</code></td><td>前者是全库的语句统计（<q>tracking planning and execution statistics of all SQL statements executed by a server</q>，<a href="https://www.postgresql.org/docs/current/pgstatstatements.html">PG 文档</a>），按 <code>total_exec_time</code> 排序找最贵的、按 <code>calls</code> 找最频繁的；后者看这一条的计划：Seq Scan / 回表 / Sort 溢出磁盘</td><td><a href="0001-composite-index-leftmost-prefix.html#s8">Lesson 01</a>、<a href="0002-sorting-selection-topk-external.html#s7">Lesson 02 的 work_mem</a></td></tr>
+    <tr><td><strong>SQL 的次数</strong></td><td>追踪里数 span；ORM 的日志级别开到 Information 看语句</td><td>每请求 SQL 数。超过个位数就该怀疑 N+1</td><td>—</td></tr>
+    <tr><td><strong>空白（等线程）</strong></td><td><code>dotnet-counters</code> → <code>dotnet-stack</code> → <code>dotnet-trace</code></td><td>counters 看 <code>thread_pool.thread.count</code> 缓涨、<code>queue.length</code> 高；stack 抓当前所有线程的栈，找栈顶 <code>Task.Wait</code> / <code>GetResultCore</code>；trace 用于偶发问题，.NET 9 起有 <code>WaitHandleWait</code> 事件，<q>emitted when a thread becomes blocked by operations such as sync-over-async calls</q>——线程被 sync-over-async 阻塞时发出</td><td><a href="0009-async-await-state-machine.html#s3">Lesson 09</a></td></tr>
+    <tr><td><strong>CPU（不是等，是算）</strong></td><td><code>dotnet-trace collect</code> / PerfView / VS Diagnostic Tools</td><td>CPU 采样火焰图：哪个方法自身耗时最多。同时看 GC：<q>Garbage collection is especially expensive on large objects (&gt;= 85,000 bytes)</q>——大对象进 LOH，要 Gen2 才回收，Gen2 会暂停整个应用</td><td><a href="0008-dotnet-locks.html">Lesson 08</a>（锁竞争也在这一层）</td></tr>
+    <tr><td><strong>下游</strong></td><td>追踪 + 对方的指标</td><td>对方的 p99；你这边的超时 / 熔断是否生效</td><td><a href="0004-microservices-what-actually-changes.html#s2">Lesson 04</a>、<a href="0013-third-party-consistency-and-rabbitmq-ack.html">Lesson 13</a></td></tr>
+    <tr><td><strong>用户那一端</strong></td><td>浏览器 DevTools Network 瀑布图</td><td>TTFB vs 内容下载 vs 渲染；响应体大小；请求数</td><td>前端板块（待）</td></tr>
+  </tbody>
+</table>
+
+<p>如果被追问「dotnet-counters 和 dotnet-trace 有什么区别」：<strong>counters 是仪表盘（一直看的几个数，便宜），trace 是录像（抓一段时间的事件，贵，事后分析）</strong>；stack 是快照（此刻每根线程在干什么）。三个都是 <code>dotnet tool install -g</code> 装的，连到进程 id 上，不用改代码、不用重启。</p>
+
+<h2 id="s6">六、日志怎么打才能排查</h2>
+
+<p>「用过哪些日志服务」——出题人想听的不是 NLog 还是 Serilog，是你的日志<strong>能不能用来排查</strong>。三个判据：能不能按字段查、能不能按请求串、有没有分级。</p>
+
+<p><strong>1. 结构化，不拼字符串。</strong>Microsoft 文档（<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/logging/#log-message-template">Logging in .NET</a>）：<q>The log message template can contain placeholders for provided arguments. Use names for the placeholders, not numbers.</q>——模板用命名占位符。为什么：<q>The arguments themselves are passed to the logging system, not just the formatted message template. This enables logging providers to store the parameter values as fields.</q>——参数本身传给了日志系统，不只是拼好的字符串，所以存储端能把它们存成<strong>字段</strong>。字段才能查 <code>OrderId = 1001</code>；拼进字符串的只能全文搜。</p>
+
+<pre><code><span class="cm">// ✗ 插值：OrderId 变成了字符串的一部分，日志后端里它不是一个字段</span>
+_logger.LogInformation($<span class="st">"订单 {order.Id} 支付超时，耗时 {elapsed}ms"</span>);
+
+<span class="cm">// ✓ 模板：OrderId 和 ElapsedMs 作为属性存储，可以按字段过滤、聚合、告警</span>
+_logger.LogWarning(<span class="st">"订单 {OrderId} 支付超时，耗时 {ElapsedMs}ms"</span>, order.Id, elapsed);</code></pre>
+
+<p><strong>2. 分级，而且生产只开到 Information。</strong>六级的官方定义（同上）：</p>
+
+<table>
+  <thead><tr><th>级别</th><th>原文</th><th>用在</th></tr></thead>
+  <tbody>
+    <tr><td>Trace</td><td><q>may contain sensitive app data ... should not be enabled in production</q></td><td>可能含敏感数据，生产禁开</td></tr>
+    <tr><td>Debug</td><td><q>For debugging and development. Use with caution in production due to the high volume</q></td><td>量大，生产慎开</td></tr>
+    <tr><td>Information</td><td><q>Tracks the general flow of the app.</q></td><td>主流程：收到请求、订单创建、状态推进</td></tr>
+    <tr><td>Warning</td><td><q>For abnormal or unexpected events ... that don&#39;t cause the app to fail.</q></td><td>异常但没失败：重试成功了、降级了、超时后走了查询</td></tr>
+    <tr><td>Error</td><td><q>a failure in the current operation or request, not an app-wide failure</q></td><td>这一次请求失败了</td></tr>
+    <tr><td>Critical</td><td><q>failures that require immediate attention, such as data loss or out of disk space</q></td><td>需要立刻有人起床</td></tr>
+  </tbody>
+</table>
+
+<p>级别按<strong>类别（category）</strong>配，类别默认是类的全名，前缀匹配：<code>"Microsoft.AspNetCore": "Warning"</code> 一行就把框架的噪音压掉，自己的命名空间开 Information。排查时可以<strong>不重启</strong>只把某个类别临时调到 Debug——这是配置热重载给的。</p>
+
+<p><strong>3. 每条日志自动带 TraceId。</strong><a href="0004-microservices-what-actually-changes.html#s3">Lesson 04</a> 里那行是手动把 <code>Activity.Current?.TraceId</code> 写进模板。不用每条都手写——用 scope：<q>A scope can group a set of logical operations. This grouping can be used to attach the same data to each log that&#39;s created as part of a set.</q>——scope 把同一份数据附加到一组日志的每一条上。ASP.NET Core 自带的 <code>IncludeScopes</code> 会把 <code>RequestId</code>、<code>TraceId</code>、<code>SpanId</code> 挂进请求范围内的所有日志；Serilog 用 enricher 做同一件事。</p>
+
+<pre><code><span class="cm">// Serilog：结构化 + 自动附 TraceId + 写到能按字段查的后端</span>
+builder.Host.UseSerilog((ctx, cfg) =&gt; cfg
+    .ReadFrom.Configuration(ctx.Configuration)          <span class="cm">// 级别、类别覆盖都放 appsettings</span>
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty(<span class="st">"Service"</span>, <span class="st">"order-api"</span>)
+    .Enrich.WithSpan()                                   <span class="cm">// Serilog.Enrichers.Span：TraceId / SpanId 自动进每条日志</span>
+    .WriteTo.Console(<span class="kw">new</span> CompactJsonFormatter())          <span class="cm">// 容器里打 JSON 到 stdout，由采集器收</span>
+    .WriteTo.Seq(<span class="st">"http://seq:5341"</span>));                    <span class="cm">// 或 ELK / Loki / App Insights —— 后端可换</span>
+
+<span class="cm">// 业务代码：一个 using 把 OrderId 挂到这段里的每一条日志上</span>
+<span class="kw">using</span> (_logger.BeginScope(<span class="kw">new</span> Dictionary&lt;<span class="kw">string</span>, <span class="kw">object</span>&gt; { [<span class="st">"OrderId"</span>] = order.Id }))
+{
+    _logger.LogInformation(<span class="st">"开始调第三方支付 Provider={Provider}"</span>, provider);
+    <span class="cm">// ... 这里面的每一条日志都自动带 OrderId + TraceId + SpanId</span>
+}</code></pre>
+
+<p>三条凑齐之后，第三节场景 ④ 的排查是这样的：追踪图指出 2800 ms 在第三方那一跳 → 拿这条 trace 的 TraceId → 日志后端 <code>TraceId = … AND Provider = …</code> 一查，那一跳里对方到底返回了什么、我方重试了几次，全在。<strong>日志是三根支柱里最后用的，但只有前面两步做对了它才有用。</strong></p>
+
+<div class="callout ext">
+  <span class="label">扩展 · 日志本身也会拖慢系统</span>
+  <p>三件事：① <strong>同步写文件是阻塞 I/O</strong>——高并发下日志锁会成为瓶颈，所以生产要用异步 sink（Serilog 的 <code>WriteTo.Async</code>）或直接写 stdout 交给采集器；用户项目里「日志走 RabbitMQ」就是这个思路的一种实现。② <strong>模板格式化有成本</strong>——<code>LoggerMessage</code> 源生成器把模板解析提前到编译期，热路径上用它；判断 <code>IsEnabled</code> 再拼昂贵参数。③ <strong>Debug 级别开着不写 ≠ 免费</strong>——参数装箱仍发生。这些追问时才说，正文不主动展开。</p>
+</div>
+
+<h2 id="s7">七、提升吞吐率：三个杠杆，一个前提</h2>
+
+<p>「如何提升系统吞吐率」。先给定义把题立住：<strong>吞吐率 = 单位时间处理完的请求数 = 并发处理数 ÷ 每个请求占用的时间</strong>。分母拆开就是三个杠杆：</p>
+
+<table>
+  <thead><tr><th>杠杆</th><th>做什么</th><th>原文依据</th></tr></thead>
+  <tbody>
+    <tr><td><strong>① 别让线程等</strong></td><td>全链路 async：Controller → 服务 → 数据访问 → HttpClient。去掉 <code>.Result</code> / <code>.Wait()</code>；不用 <code>Task.Run</code> 包同步代码；返回 <code>IAsyncEnumerable</code> 或先 <code>ToListAsync</code>。这是第三节场景 ③ 的解</td><td><q>Asynchronous APIs allow a small pool of threads to handle thousands of concurrent requests by not waiting on blocking calls.</q>——异步让一小池线程处理上千并发。<q>Do not call Task.Run and immediately await it ... calling Task.Run only results in extra unnecessary Thread Pool scheduling.</q>（<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/best-practices#avoid-blocking-calls">Best Practices</a>）</td></tr>
+    <tr><td><strong>② 让每个请求更短</strong></td><td>少往返（N+1 → JOIN / 批量）、少数据（分页、只取需要的列、只读用 no-tracking）、缓存（MemoryCache / 分布式缓存，接受稍旧的数据）、HttpClient 复用（<code>IHttpClientFactory</code>，否则 socket 耗尽）、避免大对象（≥ 85 KB 进 LOH）</td><td><q>Interactions with a data store and other remote services are often the slowest parts of an ASP.NET Core app.</q>——数据访问和远程调用通常是最慢的部分。<q>Do consider caching frequently accessed data ... if slightly out-of-date data is acceptable.</q></td></tr>
+    <tr><td><strong>③ 把慢活挪出请求</strong></td><td>长任务进后台服务 / 消息队列，请求只写中间态就返回；结果用 SignalR 或通知推回去</td><td><q>Do not wait for long-running tasks to complete as part of ordinary HTTP request processing.</q>——别在普通请求里等长任务。这正是 <a href="0013-third-party-consistency-and-rabbitmq-ack.html#s2">Lesson 13</a> 的 PENDING 顺序在性能上的收益</td></tr>
+  </tbody>
+</table>
+
+<p><strong>一个前提：先测量。</strong>三个杠杆里先拉哪个，取决于第三节的追踪图告诉你时间在哪——空白就拉 ①，SQL 就拉 ②，下游就拉 ③。Microsoft 自己在讲完编译查询之后加了一句：<q>We recommend measuring the impact of the preceding high-performance approaches before committing the code base.</q>——没测量的优化是另一种猜。横向扩容（加实例）放最后说：它的前提是服务无状态（会话不在进程内存里），而且它不解决 ② 的问题——每个实例还是要跑 51 条 SQL。</p>
+
+<h2 id="s8">八、归类练习：这个问题该问哪根支柱</h2>
+
+<p>判据一条：<strong>要「趋势和范围」→ 指标；要「这一次的时间去哪」→ 追踪；要「那一刻的细节」→ 日志。</strong></p>
+
+<div class="binsort" data-binsort='{
+  "label": "归类练习 · 这个问题去问谁",
+  "bins": [{"id":"metric","label":"指标","tone":"good"},
+           {"id":"trace","label":"追踪","tone":"good"},
+           {"id":"log","label":"日志","tone":"good"}],
+  "items": [
+    {"text":"想知道接口 p99 是从哪一天开始爬升的","bin":"metric",
+     "why":"趋势问题。指标便宜、按时间存，拉一条 p99 时间线和发布记录对齐就有答案。追踪和日志都太贵，存不了那么久。"},
+    {"text":"想知道这一次请求的三秒钟花在了哪一跳","bin":"trace",
+     "why":"这是追踪唯一的任务：一次请求的瀑布图。第三节的每张图都是它。"},
+    {"text":"想知道那次报错时传进来的订单号是什么","bin":"log",
+     "why":"细节问题：参数值。只有日志记参数——前提是第六节说的结构化模板，OrderId 是个字段才查得到。"},
+    {"text":"想知道线程池线程数现在是不是在缓慢上涨","bin":"metric",
+     "why":"thread_pool.thread.count 是一个仪表读数，dotnet-counters 或 OTel Runtime 指标直接给。它是饱和度信号，也是饥饿画像的核心。"},
+    {"text":"想知道跨三个服务的那次调用哪一段最长","bin":"trace",
+     "why":"跨进程的时间分布只有追踪能画出来——同一个 TraceId 把三个服务的 span 串成一张图。"},
+    {"text":"想知道对方接口在那次调用里返回了什么错误码","bin":"log",
+     "why":"细节。追踪只记时长和状态，不记响应体；错误码和响应内容在日志里，按 TraceId 定位到那一条。"},
+    {"text":"想配一条告警：错误率超过百分之一就通知值班","bin":"metric",
+     "why":"告警只能挂在指标上——它需要一个可以持续比较阈值的数。错误率是四个黄金信号之一。"},
+    {"text":"想把三个服务里同一次请求的记录串起来按顺序看","bin":"log",
+     "why":"这是日志按 TraceId 过滤。追踪告诉你哪一跳慢，然后拿它的 TraceId 到日志里看那一跳的每一行——第六节第 3 条就是为这一步做的。"}
+  ]
+}'></div>
+
+<h2 id="s9">九、话术</h2>
+
+<div class="script">
+  <span class="label">话术 A · 对应题「用户遇到访问慢，如何排查」</span>
+  <p><strong>先立框架：</strong><q>「慢」是症状，不是原因，所以我不先猜原因，先定位。三个反问先把范围缩到一层：是一个用户慢还是很多用户慢？是所有接口慢还是某个接口慢？是一直慢还是最近开始慢？一个用户慢先看他的浏览器瀑布图，很可能是响应体大或者网络；所有接口都慢是共享资源的问题——线程池、连接池、CPU、下游；某个接口一直慢是它自己的设计问题；最近才慢就去找拐点，对齐发布记录和数据量。</q></p>
+  <p><strong>再给工具链：</strong><q>缩到一层之后看这个请求的追踪，瀑布图上时间在哪一跳一目了然：一条 SQL 占了九成就去 EXPLAIN；五十条一样的小 SQL 是 N+1；span 加起来远小于总时长说明时间在排队、在等线程——配合 CPU 低、线程数缓慢上涨，就是线程池饥饿，dotnet-counters 确认、dotnet-stack 抓栈找那个 .Result。找到那一跳，再拿 TraceId 去日志里看那一跳里发生了什么。指标定层，追踪定跳，日志看细节。</q></p>
+  <p><strong>接真事：</strong>（这里接一次你真的排过的慢问题，哪怕很小：一条慢 SQL、一个 N+1。用「当时看到的现象 → 定位到哪一跳 → 改了什么」三段说。没有的话说 Lesson 09 那句画像：「有一类我记得很清楚的形态是全站慢、CPU 却很低……」）</p>
+</div>
+
+<div class="script">
+  <span class="label">话术 B · 对应题「用过哪些日志服务」「用过哪些检测服务」「排除性能问题用过哪些工具」</span>
+  <p><strong>日志：</strong><q>ASP.NET Core 里统一走 ILogger，底下 Serilog。我关心的是三件事而不是产品名：结构化——用命名占位符的模板不用字符串插值，这样 OrderId 在后端是字段，能按字段查、能聚合；关联——用 scope 或 enricher 把 TraceId 自动挂到每条日志上，不然分布式下日志串不起来；分级——生产只开 Information，框架类别压到 Warning，排查时把某个类别临时调 Debug，不用重启。写日志本身要异步，同步写文件在高并发下会成为瓶颈，我们项目里日志是走 RabbitMQ 异步落的，就是这个考虑。</q></p>
+  <p><strong>检测：</strong><q>可观测性三根支柱：指标看趋势和范围、追踪看一次请求的时间分布、日志看细节。指标盯四个黄金信号：延迟看 p99 不看平均、流量、错误率、饱和度——线程池和连接池用了多少。采集用 OpenTelemetry，.NET 自带 Meter 和 Activity 就是它的 API，后端可以是 Prometheus + Grafana、Jaeger，Azure 上是 Application Insights，换后端不改代码。</q></p>
+  <p><strong>工具：</strong><q>按层答：SQL 层是 pg_stat_statements 找最贵和最频繁的语句、EXPLAIN ANALYZE 看计划；进程层是 dotnet-counters 看线程数、队列、GC 这些实时读数，dotnet-stack 抓此刻所有线程的栈，dotnet-trace 录一段事件事后用 PerfView 看火焰图，三个都是 dotnet tool 装的，挂到进程 id 上不用改代码；客户端层是浏览器 DevTools 的瀑布图看 TTFB 和下载分别多长。</q></p>
+</div>
+
+<div class="script">
+  <span class="label">话术 C · 对应题「如何提升系统吞吐率」</span>
+  <p><q>吞吐率是并发处理数除以每个请求占用的时间，所以只有三个杠杆。第一，别让线程等：全链路 async，去掉 .Result 和 .Wait，一小池线程就能撑上千并发——这是 ASP.NET Core 最常见的吞吐问题。第二，让每个请求更短：数据访问通常是最慢的部分，少往返、少数据、只读查询不追踪、热数据缓存、HttpClient 用工厂复用。第三，把慢活挪出请求：长任务进后台或消息队列，请求写个中间态就返回，结果推回去。先拉哪个取决于测量——追踪图上时间在哪就拉哪个，没测量的优化是另一种猜。横向扩容放最后，前提是服务无状态，而且它不解决单请求太重的问题。</q></p>
+</div>
+
+<h2 id="s10">十、检验一下</h2>
+
+<p>先在心里说出理由再选。第 6 题是 Lesson 10 的回炉。</p>
+
+<div class="quiz" data-quiz='[
+  {
+    "q": "全站所有接口都变慢，CPU 只有 10%，线程池线程数每秒涨一两个。最可能的原因和第一个该用的工具是：",
+    "options": [
+      "数据库慢查询；用 EXPLAIN ANALYZE 看执行计划",
+      "线程池饥饿；用 dotnet-counters 看线程数和队列",
+      "内存泄漏导致频繁 GC；用 dotnet-dump 抓堆快照",
+      "第三方接口超时；看追踪里下游那一跳的时长"
+    ],
+    "answer": 1,
+    "why": "「全站慢 + CPU 低 + 线程数缓涨」是线程池饥饿的官方画像：slow and steady increase of ThreadPool threads and CPU Usage much less than 100%。全站慢说明是共享资源，CPU 低说明不是算力而是等待。数据库慢通常只拖慢用到它的接口；GC 频繁 CPU 不会低。"
+  },
+  {
+    "q": "一条追踪的总时长 3.4 秒，但里面所有 span 加起来只有 120 毫秒。这说明：",
+    "options": [
+      "追踪采集有故障，丢了大部分 span，需要修埋点",
+      "时间花在没有埋点的地方，比如排队等线程或 GC 暂停",
+      "网络传输占了剩余时间，应该检查带宽和响应体大小",
+      "总时长统计包含了客户端时间，服务端本身只有 120 毫秒"
+    ],
+    "answer": 1,
+    "why": "span 之和远小于总时长，差额就是「没人计时的时间」：请求已进进程但在等线程池线程、GC 暂停、锁等待。这个空白本身是发现，不是采集故障。网络传输不会出现在服务端的 trace 总时长里。"
+  },
+  {
+    "q": "为什么日志要写 LogInformation(\"订单 {OrderId} 创建\", id) 而不是 LogInformation($\"订单 {id} 创建\")？",
+    "options": [
+      "模板写法会在编译期检查参数个数，插值不会",
+      "模板写法把参数作为字段传给日志系统，后端可以按字段查",
+      "插值会在每次调用时分配字符串，模板在级别关闭时不分配",
+      "模板写法是官方推荐的风格，两者在功能上没有区别"
+    ],
+    "answer": 1,
+    "why": "官方原文：The arguments themselves are passed to the logging system, not just the formatted message template. This enables logging providers to store the parameter values as fields。字段才能过滤、聚合、告警；插值之后 OrderId 只是字符串里的几个字符。选项 C 说的分配差异存在，但不是主要原因。"
+  },
+  {
+    "q": "四个黄金信号里，「线程池用了 212 根线程、队列里还排着 340 个工作项」属于：",
+    "options": [
+      "延迟，因为排队直接导致请求变慢",
+      "流量，因为它反映了系统承受的需求量",
+      "饱和度，因为它衡量最紧张的资源用满了多少",
+      "错误，因为排队超过阈值的请求会按策略算失败"
+    ],
+    "answer": 2,
+    "why": "Saturation：How full your service is，强调最受约束的那个资源。线程池和连接池的占用是典型的饱和度信号。它会导致延迟上升，但它本身度量的是资源占用，不是延迟。"
+  },
+  {
+    "q": "接口里有一段同步的 CPU 密集计算，为了提升吞吐率，把它改成 await Task.Run(() => Compute())。效果是：",
+    "options": [
+      "吞吐率提升，因为请求线程被释放去处理其他请求",
+      "吞吐率不变或略降，只是多了一次线程池调度",
+      "吞吐率提升，因为计算被移到了专用的后台线程",
+      "延迟下降，因为计算和响应序列化可以并行进行"
+    ],
+    "answer": 1,
+    "why": "官方原文：Do not call Task.Run and immediately await it ... calling Task.Run only results in extra unnecessary Thread Pool scheduling。请求本来就在线程池线程上跑，Task.Run 只是换一根线程池线程做同样的活。CPU 密集的活要么优化算法，要么挪出请求进后台服务。"
+  },
+  {
+    "q": "回炉 Lesson 10：app.Use(A); app.Use(B); app.Use(C); 之后 Build()。一个请求进来，最先执行的中间件和 Build() 折叠的顺序分别是：",
+    "options": [
+      "最先执行 C；Build() 从 A 开始正向把每一个包住下一个",
+      "最先执行 A；Build() 从 C 开始倒着把每一个包在外面",
+      "最先执行 A；Build() 按注册顺序依次调用，不存在折叠",
+      "最先执行 C；Build() 从 C 开始倒着把每一个包在外面"
+    ],
+    "answer": 1,
+    "why": "Build() 从终点开始倒着折叠：先把 C 包住终点，再把 B 包住 C，最后把 A 包住 B——所以第一个注册的 A 在最外层，请求最先到它。倒着折叠才能让注册顺序等于执行顺序。"
+  }
+]'></div>
+
+<h2 id="s11">十一、下一课</h2>
+
+<p>到这一课，题库第七节五问有了话术，而且它把 01 / 02 / 04 / 08 / 09 / 13 六课的内容接成了一条排查流程——这是伏笔收束密度最高的一课，也是面试里最容易被追问到真实经历的一题。<strong>如果你有任何一次真的排过慢问题的经历，哪怕很小，告诉我，我把它写进话术 A 的第三段。</strong></p>
+
+<p>下一课候选：<strong>(c) Git flow + 单元测试 + Code Review + Azure DevOps</strong>——题库第八、十二、十三节，流程题，轻，一课可以覆盖八问，Azure 无经历走「可迁移能力」路线；<strong>(d) 前端题：下拉联动与大数据量下拉框</strong>——题库第二节，和本课场景 ⑤ 直接相连；<strong>(e) 零散题收尾：MVC vs 前后端分离 / int? 与 Nullable / 泛型方法调用 / right join 主表 / EF vs SqlSugar / 属性可扩展表</strong>——一课扫六道短答。回复一个字母即可。</p>
+
+<footer class="footer">
+  <h2>接下来</h2>
+  <p><strong>主要参考源（只看一个的话，看这个）：</strong><br>
+  <a href="https://learn.microsoft.com/en-us/dotnet/core/diagnostics/debug-threadpool-starvation">Microsoft Learn — Debug ThreadPool Starvation</a>。20 分钟，一个完整的排查现场：用 dotnet-counters 看到线程数在涨、用 dotnet-stack 抓到 <code>.Result</code>、改成 await 之后延迟从 3.48 s 回到 532 ms。第三节场景 ③ 的每个数字都是从这篇来的。<br>
+  想再深一层：<a href="https://sre.google/sre-book/monitoring-distributed-systems/">Google SRE Book — Monitoring Distributed Systems</a>（四个黄金信号的出处，症状 vs 原因那一节尤其值得读）、<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/best-practices">ASP.NET Core Best Practices</a>（第七节每一条杠杆的原文）、<a href="https://learn.microsoft.com/en-us/dotnet/core/diagnostics/observability-with-otel">.NET Observability with OpenTelemetry</a>（三根支柱与 .NET 的三个 API）、<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/logging/">Logging in .NET and ASP.NET Core</a>（级别、类别、模板、scope）。</p>
+
+  <p><strong>社区（获取智慧，不是知识）：</strong><a href="https://www.reddit.com/r/dotnet/">r/dotnet</a> 搜 <q>thread pool starvation</q> 或 <q>slow under load</q>——真实的排查帖，看别人是怎么从「全站慢」走到那个 <code>.Result</code> 的；<a href="https://stackoverflow.com/questions/tagged/serilog">Stack Overflow 的 <code>serilog</code> 标签</a> 搜 <q>TraceId enrich</q>，第六节第 3 条的各种实现都在。</p>
+
+  <div class="nav-links">
+    <a href="0013-third-party-consistency-and-rabbitmq-ack.html">← Lesson 13：一致性与 ACK</a>
+    <a href="0009-async-await-state-machine.html">← Lesson 09：async/await</a>
+    <a href="0004-microservices-what-actually-changes.html">← Lesson 04：四笔开销</a>
+    <a href="../reference/observability-cheatsheet.html">→ 速查表：排查与可观测性</a>
+    <a href="../reference/async-cheatsheet.html">→ 速查表：async</a>
+    <a href="../MISSION.md">→ Mission</a>
+  </div>
+
+  <div class="ask">
+    <strong>我是你的陪练，有任何不清楚的直接问我。</strong>这一课只收一样：<a href="#s3">第三节</a>场景 ③ 那段<strong>空白的毫秒数</strong>（一个数字）。<br>
+    另外回我一个字母：下一课走 <strong>(c) Git / 测试 / Code Review / DevOps</strong>、<strong>(d) 前端下拉联动</strong>，还是 <strong>(e) 零散短答题收尾</strong>。
+  </div>
+</footer>
+
+<script src="../assets/quiz.js"></script>
+<script src="../assets/decision.js"></script>
+<script src="../assets/waterfall.js"></script>
+<script src="../assets/binsort.js"></script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>速查表 · 慢请求排查与可观测性</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<header class="masthead">
+  <p class="kicker">Reference · 日志、监控与性能排查 · BeiGene 面试备战</p>
+  <h1>慢请求排查<br>＋ 日志 / 指标 / 追踪</h1>
+  <p class="standfirst">压缩自 <a href="../lessons/0014-slow-request-triage-and-observability.html">Lesson 14</a>，接 <a href="async-cheatsheet.html">async 速查表</a>的线程池饥饿画像、<a href="db-index-cheatsheet.html">索引速查表</a>的 EXPLAIN 三档。面试前 10 分钟只看这一页。</p>
+</header>
+
+<h2>0 · 一句话判据</h2>
+
+<p><strong>先定位，再解释：一次慢请求的时间一定花在某一跳上。指标缩到哪一层 → 追踪找到哪一跳 → 日志 / profiler 问它为什么。</strong>「慢」是症状（what&#39;s broken），原因（why）是定位之后自然出来的。</p>
+
+<h2>1 · 三个二分问题（先问，再动手）</h2>
+
+<table>
+  <thead><tr><th>问</th><th>答</th><th>去看</th></tr></thead>
+  <tbody>
+    <tr><td rowspan="2"><strong>一个用户还是很多用户？</strong></td><td>一个，数据不特殊</td><td>他的浏览器瀑布图：TTFB 小、下载长 = 响应体大 / 网络差</td></tr>
+    <tr><td>一个，数据量特别大</td><td>用他的参数跑 EXPLAIN，对比普通用户（掉到 Seq Scan？）</td></tr>
+    <tr><td rowspan="2"><strong>所有接口还是某个接口？</strong></td><td>所有 + CPU 高</td><td>算力：dotnet-trace / PerfView 火焰图；GC Gen2 频率</td></tr>
+    <tr><td>所有 + CPU 低</td><td>等待：线程池饥饿 / 连接池耗尽 / 下游慢 / 锁。看线程数与队列</td></tr>
+    <tr><td rowspan="2"><strong>一直慢还是最近开始？</strong></td><td>一直</td><td>接口设计：看一条 trace——SQL / N+1 / 大响应 / 同步下游</td></tr>
+    <tr><td>最近</td><td>找拐点：p99 时间线对齐发布记录；pg_stat_statements 同一语句 mean_exec_time 前后对比</td></tr>
+  </tbody>
+</table>
+
+<h2>2 · 追踪图的四种答案</h2>
+
+<table>
+  <thead><tr><th>看到</th><th>意思</th><th>下一步</th></tr></thead>
+  <tbody>
+    <tr><td>一个 span 占大头</td><td>就是它</td><td>SQL → EXPLAIN；下游 → 超时 / 熔断 / 异步化</td></tr>
+    <tr><td>几十个一样的小 span</td><td><strong>N+1</strong>（ORM 延迟加载）</td><td>JOIN 或 <code>WHERE id = ANY($1)</code>，往返 51 → 2</td></tr>
+    <tr><td>span 之和 ≪ 总时长</td><td><strong>空白 = 没人计时的时间</strong>：等线程池、GC 暂停、锁</td><td>配合 CPU 低 + 线程数缓涨 → 线程池饥饿 → dotnet-counters → dotnet-stack</td></tr>
+    <tr><td>服务端 span 很短，用户仍慢</td><td>时间不在服务器上</td><td>客户端瀑布图：下载 / 渲染。分页、少字段、压缩</td></tr>
+  </tbody>
+</table>
+
+<h2>3 · 三根支柱</h2>
+
+<table>
+  <thead><tr><th>支柱</th><th>回答</th><th>.NET API</th><th>常见后端</th><th>贵贱</th></tr></thead>
+  <tbody>
+    <tr><td><strong>指标</strong></td><td>什么时候开始、多严重、多大范围；<strong>告警只能挂这里</strong></td><td><code>Meter</code></td><td>Prometheus + Grafana / App Insights</td><td>最便宜，存最久</td></tr>
+    <tr><td><strong>追踪</strong></td><td>这一次请求时间在哪一跳（跨进程）</td><td><code>Activity</code> / <code>ActivitySource</code>；<code>traceparent</code> 头自动传</td><td>Jaeger / Zipkin / App Insights</td><td>中，常采样</td></tr>
+    <tr><td><strong>日志</strong></td><td>那一跳里发生了什么：参数、异常、分支</td><td><code>ILogger&lt;T&gt;</code></td><td>Seq / ELK / Loki / App Insights</td><td>最贵，最后翻</td></tr>
+  </tbody>
+</table>
+
+<p>采集统一走 <strong>OpenTelemetry</strong>：应用只对 .NET 自带的三个 API 写，OTLP 发给任意后端，换后端不改代码。</p>
+
+<h2>4 · 四个黄金信号（SRE Book）</h2>
+
+<table>
+  <thead><tr><th>信号</th><th>要点</th></tr></thead>
+  <tbody>
+    <tr><td><strong>延迟</strong></td><td>看 p99 不看平均；成功与失败分开算——<q>a slow error is even worse than a fast error</q></td></tr>
+    <tr><td><strong>流量</strong></td><td>每秒请求数。「慢」是不是因为「多」</td></tr>
+    <tr><td><strong>错误</strong></td><td>显式（500）+ 隐式（200 但内容错）+ 按策略（超 1 s 算失败）</td></tr>
+    <tr><td><strong>饱和度</strong></td><td>最紧张的资源用了多少：线程池、连接池、CPU、内存。<strong>线程数 212 / 队列 340 就是它</strong></td></tr>
+  </tbody>
+</table>
+
+<h2>5 · 工具按层</h2>
+
+<table>
+  <thead><tr><th>层</th><th>工具</th><th>看</th></tr></thead>
+  <tbody>
+    <tr><td>SQL</td><td><code>pg_stat_statements</code>（需 <code>shared_preload_libraries</code>）</td><td>按 <code>total_exec_time</code> 找最贵、按 <code>calls</code> 找最频繁；<code>shared_blks_read</code> 高 = 没命中缓存</td></tr>
+    <tr><td>SQL</td><td><code>EXPLAIN (ANALYZE, BUFFERS)</code></td><td>Seq Scan / 回表 / Sort Method 溢出磁盘</td></tr>
+    <tr><td>进程</td><td><code>dotnet-counters monitor -p &lt;pid&gt;</code></td><td>仪表盘：<code>thread_pool.thread.count</code> 缓涨、<code>queue.length</code>、GC 次数、<code>lock_contentions</code></td></tr>
+    <tr><td>进程</td><td><code>dotnet-stack report -p &lt;pid&gt;</code></td><td>快照：每根线程此刻的栈。栈顶 <code>Task.Wait</code> / <code>GetResultCore</code> → 顺着往下找业务方法</td></tr>
+    <tr><td>进程</td><td><code>dotnet-trace collect -p &lt;pid&gt;</code> → PerfView</td><td>录像：CPU 采样火焰图；.NET 9 起 <code>--clrevents waithandle</code> 抓阻塞事件（偶发问题用）</td></tr>
+    <tr><td>进程</td><td><code>dotnet-dump</code> → VS Parallel Stacks</td><td>持续问题的完整快照，可看对象图（内存泄漏）</td></tr>
+    <tr><td>客户端</td><td>DevTools Network 瀑布</td><td>DNS / TLS / TTFB / 下载 / 渲染各占多少；响应体大小</td></tr>
+  </tbody>
+</table>
+
+<p>三者关系：<strong>counters 是仪表盘，stack 是快照，trace 是录像。</strong>都是 <code>dotnet tool install -g</code>，挂进程 id，不改代码不重启。</p>
+
+<h2>6 · 线程池饥饿画像（背下来）</h2>
+
+<p><strong>全站慢 + CPU 远低于 100% + 线程池线程数缓慢持续上涨（稳定在核数 3 倍以上）+ 队列长度高。</strong>原因几乎总是 sync-over-async（<code>.Result</code> / <code>.Wait()</code> / <code>GetAwaiter().GetResult()</code>），偶尔是 <code>lock</code> / <code>SemaphoreSlim.Wait</code>。解法是全链路 await，不是加线程。</p>
+
+<h2>7 · 日志三判据</h2>
+
+<table>
+  <thead><tr><th>判据</th><th>做法</th><th>反例</th></tr></thead>
+  <tbody>
+    <tr><td><strong>结构化</strong></td><td>命名占位符模板：<code>Log("订单 {OrderId} 超时 {ElapsedMs}ms", id, ms)</code>——参数作为<strong>字段</strong>进后端</td><td><code>$"订单 {id}"</code> 插值：只剩字符串，无法按字段查</td></tr>
+    <tr><td><strong>可关联</strong></td><td>scope / enricher 自动附 TraceId、SpanId、RequestId；业务 id 用 <code>BeginScope</code></td><td>每条手写 TraceId，漏一条就断</td></tr>
+    <tr><td><strong>分级</strong></td><td>生产 Information；<code>"Microsoft.AspNetCore": "Warning"</code> 压框架噪音；排查时按类别临时调 Debug，不重启</td><td>生产开 Debug / Trace（量大、含敏感数据）</td></tr>
+  </tbody>
+</table>
+
+<p>六级：Trace（生产禁）→ Debug（慎）→ Information（主流程）→ Warning（异常但没失败：重试成功、降级）→ Error（这次请求失败）→ Critical（数据丢失、磁盘满）。</p>
+
+<p>写日志别拖慢系统：异步 sink 或写 stdout 交采集器；热路径用 <code>LoggerMessage</code> 源生成器。</p>
+
+<h2>8 · 吞吐率三杠杆</h2>
+
+<p><strong>吞吐 = 并发处理数 ÷ 每请求占用时间。</strong></p>
+
+<ol>
+  <li><strong>别让线程等</strong>：全链路 async；去 <code>.Result</code>；不用 <code>Task.Run</code> 包同步（只多一次调度）；<code>IEnumerable</code> 返回前先 <code>ToListAsync</code></li>
+  <li><strong>让每请求更短</strong>：少往返（N+1 → JOIN）、少数据（分页、只取需要的列、只读 no-tracking）、缓存（接受稍旧）、<code>IHttpClientFactory</code> 复用连接、避免 ≥ 85 KB 大对象（LOH → Gen2）</li>
+  <li><strong>把慢活挪出请求</strong>：后台服务 / MQ，请求写 PENDING 就返回，结果推回（SignalR / 通知）</li>
+</ol>
+
+<p>前提：<strong>先测量</strong>——追踪图上时间在哪就拉哪个。横向扩容放最后：要无状态，且不解决单请求太重。</p>
+
+<h2>9 · 三句话术骨架</h2>
+
+<ul>
+  <li><strong>排查慢</strong>：「慢是症状不猜原因；三问缩范围（一人/多人、一接口/全站、一直/最近）；看追踪定跳；拿 TraceId 翻日志。指标定层，追踪定跳，日志看细节。」</li>
+  <li><strong>日志 / 检测服务</strong>：「不报产品名，报三根支柱各答什么问题 + 采集走 OTel 后端可换；日志三判据：结构化、可关联、分级。」</li>
+  <li><strong>吞吐率</strong>：「并发 ÷ 每请求时间 → 三杠杆：别等、更短、挪出去；先测量再拉。」</li>
+</ul>
+
+<footer class="footer">
+  <div class="nav-links">
+    <a href="../lessons/0014-slow-request-triage-and-observability.html">← Lesson 14</a>
+    <a href="async-cheatsheet.html">→ 速查表：async</a>
+    <a href="db-index-cheatsheet.html">→ 速查表：索引</a>
+    <a href="microservices-cheatsheet.html">→ 速查表：微服务</a>
+  </div>
+</footer>
+
+</body>
+</html>

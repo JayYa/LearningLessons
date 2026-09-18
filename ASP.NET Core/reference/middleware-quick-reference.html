@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>中间件管道速查表 — ASP.NET Core</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>中间件管道速查表</h1>
+<div class="lesson-meta">参考文档 · 来源：<a href="../lessons/0003-middleware-pipeline.html">第 3 课</a> · 基于 .NET 10</div>
+
+<h2>类型与 OWIN 对照</h2>
+<table class="tbl">
+  <tr><th></th><th>OWIN / Katana</th><th>ASP.NET Core</th></tr>
+  <tr><td>应用委托</td><td><code>Func&lt;IDictionary&lt;string,object&gt;, Task&gt;</code>（AppFunc）</td><td><code>delegate Task RequestDelegate(HttpContext)</code></td></tr>
+  <tr><td>中间件</td><td><code>Func&lt;AppFunc, AppFunc&gt;</code></td><td><code>Func&lt;RequestDelegate, RequestDelegate&gt;</code></td></tr>
+  <tr><td>上下文</td><td>环境字典</td><td><code>HttpContext</code></td></tr>
+  <tr><td>vs <code>IHttpModule</code></td><td colspan="2">模块按 <code>HttpApplication</code> 事件 + web.config 顺序；中间件按注册顺序。模块请求/响应同序；中间件响应<strong>逆序</strong>。<code>Response.End()</code> 硬中断不存在。</td></tr>
+</table>
+
+<h2>四种注册 API</h2>
+<table class="tbl">
+  <tr><th>API</th><th>next</th><th>分支后</th></tr>
+  <tr><td><code>Use(async (ctx, next) =&gt; { …; await next(ctx); …; })</code></td><td>自己决定</td><td>—</td></tr>
+  <tr><td><code>Run(async ctx =&gt; …)</code></td><td>无，终结</td><td>—</td></tr>
+  <tr><td><code>Map("/prefix", b =&gt; …)</code> · <code>MapWhen(pred, b =&gt; …)</code></td><td>—</td><td><strong>不回</strong>主线；分支无终结委托 → 404</td></tr>
+  <tr><td><code>UseWhen(pred, b =&gt; …)</code></td><td>—</td><td><strong>接回</strong>主线</td></tr>
+</table>
+<p><code>MapGet</code> / <code>MapControllers</code> 注册的是端点，不是中间件；由 <code>UseRouting</code> 匹配、<code>UseEndpoints</code> 执行。</p>
+
+<h2>执行模型</h2>
+<div class="diagram">
+<pre>
+请求  A.before → B.before → C.before → 端点
+响应  A.after  ← B.after  ← C.after  ←──┘        注册顺序 = 请求顺序；响应逆序
+
+短路  A.before → B(不调 next)                    C/端点不跑；A.after 照跑
+异常  A.before → B.before → C 抛                 B.after / A.after 全跳过 → 只有最外层 UseExceptionHandler 能接
+</pre>
+</div>
+
+<h2>HasStarted</h2>
+<table class="tbl">
+  <tr><th>症状</th><th><code>InvalidOperationException: Headers are read-only, response has already started</code></th></tr>
+  <tr><td>原因</td><td><code>await next(ctx)</code> 之后改 <code>StatusCode</code> / <code>Headers</code>，但端点已写 body</td></tr>
+  <tr><td>判断</td><td><code>ctx.Response.HasStarted</code></td></tr>
+  <tr><td>正解</td><td><pre><code>app.Use(async (ctx, next) =&gt;
+{
+    ctx.Response.OnStarting(() =&gt;
+    {
+        ctx.Response.Headers["X-Request-Id"] = ctx.TraceIdentifier;
+        return Task.CompletedTask;
+    });
+    await next(ctx);
+});</code></pre></td></tr>
+</table>
+
+<h2>官方推荐顺序（Web API 精简版）</h2>
+<pre><code>app.UseForwardedHeaders();      // 代理后面：最前
+if (!app.Environment.IsDevelopment()) { app.UseExceptionHandler("/error"); app.UseHsts(); }
+app.UseHttpsRedirection();
+app.UseStaticFiles();           // 命中即短路
+app.UseRouting();               // 匹配端点（不执行）
+// app.UseRateLimiter();        // 用 [EnableRateLimiting] 时必须在 Routing 后
+// app.UseCors();               // 必须在 Authentication 前、ResponseCaching 前
+app.UseAuthentication();
+app.UseAuthorization();         // 必须在 Routing 后
+// app.UseResponseCaching(); app.UseResponseCompression();
+app.MapControllers();           // 端点；UseEndpoints 由框架补在末尾</code></pre>
+
+<h2><code>WebApplication</code> 自动补的中间件</h2>
+<table class="tbl">
+  <tr><th>条件</th><th>补什么</th><th>补在哪</th></tr>
+  <tr><td>有端点且未调 <code>UseRouting</code></td><td><code>UseRouting</code></td><td><strong>管道最前</strong></td></tr>
+  <tr><td>注册了 <code>AddAuthentication</code> 且未调 <code>UseAuthentication</code></td><td><code>UseAuthentication</code></td><td>紧跟 Routing</td></tr>
+  <tr><td>注册了 <code>AddAuthorization</code> 且未调 <code>UseAuthorization</code></td><td><code>UseAuthorization</code></td><td>再往后</td></tr>
+  <tr><td>总是</td><td><code>UseEndpoints</code></td><td>管道末尾</td></tr>
+</table>
+<p>结论：想让中间件在路由匹配<strong>前</strong>跑（ForwardedHeaders、StaticFiles、CORS 全局策略），必须显式 <code>app.UseRouting()</code> 并放在它前面。用了 <code>UseCors</code> 就要显式写 <code>UseAuthentication</code> / <code>UseAuthorization</code>。</p>
+
+<h2>来源</h2>
+<ul>
+  <li><a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/">ASP.NET Core Middleware</a></li>
+  <li><a href="https://learn.microsoft.com/en-us/aspnet/core/migration/fx-to-core/areas/http-modules">Migrate HTTP modules to ASP.NET Core middleware</a></li>
+</ul>
+
+</body>
+</html>

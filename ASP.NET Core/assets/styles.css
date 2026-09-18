@@ -344,3 +344,35 @@ hr.section { margin: 2rem 0; border: none; border-top: 1px solid var(--border); 
   .quiz__opt { border: none; padding-left: 0; }
   .quiz__retry, .quiz-score, .lesson-nav { display: none !important; }
 }
+
+/* ---------- Pipeline trace (assets/pipeline-sim.js) ---------- */
+.pipe { margin: 1.5rem 0; border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; }
+.pipe__code { margin: 0 0 0.8rem; font-size: 0.8rem; }
+.pipe__prompt { font-weight: 600; margin-bottom: 0.5rem; }
+.pipe__input {
+  width: 100%;
+  font: 0.85rem/1.5 var(--font-mono);
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  resize: vertical;
+}
+.pipe__input:focus { outline: none; box-shadow: 0 0 0 2px var(--accent-light); border-color: var(--accent); }
+.pipe__row { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.pipe__check, .pipe__reveal {
+  font: inherit; font-size: 0.85rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--accent);
+}
+.pipe__check { background: var(--accent); color: #fff; }
+.pipe__check:hover { filter: brightness(1.1); }
+.pipe__reveal { background: none; color: var(--accent); border-color: var(--accent-light); }
+.pipe__reveal:hover { background: var(--accent-light); }
+.pipe__feedback { display: none; margin-top: 0.8rem; padding: 0.7rem 0.9rem; border-radius: 6px; font-size: 0.95rem; }
+.pipe__feedback--show { display: block; }
+.pipe__feedback--ok   { background: var(--ok-bg);   border: 1px solid var(--ok-border); }
+.pipe__feedback--bad  { background: var(--bad-bg);  border: 1px solid var(--bad-border); }
+.pipe__feedback--warn { background: var(--warn-bg); border: 1px solid var(--warn-border); }
+.pipe__feedback--info { background: var(--info-bg); border: 1px solid var(--info-border); }
+.pipe__trace { margin: 0.5rem 0 0; font-size: 0.8rem; background: rgba(255,255,255,0.6); }

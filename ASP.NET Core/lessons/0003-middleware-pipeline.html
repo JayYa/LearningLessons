@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第 3 课：中间件管道——顺序、短路与 OWIN 的血缘 — ASP.NET Core</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>第 3 课：中间件管道——顺序、短路与 OWIN 的血缘</h1>
+<div class="lesson-meta">
+  模块：中间件管道（1/2）&nbsp;|&nbsp; 预计阅读/练习时间：35 分钟 &nbsp;|&nbsp; 前置：<a href="0002-kestrel-and-hosting.html">第 2 课</a>三层模型
+</div>
+
+<p>
+  第 2 课把 Kestrel 画在 ① 层，它把整条管道当成<strong>一个</strong> <code>RequestDelegate</code> 来调。这一课打开 ② 层：
+  这"一个委托"是怎么由十几个 <code>app.Use…</code> 折叠出来的，为什么响应会按<strong>逆序</strong>回来，
+  一个中间件"不调 next"时到底谁还会跑、谁不会——以及这和你熟悉的 OWIN <code>AppFunc</code>、<code>IHttpModule</code> 各差在哪。
+</p>
+
+<div class="summary">
+  <ul>
+    <li>用一个心理模型解释全部 <code>Use</code> / <code>Run</code> / <code>Map</code> / <code>MapWhen</code> / <code>UseWhen</code>：<strong>洋葱 + 一条 next 链</strong></li>
+    <li>短路（不调 <code>next</code>）后，<em>前面</em>的中间件仍会执行 <code>next</code> 之后的代码——这和 <code>IHttpModule</code> 的 <code>Response.End()</code> 不一样</li>
+    <li>响应<strong>已开始</strong>（<code>HasStarted</code>）后再改头/状态码会抛异常——中间件最常见的运行时错误</li>
+    <li>背下官方推荐顺序的<strong>骨架</strong>，并知道 <code>WebApplication</code> 偷偷补的三个中间件放在哪（收尾 LR-0001）</li>
+  </ul>
+</div>
+
+<h2>一个中间件 = 一个"拿 next、返回新委托"的函数</h2>
+
+<p>
+  官方定义（<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/">ASP.NET Core middleware</a>）：
+  中间件是管道里的一段代码，<strong>要么调用下一个，要么短路</strong>。落到类型上：
+</p>
+
+<div class="cmp">
+  <div class="cmp-col">
+    <div class="cmp-col__head cmp-col__head--old">OWIN / Katana（你熟的）</div>
+    <div class="cmp-col__body"><pre><code>// AppFunc
+Func&lt;IDictionary&lt;string, object&gt;, Task&gt;
+
+// 中间件 = 拿 next 返回 AppFunc
+Func&lt;AppFunc, AppFunc&gt;
+
+app.Use(async (env, next) =&gt; {
+    // before
+    await next();
+    // after
+});</code></pre></div>
+  </div>
+  <div class="cmp-col">
+    <div class="cmp-col__head cmp-col__head--new">ASP.NET Core</div>
+    <div class="cmp-col__body"><pre><code>// RequestDelegate
+delegate Task RequestDelegate(HttpContext ctx);
+
+// 中间件 = 拿 next 返回 RequestDelegate
+Func&lt;RequestDelegate, RequestDelegate&gt;
+
+app.Use(async (ctx, next) =&gt; {
+    // before
+    await next(ctx);
+    // after
+});</code></pre></div>
+  </div>
+</div>
+
+<p>
+  形状一模一样——Core 的管道<strong>就是</strong> Katana 那套设计的强类型版：<code>IDictionary&lt;string,object&gt;</code> 环境字典换成了 <code>HttpContext</code>，
+  其他不变。所以你在 Katana 里建立的"洋葱"直觉可以直接搬过来。
+  <code>Build()</code> 时框架把注册的 <code>Func&lt;RequestDelegate,RequestDelegate&gt;</code> 列表<strong>从后往前</strong>折叠：
+  最后一个先拿到"404 兜底委托"当 next，返回的委托再交给倒数第二个……最终得到一个 <code>RequestDelegate</code>，这就是 Kestrel 拿到的东西。
+</p>
+
+<div class="diagram">
+<pre>
+请求 ──▶ A.before ──▶ B.before ──▶ C.before ──▶ ★ 端点
+                                                 │
+响应 ◀── A.after  ◀── B.after  ◀── C.after  ◀────┘
+
+注册顺序：A, B, C      请求正序 A→B→C      响应<span class="hl">逆序</span> C→B→A
+</pre>
+</div>
+
+<div class="rule">
+  <div class="rule__num">Rule</div>
+  <h4>所有 app.Use… 的语义只有三种，看它对 next 做了什么</h4>
+  <table class="tbl">
+    <tr><th>API</th><th>对 next 的处理</th><th>什么时候用</th></tr>
+    <tr><td><code>Use(async (ctx, next) =&gt; …)</code></td><td>你决定调不调</td><td>绝大多数：日志、加头、条件拦截</td></tr>
+    <tr><td><code>Run(async ctx =&gt; …)</code></td><td><strong>没有</strong> next，永远终结</td><td>兜底、分支末尾</td></tr>
+    <tr><td><code>Map("/p", b =&gt; …)</code> / <code>MapWhen(pred, b =&gt; …)</code></td><td>命中 → 走分支，<strong>不回主线</strong></td><td>按路径前缀/任意条件切出独立子管道</td></tr>
+    <tr><td><code>UseWhen(pred, b =&gt; …)</code></td><td>命中 → 走分支，末尾<strong>接回主线</strong></td><td>"只对某些请求多加一层"</td></tr>
+  </table>
+  <p>
+    <code>MapGet</code> / <code>MapControllers</code> <strong>不在</strong>这张表里——它们注册的是 ③ 层的端点，由 <code>UseRouting</code> 匹配、<code>UseEndpoints</code> 执行，
+    本身不是中间件。第 1 课那道题的教训在此再复习一次。
+  </p>
+</div>
+
+<h2>短路：不调 next，但"外层的 after"照跑</h2>
+
+<p>
+  <code>IHttpModule</code> 里 <code>context.Response.End()</code> 直接抛 <code>ThreadAbortException</code> 把整个请求掐断；
+  Core 里没有这种硬中断——短路只是"这个中间件没往里走"，<strong>已经进来的外层中间件在 next 返回后照常执行剩余代码</strong>
+  （<a href="https://learn.microsoft.com/en-us/aspnet/core/migration/fx-to-core/areas/http-modules#migrating-module-code-to-middleware">迁移文档</a>原话：
+  "this doesn't fully terminate the request, because previous middlewares will still be invoked when the response makes its way back"）。
+</p>
+
+<div class="diagram">
+<pre>
+请求 ──▶ A.before ──▶ B: 写 403，<span class="hl">不调 next</span>
+                          │
+响应 ◀── A.after  ◀───────┘        C、端点、C.after 都没跑；A.after 跑了
+</pre>
+</div>
+
+<div class="callout callout--warn">
+  <strong>HasStarted：中间件最常见的运行时异常。</strong>
+  一旦响应头已经发给客户端（<code>ctx.Response.HasStarted == true</code>），再设状态码或响应头就会抛
+  <code>InvalidOperationException: Headers are read-only, response has already started</code>
+  （<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/#create-a-middleware-pipeline-with-webapplication">文档警告</a>）。
+  这几乎总发生在 <code>await next(ctx)</code> <em>之后</em>的代码里——端点已经把 body 写出去了。
+  想在响应上加头，要在 <code>next</code> <em>之前</em>注册 <code>ctx.Response.OnStarting(() =&gt; { …加头…; return Task.CompletedTask; })</code>，让框架在头即将发出的一刻回调你。
+</div>
+
+<h2>顺序：官方骨架 + 三条硬规则</h2>
+
+<p>
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/#middleware-order">文档给的推荐顺序</a>（Web API 用不到的已删）：
+</p>
+
+<pre><code>if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/error");   // 1. 最外层：能接住后面所有中间件的异常
+    app.UseHsts();
+}
+app.UseHttpsRedirection();               // 2. 第 2 课：代理后面记得先 UseForwardedHeaders
+app.UseStaticFiles();                    // 3. 命中即短路，越早越省
+app.UseRouting();                        // 4. 匹配端点，挂到 HttpContext（还不执行）
+// app.UseRateLimiter();                 //    用了 [EnableRateLimiting] 就必须在 Routing 之后
+// app.UseCors();                        //    必须在 Authentication 之前
+app.UseAuthentication();                 // 5. 谁在发请求
+app.UseAuthorization();                  // 6. 允不允许（要先知道端点，所以在 Routing 后）
+app.MapControllers();                    // 7. 端点在此执行（UseEndpoints 由框架补）</code></pre>
+
+<table class="tbl">
+  <tr><th>硬规则（<a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/#middleware-order">来源</a>）</th><th>为什么</th></tr>
+  <tr><td><code>UseCors</code> → <code>UseAuthentication</code> → <code>UseAuthorization</code> 顺序固定</td><td>预检请求（OPTIONS）没有凭据，得先放行</td></tr>
+  <tr><td><code>UseCors</code> 必须在 <code>UseResponseCaching</code> 前</td><td>否则缓存的响应没有 CORS 头（<a href="https://github.com/dotnet/aspnetcore/issues/23218">#23218</a>）</td></tr>
+  <tr><td><code>UseAuthorization</code> 必须在 <code>UseRouting</code> 后</td><td>授权要看端点上的 <code>[Authorize]</code> 元数据，路由没匹配就没元数据</td></tr>
+</table>
+
+<div class="rule">
+  <div class="rule__num">Rule</div>
+  <h4>你不写，<code>WebApplication</code> 也会补——补在固定位置</h4>
+  <p>
+    <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/#middleware-added-automatically-by-webapplication">文档</a>：
+    有端点但没调 <code>UseRouting</code> → 在<strong>管道最前面</strong>补 <code>UseRouting</code>；
+    注册了 <code>AddAuthentication</code> / <code>AddAuthorization</code> 但没调对应 <code>Use…</code> → 紧跟着补；
+    末尾补 <code>UseEndpoints</code>。你写的所有中间件都被夹在自动 <code>UseRouting</code> 和 <code>UseEndpoints</code> 之间。
+  </p>
+  <p>
+    后果：<strong>只要你想让某个中间件在路由匹配<em>之前</em>跑（比如 <code>UseForwardedHeaders</code>、<code>UseStaticFiles</code>），就必须显式写 <code>app.UseRouting()</code> 并把它放在前面</strong>——否则它默认已经排在自动 Routing 后面了。
+    这也是为什么模板里明明"可以省"，正式项目仍建议显式写出来。
+  </p>
+</div>
+
+<h2>练习 ①：预测控制台输出</h2>
+
+<p>先在脑子里跑一遍，再把每行按顺序写进框里（用空格或逗号分隔，大小写不限）。核对后再去动手。</p>
+
+<div class="pipe"
+     data-pipe='[{"id":"A","kind":"use"},{"id":"B","kind":"use"},{"id":"C","kind":"use"},{"id":"E","kind":"endpoint"}]'
+     data-prompt="① 普通 GET /。控制台按顺序打印什么？（写法：A in, B in, …, E, …）">
+<pre class="pipe__code"><code>app.Use(async (ctx, next) => { Log("A in"); await next(ctx); Log("A out"); });
+app.Use(async (ctx, next) => { Log("B in"); await next(ctx); Log("B out"); });
+app.Use(async (ctx, next) => { Log("C in"); await next(ctx); Log("C out"); });
+app.MapGet("/", () => { Log("E"); return "hi"; });</code></pre>
+</div>
+
+<div class="pipe"
+     data-pipe='[{"id":"A","kind":"use"},{"id":"B","kind":"use","short":true},{"id":"C","kind":"use"},{"id":"E","kind":"endpoint"}]'
+     data-prompt="② 同上，但 B 在请求带 X-Block 头时写 403 并 return（不调 next），记为 B short。打印什么？">
+<pre class="pipe__code"><code>app.Use(async (ctx, next) => { Log("A in"); await next(ctx); Log("A out"); });
+app.Use(async (ctx, next) => {
+    if (ctx.Request.Headers.ContainsKey("X-Block")) { Log("B short"); ctx.Response.StatusCode = 403; return; }
+    Log("B in"); await next(ctx); Log("B out");
+});
+app.Use(async (ctx, next) => { Log("C in"); await next(ctx); Log("C out"); });
+app.MapGet("/", () => { Log("E"); return "hi"; });</code></pre>
+</div>
+
+<div class="pipe"
+     data-pipe='[{"id":"A","kind":"use"},{"id":"M","kind":"mapwhen","hit":true,"branch":[{"id":"M","kind":"run"}]},{"id":"C","kind":"use"},{"id":"E","kind":"endpoint"}]'
+     data-prompt="③ GET /?branch=1。MapWhen 命中，分支里的 Run 记为 M。打印什么？">
+<pre class="pipe__code"><code>app.Use(async (ctx, next) => { Log("A in"); await next(ctx); Log("A out"); });
+app.MapWhen(ctx => ctx.Request.Query.ContainsKey("branch"),
+            b => b.Run(async ctx => { Log("M"); await ctx.Response.WriteAsync("branch"); }));
+app.Use(async (ctx, next) => { Log("C in"); await next(ctx); Log("C out"); });
+app.MapGet("/", () => { Log("E"); return "hi"; });</code></pre>
+</div>
+
+<div class="pipe"
+     data-pipe='[{"id":"A","kind":"use"},{"id":"U","kind":"usewhen","hit":true,"branch":[{"id":"U","kind":"use"}]},{"id":"C","kind":"use"},{"id":"E","kind":"endpoint"}]'
+     data-prompt="④ 把 MapWhen 换成 UseWhen，分支里是一个普通 Use（U in / U out）。GET /?tag=1 打印什么？">
+<pre class="pipe__code"><code>app.Use(async (ctx, next) => { Log("A in"); await next(ctx); Log("A out"); });
+app.UseWhen(ctx => ctx.Request.Query.ContainsKey("tag"),
+            b => b.Use(async (ctx, next) => { Log("U in"); await next(ctx); Log("U out"); }));
+app.Use(async (ctx, next) => { Log("C in"); await next(ctx); Log("C out"); });
+app.MapGet("/", () => { Log("E"); return "hi"; });</code></pre>
+</div>
+
+<script src="../assets/pipeline-sim.js"></script>
+
+<h2>练习 ②：动手验证</h2>
+
+<p>
+  把 <code>playground\HelloApi\Program.cs</code> 整个替换成下面这份（上面四道题的合体，外加 HasStarted 陷阱），
+  然后 <code>dotnet run --no-launch-profile --urls http://localhost:5100</code>。
+</p>
+
+<div class="steps">
+
+<div class="step">
+  <h4>Program.cs</h4>
+<pre><code>var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+app.Use(async (ctx, next) =&gt;
+{
+    Console.WriteLine("A ▶ in");
+    await next(ctx);
+    Console.WriteLine("A ◀ out  status=" + ctx.Response.StatusCode);
+});
+
+app.Use(async (ctx, next) =&gt;
+{
+    if (ctx.Request.Headers.ContainsKey("X-Block"))
+    {
+        Console.WriteLine("B ✂ short-circuit");
+        ctx.Response.StatusCode = 403;
+        await ctx.Response.WriteAsync("blocked by B");
+        return;                       // 没有 next → 后面全部不跑
+    }
+    Console.WriteLine("B ▶ in");
+    await next(ctx);
+    Console.WriteLine("B ◀ out");
+});
+
+app.MapWhen(ctx =&gt; ctx.Request.Query.ContainsKey("branch"), branch =&gt;
+{
+    branch.Run(async ctx =&gt;
+    {
+        Console.WriteLine("M ● MapWhen 分支（不回主线）");
+        await ctx.Response.WriteAsync("from MapWhen branch");
+    });
+});
+
+app.UseWhen(ctx =&gt; ctx.Request.Query.ContainsKey("tag"), branch =&gt;
+{
+    branch.Use(async (ctx, next) =&gt;
+    {
+        Console.WriteLine("U ▶ UseWhen 分支（会回主线）");
+        await next(ctx);
+        Console.WriteLine("U ◀ out");
+    });
+});
+
+app.Use(async (ctx, next) =&gt;
+{
+    Console.WriteLine("C ▶ in");
+    await next(ctx);
+    Console.WriteLine("C ◀ out  HasStarted=" + ctx.Response.HasStarted);
+    if (ctx.Request.Query.ContainsKey("late"))
+        ctx.Response.Headers["X-Late"] = "oops";   // 会抛 InvalidOperationException
+});
+
+app.MapGet("/", () =&gt;
+{
+    Console.WriteLine("★ endpoint");
+    return "hello";
+});
+
+app.Run();</code></pre>
+</div>
+
+<div class="step">
+  <h4>四个请求，对照练习 ① 的答案</h4>
+<pre><code>Invoke-RestMethod http://localhost:5100/
+Invoke-RestMethod http://localhost:5100/ -Headers @{ 'X-Block' = '1' }   # 会报 403，看服务端控制台
+Invoke-RestMethod 'http://localhost:5100/?branch=1'
+Invoke-RestMethod 'http://localhost:5100/?tag=1'</code></pre>
+  <p>服务端控制台预期（本机实测）：</p>
+<pre><code>A ▶ in
+B ▶ in
+C ▶ in
+★ endpoint
+C ◀ out  HasStarted=True
+B ◀ out
+A ◀ out  status=200
+
+A ▶ in
+B ✂ short-circuit
+A ◀ out  status=403          ← 外层 A 的 after 照跑，C 和端点没跑
+
+A ▶ in
+B ▶ in
+M ● MapWhen 分支（不回主线）
+B ◀ out
+A ◀ out  status=200          ← C 和端点没跑：分支不回主线
+
+A ▶ in
+B ▶ in
+U ▶ UseWhen 分支（会回主线）
+C ▶ in
+★ endpoint
+C ◀ out  HasStarted=True
+U ◀ out
+B ◀ out
+A ◀ out  status=200          ← U 插进了 B 和 C 之间，逆序回来时也在同一位置</code></pre>
+  <ul class="check-list">
+    <li><code>C ◀ out HasStarted=True</code>：端点返回字符串时框架已把 body 写出去，响应头已发——这是第 3 步的伏笔</li>
+    <li>第二组里没有 <code>B ◀ out</code>——B 自己 return 了，它没有 after 可跑；但 A 有</li>
+  </ul>
+</div>
+
+<div class="step">
+  <h4>触发 HasStarted 异常</h4>
+<pre><code>Invoke-RestMethod 'http://localhost:5100/?late=1'
+# 客户端：The response ended prematurely. (ResponseEnded)</code></pre>
+  <p>服务端：</p>
+<pre><code>C ◀ out  HasStarted=True
+fail: Microsoft.AspNetCore.Server.Kestrel[13]
+      System.InvalidOperationException: Headers are read-only, response has already started.
+         at … Program.cs:line 54</code></pre>
+  <ul class="check-list">
+    <li>注意<strong>没有</strong> <code>B ◀ out</code> 和 <code>A ◀ out</code>——异常沿 next 链向外抛，外层中间件 <code>await next</code> 之后的代码全被跳过。这就是为什么 <code>UseExceptionHandler</code> 必须放<strong>最外层</strong>：只有它包住了所有人</li>
+    <li>把第 4 段改成 <code>ctx.Response.OnStarting(() =&gt; { ctx.Response.Headers["X-Late"] = "ok"; return Task.CompletedTask; });</code> 并移到 <code>await next(ctx)</code> <em>之前</em>，用 <code>Invoke-WebRequest … | % Headers</code> 能看到头正常发出</li>
+  </ul>
+</div>
+
+</div>
+
+<h2>测验</h2>
+
+<div class="quiz" id="quiz1"
+     data-feedback-correct="✅ 正确。Core 里短路只是「不调 next」，已进入的外层中间件在 next 返回后照常执行剩余代码；Response.End() 式的硬中断不存在。"
+     data-feedback-wrong="❌ 不对。回看「短路」一节和动手第二组输出：B 不调 next 后，A 的 after 仍然打印了 status=403。">
+  <div class="quiz__q">❓ 一个 <code>IHttpModule</code> 在 <code>BeginRequest</code> 里调 <code>Response.End()</code> 拦截请求。迁移成中间件后，行为上最大的差别是？</div>
+  <div class="quiz__opt" data-answer="correct">它前面已进入的中间件仍会执行 next 之后的代码</div>
+  <div class="quiz__opt" data-answer="wrong">它后面注册的中间件仍会各自执行一次自己的 before</div>
+  <div class="quiz__opt" data-answer="wrong">必须显式抛出异常才能阻止端点被路由中间件执行</div>
+  <div class="quiz__opt" data-answer="wrong">短路后框架会自动把状态码从二百改写成四零三</div>
+  <div class="quiz__feedback" id="quiz1-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz2"
+     data-feedback-correct="✅ 正确。没显式调 UseRouting 时，框架把它补在管道最前面，你写的中间件全在它后面；要在路由匹配前跑，必须显式 UseRouting 并放在其前面。"
+     data-feedback-wrong="❌ 不对。回看 Rule「你不写，WebApplication 也会补」：自动补的 UseRouting 在管道最前面，你的中间件都排在它之后。">
+  <div class="quiz__q">❓ 你只写了 <code>app.UseForwardedHeaders(); app.MapGet(…)</code>，没写 <code>UseRouting</code>。实际管道里 ForwardedHeaders 和 Routing 谁先？</div>
+  <div class="quiz__opt" data-answer="wrong">ForwardedHeaders 先，因为它在源码中出现得更早</div>
+  <div class="quiz__opt" data-answer="correct">Routing 先，因为框架把它自动补在了管道最前</div>
+  <div class="quiz__opt" data-answer="wrong">两者并行，因为只有终结中间件才有先后之分</div>
+  <div class="quiz__opt" data-answer="wrong">编译报错，因为有端点时必须显式调用路由中间件</div>
+  <div class="quiz__feedback" id="quiz2-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz3"
+     data-feedback-correct="✅ 正确。MapWhen 命中后不回主线，主线上后面的中间件和端点都不执行；UseWhen 才会接回。"
+     data-feedback-wrong="❌ 不对。回看 Rule 表格和动手第三组输出：MapWhen 分支不回主线，C 和端点没跑；想接回主线要用 UseWhen。">
+  <div class="quiz__q">❓ <code>app.MapWhen(p, b =&gt; b.Use(日志中间件))</code>——分支里只有一个会调 next 的 Use，没有 Run。命中 p 的请求最终得到什么？</div>
+  <div class="quiz__opt" data-answer="wrong">分支跑完接回主线，由后面的端点正常返回二百</div>
+  <div class="quiz__opt" data-answer="correct">分支末尾没有终结委托，请求以四零四结束</div>
+  <div class="quiz__opt" data-answer="wrong">框架检测到分支为空会在启动阶段抛出异常</div>
+  <div class="quiz__opt" data-answer="wrong">主线上的端点执行两次，分别来自主线和分支</div>
+  <div class="quiz__feedback" id="quiz3-feedback"></div>
+</div>
+
+<div class="quiz" id="quiz4"
+     data-feedback-correct="✅ 正确。端点写出 body 后响应已开始，await next 之后再改头就会抛异常；OnStarting 回调在头发出前一刻执行。"
+     data-feedback-wrong="❌ 不对。回看 HasStarted 警告和动手第 3 步：响应已开始后不能改头，正确做法是在 next 之前注册 Response.OnStarting。">
+  <div class="quiz__q">❓ 想在每个响应上加 <code>X-Request-Id</code> 头。下面哪种写法在端点返回 JSON 后<strong>不会</strong>抛异常？</div>
+  <div class="quiz__opt" data-answer="wrong">在 await next 之后判断状态码为二百再设置该头</div>
+  <div class="quiz__opt" data-answer="correct">在 await next 之前用 OnStarting 注册设置该头</div>
+  <div class="quiz__opt" data-answer="wrong">在 await next 之后先清空响应体然后再设置该头</div>
+  <div class="quiz__opt" data-answer="wrong">在 Run 终结委托内部设置该头然后不再调用端点</div>
+  <div class="quiz__feedback" id="quiz4-feedback"></div>
+</div>
+
+<script src="../assets/quiz.js"></script>
+
+<h2>速查</h2>
+<p>本课压缩版在 <a href="../reference/middleware-quick-reference.html">中间件管道速查表</a>：Use/Run/Map/UseWhen 四行表、官方推荐顺序、三条硬规则、HasStarted 与 OnStarting 模板、OWIN 对照。</p>
+
+<h2>推荐阅读</h2>
+
+<p><strong>首选（30 分钟）：</strong>
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/">ASP.NET Core Middleware</a>
+  ——官方总览。重点读 "Create a middleware pipeline with WebApplication"、"Branch the middleware pipeline"、"Middleware added automatically by WebApplication"、"Middleware order" 四节。本课所有断言出自这里。
+</p>
+<p><strong>迁移视角：</strong>
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/migration/fx-to-core/areas/http-modules">Migrate HTTP modules to ASP.NET Core middleware</a>
+  ——专门写给 <code>IHttpModule</code> 用户的对照，含"顺序：模块按事件、中间件按注册；响应：模块同序、中间件逆序"的总结。
+</p>
+<p><strong>下一课会用到：</strong>
+  <a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/write">Write custom ASP.NET Core middleware</a>——把 lambda 搬进类、DI 注入、生命周期陷阱。
+</p>
+
+<div class="callout callout--info">
+  <strong>有不明白的随时问我。</strong>比如：<code>Map("/api")</code> 剥掉的前缀去哪了（<code>PathBase</code>，和第 2 课 <code>X-Forwarded-Prefix</code> 呼应）？
+  <code>Use</code> 两个重载（<code>Func&lt;Task&gt;</code> 和 <code>RequestDelegate</code>）为什么文档推荐后者？端点匹配后 <code>UseRouting</code> 和 <code>UseEndpoints</code> 中间的中间件能读到什么元数据？
+  做完练习 ① 和测验后把首次结果告诉我。
+</div>
+
+<div class="lesson-nav">
+  <a href="0002-kestrel-and-hosting.html">← 第 2 课：Kestrel、反向代理与容器部署</a>
+  <a href="0004-exception-handling-and-custom-middleware.html">下一课：异常处理与自定义中间件类 →</a>
+</div>
+
+</body>
+</html>
